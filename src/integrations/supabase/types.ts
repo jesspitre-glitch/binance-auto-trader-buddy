@@ -30,6 +30,7 @@ export type Database = {
           ema_slow: number | null
           enabled: boolean | null
           id: string
+          leverage: number | null
           macd_fast: number | null
           macd_histogram_threshold: number | null
           macd_signal: number | null
@@ -63,6 +64,7 @@ export type Database = {
           ema_slow?: number | null
           enabled?: boolean | null
           id?: string
+          leverage?: number | null
           macd_fast?: number | null
           macd_histogram_threshold?: number | null
           macd_signal?: number | null
@@ -96,6 +98,7 @@ export type Database = {
           ema_slow?: number | null
           enabled?: boolean | null
           id?: string
+          leverage?: number | null
           macd_fast?: number | null
           macd_histogram_threshold?: number | null
           macd_signal?: number | null

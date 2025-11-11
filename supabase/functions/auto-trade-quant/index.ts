@@ -28,6 +28,7 @@ interface IndicatorConfig {
   risk_per_trade_percent: number;
   max_open_positions: number;
   risk_reward_ratio: number;
+  leverage: number;
 }
 
 // Technical indicator calculations
@@ -182,6 +183,186 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   };
 }
 
+async function placeOrder(
+  symbol: string,
+  side: 'BUY' | 'SELL',
+  quantity: number,
+  stopLoss: number,
+  takeProfit: number
+) {
+  const apiKey = Deno.env.get('BINANCE_API_KEY');
+  const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
+  
+  if (!apiKey || !apiSecret) {
+    throw new Error('Binance API credentials not configured');
+  }
+
+  const timestamp = Date.now();
+  const params = new URLSearchParams({
+    symbol,
+    side,
+    type: 'MARKET',
+    quantity: quantity.toFixed(3),
+    timestamp: timestamp.toString(),
+  });
+
+  // Create signature
+  const signature = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(apiSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  ).then(key => 
+    crypto.subtle.sign('HMAC', key, new TextEncoder().encode(params.toString()))
+  ).then(sig => 
+    Array.from(new Uint8Array(sig))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+  );
+
+  params.append('signature', signature);
+
+  // Place market order
+  const orderResponse = await fetch(
+    `https://fapi.binance.com/fapi/v1/order?${params.toString()}`,
+    {
+      method: 'POST',
+      headers: {
+        'X-MBX-APIKEY': apiKey,
+      },
+    }
+  );
+
+  if (!orderResponse.ok) {
+    const error = await orderResponse.text();
+    throw new Error(`Order failed: ${error}`);
+  }
+
+  const orderData = await orderResponse.json();
+  
+  // Set stop loss
+  const slParams = new URLSearchParams({
+    symbol,
+    side: side === 'BUY' ? 'SELL' : 'BUY',
+    type: 'STOP_MARKET',
+    stopPrice: stopLoss.toFixed(2),
+    closePosition: 'true',
+    timestamp: Date.now().toString(),
+  });
+
+  const slSignature = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(apiSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  ).then(key => 
+    crypto.subtle.sign('HMAC', key, new TextEncoder().encode(slParams.toString()))
+  ).then(sig => 
+    Array.from(new Uint8Array(sig))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+  );
+
+  slParams.append('signature', slSignature);
+
+  await fetch(
+    `https://fapi.binance.com/fapi/v1/order?${slParams.toString()}`,
+    {
+      method: 'POST',
+      headers: {
+        'X-MBX-APIKEY': apiKey,
+      },
+    }
+  );
+
+  // Set take profit
+  const tpParams = new URLSearchParams({
+    symbol,
+    side: side === 'BUY' ? 'SELL' : 'BUY',
+    type: 'TAKE_PROFIT_MARKET',
+    stopPrice: takeProfit.toFixed(2),
+    closePosition: 'true',
+    timestamp: Date.now().toString(),
+  });
+
+  const tpSignature = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(apiSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  ).then(key => 
+    crypto.subtle.sign('HMAC', key, new TextEncoder().encode(tpParams.toString()))
+  ).then(sig => 
+    Array.from(new Uint8Array(sig))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+  );
+
+  tpParams.append('signature', tpSignature);
+
+  await fetch(
+    `https://fapi.binance.com/fapi/v1/order?${tpParams.toString()}`,
+    {
+      method: 'POST',
+      headers: {
+        'X-MBX-APIKEY': apiKey,
+      },
+    }
+  );
+
+  return orderData;
+}
+
+async function getAccountBalance() {
+  const apiKey = Deno.env.get('BINANCE_API_KEY');
+  const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
+  
+  if (!apiKey || !apiSecret) {
+    throw new Error('Binance API credentials not configured');
+  }
+
+  const timestamp = Date.now();
+  const params = new URLSearchParams({
+    timestamp: timestamp.toString(),
+  });
+
+  const signature = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(apiSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  ).then(key => 
+    crypto.subtle.sign('HMAC', key, new TextEncoder().encode(params.toString()))
+  ).then(sig => 
+    Array.from(new Uint8Array(sig))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+  );
+
+  params.append('signature', signature);
+
+  const response = await fetch(
+    `https://fapi.binance.com/fapi/v2/balance?${params.toString()}`,
+    {
+      headers: {
+        'X-MBX-APIKEY': apiKey,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch account balance');
+  }
+
+  const balances = await response.json();
+  const usdcBalance = balances.find((b: any) => b.asset === 'USDC');
+  return parseFloat(usdcBalance?.availableBalance || '0');
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -256,12 +437,45 @@ serve(async (req) => {
             actionTaken,
           });
 
-          // If there's a signal and we have capacity, log it
-          if (analysis.signal !== 'NONE') {
-            console.log(`Signal detected for ${session.user_id}: ${analysis.signal} on ${symbol} - Action: ${actionTaken}`);
+          // If there's a signal and we have capacity, place order
+          if (analysis.signal !== 'NONE' && (!positions || positions.length < config.max_open_positions)) {
+            console.log(`Signal detected for ${session.user_id}: ${analysis.signal} on ${symbol}`);
             
-            // Here you would place the actual order via Binance API
-            // For now, we just log the signal
+            try {
+              // Get account balance
+              const balance = await getAccountBalance();
+              const riskAmount = balance * (config.risk_per_trade_percent / 100);
+              const stopLossDistance = Math.abs(analysis.indicators.price - analysis.stopLoss);
+              const quantity = (riskAmount / stopLossDistance) * config.leverage;
+              
+              // Place order
+              const side = analysis.signal === 'LONG' ? 'BUY' : 'SELL';
+              const orderData = await placeOrder(
+                symbol,
+                side,
+                quantity,
+                analysis.stopLoss,
+                analysis.takeProfit
+              );
+              
+              // Save position to database
+              await supabaseClient.from('positions').insert({
+                user_id: session.user_id,
+                symbol,
+                side: analysis.signal,
+                entry_price: analysis.indicators.price,
+                quantity,
+                stop_loss: analysis.stopLoss,
+                take_profit: analysis.takeProfit,
+                current_price: analysis.indicators.price,
+                binance_order_id: orderData.orderId,
+                status: 'OPEN',
+              });
+              
+              console.log(`Order placed: ${symbol} ${side} ${quantity} @ ${analysis.indicators.price}`);
+            } catch (error) {
+              console.error(`Failed to place order for ${symbol}:`, error);
+            }
           }
         } catch (error) {
           console.error(`Error scanning ${symbol}:`, error);

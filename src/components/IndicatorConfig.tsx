@@ -64,6 +64,9 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     // Risk/Reward
     risk_reward_ratio: config?.risk_reward_ratio || 2,
     max_position_duration_minutes: config?.max_position_duration_minutes || 240,
+    
+    // Leverage
+    leverage: config?.leverage || 10,
   });
 
   const handleSave = async () => {
@@ -382,6 +385,15 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           <CardDescription>Position sizing og eksponering</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="leverage">Leverage</Label>
+            <Input
+              id="leverage"
+              type="number"
+              value={formData.leverage}
+              onChange={(e) => setFormData({ ...formData, leverage: parseInt(e.target.value) })}
+            />
+          </div>
           <div className="space-y-2">
             <Label htmlFor="risk_per_trade_percent">Risiko pr. Trade (%)</Label>
             <Input
