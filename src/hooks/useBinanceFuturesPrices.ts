@@ -8,12 +8,14 @@ export function useBinanceFuturesPrices(symbols: string[]) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<number | null>(null);
 
-  // Build combined stream URL
+  // Build combined stream URL for USDC perpetual futures
   const url = useMemo(() => {
     const unique = Array.from(new Set(symbols.filter(Boolean)));
     if (unique.length === 0) return null;
+    
+    // Use markPrice stream for accurate USDC futures pricing
     const streams = unique
-      .map((s) => `${s.toLowerCase()}@ticker`)
+      .map((s) => `${s.toLowerCase()}@markPrice@1s`)
       .join("/");
     return `wss://fstream.binance.com/stream?streams=${streams}`;
   }, [symbols.join(",")]);
@@ -34,7 +36,7 @@ export function useBinanceFuturesPrices(symbols: string[]) {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log("Binance WS connected for", symbols.length, "symbols");
+      console.log("Binance USDC Futures WS connected:", symbols.length, "symbols");
     };
 
     ws.onmessage = (evt) => {
@@ -42,15 +44,18 @@ export function useBinanceFuturesPrices(symbols: string[]) {
         const payload = JSON.parse(evt.data);
         // Combined stream: { stream, data }
         const d = payload?.data;
-        // ticker event fields: c (last price), s (symbol), E (event time)
+        // markPrice event for USDC futures: p (mark price), s (symbol), E (event time)
         const symbol = (d?.s || "").toUpperCase();
-        const price = parseFloat(d?.c ?? d?.p ?? "");
+        const price = parseFloat(d?.p ?? ""); // p is mark price
         const ts = typeof d?.E === "number" ? d.E : Date.now();
+        
         if (!symbol || !isFinite(price)) return;
+        
+        console.log(`Price update: ${symbol} = ${price}`);
         setPrices((prev) => ({ ...prev, [symbol]: price }));
         setUpdatedAt((prev) => ({ ...prev, [symbol]: ts }));
-      } catch {
-        // ignore
+      } catch (err) {
+        console.error("Error parsing WS message:", err);
       }
     };
 
