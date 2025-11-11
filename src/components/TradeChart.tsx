@@ -55,34 +55,35 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           const high = parseFloat(k[2]);
           const low = parseFloat(k[3]);
           
-          // Trailing stop starts once price has moved favorably by at least trailingPercent from entry
+          // Trailing stop activates ONLY when TP is reached; initial stop at TP
           let trailingStop = null;
           if (timestamp >= openTime) {
-            const activateForLong = side === 'LONG' && price >= entryPrice * (1 + trailingPercent / 100);
-            const activateForShort = side === 'SHORT' && price <= entryPrice * (1 - trailingPercent / 100);
-            const thresholdReached = activateForLong || activateForShort;
+            const tpReachedForLong = side === 'LONG' && price >= takeProfit;
+            const tpReachedForShort = side === 'SHORT' && price <= takeProfit;
+            const tpReached = tpReachedForLong || tpReachedForShort;
 
-            if (thresholdReached) {
+            if (tpReached) {
               if (!trailingActivated) {
+                // Activate trailing at TP, start peak tracking from current price
                 trailingActivated = true;
-                // For historical trades, prefer peak from DB; otherwise start with current price
-                peakPrice = trade.peak_price ? Number(trade.peak_price) : price;
-              }
-
-              // Update peak as price moves favorably
-              if (side === 'LONG' && price > peakPrice) {
                 peakPrice = price;
-              } else if (side === 'SHORT' && price < peakPrice) {
-                peakPrice = price;
-              }
-
-              // Calculate trailing stop from peak and clamp to at least break-even
-              if (side === 'LONG') {
-                const raw = peakPrice * (1 - trailingPercent / 100);
-                trailingStop = Math.max(entryPrice, raw);
+                trailingStop = takeProfit; // Start exactly at TP
               } else {
-                const raw = peakPrice * (1 + trailingPercent / 100);
-                trailingStop = Math.min(entryPrice, raw);
+                // Update peak as price moves favorably
+                if (side === 'LONG' && price > peakPrice) {
+                  peakPrice = price;
+                } else if (side === 'SHORT' && price < peakPrice) {
+                  peakPrice = price;
+                }
+
+                // Calculate trailing stop from peak and clamp so it never goes past TP
+                if (side === 'LONG') {
+                  const raw = peakPrice * (1 - trailingPercent / 100);
+                  trailingStop = Math.max(takeProfit, raw);
+                } else {
+                  const raw = peakPrice * (1 + trailingPercent / 100);
+                  trailingStop = Math.min(takeProfit, raw);
+                }
               }
             }
           }
