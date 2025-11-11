@@ -251,7 +251,7 @@ serve(async (req) => {
               .eq('id', position.id);
 
             // Add to trade history with actual values from Binance
-            await supabaseClient.from('trade_history').insert({
+            const { error: historyError } = await supabaseClient.from('trade_history').insert({
               user_id: position.user_id,
               symbol: position.symbol,
               side: position.side,
@@ -265,6 +265,12 @@ serve(async (req) => {
               duration_minutes: Math.floor((now.getTime() - openedAt.getTime()) / (1000 * 60)),
               strategy_hash: position.strategy_hash,
             });
+
+            if (historyError) {
+              console.error(`Failed to insert trade history for ${position.symbol}:`, historyError);
+            } else {
+              console.log(`Trade history saved for ${position.symbol}`);
+            }
 
             // Update user portfolio with actual P&L
             const { data: portfolio } = await supabaseClient
