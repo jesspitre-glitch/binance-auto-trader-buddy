@@ -1,0 +1,263 @@
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { TrendingUp, TrendingDown, Activity, Hash } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+interface StrategyStats {
+  strategy_hash: string;
+  config_name: string;
+  total_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  total_pnl: number;
+  avg_pnl: number;
+  win_rate: number;
+  largest_win: number;
+  largest_loss: number;
+  first_trade_date: string;
+  last_trade_date: string;
+}
+
+export const StrategyAnalysis = () => {
+  const [strategies, setStrategies] = useState<StrategyStats[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  const fetchStrategyStats = async () => {
+    try {
+      setLoading(true);
+      
+      // Get all trade history
+      const { data: trades, error } = await supabase
+        .from("trade_history")
+        .select("*")
+        .order("closed_at", { ascending: false });
+
+      if (error) throw error;
+
+      if (!trades || trades.length === 0) {
+        setStrategies([]);
+        setLoading(false);
+        return;
+      }
+
+      // Group trades by strategy_hash
+      const strategyMap = new Map<string, any[]>();
+      trades.forEach(trade => {
+        const hash = trade.strategy_hash || 'unknown';
+        if (!strategyMap.has(hash)) {
+          strategyMap.set(hash, []);
+        }
+        strategyMap.get(hash)!.push(trade);
+      });
+
+      // Calculate stats for each strategy
+      const stats: StrategyStats[] = [];
+      
+      for (const [hash, strategyTrades] of strategyMap.entries()) {
+        const winningTrades = strategyTrades.filter(t => t.pnl > 0);
+        const losingTrades = strategyTrades.filter(t => t.pnl <= 0);
+        const totalPnl = strategyTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
+        const avgPnl = totalPnl / strategyTrades.length;
+        
+        stats.push({
+          strategy_hash: hash,
+          config_name: hash.substring(0, 8), // Use hash prefix as name
+          total_trades: strategyTrades.length,
+          winning_trades: winningTrades.length,
+          losing_trades: losingTrades.length,
+          total_pnl: totalPnl,
+          avg_pnl: avgPnl,
+          win_rate: (winningTrades.length / strategyTrades.length) * 100,
+          largest_win: Math.max(...strategyTrades.map(t => t.pnl || 0)),
+          largest_loss: Math.min(...strategyTrades.map(t => t.pnl || 0)),
+          first_trade_date: strategyTrades[strategyTrades.length - 1].closed_at,
+          last_trade_date: strategyTrades[0].closed_at,
+        });
+      }
+
+      // Sort by total PnL descending
+      stats.sort((a, b) => b.total_pnl - a.total_pnl);
+      
+      setStrategies(stats);
+    } catch (error: any) {
+      toast({
+        title: "Fejl",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStrategyStats();
+
+    // Subscribe to trade_history changes
+    const channel = supabase
+      .channel("strategy-analysis")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "trade_history",
+        },
+        () => {
+          fetchStrategyStats();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Strategi Analyse</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center py-8">
+            <Activity className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (strategies.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Strategi Analyse</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-center text-muted-foreground py-8">
+            Ingen strategier fundet. Start trading for at se strategi performance.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            Strategi Performance Oversigt
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-sm text-muted-foreground">Total Strategier</div>
+                <div className="text-3xl font-bold">{strategies.length}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-sm text-muted-foreground">Bedste Strategi PnL</div>
+                <div className={`text-3xl font-bold ${strategies[0]?.total_pnl >= 0 ? "text-success" : "text-destructive"}`}>
+                  ${strategies[0]?.total_pnl.toFixed(2)}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-sm text-muted-foreground">Total Trades</div>
+                <div className="text-3xl font-bold">
+                  {strategies.reduce((sum, s) => sum + s.total_trades, 0)}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Strategi ID</TableHead>
+                  <TableHead className="text-right">Total Trades</TableHead>
+                  <TableHead className="text-right">Win Rate</TableHead>
+                  <TableHead className="text-right">Total PnL</TableHead>
+                  <TableHead className="text-right">Avg PnL</TableHead>
+                  <TableHead className="text-right">Største Win</TableHead>
+                  <TableHead className="text-right">Største Tab</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {strategies.map((strategy) => (
+                  <TableRow key={strategy.strategy_hash}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Hash className="h-4 w-4 text-muted-foreground" />
+                        <code className="text-xs font-mono bg-muted px-2 py-1 rounded">
+                          {strategy.config_name}
+                        </code>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="text-sm">
+                        {strategy.total_trades}
+                        <div className="text-xs text-muted-foreground">
+                          {strategy.winning_trades}W / {strategy.losing_trades}L
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className={`text-sm font-medium ${strategy.win_rate >= 50 ? "text-success" : "text-destructive"}`}>
+                        {strategy.win_rate.toFixed(1)}%
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className={`text-sm font-bold flex items-center justify-end gap-1 ${strategy.total_pnl >= 0 ? "text-success" : "text-destructive"}`}>
+                        {strategy.total_pnl >= 0 ? (
+                          <TrendingUp className="h-4 w-4" />
+                        ) : (
+                          <TrendingDown className="h-4 w-4" />
+                        )}
+                        ${strategy.total_pnl.toFixed(2)}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className={`text-sm ${strategy.avg_pnl >= 0 ? "text-success" : "text-destructive"}`}>
+                        ${strategy.avg_pnl.toFixed(2)}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="text-sm text-success">
+                        ${strategy.largest_win.toFixed(2)}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="text-sm text-destructive">
+                        ${strategy.largest_loss.toFixed(2)}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};

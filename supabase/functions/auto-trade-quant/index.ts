@@ -31,6 +31,41 @@ interface IndicatorConfig {
   leverage: number;
 }
 
+// Calculate strategy hash from config
+async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
+  // Create a stable string representation of the config (excluding id, user_id, name, created_at, updated_at, enabled)
+  const configStr = JSON.stringify({
+    ema_fast: config.ema_fast,
+    ema_medium: config.ema_medium,
+    ema_slow: config.ema_slow,
+    rsi_period: config.rsi_period,
+    rsi_overbought: config.rsi_overbought,
+    rsi_oversold: config.rsi_oversold,
+    macd_fast: config.macd_fast,
+    macd_slow: config.macd_slow,
+    macd_signal: config.macd_signal,
+    macd_histogram_threshold: config.macd_histogram_threshold,
+    bb_period: config.bb_period,
+    bb_std_dev: config.bb_std_dev,
+    atr_period: config.atr_period,
+    atr_stop_loss_multiplier: config.atr_stop_loss_multiplier,
+    atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier,
+    adx_period: config.adx_period,
+    adx_threshold: config.adx_threshold,
+    volume_spike_multiplier: config.volume_spike_multiplier,
+    risk_per_trade_percent: config.risk_per_trade_percent,
+    max_open_positions: config.max_open_positions,
+    risk_reward_ratio: config.risk_reward_ratio,
+    leverage: config.leverage,
+  });
+  
+  const msgUint8 = new TextEncoder().encode(configStr);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+}
+
 // Technical indicator calculations
 function calculateEMA(data: number[], period: number): number[] {
   const k = 2 / (period + 1);
@@ -403,6 +438,9 @@ serve(async (req) => {
       const config = session.indicator_config;
       if (!config || !config.enabled) continue;
 
+      // Calculate strategy hash for this config
+      const strategyHash = await calculateStrategyHash(config);
+
       // Check current open positions
       const { data: positions } = await supabaseClient
         .from('positions')
@@ -480,6 +518,7 @@ serve(async (req) => {
                 current_price: analysis.indicators.price,
                 binance_order_id: orderData.orderId,
                 status: 'OPEN',
+                strategy_hash: strategyHash,
               });
               
               console.log(`Order placed: ${symbol} ${side} ${quantity} @ ${analysis.indicators.price}`);

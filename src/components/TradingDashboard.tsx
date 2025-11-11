@@ -5,12 +5,13 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Play, Square, Settings2, History, TrendingUp, Search } from "lucide-react";
+import { Play, Square, Settings2, History, TrendingUp, Search, BarChart3 } from "lucide-react";
 import { PositionManager } from "./PositionManager";
 import { PortfolioBalance } from "./PortfolioBalance";
 import { IndicatorConfig } from "./IndicatorConfig";
 import { PnLOverview } from "./PnLOverview";
 import { ScanResults } from "./ScanResults";
+import { StrategyAnalysis } from "./StrategyAnalysis";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -189,10 +190,14 @@ export const TradingDashboard = () => {
       <PositionManager />
 
       <Tabs defaultValue="pnl">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="pnl">
             <TrendingUp className="mr-2 h-4 w-4" />
             P&L
+          </TabsTrigger>
+          <TabsTrigger value="strategy">
+            <BarChart3 className="mr-2 h-4 w-4" />
+            Strategi Analyse
           </TabsTrigger>
           <TabsTrigger value="scan">
             <Search className="mr-2 h-4 w-4" />
@@ -210,6 +215,10 @@ export const TradingDashboard = () => {
         
         <TabsContent value="pnl">
           <PnLOverview />
+        </TabsContent>
+
+        <TabsContent value="strategy">
+          <StrategyAnalysis />
         </TabsContent>
 
         <TabsContent value="scan">

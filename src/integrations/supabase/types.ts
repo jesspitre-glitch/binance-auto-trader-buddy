@@ -132,6 +132,7 @@ export type Database = {
           side: string
           status: string | null
           stop_loss: number | null
+          strategy_hash: string | null
           symbol: string
           take_profit: number | null
           trailing_stop: number | null
@@ -151,6 +152,7 @@ export type Database = {
           side: string
           status?: string | null
           stop_loss?: number | null
+          strategy_hash?: string | null
           symbol: string
           take_profit?: number | null
           trailing_stop?: number | null
@@ -170,6 +172,7 @@ export type Database = {
           side?: string
           status?: string | null
           stop_loss?: number | null
+          strategy_hash?: string | null
           symbol?: string
           take_profit?: number | null
           trailing_stop?: number | null
@@ -229,6 +232,7 @@ export type Database = {
           pnl_percent: number
           quantity: number
           side: string
+          strategy_hash: string | null
           symbol: string
           user_id: string
         }
@@ -245,6 +249,7 @@ export type Database = {
           pnl_percent: number
           quantity: number
           side: string
+          strategy_hash?: string | null
           symbol: string
           user_id: string
         }
@@ -261,6 +266,7 @@ export type Database = {
           pnl_percent?: number
           quantity?: number
           side?: string
+          strategy_hash?: string | null
           symbol?: string
           user_id?: string
         }

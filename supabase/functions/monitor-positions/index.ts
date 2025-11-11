@@ -178,6 +178,7 @@ serve(async (req) => {
               opened_at: position.opened_at,
               closed_at: new Date().toISOString(),
               duration_minutes: Math.floor((now.getTime() - openedAt.getTime()) / (1000 * 60)),
+              strategy_hash: position.strategy_hash,
             });
 
             // Update user portfolio
