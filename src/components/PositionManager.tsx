@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, TrendingUp, TrendingDown, X, BarChart2 } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, X, BarChart2, RefreshCw } from "lucide-react";
 import { useBinanceFuturesPrices } from "@/hooks/useBinanceFuturesPrices";
 import { formatDistanceToNow } from "date-fns";
 import { da } from "date-fns/locale";
@@ -72,6 +72,32 @@ export const PositionManager = () => {
   const symbols = positions.map((p) => p.symbol).filter(Boolean);
   const { prices: livePrices, updatedAt: priceUpdatedAt } = useBinanceFuturesPrices(symbols);
 
+  const syncWithBinance = async () => {
+    try {
+      toast({
+        title: "Synkroniserer...",
+        description: "Henter positioner fra Binance",
+      });
+
+      const { data, error } = await supabase.functions.invoke('sync-binance-futures-positions');
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Synkronisering fuldført",
+        description: `${data.totalPositions} aktive positioner på Binance`,
+      });
+      
+      fetchPositions();
+    } catch (error: any) {
+      toast({
+        title: "Synkroniseringsfejl",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const closePosition = async (positionId: string) => {
     try {
       const { error } = await supabase
@@ -112,7 +138,18 @@ export const PositionManager = () => {
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Åbne Positioner ({positions.length})</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Åbne Positioner ({positions.length})</CardTitle>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={syncWithBinance}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Synk med Binance
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {positions.length === 0 ? (

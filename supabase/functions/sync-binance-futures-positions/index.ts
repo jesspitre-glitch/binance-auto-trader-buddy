@@ -212,6 +212,7 @@ serve(async (req) => {
               .update({
                 status: 'CLOSED',
                 closed_at: new Date().toISOString(),
+                close_reason: 'DUPLICATE',
               })
               .eq('id', duplicate.id);
             
@@ -250,6 +251,7 @@ serve(async (req) => {
               .update({
                 status: 'CLOSED',
                 closed_at: new Date().toISOString(),
+                close_reason: 'EXTERNAL_CLOSE',
               })
               .eq('id', dbPos.id);
             
