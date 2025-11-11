@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from "recharts";
-import { Loader2 } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend, Scatter, ScatterChart, ComposedChart } from "recharts";
+import { Loader2, X } from "lucide-react";
 
 interface TradeChartProps {
   trade: any;
@@ -38,7 +38,27 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           low: parseFloat(k[3]),
         }));
         
-        setChartData(data);
+        // Find closest data points to entry and exit times
+        const entryPoint = data.reduce((closest, current) => {
+          const closestDiff = Math.abs(closest.timestamp - openTime);
+          const currentDiff = Math.abs(current.timestamp - openTime);
+          return currentDiff < closestDiff ? current : closest;
+        }, data[0]);
+        
+        const exitPoint = data.reduce((closest, current) => {
+          const closestDiff = Math.abs(closest.timestamp - closeTime);
+          const currentDiff = Math.abs(current.timestamp - closeTime);
+          return currentDiff < closestDiff ? current : closest;
+        }, data[0]);
+        
+        // Add markers to data
+        const dataWithMarkers = data.map(d => ({
+          ...d,
+          entryMarker: d.timestamp === entryPoint.timestamp ? trade.entry_price : null,
+          exitMarker: d.timestamp === exitPoint.timestamp ? trade.exit_price : null,
+        }));
+        
+        setChartData(dataWithMarkers);
       } catch (error) {
         console.error('Error fetching chart data:', error);
       } finally {
@@ -65,9 +85,20 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
     );
   }
 
+  const CustomShape = (props: any) => {
+    const { cx, cy, fill } = props;
+    const size = 8;
+    return (
+      <g>
+        <line x1={cx - size} y1={cy - size} x2={cx + size} y2={cy + size} stroke={fill} strokeWidth={3} />
+        <line x1={cx - size} y1={cy + size} x2={cx + size} y2={cy - size} stroke={fill} strokeWidth={3} />
+      </g>
+    );
+  };
+
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <LineChart data={chartData}>
+      <ComposedChart data={chartData}>
         <CartesianGrid strokeDasharray="3 3" />
         <XAxis 
           dataKey="time" 
@@ -94,12 +125,28 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           name="Price"
         />
         
+        {/* Entry marker (X) */}
+        <Scatter 
+          dataKey="entryMarker" 
+          fill="#10b981" 
+          shape={<CustomShape />}
+          name="Entry"
+        />
+        
+        {/* Exit marker (X) */}
+        <Scatter 
+          dataKey="exitMarker" 
+          fill="#ef4444" 
+          shape={<CustomShape />}
+          name="Exit"
+        />
+        
         {/* Entry price line */}
         <ReferenceLine 
           y={trade.entry_price} 
           stroke="#10b981" 
           strokeDasharray="5 5"
-          label={{ value: 'Entry', position: 'insideTopRight', fill: '#10b981', fontSize: 12 }}
+          strokeOpacity={0.5}
         />
         
         {/* Exit price line */}
@@ -107,9 +154,9 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           y={trade.exit_price} 
           stroke="#ef4444" 
           strokeDasharray="5 5"
-          label={{ value: 'Exit', position: 'insideBottomRight', fill: '#ef4444', fontSize: 12 }}
+          strokeOpacity={0.5}
         />
-      </LineChart>
+      </ComposedChart>
     </ResponsiveContainer>
   );
 };
