@@ -267,7 +267,7 @@ serve(async (req) => {
 
             console.log(`Position closed - Entry: ${position.entry_price}, Exit: ${actualExitPrice}, P&L: ${actualPnl.toFixed(2)} USDT`);
             
-            // Update position status
+            // Update position status with close reason
             await supabaseClient
               .from('positions')
               .update({ 
@@ -275,6 +275,7 @@ serve(async (req) => {
                 closed_at: new Date().toISOString(),
                 current_price: actualExitPrice,
                 unrealized_pnl: actualPnl,
+                close_reason: closeReason,
               })
               .eq('id', position.id);
 
@@ -292,6 +293,8 @@ serve(async (req) => {
               closed_at: new Date().toISOString(),
               duration_minutes: Math.floor((now.getTime() - openedAt.getTime()) / (1000 * 60)),
               strategy_hash: position.strategy_hash,
+              open_reason: position.open_reason,
+              close_reason: closeReason,
             });
 
             if (historyError) {

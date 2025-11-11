@@ -95,6 +95,37 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
             </div>
           </div>
 
+          {/* Open & Close Reasons */}
+          {(trade.open_reason || trade.close_reason) && (
+            <div className="space-y-3">
+              {trade.open_reason && (
+                <div className="border rounded-lg p-3 bg-primary/5">
+                  <div className="text-xs font-semibold text-primary mb-1 flex items-center gap-1">
+                    <TrendingUp className="h-3 w-3" />
+                    Hvorfor åbnet
+                  </div>
+                  <div className="text-sm">{trade.open_reason}</div>
+                </div>
+              )}
+              
+              {trade.close_reason && (
+                <div className="border rounded-lg p-3 bg-muted/50">
+                  <div className="text-xs font-semibold mb-1 flex items-center gap-1">
+                    <Target className="h-3 w-3" />
+                    Hvorfor lukket
+                  </div>
+                  <div className="text-sm">
+                    {trade.close_reason === 'STOP_LOSS_HIT' && 'Stop Loss ramt'}
+                    {trade.close_reason === 'TAKE_PROFIT_HIT' && 'Take Profit ramt'}
+                    {trade.close_reason === 'TIMEOUT' && 'Timeout - max varighed nået'}
+                    {trade.close_reason === 'MANUAL' && 'Manuel lukning'}
+                    {!['STOP_LOSS_HIT', 'TAKE_PROFIT_HIT', 'TIMEOUT', 'MANUAL'].includes(trade.close_reason) && trade.close_reason}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Timestamps */}
           <div className="grid grid-cols-2 gap-3">
             <div className="border rounded-lg p-3">

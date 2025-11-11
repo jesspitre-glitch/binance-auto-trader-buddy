@@ -76,14 +76,18 @@ export const PositionManager = () => {
     try {
       const { error } = await supabase
         .from("positions")
-        .update({ status: "CLOSED", closed_at: new Date().toISOString() })
+        .update({ 
+          status: "CLOSED", 
+          closed_at: new Date().toISOString(),
+          close_reason: "MANUAL"
+        })
         .eq("id", positionId);
 
       if (error) throw error;
 
       toast({
         title: "Position lukket",
-        description: "Positionen er blevet lukket",
+        description: "Positionen er blevet lukket manuelt",
       });
     } catch (error: any) {
       toast({
@@ -156,6 +160,12 @@ export const PositionManager = () => {
                           </span>
                         </div>
                         <div>Quantity: <span className="font-mono">{position.quantity}</span></div>
+                        {position.open_reason && (
+                          <div className="text-xs text-muted-foreground mt-1 max-w-xs">
+                            <span className="font-semibold">Åbnet: </span>
+                            {position.open_reason}
+                          </div>
+                        )}
                       </div>
                       
                       <div className="text-sm space-y-1">
@@ -193,6 +203,8 @@ export const PositionManager = () => {
                             closed_at: new Date().toISOString(),
                             duration_minutes: Math.floor((Date.now() - openedTime) / (1000 * 60)),
                             indicators_snapshot: null,
+                            open_reason: position.open_reason,
+                            close_reason: null, // Still open
                           };
                           setSelectedPosition(tradeView);
                         }}

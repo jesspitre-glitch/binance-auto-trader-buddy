@@ -137,11 +137,13 @@ export type Database = {
       positions: {
         Row: {
           binance_order_id: string | null
+          close_reason: string | null
           closed_at: string | null
           created_at: string | null
           current_price: number | null
           entry_price: number
           id: string
+          open_reason: string | null
           opened_at: string | null
           quantity: number
           side: string
@@ -157,11 +159,13 @@ export type Database = {
         }
         Insert: {
           binance_order_id?: string | null
+          close_reason?: string | null
           closed_at?: string | null
           created_at?: string | null
           current_price?: number | null
           entry_price: number
           id?: string
+          open_reason?: string | null
           opened_at?: string | null
           quantity: number
           side: string
@@ -177,11 +181,13 @@ export type Database = {
         }
         Update: {
           binance_order_id?: string | null
+          close_reason?: string | null
           closed_at?: string | null
           created_at?: string | null
           current_price?: number | null
           entry_price?: number
           id?: string
+          open_reason?: string | null
           opened_at?: string | null
           quantity?: number
           side?: string
@@ -235,6 +241,7 @@ export type Database = {
       }
       trade_history: {
         Row: {
+          close_reason: string | null
           closed_at: string | null
           created_at: string | null
           duration_minutes: number | null
@@ -242,6 +249,7 @@ export type Database = {
           exit_price: number
           id: string
           indicators_snapshot: Json | null
+          open_reason: string | null
           opened_at: string
           pnl: number
           pnl_percent: number
@@ -252,6 +260,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          close_reason?: string | null
           closed_at?: string | null
           created_at?: string | null
           duration_minutes?: number | null
@@ -259,6 +268,7 @@ export type Database = {
           exit_price: number
           id?: string
           indicators_snapshot?: Json | null
+          open_reason?: string | null
           opened_at: string
           pnl: number
           pnl_percent: number
@@ -269,6 +279,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          close_reason?: string | null
           closed_at?: string | null
           created_at?: string | null
           duration_minutes?: number | null
@@ -276,6 +287,7 @@ export type Database = {
           exit_price?: number
           id?: string
           indicators_snapshot?: Json | null
+          open_reason?: string | null
           opened_at?: string
           pnl?: number
           pnl_percent?: number

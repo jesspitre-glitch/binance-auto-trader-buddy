@@ -755,6 +755,16 @@ serve(async (req) => {
                 config.leverage
               );
               
+              // Build open reason description
+              const openReasonParts = [];
+              if (analysis.indicators.rsi) openReasonParts.push(`RSI: ${analysis.indicators.rsi.toFixed(2)}`);
+              if (analysis.indicators.macd) openReasonParts.push(`MACD: ${analysis.indicators.macd.toFixed(4)}`);
+              if (analysis.indicators.emaFast && analysis.indicators.emaSlow) {
+                openReasonParts.push(`EMA: Fast ${analysis.indicators.emaFast.toFixed(2)} vs Slow ${analysis.indicators.emaSlow.toFixed(2)}`);
+              }
+              if (analysis.indicators.adx) openReasonParts.push(`ADX: ${analysis.indicators.adx.toFixed(2)}`);
+              const openReason = `${analysis.signal} signal på ${symbol} - Trend: ${trend}. ${openReasonParts.join(', ')}`;
+              
               // Save position to database
               await supabaseClient.from('positions').insert({
                 user_id: session.user_id,
@@ -768,6 +778,7 @@ serve(async (req) => {
                 binance_order_id: orderData.orderId,
                 status: 'OPEN',
                 strategy_hash: strategyHash,
+                open_reason: openReason,
               });
               
               console.log(`Order placed: ${symbol} ${side} ${quantityRounded} @ ${analysis.indicators.price}`);
