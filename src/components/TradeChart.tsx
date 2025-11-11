@@ -42,9 +42,8 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         const trailingPercent = Number(trade.trailing_stop_percent) || 2.0;
         const side = trade.side as 'LONG' | 'SHORT';
         
-        // Peak price should START at entry and only move in profit direction
+        // Initialize: peak starts at entry price
         let peakPrice = entryPrice;
-        let isAfterEntry = false;
         
         const data = klines.map((k: any, index: number) => {
           const timestamp = k[0];
@@ -52,30 +51,24 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           const high = parseFloat(k[2]);
           const low = parseFloat(k[3]);
           
-          // Check if we're after entry time
-          if (timestamp >= openTime) {
-            isAfterEntry = true;
-          }
-          
-          // Only calculate trailing stop AFTER entry
+          // Only calculate trailing stop AFTER entry time
           let trailingStop = null;
-          if (isAfterEntry) {
-            // For SHORT: peak moves DOWN (to lower prices = more profit)
-            // For LONG: peak moves UP (to higher prices = more profit)
+          if (timestamp >= openTime) {
+            // Update peak price ONLY in profit direction
+            // SHORT: profit when price goes DOWN, so peak moves down
+            // LONG: profit when price goes UP, so peak moves up
             if (side === 'LONG' && price > peakPrice) {
               peakPrice = price;
-              console.log(`LONG peak updated: ${peakPrice} at ${new Date(timestamp).toLocaleTimeString()}`);
             } else if (side === 'SHORT' && price < peakPrice) {
               peakPrice = price;
-              console.log(`SHORT peak updated: ${peakPrice} at ${new Date(timestamp).toLocaleTimeString()}`);
             }
             
-            // Calculate trailing stop based on peak
-            // For SHORT: trailing stop is ABOVE peak (stops when price goes UP)
-            // For LONG: trailing stop is BELOW peak (stops when price goes DOWN)
+            // Calculate trailing stop from peak
+            // SHORT: trailing stop ABOVE peak (+ percent) - exits when price rises
+            // LONG: trailing stop BELOW peak (- percent) - exits when price falls
             if (side === 'LONG') {
               trailingStop = peakPrice * (1 - trailingPercent / 100);
-            } else {
+            } else { // SHORT
               trailingStop = peakPrice * (1 + trailingPercent / 100);
             }
           }
@@ -87,7 +80,6 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
             high,
             low,
             trailingStop,
-            isAfterEntry,
           };
         });
         
