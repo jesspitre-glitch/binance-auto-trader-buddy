@@ -24,7 +24,6 @@ interface IndicatorConfig {
   atr_trailing_stop_multiplier: number;
   adx_period: number;
   adx_threshold: number;
-  volume_spike_multiplier: number;
   risk_per_trade_percent: number;
   max_open_positions: number;
   risk_reward_ratio: number;
@@ -54,7 +53,6 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
     atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier,
     adx_period: config.adx_period,
     adx_threshold: config.adx_threshold,
-    volume_spike_multiplier: config.volume_spike_multiplier,
     risk_per_trade_percent: config.risk_per_trade_percent,
     max_open_positions: config.max_open_positions,
     risk_reward_ratio: config.risk_reward_ratio,
@@ -271,7 +269,6 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
     emaMediumCurrent > emaSlowCurrent,
     rsi > 30 && rsi < config.rsi_overbought,
     macd.histogram > config.macd_histogram_threshold,
-    currentVolume > avgVolume * config.volume_spike_multiplier,
   ];
   
   // SHORT signal
@@ -281,11 +278,10 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
     emaMediumCurrent < emaSlowCurrent,
     rsi < 70 && rsi > config.rsi_oversold,
     macd.histogram < -config.macd_histogram_threshold,
-    currentVolume > avgVolume * config.volume_spike_multiplier,
   ];
   
-  const longSignal = longConditions.filter(c => c).length >= 5;
-  const shortSignal = shortConditions.filter(c => c).length >= 5;
+  const longSignal = longConditions.filter(c => c).length >= 4;
+  const shortSignal = shortConditions.filter(c => c).length >= 4;
   
   return {
     signal: longSignal ? 'LONG' : shortSignal ? 'SHORT' : 'NONE',

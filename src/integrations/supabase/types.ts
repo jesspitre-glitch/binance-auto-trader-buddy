@@ -48,7 +48,6 @@ export type Database = {
           trend_timeframe: string | null
           updated_at: string | null
           user_id: string
-          volume_spike_multiplier: number | null
         }
         Insert: {
           adx_period?: number | null
@@ -83,7 +82,6 @@ export type Database = {
           trend_timeframe?: string | null
           updated_at?: string | null
           user_id: string
-          volume_spike_multiplier?: number | null
         }
         Update: {
           adx_period?: number | null
@@ -118,7 +116,6 @@ export type Database = {
           trend_timeframe?: string | null
           updated_at?: string | null
           user_id?: string
-          volume_spike_multiplier?: number | null
         }
         Relationships: []
       }
