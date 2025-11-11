@@ -216,9 +216,17 @@ serve(async (req) => {
         let newTrailingStop = position.trailing_stop;
         
         if (position.side === 'LONG') {
-          newTrailingStop = newPeakPrice * (1 - trailingPercent / 100);
+          // LONG: trailing stop below peak, but never above entry (prevents loss)
+          newTrailingStop = Math.max(
+            newPeakPrice * (1 - trailingPercent / 100),
+            position.entry_price
+          );
         } else {
-          newTrailingStop = newPeakPrice * (1 + trailingPercent / 100);
+          // SHORT: trailing stop above peak, but never below entry (prevents loss)
+          newTrailingStop = Math.min(
+            newPeakPrice * (1 + trailingPercent / 100),
+            position.entry_price
+          );
         }
 
         // Check trailing stop first (highest priority)

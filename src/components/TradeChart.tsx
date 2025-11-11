@@ -63,13 +63,19 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
               peakPrice = price;
             }
             
-            // Calculate trailing stop from peak
-            // SHORT: trailing stop ABOVE peak (+ percent) - exits when price rises
-            // LONG: trailing stop BELOW peak (- percent) - exits when price falls
+            // Calculate trailing stop from peak, but NEVER allow it to start in loss territory
             if (side === 'LONG') {
-              trailingStop = peakPrice * (1 - trailingPercent / 100);
-            } else { // SHORT
-              trailingStop = peakPrice * (1 + trailingPercent / 100);
+              // LONG: trailing below peak, but never above entry
+              trailingStop = Math.max(
+                peakPrice * (1 - trailingPercent / 100),
+                entryPrice
+              );
+            } else {
+              // SHORT: trailing above peak, but never below entry
+              trailingStop = Math.min(
+                peakPrice * (1 + trailingPercent / 100),
+                entryPrice
+              );
             }
           }
           
