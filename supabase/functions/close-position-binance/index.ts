@@ -87,13 +87,81 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Binance API keys not configured' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Close position on Binance (reduce-only market)
-    const closeRes = await closeOnBinance(symbol, apiKey, apiSecret);
+    // 1) Read the latest OPEN position for this symbol first (so we have full context)
+    const { data: openPositions } = await supabaseClient
+      .from('positions')
+      .select('*')
+      .eq('symbol', symbol)
+      .eq('status', 'OPEN')
+      .order('opened_at', { ascending: false })
+      .limit(1);
+    const position = openPositions?.[0];
 
-    // Immediately sync DB with Binance (Binance has source of truth)
+    // 2) Close position on Binance (reduce-only market)
+    const closeRes = await closeOnBinance(symbol, apiKey, apiSecret);
+    const order = (closeRes as any).order ?? {};
+
+    // 3) Resolve execution details from Binance response (fallback to ticker if missing)
+    const avgPrice = Number(order.avgPrice) || Number(order.price) || 0;
+    const executedQty = Number(order.executedQty) || Number(order.origQty) || Number(position?.quantity) || 0;
+
+    let exitPrice = avgPrice;
+    if (!exitPrice || !isFinite(exitPrice) || exitPrice === 0) {
+      try {
+        const tRes = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
+        if (tRes.ok) {
+          const tData = await tRes.json();
+          exitPrice = parseFloat(tData.price);
+        }
+      } catch (_) {}
+    }
+
+    // 4) If we have the DB position, persist CLOSED state and insert trade history immediately
+    let historyInserted = false;
+    if (position) {
+      const side: 'LONG' | 'SHORT' = position.side as any;
+      const entry = Number(position.entry_price) || 0;
+      const qty = executedQty || Number(position.quantity) || 0;
+      const nowIso = new Date().toISOString();
+
+      const pnl = side === 'LONG' ? (exitPrice - entry) * qty : (entry - exitPrice) * qty;
+      const pnlPercent = ((exitPrice - entry) / (entry || 1)) * 100 * (side === 'LONG' ? 1 : -1);
+
+      await supabaseClient
+        .from('positions')
+        .update({
+          status: 'CLOSED',
+          closed_at: nowIso,
+          current_price: exitPrice || null,
+          unrealized_pnl: pnl,
+          close_reason: 'MANUAL',
+        })
+        .eq('id', position.id);
+
+      const { error: histError } = await supabaseClient.from('trade_history').insert({
+        user_id: position.user_id,
+        symbol: position.symbol,
+        side: position.side,
+        entry_price: entry,
+        exit_price: exitPrice,
+        quantity: qty,
+        pnl: pnl,
+        pnl_percent: pnlPercent,
+        opened_at: position.opened_at,
+        closed_at: nowIso,
+        duration_minutes: position.opened_at ? Math.floor((Date.now() - new Date(position.opened_at).getTime()) / (1000 * 60)) : null,
+        strategy_hash: position.strategy_hash,
+        open_reason: position.open_reason,
+        close_reason: 'MANUAL',
+      });
+
+      historyInserted = !histError;
+    }
+
+    // 5) Still run a sync to refresh portfolio and ensure consistency with Binance
     const sync = await supabaseClient.functions.invoke('sync-binance-futures-positions');
 
-    return new Response(JSON.stringify({ success: true, closeRes, sync: sync.data }), {
+    return new Response(JSON.stringify({ success: true, closeRes, historyInserted, sync: sync.data }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: any) {
