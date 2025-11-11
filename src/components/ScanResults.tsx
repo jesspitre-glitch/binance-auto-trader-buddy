@@ -18,10 +18,17 @@ export const ScanResults = () => {
         .from("scan_results")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(20);
+        .limit(100);
 
       if (error) throw error;
-      setResults(data || []);
+      // Keep only the newest result per symbol
+      const latestBySymbol = new Map<string, any>();
+      (data || []).forEach((row) => {
+        if (!latestBySymbol.has(row.symbol)) {
+          latestBySymbol.set(row.symbol, row);
+        }
+      });
+      setResults(Array.from(latestBySymbol.values()));
     } catch (error: any) {
       console.error("Scan results fetch error:", error);
     } finally {
@@ -46,9 +53,10 @@ export const ScanResults = () => {
           console.log("New scan result:", payload);
           if (payload.eventType === "INSERT") {
             const newResult = payload.new as any;
-            setResults((prev) => [newResult, ...prev].slice(0, 20));
-            
-            // Show notification for signals
+            setResults((prev) => {
+              const filtered = prev.filter((r) => r.symbol !== newResult.symbol);
+              return [newResult, ...filtered];
+            });
             if (newResult.signal !== "NONE") {
               toast({
                 title: `${newResult.signal} Signal Detekteret`,
