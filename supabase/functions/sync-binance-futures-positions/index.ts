@@ -44,6 +44,8 @@ async function getBinanceAccount(apiKey: string, apiSecret: string) {
   });
   
   if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Binance account error:', errorText);
     throw new Error(`Binance API error: ${response.statusText}`);
   }
   
@@ -52,10 +54,10 @@ async function getBinanceAccount(apiKey: string, apiSecret: string) {
 
 async function getBinancePositions(apiKey: string, apiSecret: string) {
   const serverTime = await getBinanceServerTime();
-  const queryString = `timestamp=${serverTime}`;
+  const queryString = `timestamp=${serverTime}&recvWindow=10000`;
   const signature = await createSignature(queryString, apiSecret);
   
-  const url = `https://fapi.binance.com/fapi/v1/positionRisk?${queryString}&signature=${signature}`;
+  const url = `https://fapi.binance.com/fapi/v3/positionRisk?${queryString}&signature=${signature}`;
   
   const response = await fetch(url, {
     headers: {
@@ -64,6 +66,8 @@ async function getBinancePositions(apiKey: string, apiSecret: string) {
   });
   
   if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Binance positions error:', errorText);
     throw new Error(`Binance API error: ${response.statusText}`);
   }
   
