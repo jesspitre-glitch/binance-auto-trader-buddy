@@ -298,42 +298,58 @@ serve(async (req) => {
             const qty = Number(dbPos.quantity) || 0;
             const entry = Number(dbPos.entry_price) || 0;
             const sideDb = dbPos.side as 'LONG' | 'SHORT';
+
+            // Infer reason if we have SL/TP
+            let inferredReason: 'EXTERNAL_CLOSE' | 'STOP_LOSS_HIT' | 'TAKE_PROFIT_HIT' = 'EXTERNAL_CLOSE';
+            if (sideDb === 'LONG') {
+              if (dbPos.stop_loss && exitPrice <= Number(dbPos.stop_loss)) inferredReason = 'STOP_LOSS_HIT';
+              else if (dbPos.take_profit && exitPrice >= Number(dbPos.take_profit)) inferredReason = 'TAKE_PROFIT_HIT';
+            } else {
+              if (dbPos.stop_loss && exitPrice >= Number(dbPos.stop_loss)) inferredReason = 'STOP_LOSS_HIT';
+              else if (dbPos.take_profit && exitPrice <= Number(dbPos.take_profit)) inferredReason = 'TAKE_PROFIT_HIT';
+            }
+
             const pnlRaw = sideDb === 'LONG' ? (exitPrice - entry) * qty : (entry - exitPrice) * qty;
             const positionValue = entry * qty || 1;
             const pnlPct = (pnlRaw / positionValue) * 100;
             const durationMin = dbPos.opened_at ? Math.floor((Date.now() - new Date(dbPos.opened_at).getTime()) / (1000 * 60)) : null;
             
-            await supabaseClient
+            const { data: updatedRows } = await supabaseClient
               .from('positions')
               .update({
                 status: 'CLOSED',
                 closed_at: nowIso,
-                close_reason: 'EXTERNAL_CLOSE',
+                close_reason: inferredReason,
               })
               .eq('id', dbPos.id)
-              .eq('status', 'OPEN'); // Only update if still OPEN
+              .eq('status', 'OPEN')
+              .select('id'); // Only update if still OPEN
             
-            // Insert trade history for external closure
-            await supabaseClient
-              .from('trade_history')
-              .insert({
-                user_id: dbPos.user_id,
-                symbol: dbPos.symbol,
-                side: dbPos.side,
-                entry_price: entry,
-                exit_price: exitPrice,
-                quantity: qty,
-                pnl: pnlRaw,
-                pnl_percent: pnlPct,
-                opened_at: dbPos.opened_at,
-                closed_at: nowIso,
-                duration_minutes: durationMin,
-                strategy_hash: dbPos.strategy_hash,
-                open_reason: dbPos.open_reason,
-                close_reason: 'EXTERNAL_CLOSE',
-              });
+            // Insert trade history only if we actually changed the row (avoids duplicates)
+            if (updatedRows && updatedRows.length > 0) {
+              await supabaseClient
+                .from('trade_history')
+                .insert({
+                  user_id: dbPos.user_id,
+                  symbol: dbPos.symbol,
+                  side: dbPos.side,
+                  entry_price: entry,
+                  exit_price: exitPrice,
+                  quantity: qty,
+                  pnl: pnlRaw,
+                  pnl_percent: pnlPct,
+                  opened_at: dbPos.opened_at,
+                  closed_at: nowIso,
+                  duration_minutes: durationMin,
+                  strategy_hash: dbPos.strategy_hash,
+                  open_reason: dbPos.open_reason,
+                  close_reason: inferredReason,
+                });
 
-            updates.push({ symbol: dbPos.symbol, action: 'closed', id: dbPos.id });
+              updates.push({ symbol: dbPos.symbol, action: 'closed', id: dbPos.id });
+            } else {
+              console.log(`No update applied for ${dbPos.symbol} (already closed)`);
+            }
           }
         }
       }
