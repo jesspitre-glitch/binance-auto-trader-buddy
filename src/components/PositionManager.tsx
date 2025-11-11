@@ -161,26 +161,28 @@ export const PositionManager = () => {
                         <div>SL: <span className="font-mono">${position.stop_loss}</span></div>
                         <div>TP: <span className="font-mono">${position.take_profit}</span></div>
                         {position.trailing_stop && (() => {
-                          // Trailing stop is only active if peak has moved in profit direction
-                          const peakPrice = Number(position.peak_price) || Number(position.entry_price);
-                          const entryPrice = Number(position.entry_price);
-                          const isTrailing = position.side === "LONG" 
-                            ? peakPrice > entryPrice * 1.001 // At least 0.1% profit for LONG
-                            : peakPrice < entryPrice * 0.999; // At least 0.1% profit for SHORT
+                          // Trailing stop is only active if TP has been reached
+                          const currentPrice = livePrices[position.symbol] ?? position.current_price ?? position.entry_price;
+                          const tpReached = position.side === "LONG"
+                            ? currentPrice >= Number(position.take_profit)
+                            : currentPrice <= Number(position.take_profit);
+                          
                           return (
                             <>
                               <div className="flex items-center gap-2">
                                 <span>Trail:</span>
                                 <span className="font-mono">${Number(position.trailing_stop).toFixed(4)}</span>
-                                {isTrailing && (
+                                {tpReached && (
                                   <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-profit/10 text-profit border-profit/20">
                                     AKTIV
                                   </Badge>
                                 )}
                               </div>
-                              <div className="text-xs text-muted-foreground">
-                                Peak: <span className="font-mono">${peakPrice.toFixed(4)}</span>
-                              </div>
+                              {tpReached && (
+                                <div className="text-xs text-muted-foreground">
+                                  Peak: <span className="font-mono">${Number(position.peak_price).toFixed(4)}</span>
+                                </div>
+                              )}
                             </>
                           );
                         })()}

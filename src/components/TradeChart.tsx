@@ -41,9 +41,11 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         const entryPrice = Number(trade.entry_price);
         const trailingPercent = Number(trade.trailing_stop_percent) || 2.0;
         const side = trade.side as 'LONG' | 'SHORT';
+        const takeProfit = Number(trade.take_profit);
         
-        // Initialize: peak starts at entry price
-        let peakPrice = entryPrice;
+        // Peak price starts at TP when trailing activates
+        let peakPrice = takeProfit;
+        let trailingActivated = false;
         
         const data = klines.map((k: any, index: number) => {
           const timestamp = k[0];
@@ -51,31 +53,34 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           const high = parseFloat(k[2]);
           const low = parseFloat(k[3]);
           
-          // Only calculate trailing stop AFTER entry time
+          // Trailing stop only activates AFTER TP is reached
           let trailingStop = null;
           if (timestamp >= openTime) {
-            // Update peak price ONLY in profit direction
-            // SHORT: profit when price goes DOWN, so peak moves down
-            // LONG: profit when price goes UP, so peak moves up
-            if (side === 'LONG' && price > peakPrice) {
-              peakPrice = price;
-            } else if (side === 'SHORT' && price < peakPrice) {
-              peakPrice = price;
-            }
+            // Check if TP has been reached at this point
+            const tpReached = side === 'LONG' 
+              ? price >= takeProfit 
+              : price <= takeProfit;
             
-            // Calculate trailing stop from peak, but NEVER allow it to start in loss territory
-            if (side === 'LONG') {
-              // LONG: trailing below peak, but never above entry
-              trailingStop = Math.max(
-                peakPrice * (1 - trailingPercent / 100),
-                entryPrice
-              );
-            } else {
-              // SHORT: trailing above peak, but never below entry
-              trailingStop = Math.min(
-                peakPrice * (1 + trailingPercent / 100),
-                entryPrice
-              );
+            if (tpReached) {
+              if (!trailingActivated) {
+                trailingActivated = true;
+                peakPrice = takeProfit; // Start peak at TP level
+              }
+              
+              // TP reached - activate trailing stop
+              // Update peak from TP level onwards
+              if (side === 'LONG' && price > peakPrice) {
+                peakPrice = price;
+              } else if (side === 'SHORT' && price < peakPrice) {
+                peakPrice = price;
+              }
+              
+              // Calculate trailing stop from peak
+              if (side === 'LONG') {
+                trailingStop = peakPrice * (1 - trailingPercent / 100);
+              } else {
+                trailingStop = peakPrice * (1 + trailingPercent / 100);
+              }
             }
           }
           
@@ -213,6 +218,25 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           stroke="#10b981" 
           strokeDasharray="5 5"
           strokeOpacity={0.5}
+          label="Entry"
+        />
+        
+        {/* Take Profit line - when hit, trailing stop activates */}
+        <ReferenceLine 
+          y={trade.take_profit} 
+          stroke="#22c55e" 
+          strokeDasharray="3 3"
+          strokeOpacity={0.7}
+          label="TP (activates trailing)"
+        />
+        
+        {/* Stop Loss line */}
+        <ReferenceLine 
+          y={trade.stop_loss} 
+          stroke="#ef4444" 
+          strokeDasharray="3 3"
+          strokeOpacity={0.7}
+          label="SL"
         />
         
         {/* Exit price line */}
@@ -221,6 +245,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           stroke="#ef4444" 
           strokeDasharray="5 5"
           strokeOpacity={0.5}
+          label="Exit"
         />
       </ComposedChart>
     </ResponsiveContainer>

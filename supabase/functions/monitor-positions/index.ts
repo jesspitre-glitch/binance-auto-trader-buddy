@@ -203,62 +203,59 @@ serve(async (req) => {
         let shouldClose = false;
         let closeReason = '';
 
-        // Update peak price for trailing stop
+        // Check if TP was reached to activate trailing stop
+        let trailingStopActive = false;
         let newPeakPrice = position.peak_price || position.entry_price;
-        if (position.side === 'LONG' && currentPrice > newPeakPrice) {
-          newPeakPrice = currentPrice;
-        } else if (position.side === 'SHORT' && (!newPeakPrice || currentPrice < newPeakPrice)) {
-          newPeakPrice = currentPrice;
-        }
-
-        // Calculate trailing stop based on peak price
-        const trailingPercent = position.trailing_stop_percent || 2.0;
         let newTrailingStop = position.trailing_stop;
         
-        if (position.side === 'LONG') {
-          // LONG: trailing stop below peak, but never above entry (prevents loss)
-          newTrailingStop = Math.max(
-            newPeakPrice * (1 - trailingPercent / 100),
-            position.entry_price
-          );
-        } else {
-          // SHORT: trailing stop above peak, but never below entry (prevents loss)
-          newTrailingStop = Math.min(
-            newPeakPrice * (1 + trailingPercent / 100),
-            position.entry_price
-          );
-        }
-
-        // Check trailing stop first (highest priority)
-        if (newTrailingStop) {
-          if (position.side === 'LONG' && currentPrice <= newTrailingStop) {
-            shouldClose = true;
-            closeReason = 'TRAILING_STOP_HIT';
-          } else if (position.side === 'SHORT' && currentPrice >= newTrailingStop) {
-            shouldClose = true;
-            closeReason = 'TRAILING_STOP_HIT';
+        if (position.take_profit) {
+          const tpReached = position.side === 'LONG' 
+            ? currentPrice >= position.take_profit 
+            : currentPrice <= position.take_profit;
+          
+          if (tpReached) {
+            trailingStopActive = true;
+            console.log(`TP reached for ${position.symbol}, activating trailing stop`);
+            
+            // Initialize peak at TP level if trailing just activated
+            if (!position.peak_price || position.peak_price === position.entry_price) {
+              newPeakPrice = position.take_profit;
+            }
+            
+            // Update peak from current price if better than peak
+            if (position.side === 'LONG' && currentPrice > newPeakPrice) {
+              newPeakPrice = currentPrice;
+            } else if (position.side === 'SHORT' && currentPrice < newPeakPrice) {
+              newPeakPrice = currentPrice;
+            }
+            
+            // Calculate trailing stop from peak
+            const trailingPercent = position.trailing_stop_percent || 2.0;
+            if (position.side === 'LONG') {
+              newTrailingStop = newPeakPrice * (1 - trailingPercent / 100);
+            } else {
+              newTrailingStop = newPeakPrice * (1 + trailingPercent / 100);
+            }
+            
+            // Check if trailing stop is hit
+            if (position.side === 'LONG' && currentPrice <= newTrailingStop) {
+              shouldClose = true;
+              closeReason = 'TRAILING_STOP_HIT';
+            } else if (position.side === 'SHORT' && currentPrice >= newTrailingStop) {
+              shouldClose = true;
+              closeReason = 'TRAILING_STOP_HIT';
+            }
           }
         }
 
-        // Check stop loss (only if trailing stop didn't trigger)
-        if (!shouldClose && position.stop_loss) {
+        // Check stop loss (only if TP not reached)
+        if (!trailingStopActive && !shouldClose && position.stop_loss) {
           if (position.side === 'LONG' && currentPrice <= position.stop_loss) {
             shouldClose = true;
             closeReason = 'STOP_LOSS_HIT';
           } else if (position.side === 'SHORT' && currentPrice >= position.stop_loss) {
             shouldClose = true;
             closeReason = 'STOP_LOSS_HIT';
-          }
-        }
-
-        // Check take profit
-        if (!shouldClose && position.take_profit) {
-          if (position.side === 'LONG' && currentPrice >= position.take_profit) {
-            shouldClose = true;
-            closeReason = 'TAKE_PROFIT_HIT';
-          } else if (position.side === 'SHORT' && currentPrice <= position.take_profit) {
-            shouldClose = true;
-            closeReason = 'TAKE_PROFIT_HIT';
           }
         }
 
