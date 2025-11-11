@@ -284,6 +284,12 @@ serve(async (req) => {
       if (dbPositions) {
         for (const dbPos of dbPositions) {
           if (!binanceSymbols.has(dbPos.symbol)) {
+            // Only process if still OPEN (don't overwrite if already closed by monitor/manual)
+            if (dbPos.status !== 'OPEN') {
+              console.log(`Skipping ${dbPos.symbol} - already closed with reason: ${dbPos.close_reason}`);
+              continue;
+            }
+            
             console.log(`Closing position ${dbPos.symbol} - not found on Binance (was closed externally)`);
             const nowIso = new Date().toISOString();
 
@@ -304,7 +310,8 @@ serve(async (req) => {
                 closed_at: nowIso,
                 close_reason: 'EXTERNAL_CLOSE',
               })
-              .eq('id', dbPos.id);
+              .eq('id', dbPos.id)
+              .eq('status', 'OPEN'); // Only update if still OPEN
             
             // Insert trade history for external closure
             await supabaseClient
