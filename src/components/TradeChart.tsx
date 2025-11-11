@@ -13,11 +13,19 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
   useEffect(() => {
     const fetchKlines = async () => {
       try {
-        // Calculate time range: 30 min before entry to 30 min after exit
+        // Calculate time range: 30 min before entry to 30 min after exit (or now if still open)
         const openTime = new Date(trade.opened_at).getTime();
-        const closeTime = new Date(trade.closed_at).getTime();
+        const closeTime = trade.closed_at ? new Date(trade.closed_at).getTime() : Date.now();
         const startTime = openTime - (30 * 60 * 1000); // 30 min before
         const endTime = closeTime + (30 * 60 * 1000); // 30 min after
+        
+        console.log('Trade details:', {
+          symbol: trade.symbol,
+          side: trade.side,
+          entry_price: trade.entry_price,
+          trailing_percent: trade.trailing_stop_percent,
+          openTime: new Date(openTime).toISOString(),
+        });
         
         // Fetch 1-minute klines from Binance
         const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${trade.symbol}&interval=1m&startTime=${startTime}&endTime=${endTime}&limit=500`;
@@ -34,24 +42,37 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         const trailingPercent = Number(trade.trailing_stop_percent) || 2.0;
         const side = trade.side as 'LONG' | 'SHORT';
         
+        // Peak price should START at entry and only move in profit direction
         let peakPrice = entryPrice;
+        let isAfterEntry = false;
+        
         const data = klines.map((k: any, index: number) => {
           const timestamp = k[0];
           const price = parseFloat(k[4]); // Close price
           const high = parseFloat(k[2]);
           const low = parseFloat(k[3]);
           
-          // Only calculate trailing stop after entry
-          let trailingStop = null;
+          // Check if we're after entry time
           if (timestamp >= openTime) {
-            // Update peak price
+            isAfterEntry = true;
+          }
+          
+          // Only calculate trailing stop AFTER entry
+          let trailingStop = null;
+          if (isAfterEntry) {
+            // For SHORT: peak moves DOWN (to lower prices = more profit)
+            // For LONG: peak moves UP (to higher prices = more profit)
             if (side === 'LONG' && price > peakPrice) {
               peakPrice = price;
+              console.log(`LONG peak updated: ${peakPrice} at ${new Date(timestamp).toLocaleTimeString()}`);
             } else if (side === 'SHORT' && price < peakPrice) {
               peakPrice = price;
+              console.log(`SHORT peak updated: ${peakPrice} at ${new Date(timestamp).toLocaleTimeString()}`);
             }
             
             // Calculate trailing stop based on peak
+            // For SHORT: trailing stop is ABOVE peak (stops when price goes UP)
+            // For LONG: trailing stop is BELOW peak (stops when price goes DOWN)
             if (side === 'LONG') {
               trailingStop = peakPrice * (1 - trailingPercent / 100);
             } else {
@@ -66,8 +87,12 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
             high,
             low,
             trailingStop,
+            isAfterEntry,
           };
         });
+        
+        console.log('First 5 data points:', data.slice(0, 5));
+        console.log('Last 5 data points:', data.slice(-5));
         
         // Find closest data points to entry and exit times
         const entryPoint = data.reduce((closest, current) => {
