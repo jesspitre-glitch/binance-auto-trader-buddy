@@ -117,12 +117,13 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
                   <div className="text-sm">
                     {trade.close_reason === 'STOP_LOSS_HIT' && 'Stop Loss ramt'}
                     {trade.close_reason === 'TAKE_PROFIT_HIT' && 'Take Profit ramt'}
+                    {trade.close_reason === 'TRAILING_STOP_HIT' && 'Trailing Stop ramt'}
                     {trade.close_reason === 'TIMEOUT' && 'Timeout - max varighed nået'}
                     {trade.close_reason === 'MANUAL' && 'Manuel lukning'}
                     {trade.close_reason === 'SYSTEM_CLOSE' && 'Automatisk lukket af systemet'}
-                    {trade.close_reason === 'EXTERNAL_CLOSE' && 'Lukket eksternt (direkte på Binance)'}
+                    {trade.close_reason === 'EXTERNAL_CLOSE' && 'Automatisk lukket (system eller eksternt)'}
                     {trade.close_reason === 'DUPLICATE' && 'Duplikat position fjernet'}
-                    {!['STOP_LOSS_HIT', 'TAKE_PROFIT_HIT', 'TIMEOUT', 'MANUAL', 'SYSTEM_CLOSE', 'EXTERNAL_CLOSE', 'DUPLICATE'].includes(trade.close_reason) && trade.close_reason}
+                    {!['STOP_LOSS_HIT', 'TAKE_PROFIT_HIT', 'TRAILING_STOP_HIT', 'TIMEOUT', 'MANUAL', 'SYSTEM_CLOSE', 'EXTERNAL_CLOSE', 'DUPLICATE'].includes(trade.close_reason) && trade.close_reason}
                   </div>
                 </div>
               )}
