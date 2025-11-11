@@ -780,6 +780,9 @@ serve(async (req) => {
                 strategy_hash: strategyHash,
                 open_reason: openReason,
               });
+
+              // Immediately sync with Binance so DB matches source of truth
+              await supabaseClient.functions.invoke('sync-binance-futures-positions');
               
               console.log(`Order placed: ${symbol} ${side} ${quantityRounded} @ ${analysis.indicators.price}`);
             } catch (error) {

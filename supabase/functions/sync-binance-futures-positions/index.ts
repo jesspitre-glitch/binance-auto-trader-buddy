@@ -77,6 +77,14 @@ async function getBinancePositions(apiKey: string, apiSecret: string) {
   return positions.filter((p: any) => parseFloat(p.positionAmt) !== 0);
 }
 
+async function getCurrentPrice(symbol: string): Promise<number> {
+  const res = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
+  if (!res.ok) return NaN;
+  const data = await res.json();
+  return parseFloat(data.price);
+}
+
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -207,14 +215,45 @@ serve(async (req) => {
             const duplicate = matchingPositions[i];
             console.log(`Closing duplicate position ${duplicate.symbol} (ID: ${duplicate.id})`);
             
+            // Fetch a current price snapshot to log history
+            const exitPrice = await getCurrentPrice(duplicate.symbol);
+            const qty = Number(duplicate.quantity) || 0;
+            const entry = Number(duplicate.entry_price) || 0;
+            const sideDup = duplicate.side as 'LONG' | 'SHORT';
+            const pnlRaw = sideDup === 'LONG' ? (exitPrice - entry) * qty : (entry - exitPrice) * qty;
+            const positionValue = entry * qty || 1;
+            const pnlPct = (pnlRaw / positionValue) * 100;
+            const nowIso = new Date().toISOString();
+            const durationMin = duplicate.opened_at ? Math.floor((Date.now() - new Date(duplicate.opened_at).getTime()) / (1000 * 60)) : null;
+
             await supabaseClient
               .from('positions')
               .update({
                 status: 'CLOSED',
-                closed_at: new Date().toISOString(),
+                closed_at: nowIso,
                 close_reason: 'DUPLICATE',
               })
               .eq('id', duplicate.id);
+
+            // Insert trade history for duplicate closure
+            await supabaseClient
+              .from('trade_history')
+              .insert({
+                user_id: duplicate.user_id,
+                symbol: duplicate.symbol,
+                side: duplicate.side,
+                entry_price: entry,
+                exit_price: exitPrice,
+                quantity: qty,
+                pnl: pnlRaw,
+                pnl_percent: pnlPct,
+                opened_at: duplicate.opened_at,
+                closed_at: nowIso,
+                duration_minutes: durationMin,
+                strategy_hash: duplicate.strategy_hash,
+                open_reason: duplicate.open_reason,
+                close_reason: 'DUPLICATE',
+              });
             
             updates.push({ symbol: duplicate.symbol, action: 'closed_duplicate', id: duplicate.id });
           }
@@ -245,16 +284,47 @@ serve(async (req) => {
         for (const dbPos of dbPositions) {
           if (!binanceSymbols.has(dbPos.symbol)) {
             console.log(`Closing position ${dbPos.symbol} - not found on Binance (was closed externally)`);
+            const nowIso = new Date().toISOString();
+
+            // Best-effort snapshot price for history
+            const exitPrice = await getCurrentPrice(dbPos.symbol);
+            const qty = Number(dbPos.quantity) || 0;
+            const entry = Number(dbPos.entry_price) || 0;
+            const sideDb = dbPos.side as 'LONG' | 'SHORT';
+            const pnlRaw = sideDb === 'LONG' ? (exitPrice - entry) * qty : (entry - exitPrice) * qty;
+            const positionValue = entry * qty || 1;
+            const pnlPct = (pnlRaw / positionValue) * 100;
+            const durationMin = dbPos.opened_at ? Math.floor((Date.now() - new Date(dbPos.opened_at).getTime()) / (1000 * 60)) : null;
             
             await supabaseClient
               .from('positions')
               .update({
                 status: 'CLOSED',
-                closed_at: new Date().toISOString(),
+                closed_at: nowIso,
                 close_reason: 'EXTERNAL_CLOSE',
               })
               .eq('id', dbPos.id);
             
+            // Insert trade history for external closure
+            await supabaseClient
+              .from('trade_history')
+              .insert({
+                user_id: dbPos.user_id,
+                symbol: dbPos.symbol,
+                side: dbPos.side,
+                entry_price: entry,
+                exit_price: exitPrice,
+                quantity: qty,
+                pnl: pnlRaw,
+                pnl_percent: pnlPct,
+                opened_at: dbPos.opened_at,
+                closed_at: nowIso,
+                duration_minutes: durationMin,
+                strategy_hash: dbPos.strategy_hash,
+                open_reason: dbPos.open_reason,
+                close_reason: 'EXTERNAL_CLOSE',
+              });
+
             updates.push({ symbol: dbPos.symbol, action: 'closed', id: dbPos.id });
           }
         }

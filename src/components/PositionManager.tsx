@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, TrendingUp, TrendingDown, X, BarChart2, RefreshCw } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, X, BarChart2 } from "lucide-react";
 import { useBinanceFuturesPrices } from "@/hooks/useBinanceFuturesPrices";
 import { formatDistanceToNow } from "date-fns";
 import { da } from "date-fns/locale";
@@ -72,55 +72,18 @@ export const PositionManager = () => {
   const symbols = positions.map((p) => p.symbol).filter(Boolean);
   const { prices: livePrices, updatedAt: priceUpdatedAt } = useBinanceFuturesPrices(symbols);
 
-  const syncWithBinance = async () => {
+  const closePosition = async (position: any) => {
     try {
-      toast({
-        title: "Synkroniserer...",
-        description: "Henter positioner fra Binance",
+      toast({ title: "Lukker på Binance...", description: position.symbol });
+      const { data, error } = await supabase.functions.invoke('close-position-binance', {
+        body: { symbol: position.symbol },
       });
-
-      const { data, error } = await supabase.functions.invoke('sync-binance-futures-positions');
-      
       if (error) throw error;
-      
-      toast({
-        title: "Synkronisering fuldført",
-        description: `${data.totalPositions} aktive positioner på Binance`,
-      });
-      
+      toast({ title: "Lukket og synkroniseret", description: `${position.symbol} lukket på Binance` });
+      // fetchPositions will be triggered by realtime, but also force refresh
       fetchPositions();
     } catch (error: any) {
-      toast({
-        title: "Synkroniseringsfejl",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const closePosition = async (positionId: string) => {
-    try {
-      const { error } = await supabase
-        .from("positions")
-        .update({ 
-          status: "CLOSED", 
-          closed_at: new Date().toISOString(),
-          close_reason: "MANUAL"
-        })
-        .eq("id", positionId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Position lukket",
-        description: "Positionen er blevet lukket manuelt",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Fejl",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Fejl ved lukning", description: error.message, variant: "destructive" });
     }
   };
 
@@ -138,18 +101,7 @@ export const PositionManager = () => {
     <>
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Åbne Positioner ({positions.length})</CardTitle>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={syncWithBinance}
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Synk med Binance
-            </Button>
-          </div>
+          <CardTitle>Åbne Positioner ({positions.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {positions.length === 0 ? (
@@ -252,7 +204,7 @@ export const PositionManager = () => {
                       <Button
                         size="icon"
                         variant="ghost"
-                        onClick={() => closePosition(position.id)}
+                        onClick={() => closePosition(position)}
                       >
                         <X className="h-4 w-4" />
                       </Button>

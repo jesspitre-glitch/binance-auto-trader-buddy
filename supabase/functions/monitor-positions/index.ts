@@ -341,6 +341,9 @@ serve(async (req) => {
               console.error('Failed to update portfolio balance:', error);
             }
 
+            // After closing, immediately sync with Binance (source of truth)
+            await supabaseClient.functions.invoke('sync-binance-futures-positions');
+
             results.push({
               symbol: position.symbol,
               action: 'CLOSED',
