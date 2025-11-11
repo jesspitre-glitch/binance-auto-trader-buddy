@@ -15,6 +15,49 @@ async function getCurrentPrice(symbol: string): Promise<number> {
   return parseFloat(data.price);
 }
 
+async function createSignature(queryString: string, apiSecret: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(apiSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(queryString)
+  );
+  
+  return Array.from(new Uint8Array(signature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function getPositionFromBinance(symbol: string, apiKey: string, apiSecret: string) {
+  const timestamp = Date.now();
+  const queryString = `timestamp=${timestamp}&recvWindow=10000`;
+  const signature = await createSignature(queryString, apiSecret);
+  
+  const response = await fetch(
+    `https://fapi.binance.com/fapi/v2/positionRisk?${queryString}&signature=${signature}`,
+    {
+      headers: {
+        'X-MBX-APIKEY': apiKey,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to get position: ${error}`);
+  }
+
+  const positions = await response.json();
+  return positions.find((p: any) => p.symbol === symbol && parseFloat(p.positionAmt) !== 0);
+}
+
 async function closePositionOnBinance(symbol: string, side: string, quantity: number) {
   const apiKey = Deno.env.get('BINANCE_API_KEY');
   const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
@@ -23,85 +66,24 @@ async function closePositionOnBinance(symbol: string, side: string, quantity: nu
     throw new Error('Binance API credentials not configured');
   }
 
-  const timestamp = Date.now();
-  const closeSide = side === 'LONG' ? 'SELL' : 'BUY';
-  
-  // First get position to find exact quantity
-  const positionParams = new URLSearchParams({
-    timestamp: timestamp.toString(),
-    recvWindow: '10000',
-  });
-
-  let positionSignature = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(apiSecret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  ).then(key => 
-    crypto.subtle.sign('HMAC', key, new TextEncoder().encode(positionParams.toString()))
-  ).then(sig => 
-    Array.from(new Uint8Array(sig))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('')
-  );
-
-  positionParams.append('signature', positionSignature);
-
-  const positionResponse = await fetch(
-    `https://fapi.binance.com/fapi/v2/positionRisk?${positionParams.toString()}`,
-    {
-      headers: {
-        'X-MBX-APIKEY': apiKey,
-      },
-    }
-  );
-
-  if (!positionResponse.ok) {
-    const error = await positionResponse.text();
-    console.error('Failed to get position:', error);
-    throw new Error(`Failed to get position: ${error}`);
-  }
-
-  const positions = await positionResponse.json();
-  const position = positions.find((p: any) => p.symbol === symbol && parseFloat(p.positionAmt) !== 0);
+  // Get current position to verify quantity
+  const position = await getPositionFromBinance(symbol, apiKey, apiSecret);
   
   if (!position) {
     console.log(`No open position found for ${symbol}, skipping close`);
-    return { message: 'No position to close' };
+    return null;
   }
 
   const positionAmt = Math.abs(parseFloat(position.positionAmt));
+  const closeSide = side === 'LONG' ? 'SELL' : 'BUY';
   
-  // Now place the closing order with exact quantity
-  const orderTimestamp = Date.now();
-  const params = new URLSearchParams({
-    symbol,
-    side: closeSide,
-    type: 'MARKET',
-    quantity: positionAmt.toString(),
-    timestamp: orderTimestamp.toString(),
-    recvWindow: '10000',
-  });
-
-  const signature = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(apiSecret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  ).then(key => 
-    crypto.subtle.sign('HMAC', key, new TextEncoder().encode(params.toString()))
-  ).then(sig => 
-    Array.from(new Uint8Array(sig))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('')
-  );
-
-  params.append('signature', signature);
+  // Place the closing order
+  const timestamp = Date.now();
+  const queryString = `symbol=${symbol}&side=${closeSide}&type=MARKET&quantity=${positionAmt}&timestamp=${timestamp}&recvWindow=10000`;
+  const signature = await createSignature(queryString, apiSecret);
 
   const response = await fetch(
-    `https://fapi.binance.com/fapi/v1/order?${params.toString()}`,
+    `https://fapi.binance.com/fapi/v1/order?${queryString}&signature=${signature}`,
     {
       method: 'POST',
       headers: {
@@ -116,7 +98,39 @@ async function closePositionOnBinance(symbol: string, side: string, quantity: nu
     throw new Error(`Failed to close position: ${error}`);
   }
 
-  return await response.json();
+  const orderResult = await response.json();
+  
+  // Wait a bit for order to fill
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  
+  // Get the filled order details to get actual exit price
+  const orderQueryString = `symbol=${symbol}&orderId=${orderResult.orderId}&timestamp=${Date.now()}&recvWindow=10000`;
+  const orderSignature = await createSignature(orderQueryString, apiSecret);
+  
+  const orderResponse = await fetch(
+    `https://fapi.binance.com/fapi/v1/order?${orderQueryString}&signature=${orderSignature}`,
+    {
+      headers: {
+        'X-MBX-APIKEY': apiKey,
+      },
+    }
+  );
+
+  if (orderResponse.ok) {
+    const orderDetails = await orderResponse.json();
+    return {
+      orderId: orderResult.orderId,
+      avgPrice: parseFloat(orderDetails.avgPrice),
+      executedQty: parseFloat(orderDetails.executedQty),
+      cumQuote: parseFloat(orderDetails.cumQuote),
+    };
+  }
+
+  return {
+    orderId: orderResult.orderId,
+    avgPrice: parseFloat(orderResult.avgPrice || orderResult.price || '0'),
+    executedQty: parseFloat(orderResult.executedQty || '0'),
+  };
 }
 
 serve(async (req) => {
@@ -204,8 +218,26 @@ serve(async (req) => {
           console.log(`Closing position ${position.symbol} - Reason: ${closeReason}`);
           
           try {
-            // Close position on Binance
-            await closePositionOnBinance(position.symbol, position.side, position.quantity);
+            // Close position on Binance and get actual exit price
+            const closeResult = await closePositionOnBinance(position.symbol, position.side, position.quantity);
+            
+            if (!closeResult) {
+              console.log(`Position ${position.symbol} already closed on Binance`);
+              continue;
+            }
+
+            // Use actual exit price from Binance order
+            const actualExitPrice = closeResult.avgPrice;
+            const actualQuantity = closeResult.executedQty;
+            
+            // Calculate actual P&L based on real exit price
+            const actualPnl = position.side === 'LONG' 
+              ? (actualExitPrice - position.entry_price) * actualQuantity
+              : (position.entry_price - actualExitPrice) * actualQuantity;
+            
+            const actualPnlPercent = ((actualExitPrice - position.entry_price) / position.entry_price) * 100 * (position.side === 'LONG' ? 1 : -1);
+
+            console.log(`Position closed - Entry: ${position.entry_price}, Exit: ${actualExitPrice}, P&L: ${actualPnl.toFixed(2)} USDT`);
             
             // Update position status
             await supabaseClient
@@ -213,26 +245,28 @@ serve(async (req) => {
               .update({ 
                 status: 'CLOSED',
                 closed_at: new Date().toISOString(),
+                current_price: actualExitPrice,
+                unrealized_pnl: actualPnl,
               })
               .eq('id', position.id);
 
-            // Add to trade history
+            // Add to trade history with actual values from Binance
             await supabaseClient.from('trade_history').insert({
               user_id: position.user_id,
               symbol: position.symbol,
               side: position.side,
               entry_price: position.entry_price,
-              exit_price: currentPrice,
-              quantity: position.quantity,
-              pnl: pnl,
-              pnl_percent: pnlPercent,
+              exit_price: actualExitPrice,
+              quantity: actualQuantity,
+              pnl: actualPnl,
+              pnl_percent: actualPnlPercent,
               opened_at: position.opened_at,
               closed_at: new Date().toISOString(),
               duration_minutes: Math.floor((now.getTime() - openedAt.getTime()) / (1000 * 60)),
               strategy_hash: position.strategy_hash,
             });
 
-            // Update user portfolio
+            // Update user portfolio with actual P&L
             const { data: portfolio } = await supabaseClient
               .from('user_portfolio')
               .select('*')
@@ -243,7 +277,7 @@ serve(async (req) => {
               await supabaseClient
                 .from('user_portfolio')
                 .update({
-                  futures_capital: portfolio.futures_capital + pnl,
+                  futures_capital: portfolio.futures_capital + actualPnl,
                 })
                 .eq('user_id', position.user_id);
             }
@@ -252,8 +286,10 @@ serve(async (req) => {
               symbol: position.symbol,
               action: 'CLOSED',
               reason: closeReason,
-              pnl: pnl,
-              pnlPercent: pnlPercent,
+              pnl: actualPnl,
+              pnlPercent: actualPnlPercent,
+              entryPrice: position.entry_price,
+              exitPrice: actualExitPrice,
             });
           } catch (error) {
             console.error(`Failed to close position ${position.symbol}:`, error);

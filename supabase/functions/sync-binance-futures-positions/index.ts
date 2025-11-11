@@ -168,26 +168,39 @@ serve(async (req) => {
         const quantity = parseFloat(binancePos.positionAmt);
         const side = quantity > 0 ? 'LONG' : 'SHORT';
         const absQuantity = Math.abs(quantity);
+        const currentPrice = parseFloat(binancePos.markPrice);
+        const unrealizedPnl = parseFloat(binancePos.unRealizedProfit);
+        
         binanceSymbols.add(binancePos.symbol);
         
         // Find ALL matching positions in DB for this symbol
         const matchingPositions = dbPositions?.filter(p => p.symbol === binancePos.symbol) || [];
         
         if (matchingPositions.length > 0) {
-          // Update the FIRST position
+          // Update the FIRST position with LIVE data from Binance
           const mainPos = matchingPositions[0];
+          
+          console.log(`Updating ${binancePos.symbol}: Price ${currentPrice}, P&L ${unrealizedPnl.toFixed(2)} USDT`);
+          
           const { error } = await supabaseClient
             .from('positions')
             .update({
-              current_price: parseFloat(binancePos.markPrice),
-              unrealized_pnl: parseFloat(binancePos.unRealizedProfit),
+              current_price: currentPrice,
+              unrealized_pnl: unrealizedPnl,
               quantity: absQuantity,
               side: side,
+              updated_at: new Date().toISOString(),
             })
             .eq('id', mainPos.id);
           
           if (error) console.error('Update error:', error);
-          updates.push({ symbol: binancePos.symbol, action: 'updated', id: mainPos.id });
+          updates.push({ 
+            symbol: binancePos.symbol, 
+            action: 'updated', 
+            id: mainPos.id,
+            price: currentPrice,
+            pnl: unrealizedPnl,
+          });
           
           // Close DUPLICATES (all except the first one)
           for (let i = 1; i < matchingPositions.length; i++) {
@@ -206,6 +219,8 @@ serve(async (req) => {
           }
         } else {
           // Create new position if none exists
+          console.log(`Creating new position for ${binancePos.symbol}`);
+          
           const { error } = await supabaseClient
             .from('positions')
             .insert({
@@ -214,8 +229,8 @@ serve(async (req) => {
               side,
               entry_price: parseFloat(binancePos.entryPrice),
               quantity: absQuantity,
-              current_price: parseFloat(binancePos.markPrice),
-              unrealized_pnl: parseFloat(binancePos.unRealizedProfit),
+              current_price: currentPrice,
+              unrealized_pnl: unrealizedPnl,
               status: 'OPEN',
             });
           
@@ -228,7 +243,7 @@ serve(async (req) => {
       if (dbPositions) {
         for (const dbPos of dbPositions) {
           if (!binanceSymbols.has(dbPos.symbol)) {
-            console.log(`Closing position ${dbPos.symbol} - not found on Binance`);
+            console.log(`Closing position ${dbPos.symbol} - not found on Binance (was closed externally)`);
             
             await supabaseClient
               .from('positions')
@@ -248,6 +263,8 @@ serve(async (req) => {
         updates: updates,
       });
     }
+
+    console.log(`Sync completed - Updated ${allUpdates.length} users`);
 
     return new Response(JSON.stringify({ 
       success: true, 
