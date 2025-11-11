@@ -35,6 +35,34 @@ async function createSignature(queryString: string, apiSecret: string): Promise<
     .join('');
 }
 
+async function getBinanceAccountBalance(apiKey: string, apiSecret: string) {
+  const timestamp = Date.now();
+  const queryString = `timestamp=${timestamp}&recvWindow=10000`;
+  const signature = await createSignature(queryString, apiSecret);
+  
+  const response = await fetch(
+    `https://fapi.binance.com/fapi/v2/account?${queryString}&signature=${signature}`,
+    {
+      headers: {
+        'X-MBX-APIKEY': apiKey,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to get account balance: ${error}`);
+  }
+
+  const accountData = await response.json();
+  return {
+    totalMarginBalance: parseFloat(accountData.totalMarginBalance),
+    totalWalletBalance: parseFloat(accountData.totalWalletBalance),
+    totalUnrealizedProfit: parseFloat(accountData.totalUnrealizedProfit),
+    availableBalance: parseFloat(accountData.availableBalance),
+  };
+}
+
 async function getPositionFromBinance(symbol: string, apiKey: string, apiSecret: string) {
   const timestamp = Date.now();
   const queryString = `timestamp=${timestamp}&recvWindow=10000`;
@@ -272,20 +300,42 @@ serve(async (req) => {
               console.log(`Trade history saved for ${position.symbol}`);
             }
 
-            // Update user portfolio with actual P&L
-            const { data: portfolio } = await supabaseClient
-              .from('user_portfolio')
-              .select('*')
-              .eq('user_id', position.user_id)
-              .single();
+            // Update user portfolio with actual balance from Binance
+            try {
+              const apiKey = Deno.env.get('BINANCE_API_KEY');
+              const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
+              
+              if (apiKey && apiSecret) {
+                const accountBalance = await getBinanceAccountBalance(apiKey, apiSecret);
+                
+                const { data: portfolio } = await supabaseClient
+                  .from('user_portfolio')
+                  .select('*')
+                  .eq('user_id', position.user_id)
+                  .single();
 
-            if (portfolio) {
-              await supabaseClient
-                .from('user_portfolio')
-                .update({
-                  futures_capital: portfolio.futures_capital + actualPnl,
-                })
-                .eq('user_id', position.user_id);
+                if (portfolio) {
+                  await supabaseClient
+                    .from('user_portfolio')
+                    .update({
+                      futures_capital: accountBalance.totalMarginBalance,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq('user_id', position.user_id);
+                  
+                  console.log(`Portfolio updated: ${accountBalance.totalMarginBalance} USDT`);
+                } else {
+                  // Create portfolio if it doesn't exist
+                  await supabaseClient
+                    .from('user_portfolio')
+                    .insert({
+                      user_id: position.user_id,
+                      futures_capital: accountBalance.totalMarginBalance,
+                    });
+                }
+              }
+            } catch (error) {
+              console.error('Failed to update portfolio balance:', error);
             }
 
             results.push({
