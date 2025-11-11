@@ -690,12 +690,19 @@ serve(async (req) => {
             // Re-check positions count right before opening (positions may have been opened in this same scan)
             const { data: currentPositions } = await supabaseClient
               .from('positions')
-              .select('id')
+              .select('id, symbol')
               .eq('user_id', session.user_id)
               .eq('status', 'OPEN');
             
             if (currentPositions && currentPositions.length >= config.max_open_positions) {
               console.log(`Max positions reached (${currentPositions.length}/${config.max_open_positions}) for user ${session.user_id}, skipping ${symbol}`);
+              continue;
+            }
+            
+            // Check if there's already an open position for this specific symbol
+            const existingPositionForSymbol = currentPositions?.find(p => p.symbol === symbol);
+            if (existingPositionForSymbol) {
+              console.log(`Skipping ${symbol}: Already have an open position for this symbol`);
               continue;
             }
             
