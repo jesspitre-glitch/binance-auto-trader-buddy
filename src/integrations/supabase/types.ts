@@ -262,6 +262,36 @@ export type Database = {
           },
         ]
       }
+      user_portfolio: {
+        Row: {
+          created_at: string | null
+          futures_capital: number | null
+          futures_deposited: number | null
+          futures_withdrawn: number | null
+          id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          futures_capital?: number | null
+          futures_deposited?: number | null
+          futures_withdrawn?: number | null
+          id?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          futures_capital?: number | null
+          futures_deposited?: number | null
+          futures_withdrawn?: number | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

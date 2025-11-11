@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Play, Square, Settings2, History } from "lucide-react";
 import { PositionManager } from "./PositionManager";
+import { PortfolioBalance } from "./PortfolioBalance";
 import { IndicatorConfig } from "./IndicatorConfig";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -182,6 +183,8 @@ export const TradingDashboard = () => {
           </div>
         </CardContent>
       </Card>
+
+      <PortfolioBalance />
 
       <PositionManager />
 

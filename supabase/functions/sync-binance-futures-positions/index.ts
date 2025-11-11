@@ -24,9 +24,35 @@ async function createSignature(queryString: string, secret: string): Promise<str
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+async function getBinanceServerTime(): Promise<number> {
+  const response = await fetch('https://fapi.binance.com/fapi/v1/time');
+  const data = await response.json();
+  return data.serverTime;
+}
+
+async function getBinanceAccount(apiKey: string, apiSecret: string) {
+  const serverTime = await getBinanceServerTime();
+  const queryString = `timestamp=${serverTime}&recvWindow=10000`;
+  const signature = await createSignature(queryString, apiSecret);
+  
+  const url = `https://fapi.binance.com/fapi/v2/account?${queryString}&signature=${signature}`;
+  
+  const response = await fetch(url, {
+    headers: {
+      'X-MBX-APIKEY': apiKey,
+    },
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Binance API error: ${response.statusText}`);
+  }
+  
+  return await response.json();
+}
+
 async function getBinancePositions(apiKey: string, apiSecret: string) {
-  const timestamp = Date.now();
-  const queryString = `timestamp=${timestamp}`;
+  const serverTime = await getBinanceServerTime();
+  const queryString = `timestamp=${serverTime}`;
   const signature = await createSignature(queryString, apiSecret);
   
   const url = `https://fapi.binance.com/fapi/v1/positionRisk?${queryString}&signature=${signature}`;
@@ -75,6 +101,37 @@ serve(async (req) => {
     
     if (!apiKey || !apiSecret) {
       throw new Error('Binance API keys not configured');
+    }
+
+    // Fetch account data (balance) from Binance
+    const accountData = await getBinanceAccount(apiKey, apiSecret);
+    const totalMarginBalance = parseFloat(accountData.totalMarginBalance);
+    const totalWalletBalance = parseFloat(accountData.totalWalletBalance);
+    const totalUnrealizedProfit = parseFloat(accountData.totalUnrealizedProfit);
+    const availableBalance = parseFloat(accountData.availableBalance);
+
+    // Update or insert user portfolio with balance
+    const { data: existingPortfolio } = await supabaseClient
+      .from('user_portfolio')
+      .select('*')
+      .eq('user_id', user.id)
+      .single();
+
+    if (existingPortfolio) {
+      await supabaseClient
+        .from('user_portfolio')
+        .update({
+          futures_capital: totalMarginBalance,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', user.id);
+    } else {
+      await supabaseClient
+        .from('user_portfolio')
+        .insert({
+          user_id: user.id,
+          futures_capital: totalMarginBalance,
+        });
     }
 
     // Fetch positions from Binance
@@ -151,6 +208,12 @@ serve(async (req) => {
       success: true, 
       updates,
       totalPositions: binancePositions.length,
+      balance: {
+        totalMarginBalance,
+        totalWalletBalance,
+        totalUnrealizedProfit,
+        availableBalance,
+      },
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
