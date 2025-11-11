@@ -272,6 +272,7 @@ serve(async (req) => {
               current_price: currentPrice,
               unrealized_pnl: unrealizedPnl,
               status: 'OPEN',
+              open_reason: `Position fundet på Binance (${side} @ ${parseFloat(binancePos.entryPrice).toFixed(4)})`,
             });
           
           if (error) console.error('Insert error:', error);
