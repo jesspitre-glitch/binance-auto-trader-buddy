@@ -125,8 +125,25 @@ export const TradingDashboard = () => {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Trading Dashboard</h1>
         <div className="flex items-center gap-4">
+          <Button
+            onClick={toggleTrading}
+            variant={isActive ? "destructive" : "default"}
+            size="lg"
+            className="min-w-[160px]"
+          >
+            {isActive ? (
+              <>
+                <Square className="mr-2 h-5 w-5" />
+                Stop Bot
+              </>
+            ) : (
+              <>
+                <Play className="mr-2 h-5 w-5" />
+                Start Bot
+              </>
+            )}
+          </Button>
           <div className="flex items-center gap-2">
-            <Label>Status:</Label>
             <span
               className={`px-3 py-1 rounded-full text-sm font-medium ${
                 isActive
@@ -142,12 +159,12 @@ export const TradingDashboard = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Trading Kontrol</CardTitle>
+          <CardTitle>Strategi Indstillinger</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4">
             <div className="flex-1">
-              <Label>Vælg Strategi</Label>
+              <Label>Vælg Aktiv Strategi</Label>
               <Select value={activeConfigId || undefined} onValueChange={setActiveConfigId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Vælg en strategi" />
@@ -160,25 +177,6 @@ export const TradingDashboard = () => {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="flex gap-2 pt-6">
-              <Button
-                onClick={toggleTrading}
-                variant={isActive ? "destructive" : "default"}
-                size="lg"
-              >
-                {isActive ? (
-                  <>
-                    <Square className="mr-2 h-5 w-5" />
-                    Stop Trading
-                  </>
-                ) : (
-                  <>
-                    <Play className="mr-2 h-5 w-5" />
-                    Start Trading
-                  </>
-                )}
-              </Button>
             </div>
           </div>
         </CardContent>
