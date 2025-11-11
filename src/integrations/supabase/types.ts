@@ -176,6 +176,42 @@ export type Database = {
         }
         Relationships: []
       }
+      scan_results: {
+        Row: {
+          action_taken: string | null
+          created_at: string
+          id: string
+          indicators: Json | null
+          signal: string
+          stop_loss: number | null
+          symbol: string
+          take_profit: number | null
+          user_id: string
+        }
+        Insert: {
+          action_taken?: string | null
+          created_at?: string
+          id?: string
+          indicators?: Json | null
+          signal: string
+          stop_loss?: number | null
+          symbol: string
+          take_profit?: number | null
+          user_id: string
+        }
+        Update: {
+          action_taken?: string | null
+          created_at?: string
+          id?: string
+          indicators?: Json | null
+          signal?: string
+          stop_loss?: number | null
+          symbol?: string
+          take_profit?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       trade_history: {
         Row: {
           closed_at: string | null

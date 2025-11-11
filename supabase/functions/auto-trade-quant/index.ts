@@ -229,15 +229,33 @@ serve(async (req) => {
       const klines = await fetchKlines(symbol, '5m', 100);
       const analysis = analyzeSignal(klines, config);
 
+      // Log scan result to database
+      const actionTaken = analysis.signal === 'NONE' 
+        ? 'NO_SIGNAL'
+        : positions && positions.length >= config.max_open_positions
+        ? 'MAX_POSITIONS_REACHED'
+        : 'SIGNAL_DETECTED';
+
+      await supabaseClient.from('scan_results').insert({
+        user_id: session.user_id,
+        symbol,
+        signal: analysis.signal,
+        indicators: analysis.indicators,
+        stop_loss: analysis.stopLoss,
+        take_profit: analysis.takeProfit,
+        action_taken: actionTaken,
+      });
+
       results.push({
         userId: session.user_id,
         symbol,
         analysis,
+        actionTaken,
       });
 
       // If there's a signal and we have capacity, log it
       if (analysis.signal !== 'NONE') {
-        console.log(`Signal detected for ${session.user_id}: ${analysis.signal} on ${symbol}`);
+        console.log(`Signal detected for ${session.user_id}: ${analysis.signal} on ${symbol} - Action: ${actionTaken}`);
         
         // Here you would place the actual order via Binance API
         // For now, we just log the signal

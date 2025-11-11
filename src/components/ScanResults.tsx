@@ -1,0 +1,206 @@
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2, Search, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
+
+export const ScanResults = () => {
+  const [results, setResults] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [scanning, setScanning] = useState(false);
+  const { toast } = useToast();
+
+  const fetchResults = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("scan_results")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      setResults(data || []);
+    } catch (error: any) {
+      console.error("Scan results fetch error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchResults();
+
+    // Realtime subscription
+    const channel = supabase
+      .channel("scan-results-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "scan_results",
+        },
+        (payload) => {
+          console.log("New scan result:", payload);
+          if (payload.eventType === "INSERT") {
+            const newResult = payload.new as any;
+            setResults((prev) => [newResult, ...prev].slice(0, 20));
+            
+            // Show notification for signals
+            if (newResult.signal !== "NONE") {
+              toast({
+                title: `${newResult.signal} Signal Detekteret`,
+                description: `${newResult.symbol} - ${newResult.action_taken}`,
+              });
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const triggerScan = async () => {
+    setScanning(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const { data, error } = await supabase.functions.invoke("auto-trade-quant", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Scanning Fuldført",
+        description: "Markeds scanning er gennemført",
+      });
+
+      fetchResults();
+    } catch (error: any) {
+      toast({
+        title: "Fejl",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-8">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+        <CardTitle className="flex items-center gap-2">
+          <Search className="h-5 w-5" />
+          Scan Resultater
+        </CardTitle>
+        <Button onClick={triggerScan} disabled={scanning} size="sm">
+          {scanning ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Scanner...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Scan Nu
+            </>
+          )}
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {results.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8">
+            Ingen scan resultater endnu. Tryk "Scan Nu" for at starte.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {results.map((result) => (
+              <div
+                key={result.id}
+                className="flex items-center justify-between border rounded-lg p-4"
+              >
+                <div className="flex items-center gap-4">
+                  {result.signal === "LONG" ? (
+                    <TrendingUp className="h-5 w-5 text-profit" />
+                  ) : result.signal === "SHORT" ? (
+                    <TrendingDown className="h-5 w-5 text-loss" />
+                  ) : (
+                    <div className="h-5 w-5 rounded-full bg-muted" />
+                  )}
+
+                  <div>
+                    <div className="font-semibold">{result.symbol}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {new Date(result.created_at).toLocaleString("da-DK")}
+                    </div>
+                  </div>
+
+                  <Badge
+                    variant={
+                      result.signal === "LONG"
+                        ? "default"
+                        : result.signal === "SHORT"
+                        ? "secondary"
+                        : "outline"
+                    }
+                  >
+                    {result.signal}
+                  </Badge>
+
+                  {result.indicators && (
+                    <div className="text-sm space-y-1">
+                      <div>
+                        Pris:{" "}
+                        <span className="font-mono">
+                          ${result.indicators.price?.toFixed(2)}
+                        </span>
+                      </div>
+                      <div>
+                        RSI:{" "}
+                        <span className="font-mono">
+                          {result.indicators.rsi?.toFixed(1)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-right">
+                  <div className="text-sm text-muted-foreground">
+                    {result.action_taken?.replace(/_/g, " ")}
+                  </div>
+                  {result.signal !== "NONE" && (
+                    <div className="text-xs space-y-1 mt-1">
+                      <div>SL: ${result.stop_loss?.toFixed(2)}</div>
+                      <div>TP: ${result.take_profit?.toFixed(2)}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};

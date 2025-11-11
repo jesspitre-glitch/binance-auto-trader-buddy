@@ -5,10 +5,12 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Play, Square, Settings2, History } from "lucide-react";
+import { Play, Square, Settings2, History, TrendingUp, Search } from "lucide-react";
 import { PositionManager } from "./PositionManager";
 import { PortfolioBalance } from "./PortfolioBalance";
 import { IndicatorConfig } from "./IndicatorConfig";
+import { PnLOverview } from "./PnLOverview";
+import { ScanResults } from "./ScanResults";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -186,9 +188,17 @@ export const TradingDashboard = () => {
 
       <PositionManager />
 
-      <Tabs defaultValue="positions">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="positions">
+      <Tabs defaultValue="pnl">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="pnl">
+            <TrendingUp className="mr-2 h-4 w-4" />
+            P&L
+          </TabsTrigger>
+          <TabsTrigger value="scan">
+            <Search className="mr-2 h-4 w-4" />
+            Scan Resultater
+          </TabsTrigger>
+          <TabsTrigger value="history">
             <History className="mr-2 h-4 w-4" />
             Historik
           </TabsTrigger>
@@ -197,7 +207,16 @@ export const TradingDashboard = () => {
             Indikator Konfiguration
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="positions" className="space-y-4">
+        
+        <TabsContent value="pnl">
+          <PnLOverview />
+        </TabsContent>
+
+        <TabsContent value="scan">
+          <ScanResults />
+        </TabsContent>
+
+        <TabsContent value="history" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>Trade Historik</CardTitle>
@@ -209,6 +228,7 @@ export const TradingDashboard = () => {
             </CardContent>
           </Card>
         </TabsContent>
+        
         <TabsContent value="config">
           <IndicatorConfig
             config={configs.find((c) => c.id === activeConfigId)}
