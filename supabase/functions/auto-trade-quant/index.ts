@@ -133,6 +133,31 @@ function calculateBollingerBands(prices: number[], period: number, stdDev: numbe
   };
 }
 
+async function fetchAllUSDCSymbols(): Promise<string[]> {
+  try {
+    const response = await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo');
+    if (!response.ok) {
+      throw new Error(`Failed to fetch exchange info: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const usdcSymbols = data.symbols
+      .filter((s: any) => 
+        s.quoteAsset === 'USDC' && 
+        s.status === 'TRADING' &&
+        s.contractType === 'PERPETUAL'
+      )
+      .map((s: any) => s.symbol);
+    
+    console.log(`Found ${usdcSymbols.length} USDC perpetual futures pairs`);
+    return usdcSymbols;
+  } catch (error) {
+    console.error('Error fetching USDC symbols:', error);
+    // Fallback to known pairs if API fails
+    return ['BTCUSDC', 'ETHUSDC', 'BNBUSDC', 'SOLUSDC'];
+  }
+}
+
 async function fetchKlines(symbol: string, interval: string, limit: number) {
   const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
   const response = await fetch(url);
@@ -453,8 +478,9 @@ serve(async (req) => {
         continue;
       }
 
-      // Analyze USDC pairs
-      const symbols = ['BTCUSDC', 'ETHUSDC', 'BNBUSDC', 'SOLUSDC'];
+      // Analyze all USDC perpetual futures pairs
+      const symbols = await fetchAllUSDCSymbols();
+      console.log(`Scanning ${symbols.length} USDC pairs for user ${session.user_id}`);
       
       for (const symbol of symbols) {
         try {
