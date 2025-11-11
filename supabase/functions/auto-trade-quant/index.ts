@@ -183,6 +183,43 @@ async function fetchKlines(symbol: string, interval: string, limit: number) {
   }));
 }
 
+// Binance filters
+type SymbolFilters = { stepSize: number; minQty: number; tickSize: number };
+
+function getPrecisionFromStep(step: number): number {
+  // Handle scientific notation and decimals
+  const s = step.toString();
+  if (s.includes('e-')) {
+    const p = parseInt(s.split('e-')[1], 10);
+    return p;
+  }
+  const parts = s.split('.');
+  return parts[1] ? parts[1].length : 0;
+}
+
+async function fetchSymbolFilters(): Promise<Record<string, SymbolFilters>> {
+  const map: Record<string, SymbolFilters> = {};
+  try {
+    const response = await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo');
+    if (!response.ok) return map;
+    const data = await response.json();
+    for (const s of data.symbols) {
+      if (s.quoteAsset !== 'USDC' || s.status !== 'TRADING' || s.contractType !== 'PERPETUAL') continue;
+      const lot = s.filters.find((f: any) => f.filterType === 'LOT_SIZE');
+      const price = s.filters.find((f: any) => f.filterType === 'PRICE_FILTER');
+      if (!lot || !price) continue;
+      map[s.symbol] = {
+        stepSize: parseFloat(lot.stepSize),
+        minQty: parseFloat(lot.minQty),
+        tickSize: parseFloat(price.tickSize),
+      };
+    }
+  } catch (e) {
+    console.error('Failed to fetch symbol filters', e);
+  }
+  return map;
+}
+
 function analyzeSignal(klines: any[], config: IndicatorConfig) {
   const closes = klines.map(k => k.close);
   const highs = klines.map(k => k.high);
@@ -258,7 +295,9 @@ async function placeOrder(
   side: 'BUY' | 'SELL',
   quantity: number,
   stopLoss: number,
-  takeProfit: number
+  takeProfit: number,
+  quantityPrecision: number,
+  pricePrecision: number
 ) {
   const apiKey = Deno.env.get('BINANCE_API_KEY');
   const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
@@ -316,7 +355,7 @@ async function placeOrder(
     symbol,
     side: side === 'BUY' ? 'SELL' : 'BUY',
     type: 'STOP_MARKET',
-    stopPrice: stopLoss.toFixed(2),
+    stopPrice: stopLoss.toFixed(pricePrecision),
     closePosition: 'true',
     timestamp: Date.now().toString(),
   });
@@ -479,6 +518,7 @@ serve(async (req) => {
       }
 
       // Analyze all USDC perpetual futures pairs
+      const symbolFilters = await fetchSymbolFilters();
       const symbols = await fetchAllUSDCSymbols();
       console.log(`Scanning ${symbols.length} USDC pairs for user ${session.user_id}`);
       
@@ -520,16 +560,35 @@ serve(async (req) => {
               const balance = await getAccountBalance();
               const riskAmount = balance * (config.risk_per_trade_percent / 100);
               const stopLossDistance = Math.abs(analysis.indicators.price - analysis.stopLoss);
-              const quantity = (riskAmount / stopLossDistance) * config.leverage;
+              const rawQuantity = (riskAmount / stopLossDistance) * config.leverage;
+
+              // Apply Binance filters (minQty/stepSize and pricing tick)
+              const filters = symbolFilters[symbol];
+              if (!filters) {
+                console.log(`Missing filters for ${symbol}, skipping.`);
+                continue;
+              }
+              const qtyPrecision = getPrecisionFromStep(filters.stepSize);
+              const pricePrecision = getPrecisionFromStep(filters.tickSize);
+
+              const step = filters.stepSize;
+              const quantityRounded = Math.floor(rawQuantity / step) * step;
+
+              if (!isFinite(quantityRounded) || quantityRounded <= 0 || quantityRounded < filters.minQty) {
+                console.log(`Skip ${symbol}: qty ${quantityRounded} below min ${filters.minQty}`);
+                continue;
+              }
               
               // Place order
               const side = analysis.signal === 'LONG' ? 'BUY' : 'SELL';
               const orderData = await placeOrder(
                 symbol,
                 side,
-                quantity,
+                quantityRounded,
                 analysis.stopLoss,
-                analysis.takeProfit
+                analysis.takeProfit,
+                qtyPrecision,
+                pricePrecision
               );
               
               // Save position to database
@@ -538,7 +597,7 @@ serve(async (req) => {
                 symbol,
                 side: analysis.signal,
                 entry_price: analysis.indicators.price,
-                quantity,
+                quantity: quantityRounded,
                 stop_loss: analysis.stopLoss,
                 take_profit: analysis.takeProfit,
                 current_price: analysis.indicators.price,
@@ -547,7 +606,7 @@ serve(async (req) => {
                 strategy_hash: strategyHash,
               });
               
-              console.log(`Order placed: ${symbol} ${side} ${quantity} @ ${analysis.indicators.price}`);
+              console.log(`Order placed: ${symbol} ${side} ${quantityRounded} @ ${analysis.indicators.price}`);
             } catch (error) {
               console.error(`Failed to place order for ${symbol}:`, error);
             }
