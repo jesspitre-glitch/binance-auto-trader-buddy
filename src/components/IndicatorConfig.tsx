@@ -52,8 +52,9 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     // Volume
     volume_spike_multiplier: config?.volume_spike_multiplier || 2,
     
-    // Multi-timeframe
-    mtf_timeframe: config?.mtf_timeframe || "15m",
+    // Timeframes
+    scan_interval: config?.scan_interval || "5m",
+    trend_timeframe: config?.trend_timeframe || config?.mtf_timeframe || "15m",
     
     // Risk Management
     risk_per_trade_percent: config?.risk_per_trade_percent || 1,
@@ -353,10 +354,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Volume & Multi-Timeframe</CardTitle>
-          <CardDescription>Volumen spike og multi-timeframe filtre</CardDescription>
+          <CardTitle>Timeframes</CardTitle>
+          <CardDescription>Scan interval og trend analyse timeframe</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
+        <CardContent className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">
             <Label htmlFor="volume_spike_multiplier">Volumen Spike Multiplikator</Label>
             <Input
@@ -368,13 +369,24 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="mtf_timeframe">Multi-Timeframe</Label>
+            <Label htmlFor="scan_interval">Scan Interval</Label>
             <Input
-              id="mtf_timeframe"
-              value={formData.mtf_timeframe}
-              onChange={(e) => setFormData({ ...formData, mtf_timeframe: e.target.value })}
+              id="scan_interval"
+              value={formData.scan_interval}
+              onChange={(e) => setFormData({ ...formData, scan_interval: e.target.value })}
+              placeholder="5m"
+            />
+            <p className="text-xs text-muted-foreground">1m, 5m, 15m, 1h</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="trend_timeframe">Trend Timeframe</Label>
+            <Input
+              id="trend_timeframe"
+              value={formData.trend_timeframe}
+              onChange={(e) => setFormData({ ...formData, trend_timeframe: e.target.value })}
               placeholder="15m"
             />
+            <p className="text-xs text-muted-foreground">Højere TF for trend filter</p>
           </div>
         </CardContent>
       </Card>

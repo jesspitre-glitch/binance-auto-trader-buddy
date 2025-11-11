@@ -38,13 +38,14 @@ export type Database = {
           max_exposure_percent: number | null
           max_open_positions: number | null
           max_position_duration_minutes: number | null
-          mtf_timeframe: string | null
           name: string
           risk_per_trade_percent: number | null
           risk_reward_ratio: number | null
           rsi_overbought: number | null
           rsi_oversold: number | null
           rsi_period: number | null
+          scan_interval: string | null
+          trend_timeframe: string | null
           updated_at: string | null
           user_id: string
           volume_spike_multiplier: number | null
@@ -72,13 +73,14 @@ export type Database = {
           max_exposure_percent?: number | null
           max_open_positions?: number | null
           max_position_duration_minutes?: number | null
-          mtf_timeframe?: string | null
           name: string
           risk_per_trade_percent?: number | null
           risk_reward_ratio?: number | null
           rsi_overbought?: number | null
           rsi_oversold?: number | null
           rsi_period?: number | null
+          scan_interval?: string | null
+          trend_timeframe?: string | null
           updated_at?: string | null
           user_id: string
           volume_spike_multiplier?: number | null
@@ -106,13 +108,14 @@ export type Database = {
           max_exposure_percent?: number | null
           max_open_positions?: number | null
           max_position_duration_minutes?: number | null
-          mtf_timeframe?: string | null
           name?: string
           risk_per_trade_percent?: number | null
           risk_reward_ratio?: number | null
           rsi_overbought?: number | null
           rsi_oversold?: number | null
           rsi_period?: number | null
+          scan_interval?: string | null
+          trend_timeframe?: string | null
           updated_at?: string | null
           user_id?: string
           volume_spike_multiplier?: number | null

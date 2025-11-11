@@ -29,6 +29,8 @@ interface IndicatorConfig {
   max_open_positions: number;
   risk_reward_ratio: number;
   leverage: number;
+  scan_interval: string;
+  trend_timeframe: string;
 }
 
 // Calculate strategy hash from config
@@ -57,6 +59,8 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
     max_open_positions: config.max_open_positions,
     risk_reward_ratio: config.risk_reward_ratio,
     leverage: config.leverage,
+    scan_interval: config.scan_interval,
+    trend_timeframe: config.trend_timeframe,
   });
   
   const msgUint8 = new TextEncoder().encode(configStr);
@@ -64,6 +68,22 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   return hashHex;
+}
+
+// Determine trend direction from higher timeframe
+function analyzeTrend(klines: any[]): 'BULLISH' | 'BEARISH' | 'NEUTRAL' {
+  const closes = klines.map(k => k.close);
+  
+  // Simple trend: compare EMA20 vs EMA50
+  const ema20 = calculateEMA(closes, 20);
+  const ema50 = calculateEMA(closes, 50);
+  
+  const currentEma20 = ema20[ema20.length - 1];
+  const currentEma50 = ema50[ema50.length - 1];
+  
+  if (currentEma20 > currentEma50 * 1.001) return 'BULLISH';
+  if (currentEma20 < currentEma50 * 0.999) return 'BEARISH';
+  return 'NEUTRAL';
 }
 
 // Technical indicator calculations
@@ -524,11 +544,26 @@ serve(async (req) => {
       
       for (const symbol of symbols) {
         try {
-          const klines = await fetchKlines(symbol, '5m', 100);
-          const analysis = analyzeSignal(klines, config);
+          // Fetch klines for both scan interval and trend timeframe
+          const scanKlines = await fetchKlines(symbol, config.scan_interval || '5m', 100);
+          const trendKlines = await fetchKlines(symbol, config.trend_timeframe || '15m', 100);
+          
+          // Determine higher timeframe trend
+          const trend = analyzeTrend(trendKlines);
+          
+          // Analyze signal on scan interval
+          const analysis = analyzeSignal(scanKlines, config);
+          
+          // Filter signal based on trend
+          let filteredSignal = analysis.signal;
+          if (filteredSignal === 'LONG' && trend === 'BEARISH') {
+            filteredSignal = 'NONE'; // Skip LONG if trend is bearish
+          } else if (filteredSignal === 'SHORT' && trend === 'BULLISH') {
+            filteredSignal = 'NONE'; // Skip SHORT if trend is bullish
+          }
 
           // Log scan result to database
-          const actionTaken = analysis.signal === 'NONE' 
+          const actionTaken = filteredSignal === 'NONE' 
             ? 'NO_SIGNAL'
             : positions && positions.length >= config.max_open_positions
             ? 'MAX_POSITIONS_REACHED'
@@ -537,8 +572,13 @@ serve(async (req) => {
           await supabaseClient.from('scan_results').insert({
             user_id: session.user_id,
             symbol,
-            signal: analysis.signal,
-            indicators: analysis.indicators,
+            signal: filteredSignal,
+            indicators: {
+              ...analysis.indicators,
+              trend: trend, // Include trend info
+              scan_interval: config.scan_interval,
+              trend_timeframe: config.trend_timeframe,
+            },
             stop_loss: analysis.stopLoss,
             take_profit: analysis.takeProfit,
             action_taken: actionTaken,
@@ -547,13 +587,14 @@ serve(async (req) => {
           results.push({
             userId: session.user_id,
             symbol,
-            analysis,
+            analysis: { ...analysis, signal: filteredSignal },
             actionTaken,
+            trend,
           });
 
           // If there's a signal and we have capacity, place order
-          if (analysis.signal !== 'NONE' && (!positions || positions.length < config.max_open_positions)) {
-            console.log(`Signal detected for ${session.user_id}: ${analysis.signal} on ${symbol}`);
+          if (filteredSignal !== 'NONE' && (!positions || positions.length < config.max_open_positions)) {
+            console.log(`Signal detected for ${session.user_id}: ${filteredSignal} on ${symbol} (Trend: ${trend})`);
             
             try {
               // Get account balance
