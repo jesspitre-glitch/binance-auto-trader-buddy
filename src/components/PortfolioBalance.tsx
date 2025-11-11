@@ -131,7 +131,7 @@ export const PortfolioBalance = () => {
               <span>Total Margin Balance</span>
             </div>
             <div className="text-2xl font-bold">
-              ${futuresCapital.toFixed(2)} USDT
+              ${futuresCapital.toFixed(2)} USDC
             </div>
           </div>
 
@@ -146,7 +146,7 @@ export const PortfolioBalance = () => {
               }`}
             >
               {totalPnL >= 0 ? "+" : ""}
-              ${totalPnL.toFixed(2)} USDT
+              ${totalPnL.toFixed(2)} USDC
               <span className="text-sm ml-2">
                 ({pnlPercent >= 0 ? "+" : ""}
                 {pnlPercent.toFixed(2)}%)
@@ -157,7 +157,7 @@ export const PortfolioBalance = () => {
           <div className="space-y-1">
             <div className="text-sm text-muted-foreground">Net Deposits</div>
             <div className="text-lg font-semibold">
-              ${netDeposits.toFixed(2)} USDT
+              ${netDeposits.toFixed(2)} USDC
             </div>
           </div>
 
