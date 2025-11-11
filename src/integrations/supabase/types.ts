@@ -14,7 +14,254 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      indicator_config: {
+        Row: {
+          adx_period: number | null
+          adx_threshold: number | null
+          atr_period: number | null
+          atr_stop_loss_multiplier: number | null
+          atr_trailing_stop_multiplier: number | null
+          bb_period: number | null
+          bb_std_dev: number | null
+          created_at: string | null
+          daily_loss_limit_percent: number | null
+          ema_fast: number | null
+          ema_medium: number | null
+          ema_slow: number | null
+          enabled: boolean | null
+          id: string
+          macd_fast: number | null
+          macd_histogram_threshold: number | null
+          macd_signal: number | null
+          macd_slow: number | null
+          max_exposure_percent: number | null
+          max_open_positions: number | null
+          max_position_duration_minutes: number | null
+          mtf_timeframe: string | null
+          name: string
+          risk_per_trade_percent: number | null
+          risk_reward_ratio: number | null
+          rsi_overbought: number | null
+          rsi_oversold: number | null
+          rsi_period: number | null
+          updated_at: string | null
+          user_id: string
+          volume_spike_multiplier: number | null
+        }
+        Insert: {
+          adx_period?: number | null
+          adx_threshold?: number | null
+          atr_period?: number | null
+          atr_stop_loss_multiplier?: number | null
+          atr_trailing_stop_multiplier?: number | null
+          bb_period?: number | null
+          bb_std_dev?: number | null
+          created_at?: string | null
+          daily_loss_limit_percent?: number | null
+          ema_fast?: number | null
+          ema_medium?: number | null
+          ema_slow?: number | null
+          enabled?: boolean | null
+          id?: string
+          macd_fast?: number | null
+          macd_histogram_threshold?: number | null
+          macd_signal?: number | null
+          macd_slow?: number | null
+          max_exposure_percent?: number | null
+          max_open_positions?: number | null
+          max_position_duration_minutes?: number | null
+          mtf_timeframe?: string | null
+          name: string
+          risk_per_trade_percent?: number | null
+          risk_reward_ratio?: number | null
+          rsi_overbought?: number | null
+          rsi_oversold?: number | null
+          rsi_period?: number | null
+          updated_at?: string | null
+          user_id: string
+          volume_spike_multiplier?: number | null
+        }
+        Update: {
+          adx_period?: number | null
+          adx_threshold?: number | null
+          atr_period?: number | null
+          atr_stop_loss_multiplier?: number | null
+          atr_trailing_stop_multiplier?: number | null
+          bb_period?: number | null
+          bb_std_dev?: number | null
+          created_at?: string | null
+          daily_loss_limit_percent?: number | null
+          ema_fast?: number | null
+          ema_medium?: number | null
+          ema_slow?: number | null
+          enabled?: boolean | null
+          id?: string
+          macd_fast?: number | null
+          macd_histogram_threshold?: number | null
+          macd_signal?: number | null
+          macd_slow?: number | null
+          max_exposure_percent?: number | null
+          max_open_positions?: number | null
+          max_position_duration_minutes?: number | null
+          mtf_timeframe?: string | null
+          name?: string
+          risk_per_trade_percent?: number | null
+          risk_reward_ratio?: number | null
+          rsi_overbought?: number | null
+          rsi_oversold?: number | null
+          rsi_period?: number | null
+          updated_at?: string | null
+          user_id?: string
+          volume_spike_multiplier?: number | null
+        }
+        Relationships: []
+      }
+      positions: {
+        Row: {
+          binance_order_id: string | null
+          closed_at: string | null
+          created_at: string | null
+          current_price: number | null
+          entry_price: number
+          id: string
+          opened_at: string | null
+          quantity: number
+          side: string
+          status: string | null
+          stop_loss: number | null
+          symbol: string
+          take_profit: number | null
+          trailing_stop: number | null
+          unrealized_pnl: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          binance_order_id?: string | null
+          closed_at?: string | null
+          created_at?: string | null
+          current_price?: number | null
+          entry_price: number
+          id?: string
+          opened_at?: string | null
+          quantity: number
+          side: string
+          status?: string | null
+          stop_loss?: number | null
+          symbol: string
+          take_profit?: number | null
+          trailing_stop?: number | null
+          unrealized_pnl?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          binance_order_id?: string | null
+          closed_at?: string | null
+          created_at?: string | null
+          current_price?: number | null
+          entry_price?: number
+          id?: string
+          opened_at?: string | null
+          quantity?: number
+          side?: string
+          status?: string | null
+          stop_loss?: number | null
+          symbol?: string
+          take_profit?: number | null
+          trailing_stop?: number | null
+          unrealized_pnl?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      trade_history: {
+        Row: {
+          closed_at: string | null
+          created_at: string | null
+          duration_minutes: number | null
+          entry_price: number
+          exit_price: number
+          id: string
+          indicators_snapshot: Json | null
+          opened_at: string
+          pnl: number
+          pnl_percent: number
+          quantity: number
+          side: string
+          symbol: string
+          user_id: string
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string | null
+          duration_minutes?: number | null
+          entry_price: number
+          exit_price: number
+          id?: string
+          indicators_snapshot?: Json | null
+          opened_at: string
+          pnl: number
+          pnl_percent: number
+          quantity: number
+          side: string
+          symbol: string
+          user_id: string
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string | null
+          duration_minutes?: number | null
+          entry_price?: number
+          exit_price?: number
+          id?: string
+          indicators_snapshot?: Json | null
+          opened_at?: string
+          pnl?: number
+          pnl_percent?: number
+          quantity?: number
+          side?: string
+          symbol?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      trading_session: {
+        Row: {
+          active_config_id: string | null
+          id: string
+          is_active: boolean | null
+          started_at: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          active_config_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          started_at?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          active_config_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          started_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trading_session_active_config_id_fkey"
+            columns: ["active_config_id"]
+            isOneToOne: false
+            referencedRelation: "indicator_config"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
