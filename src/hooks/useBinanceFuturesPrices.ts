@@ -13,7 +13,7 @@ export function useBinanceFuturesPrices(symbols: string[]) {
     const unique = Array.from(new Set(symbols.filter(Boolean)));
     if (unique.length === 0) return null;
     const streams = unique
-      .map((s) => `${s.toLowerCase()}@markPrice@1s`)
+      .map((s) => `${s.toLowerCase()}@ticker`)
       .join("/");
     return `wss://fstream.binance.com/stream?streams=${streams}`;
   }, [symbols.join(",")]);
@@ -34,7 +34,7 @@ export function useBinanceFuturesPrices(symbols: string[]) {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      // console.log("Binance WS connected");
+      console.log("Binance WS connected for", symbols.length, "symbols");
     };
 
     ws.onmessage = (evt) => {
@@ -42,9 +42,9 @@ export function useBinanceFuturesPrices(symbols: string[]) {
         const payload = JSON.parse(evt.data);
         // Combined stream: { stream, data }
         const d = payload?.data;
-        // markPrice event fields: p (mark price), E (event time), s (symbol)
+        // ticker event fields: c (last price), s (symbol), E (event time)
         const symbol = (d?.s || "").toUpperCase();
-        const price = parseFloat(d?.p ?? d?.c ?? d?.ap ?? "");
+        const price = parseFloat(d?.c ?? d?.p ?? "");
         const ts = typeof d?.E === "number" ? d.E : Date.now();
         if (!symbol || !isFinite(price)) return;
         setPrices((prev) => ({ ...prev, [symbol]: price }));
@@ -54,7 +54,12 @@ export function useBinanceFuturesPrices(symbols: string[]) {
       }
     };
 
+    ws.onerror = (err) => {
+      console.error("Binance WS error:", err);
+    };
+
     ws.onclose = () => {
+      console.log("Binance WS closed, reconnecting...");
       // Auto-reconnect after short delay
       reconnectRef.current = window.setTimeout(() => {
         if (symbols.length > 0) {
