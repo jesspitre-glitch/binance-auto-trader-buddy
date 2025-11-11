@@ -29,14 +29,45 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         
         const klines = await response.json();
         
-        // Transform to chart data
-        const data = klines.map((k: any) => ({
-          time: new Date(k[0]).toLocaleTimeString("da-DK", { hour: '2-digit', minute: '2-digit' }),
-          timestamp: k[0],
-          price: parseFloat(k[4]), // Close price
-          high: parseFloat(k[2]),
-          low: parseFloat(k[3]),
-        }));
+        // Transform to chart data and calculate trailing stop dynamically
+        const entryPrice = Number(trade.entry_price);
+        const trailingPercent = Number(trade.trailing_stop_percent) || 2.0;
+        const side = trade.side as 'LONG' | 'SHORT';
+        
+        let peakPrice = entryPrice;
+        const data = klines.map((k: any, index: number) => {
+          const timestamp = k[0];
+          const price = parseFloat(k[4]); // Close price
+          const high = parseFloat(k[2]);
+          const low = parseFloat(k[3]);
+          
+          // Only calculate trailing stop after entry
+          let trailingStop = null;
+          if (timestamp >= openTime) {
+            // Update peak price
+            if (side === 'LONG' && price > peakPrice) {
+              peakPrice = price;
+            } else if (side === 'SHORT' && price < peakPrice) {
+              peakPrice = price;
+            }
+            
+            // Calculate trailing stop based on peak
+            if (side === 'LONG') {
+              trailingStop = peakPrice * (1 - trailingPercent / 100);
+            } else {
+              trailingStop = peakPrice * (1 + trailingPercent / 100);
+            }
+          }
+          
+          return {
+            time: new Date(timestamp).toLocaleTimeString("da-DK", { hour: '2-digit', minute: '2-digit' }),
+            timestamp,
+            price,
+            high,
+            low,
+            trailingStop,
+          };
+        });
         
         // Find closest data points to entry and exit times
         const entryPoint = data.reduce((closest, current) => {
@@ -123,6 +154,18 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           strokeWidth={2}
           dot={false}
           name="Price"
+        />
+        
+        {/* Trailing Stop line - shows dynamic trailing stop movement */}
+        <Line 
+          type="stepAfter" 
+          dataKey="trailingStop" 
+          stroke="#f59e0b" 
+          strokeWidth={2}
+          strokeDasharray="3 3"
+          dot={false}
+          name="Trailing Stop"
+          connectNulls={false}
         />
         
         {/* Entry marker (X) */}
