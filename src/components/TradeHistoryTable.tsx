@@ -54,8 +54,15 @@ export const TradeHistoryTable = () => {
       )
       .subscribe();
 
+    // Also refetch when tab/window becomes visible (in case realtime is delayed)
+    const onVis = () => {
+      if (!document.hidden) fetchTrades();
+    };
+    document.addEventListener('visibilitychange', onVis);
+
     return () => {
       supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', onVis);
     };
   }, []);
 
