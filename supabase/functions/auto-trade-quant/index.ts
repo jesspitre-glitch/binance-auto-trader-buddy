@@ -772,6 +772,10 @@ serve(async (req) => {
               if (analysis.indicators.adx) openReasonParts.push(`ADX: ${analysis.indicators.adx.toFixed(2)}`);
               const openReason = `${analysis.signal} signal på ${symbol} - Trend: ${trend}. ${openReasonParts.join(', ')}`;
               
+              // Calculate trailing stop percentage from ATR and config
+              const trailingStopDistance = analysis.indicators.atr * config.atr_trailing_stop_multiplier;
+              const trailingStopPercent = (trailingStopDistance / analysis.indicators.price) * 100;
+              
               // Save position to database
               await supabaseClient.from('positions').insert({
                 user_id: session.user_id,
@@ -783,7 +787,7 @@ serve(async (req) => {
                 take_profit: analysis.takeProfit,
                 current_price: analysis.indicators.price,
                 peak_price: analysis.indicators.price,
-                trailing_stop_percent: 2.0,
+                trailing_stop_percent: parseFloat(trailingStopPercent.toFixed(2)),
                 binance_order_id: orderData.orderId,
                 status: 'OPEN',
                 strategy_hash: strategyHash,

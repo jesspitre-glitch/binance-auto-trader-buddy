@@ -294,21 +294,23 @@ serve(async (req) => {
           // Create new position if none exists
           console.log(`Creating new position for ${binancePos.symbol}`);
           
-          const { error } = await supabaseClient
-            .from('positions')
-            .insert({
-              user_id: userId,
-              symbol: binancePos.symbol,
-              side,
-              entry_price: parseFloat(binancePos.entryPrice),
-              quantity: absQuantity,
-              current_price: currentPrice,
-              peak_price: currentPrice,
-              trailing_stop_percent: 2.0,
-              unrealized_pnl: unrealizedPnl,
-              status: 'OPEN',
-              open_reason: `Position fundet på Binance (${side} @ ${parseFloat(binancePos.entryPrice).toFixed(4)})`,
-            });
+            // For positions found on Binance (not created by our system), use a default trailing stop
+            // We don't have ATR or config here, so use a reasonable default of 2%
+            const { error } = await supabaseClient
+              .from('positions')
+              .insert({
+                user_id: userId,
+                symbol: binancePos.symbol,
+                side,
+                entry_price: parseFloat(binancePos.entryPrice),
+                quantity: absQuantity,
+                current_price: currentPrice,
+                peak_price: currentPrice,
+                trailing_stop_percent: 2.0, // Default for external positions
+                unrealized_pnl: unrealizedPnl,
+                status: 'OPEN',
+                open_reason: `Position fundet på Binance (${side} @ ${parseFloat(binancePos.entryPrice).toFixed(4)})`,
+              });
           
           if (error) console.error('Insert error:', error);
           updates.push({ symbol: binancePos.symbol, action: 'created' });

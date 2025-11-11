@@ -161,9 +161,12 @@ export const PositionManager = () => {
                         <div>SL: <span className="font-mono">${position.stop_loss}</span></div>
                         <div>TP: <span className="font-mono">${position.take_profit}</span></div>
                         {position.trailing_stop && (() => {
+                          // Trailing stop is only active if peak has moved in profit direction
+                          const peakPrice = Number(position.peak_price) || Number(position.entry_price);
+                          const entryPrice = Number(position.entry_price);
                           const isTrailing = position.side === "LONG" 
-                            ? Number(position.peak_price) > Number(position.entry_price)
-                            : Number(position.peak_price) < Number(position.entry_price);
+                            ? peakPrice > entryPrice * 1.001 // At least 0.1% profit for LONG
+                            : peakPrice < entryPrice * 0.999; // At least 0.1% profit for SHORT
                           return (
                             <>
                               <div className="flex items-center gap-2">
@@ -176,7 +179,7 @@ export const PositionManager = () => {
                                 )}
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                Peak: <span className="font-mono">${Number(position.peak_price).toFixed(4)}</span>
+                                Peak: <span className="font-mono">${peakPrice.toFixed(4)}</span>
                               </div>
                             </>
                           );
