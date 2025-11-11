@@ -160,14 +160,27 @@ export const PositionManager = () => {
                       <div className="text-sm space-y-1">
                         <div>SL: <span className="font-mono">${position.stop_loss}</span></div>
                         <div>TP: <span className="font-mono">${position.take_profit}</span></div>
-                        {position.trailing_stop && (
-                          <>
-                            <div>Trail: <span className="font-mono">${Number(position.trailing_stop).toFixed(4)}</span></div>
-                            <div className="text-xs text-muted-foreground">
-                              Peak: <span className="font-mono">${Number(position.peak_price).toFixed(4)}</span>
-                            </div>
-                          </>
-                        )}
+                        {position.trailing_stop && (() => {
+                          const isTrailing = position.side === "LONG" 
+                            ? Number(position.peak_price) > Number(position.entry_price)
+                            : Number(position.peak_price) < Number(position.entry_price);
+                          return (
+                            <>
+                              <div className="flex items-center gap-2">
+                                <span>Trail:</span>
+                                <span className="font-mono">${Number(position.trailing_stop).toFixed(4)}</span>
+                                {isTrailing && (
+                                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-profit/10 text-profit border-profit/20">
+                                    AKTIV
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Peak: <span className="font-mono">${Number(position.peak_price).toFixed(4)}</span>
+                              </div>
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                     
