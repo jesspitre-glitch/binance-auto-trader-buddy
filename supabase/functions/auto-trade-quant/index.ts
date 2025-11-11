@@ -782,6 +782,8 @@ serve(async (req) => {
                 stop_loss: analysis.stopLoss,
                 take_profit: analysis.takeProfit,
                 current_price: analysis.indicators.price,
+                peak_price: analysis.indicators.price,
+                trailing_stop_percent: 2.0,
                 binance_order_id: orderData.orderId,
                 status: 'OPEN',
                 strategy_hash: strategyHash,

@@ -303,6 +303,8 @@ serve(async (req) => {
               entry_price: parseFloat(binancePos.entryPrice),
               quantity: absQuantity,
               current_price: currentPrice,
+              peak_price: currentPrice,
+              trailing_stop_percent: 2.0,
               unrealized_pnl: unrealizedPnl,
               status: 'OPEN',
               open_reason: `Position fundet på Binance (${side} @ ${parseFloat(binancePos.entryPrice).toFixed(4)})`,

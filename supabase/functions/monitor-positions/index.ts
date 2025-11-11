@@ -203,31 +203,66 @@ serve(async (req) => {
         let shouldClose = false;
         let closeReason = '';
 
-        // Check stop loss
-        if (position.side === 'LONG' && currentPrice <= position.stop_loss) {
-          shouldClose = true;
-          closeReason = 'STOP_LOSS_HIT';
-        } else if (position.side === 'SHORT' && currentPrice >= position.stop_loss) {
-          shouldClose = true;
-          closeReason = 'STOP_LOSS_HIT';
+        // Update peak price for trailing stop
+        let newPeakPrice = position.peak_price || position.entry_price;
+        if (position.side === 'LONG' && currentPrice > newPeakPrice) {
+          newPeakPrice = currentPrice;
+        } else if (position.side === 'SHORT' && (!newPeakPrice || currentPrice < newPeakPrice)) {
+          newPeakPrice = currentPrice;
+        }
+
+        // Calculate trailing stop based on peak price
+        const trailingPercent = position.trailing_stop_percent || 2.0;
+        let newTrailingStop = position.trailing_stop;
+        
+        if (position.side === 'LONG') {
+          newTrailingStop = newPeakPrice * (1 - trailingPercent / 100);
+        } else {
+          newTrailingStop = newPeakPrice * (1 + trailingPercent / 100);
+        }
+
+        // Check trailing stop first (highest priority)
+        if (newTrailingStop) {
+          if (position.side === 'LONG' && currentPrice <= newTrailingStop) {
+            shouldClose = true;
+            closeReason = 'TRAILING_STOP_HIT';
+          } else if (position.side === 'SHORT' && currentPrice >= newTrailingStop) {
+            shouldClose = true;
+            closeReason = 'TRAILING_STOP_HIT';
+          }
+        }
+
+        // Check stop loss (only if trailing stop didn't trigger)
+        if (!shouldClose && position.stop_loss) {
+          if (position.side === 'LONG' && currentPrice <= position.stop_loss) {
+            shouldClose = true;
+            closeReason = 'STOP_LOSS_HIT';
+          } else if (position.side === 'SHORT' && currentPrice >= position.stop_loss) {
+            shouldClose = true;
+            closeReason = 'STOP_LOSS_HIT';
+          }
         }
 
         // Check take profit
-        if (position.side === 'LONG' && currentPrice >= position.take_profit) {
-          shouldClose = true;
-          closeReason = 'TAKE_PROFIT_HIT';
-        } else if (position.side === 'SHORT' && currentPrice <= position.take_profit) {
-          shouldClose = true;
-          closeReason = 'TAKE_PROFIT_HIT';
+        if (!shouldClose && position.take_profit) {
+          if (position.side === 'LONG' && currentPrice >= position.take_profit) {
+            shouldClose = true;
+            closeReason = 'TAKE_PROFIT_HIT';
+          } else if (position.side === 'SHORT' && currentPrice <= position.take_profit) {
+            shouldClose = true;
+            closeReason = 'TAKE_PROFIT_HIT';
+          }
         }
 
         // Check timeout (4 hours default)
         const openedAt = new Date(position.opened_at);
         const now = new Date();
-        const hoursSinceOpen = (now.getTime() - openedAt.getTime()) / (1000 * 60 * 60);
-        if (hoursSinceOpen >= 4) {
-          shouldClose = true;
-          closeReason = 'TIMEOUT';
+        if (!shouldClose) {
+          const hoursSinceOpen = (now.getTime() - openedAt.getTime()) / (1000 * 60 * 60);
+          if (hoursSinceOpen >= 4) {
+            shouldClose = true;
+            closeReason = 'TIMEOUT';
+          }
         }
 
         // Calculate unrealized PnL
@@ -237,9 +272,15 @@ serve(async (req) => {
         
         const pnlPercent = ((currentPrice - position.entry_price) / position.entry_price) * 100 * (position.side === 'LONG' ? 1 : -1);
 
+        // Update position with new peak and trailing stop
         await supabaseClient
           .from('positions')
-          .update({ unrealized_pnl: pnl })
+          .update({ 
+            unrealized_pnl: pnl,
+            current_price: currentPrice,
+            peak_price: newPeakPrice,
+            trailing_stop: newTrailingStop,
+          })
           .eq('id', position.id);
 
         if (shouldClose) {

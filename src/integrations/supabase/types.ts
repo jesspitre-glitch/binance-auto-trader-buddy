@@ -145,6 +145,7 @@ export type Database = {
           id: string
           open_reason: string | null
           opened_at: string | null
+          peak_price: number | null
           quantity: number
           side: string
           status: string | null
@@ -153,6 +154,7 @@ export type Database = {
           symbol: string
           take_profit: number | null
           trailing_stop: number | null
+          trailing_stop_percent: number | null
           unrealized_pnl: number | null
           updated_at: string | null
           user_id: string
@@ -167,6 +169,7 @@ export type Database = {
           id?: string
           open_reason?: string | null
           opened_at?: string | null
+          peak_price?: number | null
           quantity: number
           side: string
           status?: string | null
@@ -175,6 +178,7 @@ export type Database = {
           symbol: string
           take_profit?: number | null
           trailing_stop?: number | null
+          trailing_stop_percent?: number | null
           unrealized_pnl?: number | null
           updated_at?: string | null
           user_id: string
@@ -189,6 +193,7 @@ export type Database = {
           id?: string
           open_reason?: string | null
           opened_at?: string | null
+          peak_price?: number | null
           quantity?: number
           side?: string
           status?: string | null
@@ -197,6 +202,7 @@ export type Database = {
           symbol?: string
           take_profit?: number | null
           trailing_stop?: number | null
+          trailing_stop_percent?: number | null
           unrealized_pnl?: number | null
           updated_at?: string | null
           user_id?: string

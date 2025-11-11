@@ -161,7 +161,12 @@ export const PositionManager = () => {
                         <div>SL: <span className="font-mono">${position.stop_loss}</span></div>
                         <div>TP: <span className="font-mono">${position.take_profit}</span></div>
                         {position.trailing_stop && (
-                          <div>Trail: <span className="font-mono">${position.trailing_stop}</span></div>
+                          <>
+                            <div>Trail: <span className="font-mono">${Number(position.trailing_stop).toFixed(4)}</span></div>
+                            <div className="text-xs text-muted-foreground">
+                              Peak: <span className="font-mono">${Number(position.peak_price).toFixed(4)}</span>
+                            </div>
+                          </>
                         )}
                       </div>
                     </div>
