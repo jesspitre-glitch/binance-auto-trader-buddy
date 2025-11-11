@@ -23,6 +23,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           symbol: trade.symbol,
           side: trade.side,
           entry_price: trade.entry_price,
+          peak_price: trade.peak_price,
           trailing_percent: trade.trailing_stop_percent,
           openTime: new Date(openTime).toISOString(),
         });
@@ -42,9 +43,10 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         const trailingPercent = Number(trade.trailing_stop_percent) || 2.0;
         const side = trade.side as 'LONG' | 'SHORT';
         const takeProfit = Number(trade.take_profit);
+        const stopLoss = Number(trade.stop_loss);
         
-        // Peak price starts at TP when trailing activates
-        let peakPrice = takeProfit;
+        // Use actual peak_price from database if available, otherwise start at entry
+        let peakPrice = trade.peak_price ? Number(trade.peak_price) : entryPrice;
         let trailingActivated = false;
         
         const data = klines.map((k: any, index: number) => {
@@ -53,29 +55,34 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           const high = parseFloat(k[2]);
           const low = parseFloat(k[3]);
           
-          // Trailing stop only activates AFTER TP is reached
+          // Trailing stop starts from entry and follows peak
           let trailingStop = null;
           if (timestamp >= openTime) {
-            // Check if TP has been reached at this point
-            const tpReached = side === 'LONG' 
-              ? price >= takeProfit 
-              : price <= takeProfit;
+            // Check if we've moved far enough from entry to activate trailing
+            const movementFromEntry = side === 'LONG' 
+              ? (price - entryPrice) / entryPrice * 100
+              : (entryPrice - price) / entryPrice * 100;
             
-            if (tpReached) {
+            // Activate trailing once we're in profit (price moved favorably from entry)
+            if (movementFromEntry > 0) {
               if (!trailingActivated) {
                 trailingActivated = true;
-                peakPrice = takeProfit; // Start peak at TP level
+                // For historical trades, use the actual peak_price from DB
+                if (trade.peak_price) {
+                  peakPrice = Number(trade.peak_price);
+                } else {
+                  peakPrice = price; // For live calculation
+                }
               }
               
-              // TP reached - activate trailing stop
-              // Update peak from TP level onwards
+              // Update peak as price moves favorably
               if (side === 'LONG' && price > peakPrice) {
                 peakPrice = price;
               } else if (side === 'SHORT' && price < peakPrice) {
                 peakPrice = price;
               }
               
-              // Calculate trailing stop from peak
+              // Calculate trailing stop from peak (not from TP!)
               if (side === 'LONG') {
                 trailingStop = peakPrice * (1 - trailingPercent / 100);
               } else {
