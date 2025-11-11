@@ -494,6 +494,7 @@ async function getAccountBalance() {
   const timestamp = Date.now();
   const params = new URLSearchParams({
     timestamp: timestamp.toString(),
+    recvWindow: '10000',
   });
 
   const signature = await crypto.subtle.importKey(
@@ -513,7 +514,7 @@ async function getAccountBalance() {
   params.append('signature', signature);
 
   const response = await fetch(
-    `https://fapi.binance.com/fapi/v2/balance?${params.toString()}`,
+    `https://fapi.binance.com/fapi/v2/account?${params.toString()}`,
     {
       headers: {
         'X-MBX-APIKEY': apiKey,
@@ -522,12 +523,13 @@ async function getAccountBalance() {
   );
 
   if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Binance account balance error:', errorText);
     throw new Error('Failed to fetch account balance');
   }
 
-  const balances = await response.json();
-  const usdcBalance = balances.find((b: any) => b.asset === 'USDC');
-  return parseFloat(usdcBalance?.availableBalance || '0');
+  const account = await response.json();
+  return parseFloat(account.totalMarginBalance || '0');
 }
 
 serve(async (req) => {
@@ -637,19 +639,26 @@ serve(async (req) => {
             try {
               // Get account balance
               const balance = await getAccountBalance();
+              console.log(`Balance for ${symbol}: ${balance} USDC`);
+              
+              // Log config values
+              console.log(`Config - risk_per_trade: ${config.risk_per_trade_percent}%, position_size: ${config.position_size_percent}%, leverage: ${config.leverage}x`);
               
               // Calculate position size using BOTH methods, take the smaller
               // Method 1: Risk-based (current logic)
               const riskAmount = balance * (config.risk_per_trade_percent / 100);
               const stopLossDistance = Math.abs(analysis.indicators.price - analysis.stopLoss);
               const riskBasedQuantity = (riskAmount / stopLossDistance) * config.leverage;
+              console.log(`Risk-based: riskAmount=${riskAmount}, stopLossDistance=${stopLossDistance}, quantity=${riskBasedQuantity}`);
               
               // Method 2: Direct percentage of balance
               const directPositionValue = balance * (config.position_size_percent / 100);
               const directQuantity = (directPositionValue / analysis.indicators.price) * config.leverage;
+              console.log(`Direct: positionValue=${directPositionValue}, price=${analysis.indicators.price}, quantity=${directQuantity}`);
               
               // Use the SMALLER of the two (more conservative)
               const rawQuantity = Math.min(riskBasedQuantity, directQuantity);
+              console.log(`Raw quantity (min of both methods): ${rawQuantity}`);
 
               // Apply Binance filters (minQty/stepSize and pricing tick)
               const filters = symbolFilters[symbol];
