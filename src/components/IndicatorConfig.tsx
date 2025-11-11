@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
@@ -357,23 +358,59 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="scan_interval">Scan Interval (Trading Timeframe)</Label>
-            <Input
-              id="scan_interval"
+            <Select
               value={formData.scan_interval}
-              onChange={(e) => setFormData({ ...formData, scan_interval: e.target.value })}
-              placeholder="5m"
-            />
-            <p className="text-xs text-muted-foreground">1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 1d, 1w</p>
+              onValueChange={(value) => setFormData({ ...formData, scan_interval: value })}
+            >
+              <SelectTrigger id="scan_interval">
+                <SelectValue placeholder="Vælg interval" />
+              </SelectTrigger>
+              <SelectContent className="bg-background">
+                <SelectItem value="1m">1 minut</SelectItem>
+                <SelectItem value="3m">3 minutter</SelectItem>
+                <SelectItem value="5m">5 minutter</SelectItem>
+                <SelectItem value="15m">15 minutter</SelectItem>
+                <SelectItem value="30m">30 minutter</SelectItem>
+                <SelectItem value="1h">1 time</SelectItem>
+                <SelectItem value="2h">2 timer</SelectItem>
+                <SelectItem value="4h">4 timer</SelectItem>
+                <SelectItem value="6h">6 timer</SelectItem>
+                <SelectItem value="8h">8 timer</SelectItem>
+                <SelectItem value="12h">12 timer</SelectItem>
+                <SelectItem value="1d">1 dag</SelectItem>
+                <SelectItem value="3d">3 dage</SelectItem>
+                <SelectItem value="1w">1 uge</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Timeframe for trading signals</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="trend_timeframe">Trend Timeframe</Label>
-            <Input
-              id="trend_timeframe"
+            <Select
               value={formData.trend_timeframe}
-              onChange={(e) => setFormData({ ...formData, trend_timeframe: e.target.value })}
-              placeholder="15m"
-            />
-            <p className="text-xs text-muted-foreground">Højere TF for at bestemme trend-retning</p>
+              onValueChange={(value) => setFormData({ ...formData, trend_timeframe: value })}
+            >
+              <SelectTrigger id="trend_timeframe">
+                <SelectValue placeholder="Vælg trend timeframe" />
+              </SelectTrigger>
+              <SelectContent className="bg-background">
+                <SelectItem value="1m">1 minut</SelectItem>
+                <SelectItem value="3m">3 minutter</SelectItem>
+                <SelectItem value="5m">5 minutter</SelectItem>
+                <SelectItem value="15m">15 minutter</SelectItem>
+                <SelectItem value="30m">30 minutter</SelectItem>
+                <SelectItem value="1h">1 time</SelectItem>
+                <SelectItem value="2h">2 timer</SelectItem>
+                <SelectItem value="4h">4 timer</SelectItem>
+                <SelectItem value="6h">6 timer</SelectItem>
+                <SelectItem value="8h">8 timer</SelectItem>
+                <SelectItem value="12h">12 timer</SelectItem>
+                <SelectItem value="1d">1 dag</SelectItem>
+                <SelectItem value="3d">3 dage</SelectItem>
+                <SelectItem value="1w">1 uge</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Højere TF for trend-retning</p>
           </div>
         </CardContent>
       </Card>
