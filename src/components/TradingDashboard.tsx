@@ -12,6 +12,7 @@ import { IndicatorConfig } from "./IndicatorConfig";
 import { PnLOverview } from "./PnLOverview";
 import { ScanResults } from "./ScanResults";
 import { StrategyAnalysis } from "./StrategyAnalysis";
+import { TradeHistoryTable } from "./TradeHistoryTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -226,16 +227,7 @@ export const TradingDashboard = () => {
         </TabsContent>
 
         <TabsContent value="history" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Trade Historik</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-center text-muted-foreground py-8">
-                Trade historik kommer her
-              </p>
-            </CardContent>
-          </Card>
+          <TradeHistoryTable />
         </TabsContent>
         
         <TabsContent value="config">
