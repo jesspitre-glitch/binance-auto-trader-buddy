@@ -348,6 +348,55 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   };
 }
 
+async function setLeverage(symbol: string, leverage: number) {
+  const apiKey = Deno.env.get('BINANCE_API_KEY');
+  const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
+  
+  if (!apiKey || !apiSecret) {
+    throw new Error('Binance API credentials not configured');
+  }
+
+  const timestamp = Date.now();
+  const params = new URLSearchParams({
+    symbol,
+    leverage: leverage.toString(),
+    timestamp: timestamp.toString(),
+  });
+
+  const signature = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(apiSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  ).then(key => 
+    crypto.subtle.sign('HMAC', key, new TextEncoder().encode(params.toString()))
+  ).then(sig => 
+    Array.from(new Uint8Array(sig))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+  );
+
+  params.append('signature', signature);
+
+  const response = await fetch(
+    `https://fapi.binance.com/fapi/v1/leverage?${params.toString()}`,
+    {
+      method: 'POST',
+      headers: {
+        'X-MBX-APIKEY': apiKey,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to set leverage: ${error}`);
+  }
+
+  return await response.json();
+}
+
 async function placeOrder(
   symbol: string,
   side: 'BUY' | 'SELL',
@@ -355,7 +404,8 @@ async function placeOrder(
   stopLoss: number,
   takeProfit: number,
   quantityPrecision: number,
-  pricePrecision: number
+  pricePrecision: number,
+  leverage: number
 ) {
   const apiKey = Deno.env.get('BINANCE_API_KEY');
   const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
@@ -363,6 +413,9 @@ async function placeOrder(
   if (!apiKey || !apiSecret) {
     throw new Error('Binance API credentials not configured');
   }
+
+  // Set leverage before placing order
+  await setLeverage(symbol, leverage);
 
   const timestamp = Date.now();
   const params = new URLSearchParams({
@@ -686,7 +739,8 @@ serve(async (req) => {
                 analysis.stopLoss,
                 analysis.takeProfit,
                 qtyPrecision,
-                pricePrecision
+                pricePrecision,
+                config.leverage
               );
               
               // Save position to database
