@@ -84,6 +84,39 @@ async function getCurrentPrice(symbol: string): Promise<number> {
   return parseFloat(data.price);
 }
 
+// Try to detect the actual close order type from Binance (TP/SL/Trailing)
+async function getRecentCloseReason(
+  symbol: string,
+  apiKey: string,
+  apiSecret: string
+): Promise<'EXTERNAL_CLOSE' | 'STOP_LOSS_HIT' | 'TAKE_PROFIT_HIT' | 'TRAILING_STOP_HIT'> {
+  try {
+    const serverTime = await getBinanceServerTime();
+    const params = new URLSearchParams({
+      symbol,
+      timestamp: serverTime.toString(),
+      recvWindow: '10000',
+      limit: '50',
+    });
+    const signature = await createSignature(params.toString(), apiSecret);
+    const url = `https://fapi.binance.com/fapi/v1/allOrders?${params.toString()}&signature=${signature}`;
+    const res = await fetch(url, { headers: { 'X-MBX-APIKEY': apiKey } });
+    if (!res.ok) return 'EXTERNAL_CLOSE';
+    const orders = await res.json();
+    // Look for the most recent filled reduce-only order
+    const recent = orders
+      .filter((o: any) => o.status === 'FILLED')
+      .sort((a: any, b: any) => (b.updateTime || b.time) - (a.updateTime || a.time))[0];
+    if (!recent) return 'EXTERNAL_CLOSE';
+    const type: string = recent.origType || recent.type || '';
+    if (type.includes('TAKE_PROFIT')) return 'TAKE_PROFIT_HIT';
+    if (type.includes('TRAILING_STOP')) return 'TRAILING_STOP_HIT';
+    if (type.includes('STOP')) return 'STOP_LOSS_HIT';
+    return 'EXTERNAL_CLOSE';
+  } catch (_err) {
+    return 'EXTERNAL_CLOSE';
+  }
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -299,14 +332,16 @@ serve(async (req) => {
             const entry = Number(dbPos.entry_price) || 0;
             const sideDb = dbPos.side as 'LONG' | 'SHORT';
 
-            // Infer reason if we have SL/TP
-            let inferredReason: 'EXTERNAL_CLOSE' | 'STOP_LOSS_HIT' | 'TAKE_PROFIT_HIT' = 'EXTERNAL_CLOSE';
-            if (sideDb === 'LONG') {
-              if (dbPos.stop_loss && exitPrice <= Number(dbPos.stop_loss)) inferredReason = 'STOP_LOSS_HIT';
-              else if (dbPos.take_profit && exitPrice >= Number(dbPos.take_profit)) inferredReason = 'TAKE_PROFIT_HIT';
-            } else {
-              if (dbPos.stop_loss && exitPrice >= Number(dbPos.stop_loss)) inferredReason = 'STOP_LOSS_HIT';
-              else if (dbPos.take_profit && exitPrice <= Number(dbPos.take_profit)) inferredReason = 'TAKE_PROFIT_HIT';
+            // Try to infer reason from Binance recent orders first, then fallback to SL/TP thresholds
+            let inferredReason: 'EXTERNAL_CLOSE' | 'STOP_LOSS_HIT' | 'TAKE_PROFIT_HIT' | 'TRAILING_STOP_HIT' = await getRecentCloseReason(dbPos.symbol, apiKey!, apiSecret!);
+            if (inferredReason === 'EXTERNAL_CLOSE') {
+              if (sideDb === 'LONG') {
+                if (dbPos.stop_loss && exitPrice <= Number(dbPos.stop_loss)) inferredReason = 'STOP_LOSS_HIT';
+                else if (dbPos.take_profit && exitPrice >= Number(dbPos.take_profit)) inferredReason = 'TAKE_PROFIT_HIT';
+              } else {
+                if (dbPos.stop_loss && exitPrice >= Number(dbPos.stop_loss)) inferredReason = 'STOP_LOSS_HIT';
+                else if (dbPos.take_profit && exitPrice <= Number(dbPos.take_profit)) inferredReason = 'TAKE_PROFIT_HIT';
+              }
             }
 
             const pnlRaw = sideDb === 'LONG' ? (exitPrice - entry) * qty : (entry - exitPrice) * qty;
