@@ -1,0 +1,56 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    );
+
+    console.log('Starting automated trading workflow...');
+
+    // Step 1: Monitor open positions
+    console.log('Step 1: Monitoring open positions...');
+    const monitorResponse = await supabaseClient.functions.invoke('monitor-positions');
+    
+    if (monitorResponse.error) {
+      console.error('Error monitoring positions:', monitorResponse.error);
+    } else {
+      console.log('Position monitoring completed:', monitorResponse.data);
+    }
+
+    // Step 2: Scan for new signals
+    console.log('Step 2: Scanning for new trading signals...');
+    const scanResponse = await supabaseClient.functions.invoke('auto-trade-quant');
+    
+    if (scanResponse.error) {
+      console.error('Error scanning markets:', scanResponse.error);
+    } else {
+      console.log('Market scan completed:', scanResponse.data);
+    }
+
+    return new Response(JSON.stringify({ 
+      message: 'Workflow completed',
+      monitorResult: monitorResponse.data,
+      scanResult: scanResponse.data,
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error: any) {
+    console.error('Workflow error:', error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
