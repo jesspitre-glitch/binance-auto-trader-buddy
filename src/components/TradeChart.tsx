@@ -55,38 +55,34 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           const high = parseFloat(k[2]);
           const low = parseFloat(k[3]);
           
-          // Trailing stop starts from entry and follows peak
+          // Trailing stop starts once price has moved favorably by at least trailingPercent from entry
           let trailingStop = null;
           if (timestamp >= openTime) {
-            // Check if we've moved far enough from entry to activate trailing
-            const movementFromEntry = side === 'LONG' 
-              ? (price - entryPrice) / entryPrice * 100
-              : (entryPrice - price) / entryPrice * 100;
-            
-            // Activate trailing once we're in profit (price moved favorably from entry)
-            if (movementFromEntry > 0) {
+            const activateForLong = side === 'LONG' && price >= entryPrice * (1 + trailingPercent / 100);
+            const activateForShort = side === 'SHORT' && price <= entryPrice * (1 - trailingPercent / 100);
+            const thresholdReached = activateForLong || activateForShort;
+
+            if (thresholdReached) {
               if (!trailingActivated) {
                 trailingActivated = true;
-                // For historical trades, use the actual peak_price from DB
-                if (trade.peak_price) {
-                  peakPrice = Number(trade.peak_price);
-                } else {
-                  peakPrice = price; // For live calculation
-                }
+                // For historical trades, prefer peak from DB; otherwise start with current price
+                peakPrice = trade.peak_price ? Number(trade.peak_price) : price;
               }
-              
+
               // Update peak as price moves favorably
               if (side === 'LONG' && price > peakPrice) {
                 peakPrice = price;
               } else if (side === 'SHORT' && price < peakPrice) {
                 peakPrice = price;
               }
-              
-              // Calculate trailing stop from peak (not from TP!)
+
+              // Calculate trailing stop from peak and clamp to at least break-even
               if (side === 'LONG') {
-                trailingStop = peakPrice * (1 - trailingPercent / 100);
+                const raw = peakPrice * (1 - trailingPercent / 100);
+                trailingStop = Math.max(entryPrice, raw);
               } else {
-                trailingStop = peakPrice * (1 + trailingPercent / 100);
+                const raw = peakPrice * (1 + trailingPercent / 100);
+                trailingStop = Math.min(entryPrice, raw);
               }
             }
           }
@@ -228,13 +224,13 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           label="Entry"
         />
         
-        {/* Take Profit line - when hit, trailing stop activates */}
+        {/* Take Profit line */}
         <ReferenceLine 
           y={trade.take_profit} 
           stroke="#22c55e" 
           strokeDasharray="3 3"
           strokeOpacity={0.7}
-          label="TP (activates trailing)"
+          label="TP"
         />
         
         {/* Stop Loss line */}
