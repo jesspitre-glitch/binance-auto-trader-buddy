@@ -686,8 +686,20 @@ serve(async (req) => {
           });
 
           // If there's a signal and we have capacity, place order
-          if (filteredSignal !== 'NONE' && (!positions || positions.length < config.max_open_positions)) {
-            console.log(`Signal detected for ${session.user_id}: ${filteredSignal} on ${symbol} (Trend: ${trend})`);
+          if (filteredSignal !== 'NONE') {
+            // Re-check positions count right before opening (positions may have been opened in this same scan)
+            const { data: currentPositions } = await supabaseClient
+              .from('positions')
+              .select('id')
+              .eq('user_id', session.user_id)
+              .eq('status', 'OPEN');
+            
+            if (currentPositions && currentPositions.length >= config.max_open_positions) {
+              console.log(`Max positions reached (${currentPositions.length}/${config.max_open_positions}) for user ${session.user_id}, skipping ${symbol}`);
+              continue;
+            }
+            
+            console.log(`Signal detected for ${session.user_id}: ${filteredSignal} on ${symbol} (Trend: ${trend}) - Current positions: ${currentPositions?.length || 0}/${config.max_open_positions}`);
             
             try {
               // Get account balance
