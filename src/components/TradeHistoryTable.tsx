@@ -23,7 +23,9 @@ export const TradeHistoryTable = () => {
         .limit(50);
 
       if (error) throw error;
-      setTrades(data || []);
+      // Filter out duplicates from display
+      const filteredTrades = (data || []).filter(trade => trade.close_reason !== 'DUPLICATE');
+      setTrades(filteredTrades);
     } catch (error: any) {
       toast({
         title: "Fejl",
@@ -123,7 +125,7 @@ export const TradeHistoryTable = () => {
                       </div>
                       <div className="text-right">
                         <div className={`text-sm font-bold ${isProfitable ? "text-profit" : "text-loss"}`}>
-                          {isProfitable ? "+" : ""}{trade.pnl.toFixed(2)} USDT
+                          {isProfitable ? "+" : ""}{trade.pnl.toFixed(2)} USDC
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {trade.pnl_percent >= 0 ? "+" : ""}{trade.pnl_percent.toFixed(2)}%
