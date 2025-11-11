@@ -41,13 +41,17 @@ export type Database = {
           name: string
           risk_per_trade_percent: number | null
           risk_reward_ratio: number | null
+          rsi_max_short: number | null
+          rsi_min_long: number | null
           rsi_overbought: number | null
           rsi_oversold: number | null
           rsi_period: number | null
           scan_interval: string | null
+          signal_conditions_required: number | null
           trend_timeframe: string | null
           updated_at: string | null
           user_id: string
+          volume_avg_period: number | null
         }
         Insert: {
           adx_period?: number | null
@@ -75,13 +79,17 @@ export type Database = {
           name: string
           risk_per_trade_percent?: number | null
           risk_reward_ratio?: number | null
+          rsi_max_short?: number | null
+          rsi_min_long?: number | null
           rsi_overbought?: number | null
           rsi_oversold?: number | null
           rsi_period?: number | null
           scan_interval?: string | null
+          signal_conditions_required?: number | null
           trend_timeframe?: string | null
           updated_at?: string | null
           user_id: string
+          volume_avg_period?: number | null
         }
         Update: {
           adx_period?: number | null
@@ -109,13 +117,17 @@ export type Database = {
           name?: string
           risk_per_trade_percent?: number | null
           risk_reward_ratio?: number | null
+          rsi_max_short?: number | null
+          rsi_min_long?: number | null
           rsi_overbought?: number | null
           rsi_oversold?: number | null
           rsi_period?: number | null
           scan_interval?: string | null
+          signal_conditions_required?: number | null
           trend_timeframe?: string | null
           updated_at?: string | null
           user_id?: string
+          volume_avg_period?: number | null
         }
         Relationships: []
       }

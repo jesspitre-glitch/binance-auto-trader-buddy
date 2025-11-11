@@ -13,6 +13,8 @@ interface IndicatorConfig {
   rsi_period: number;
   rsi_overbought: number;
   rsi_oversold: number;
+  rsi_min_long: number;
+  rsi_max_short: number;
   macd_fast: number;
   macd_slow: number;
   macd_signal: number;
@@ -24,8 +26,13 @@ interface IndicatorConfig {
   atr_trailing_stop_multiplier: number;
   adx_period: number;
   adx_threshold: number;
+  volume_avg_period: number;
+  signal_conditions_required: number;
   risk_per_trade_percent: number;
   max_open_positions: number;
+  max_exposure_percent: number;
+  daily_loss_limit_percent: number;
+  max_position_duration_minutes: number;
   risk_reward_ratio: number;
   leverage: number;
   scan_interval: string;
@@ -69,18 +76,18 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
 }
 
 // Determine trend direction from higher timeframe
-function analyzeTrend(klines: any[]): 'BULLISH' | 'BEARISH' | 'NEUTRAL' {
+function analyzeTrend(klines: any[], config: IndicatorConfig): 'BULLISH' | 'BEARISH' | 'NEUTRAL' {
   const closes = klines.map(k => k.close);
   
-  // Simple trend: compare EMA20 vs EMA50
-  const ema20 = calculateEMA(closes, 20);
-  const ema50 = calculateEMA(closes, 50);
+  // Use config EMAs for trend analysis
+  const emaMedium = calculateEMA(closes, config.ema_medium);
+  const emaSlow = calculateEMA(closes, config.ema_slow);
   
-  const currentEma20 = ema20[ema20.length - 1];
-  const currentEma50 = ema50[ema50.length - 1];
+  const currentEmaMedium = emaMedium[emaMedium.length - 1];
+  const currentEmaSlow = emaSlow[emaSlow.length - 1];
   
-  if (currentEma20 > currentEma50 * 1.001) return 'BULLISH';
-  if (currentEma20 < currentEma50 * 0.999) return 'BEARISH';
+  if (currentEmaMedium > currentEmaSlow * 1.001) return 'BULLISH';
+  if (currentEmaMedium < currentEmaSlow * 0.999) return 'BEARISH';
   return 'NEUTRAL';
 }
 
@@ -149,6 +156,35 @@ function calculateBollingerBands(prices: number[], period: number, stdDev: numbe
     middle: sma,
     lower: sma - (stdDev * std),
   };
+}
+
+function calculateADX(high: number[], low: number[], close: number[], period: number): number {
+  const tr: number[] = [];
+  const dmPlus: number[] = [];
+  const dmMinus: number[] = [];
+  
+  // Calculate True Range and Directional Movement
+  for (let i = 1; i < high.length; i++) {
+    const hl = high[i] - low[i];
+    const hc = Math.abs(high[i] - close[i - 1]);
+    const lc = Math.abs(low[i] - close[i - 1]);
+    tr.push(Math.max(hl, hc, lc));
+    
+    const highDiff = high[i] - high[i - 1];
+    const lowDiff = low[i - 1] - low[i];
+    
+    dmPlus.push(highDiff > lowDiff && highDiff > 0 ? highDiff : 0);
+    dmMinus.push(lowDiff > highDiff && lowDiff > 0 ? lowDiff : 0);
+  }
+  
+  // Smooth the values
+  const atr = tr.slice(-period).reduce((a, b) => a + b, 0) / period;
+  const diPlus = (dmPlus.slice(-period).reduce((a, b) => a + b, 0) / period / atr) * 100;
+  const diMinus = (dmMinus.slice(-period).reduce((a, b) => a + b, 0) / period / atr) * 100;
+  
+  // Calculate DX and ADX
+  const dx = Math.abs(diPlus - diMinus) / (diPlus + diMinus) * 100;
+  return dx;
 }
 
 async function fetchAllUSDCSymbols(): Promise<string[]> {
@@ -253,9 +289,10 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   const macd = calculateMACD(closes, config.macd_fast, config.macd_slow, config.macd_signal);
   const atr = calculateATR(highs, lows, closes, config.atr_period);
   const bb = calculateBollingerBands(closes, config.bb_period, config.bb_std_dev);
+  const adx = calculateADX(highs, lows, closes, config.adx_period);
   
   const currentPrice = closes[closes.length - 1];
-  const avgVolume = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+  const avgVolume = volumes.slice(-config.volume_avg_period).reduce((a, b) => a + b, 0) / config.volume_avg_period;
   const currentVolume = volumes[volumes.length - 1];
   
   const emaFastCurrent = emaFast[emaFast.length - 1];
@@ -267,8 +304,9 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
     currentPrice > emaFastCurrent,
     emaFastCurrent > emaMediumCurrent,
     emaMediumCurrent > emaSlowCurrent,
-    rsi > 30 && rsi < config.rsi_overbought,
+    rsi > (config.rsi_min_long || 30) && rsi < config.rsi_overbought,
     macd.histogram > config.macd_histogram_threshold,
+    adx > config.adx_threshold,
   ];
   
   // SHORT signal
@@ -276,12 +314,14 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
     currentPrice < emaFastCurrent,
     emaFastCurrent < emaMediumCurrent,
     emaMediumCurrent < emaSlowCurrent,
-    rsi < 70 && rsi > config.rsi_oversold,
+    rsi < (config.rsi_max_short || 70) && rsi > config.rsi_oversold,
     macd.histogram < -config.macd_histogram_threshold,
+    adx > config.adx_threshold,
   ];
   
-  const longSignal = longConditions.filter(c => c).length >= 4;
-  const shortSignal = shortConditions.filter(c => c).length >= 4;
+  const requiredConditions = config.signal_conditions_required || 5;
+  const longSignal = longConditions.filter(c => c).length >= requiredConditions;
+  const shortSignal = shortConditions.filter(c => c).length >= requiredConditions;
   
   return {
     signal: longSignal ? 'LONG' : shortSignal ? 'SHORT' : 'NONE',
@@ -294,6 +334,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
       macd: macd.histogram,
       atr,
       bb,
+      adx,
       volume: currentVolume,
       avgVolume,
     },
@@ -327,7 +368,7 @@ async function placeOrder(
     symbol,
     side,
     type: 'MARKET',
-    quantity: quantity.toFixed(3),
+    quantity: quantity.toFixed(quantityPrecision),
     timestamp: timestamp.toString(),
   });
 
@@ -407,7 +448,7 @@ async function placeOrder(
     symbol,
     side: side === 'BUY' ? 'SELL' : 'BUY',
     type: 'TAKE_PROFIT_MARKET',
-    stopPrice: takeProfit.toFixed(2),
+    stopPrice: takeProfit.toFixed(pricePrecision),
     closePosition: 'true',
     timestamp: Date.now().toString(),
   });
@@ -545,7 +586,7 @@ serve(async (req) => {
           const trendKlines = await fetchKlines(symbol, config.trend_timeframe || '15m', 100);
           
           // Determine higher timeframe trend
-          const trend = analyzeTrend(trendKlines);
+          const trend = analyzeTrend(trendKlines, config);
           
           // Analyze signal on scan interval
           const analysis = analyzeSignal(scanKlines, config);

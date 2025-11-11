@@ -30,6 +30,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     rsi_period: config?.rsi_period || 14,
     rsi_overbought: config?.rsi_overbought || 70,
     rsi_oversold: config?.rsi_oversold || 30,
+    rsi_min_long: config?.rsi_min_long || 30,
+    rsi_max_short: config?.rsi_max_short || 70,
     
     // MACD
     macd_fast: config?.macd_fast || 12,
@@ -49,6 +51,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     // ADX
     adx_period: config?.adx_period || 14,
     adx_threshold: config?.adx_threshold || 25,
+    
+    // Volume & Signal
+    volume_avg_period: config?.volume_avg_period || 20,
+    signal_conditions_required: config?.signal_conditions_required || 5,
     
     // Timeframes
     scan_interval: config?.scan_interval || "5m",
@@ -177,7 +183,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           <CardTitle>RSI (Relative Strength Index)</CardTitle>
           <CardDescription>Overkøbt/Oversolgt niveau</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-3">
+        <CardContent className="grid gap-4 sm:grid-cols-4">
           <div className="space-y-2">
             <Label htmlFor="rsi_period">RSI Periode</Label>
             <Input
@@ -185,6 +191,16 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               value={formData.rsi_period}
               onChange={(e) => setFormData({ ...formData, rsi_period: parseInt(e.target.value) })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="rsi_min_long">Min RSI (LONG)</Label>
+            <Input
+              id="rsi_min_long"
+              type="number"
+              step="0.01"
+              value={formData.rsi_min_long}
+              onChange={(e) => setFormData({ ...formData, rsi_min_long: parseFloat(e.target.value) })}
             />
           </div>
           <div className="space-y-2">
@@ -205,6 +221,16 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               step="0.01"
               value={formData.rsi_oversold}
               onChange={(e) => setFormData({ ...formData, rsi_oversold: parseFloat(e.target.value) })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="rsi_max_short">Max RSI (SHORT)</Label>
+            <Input
+              id="rsi_max_short"
+              type="number"
+              step="0.01"
+              value={formData.rsi_max_short}
+              onChange={(e) => setFormData({ ...formData, rsi_max_short: parseFloat(e.target.value) })}
             />
           </div>
         </CardContent>
@@ -346,6 +372,35 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.adx_threshold}
               onChange={(e) => setFormData({ ...formData, adx_threshold: parseFloat(e.target.value) })}
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Signal Settings</CardTitle>
+          <CardDescription>Volumen analyse og signal krav</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="volume_avg_period">Volumen Gennemsnit Periode</Label>
+            <Input
+              id="volume_avg_period"
+              type="number"
+              value={formData.volume_avg_period}
+              onChange={(e) => setFormData({ ...formData, volume_avg_period: parseInt(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Antal bars for gennemsnit</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="signal_conditions_required">Signal Betingelser Påkrævet</Label>
+            <Input
+              id="signal_conditions_required"
+              type="number"
+              value={formData.signal_conditions_required}
+              onChange={(e) => setFormData({ ...formData, signal_conditions_required: parseInt(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Hvor mange ud af 6 betingelser skal være opfyldt</p>
           </div>
         </CardContent>
       </Card>
