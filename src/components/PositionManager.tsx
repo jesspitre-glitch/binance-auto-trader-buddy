@@ -5,10 +5,13 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, TrendingUp, TrendingDown, X } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { da } from "date-fns/locale";
 
 export const PositionManager = () => {
   const [positions, setPositions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentTime, setCurrentTime] = useState(Date.now());
   const { toast } = useToast();
 
   const fetchPositions = async () => {
@@ -51,8 +54,14 @@ export const PositionManager = () => {
       )
       .subscribe();
 
+    // Update time every second for live relative times
+    const timeInterval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(timeInterval);
     };
   }, []);
 
@@ -143,7 +152,10 @@ export const PositionManager = () => {
                         {isProfitable ? "+" : ""}{pnl.toFixed(2)} USDT
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        {new Date(position.opened_at).toLocaleTimeString("da-DK")}
+                        {formatDistanceToNow(new Date(position.opened_at), { 
+                          addSuffix: true,
+                          locale: da 
+                        })}
                       </div>
                     </div>
                     
