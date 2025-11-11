@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, TrendingUp, TrendingDown, X } from "lucide-react";
+import { useBinanceFuturesPrices } from "@/hooks/useBinanceFuturesPrices";
 import { formatDistanceToNow } from "date-fns";
 import { da } from "date-fns/locale";
 
@@ -38,7 +39,7 @@ export const PositionManager = () => {
   useEffect(() => {
     fetchPositions();
     
-    // Realtime subscription
+    // Realtime subscription for DB changes (open/close/status)
     const channel = supabase
       .channel("positions-changes")
       .on(
@@ -64,6 +65,10 @@ export const PositionManager = () => {
       clearInterval(timeInterval);
     };
   }, []);
+
+  // Live Binance prices for open symbols
+  const symbols = positions.map((p) => p.symbol).filter(Boolean);
+  const { prices: livePrices, updatedAt: priceUpdatedAt } = useBinanceFuturesPrices(symbols);
 
   const closePosition = async (positionId: string) => {
     try {
@@ -108,7 +113,14 @@ export const PositionManager = () => {
         ) : (
           <div className="space-y-4">
             {positions.map((position) => {
-              const pnl = position.unrealized_pnl || 0;
+              const pnlLiveBase = (() => {
+                const live = livePrices[position.symbol];
+                const price = live ?? position.current_price ?? position.entry_price;
+                return position.side === "LONG"
+                  ? (price - position.entry_price) * position.quantity
+                  : (position.entry_price - price) * position.quantity;
+              })();
+              const pnl = Number.isFinite(pnlLiveBase) ? pnlLiveBase : (position.unrealized_pnl || 0);
               const isProfitable = pnl >= 0;
               
               // Use currentTime directly to ensure re-calculation on every update
@@ -148,7 +160,11 @@ export const PositionManager = () => {
                     
                     <div className="text-sm space-y-1">
                       <div>Entry: <span className="font-mono">${position.entry_price}</span></div>
-                      <div>Current: <span className="font-mono">${position.current_price || "..."}</span></div>
+                      <div>
+                        Current: <span className="font-mono">
+                          ${livePrices[position.symbol] ?? position.current_price ?? "..."}
+                        </span>
+                      </div>
                       <div>Quantity: <span className="font-mono">{position.quantity}</span></div>
                     </div>
                     
@@ -166,8 +182,11 @@ export const PositionManager = () => {
                       <div className={`text-lg font-bold ${isProfitable ? "text-profit" : "text-loss"}`}>
                         {isProfitable ? "+" : ""}{pnl.toFixed(2)} USDT
                       </div>
-                      <div className="text-sm text-muted-foreground">
-                        {timeAgo}
+                      <div className="text-xs text-muted-foreground">
+                        Senest pris: {priceUpdatedAt[position.symbol] ? formatDistanceToNow(new Date(priceUpdatedAt[position.symbol]), { addSuffix: true, locale: da }) : 'venter...'}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Åbnet: {formatDistanceToNow(new Date(openedTime), { addSuffix: true, locale: da })}
                       </div>
                     </div>
                     
