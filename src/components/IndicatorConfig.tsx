@@ -61,6 +61,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     trend_timeframe: config?.trend_timeframe || config?.mtf_timeframe || "15m",
     
     // Risk Management
+    position_size_percent: config?.position_size_percent || 5,
     risk_per_trade_percent: config?.risk_per_trade_percent || 1,
     max_open_positions: config?.max_open_positions || 3,
     max_exposure_percent: config?.max_exposure_percent || 5,
@@ -486,7 +487,18 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="risk_per_trade_percent">Risiko pr. Trade (%)</Label>
+            <Label htmlFor="position_size_percent">% pr Trade</Label>
+            <Input
+              id="position_size_percent"
+              type="number"
+              step="0.1"
+              value={formData.position_size_percent}
+              onChange={(e) => setFormData({ ...formData, position_size_percent: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Direkte position størrelse i % af balance</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="risk_per_trade_percent">Max Risiko pr. Trade (%)</Label>
             <Input
               id="risk_per_trade_percent"
               type="number"
@@ -494,6 +506,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.risk_per_trade_percent}
               onChange={(e) => setFormData({ ...formData, risk_per_trade_percent: parseFloat(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Max tab hvis stop loss rammes</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="max_open_positions">Max Åbne Positioner</Label>

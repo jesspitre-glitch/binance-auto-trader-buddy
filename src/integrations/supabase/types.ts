@@ -39,6 +39,7 @@ export type Database = {
           max_open_positions: number | null
           max_position_duration_minutes: number | null
           name: string
+          position_size_percent: number | null
           risk_per_trade_percent: number | null
           risk_reward_ratio: number | null
           rsi_max_short: number | null
@@ -77,6 +78,7 @@ export type Database = {
           max_open_positions?: number | null
           max_position_duration_minutes?: number | null
           name: string
+          position_size_percent?: number | null
           risk_per_trade_percent?: number | null
           risk_reward_ratio?: number | null
           rsi_max_short?: number | null
@@ -115,6 +117,7 @@ export type Database = {
           max_open_positions?: number | null
           max_position_duration_minutes?: number | null
           name?: string
+          position_size_percent?: number | null
           risk_per_trade_percent?: number | null
           risk_reward_ratio?: number | null
           rsi_max_short?: number | null

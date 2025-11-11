@@ -28,6 +28,7 @@ interface IndicatorConfig {
   adx_threshold: number;
   volume_avg_period: number;
   signal_conditions_required: number;
+  position_size_percent: number;
   risk_per_trade_percent: number;
   max_open_positions: number;
   max_exposure_percent: number;
@@ -636,9 +637,19 @@ serve(async (req) => {
             try {
               // Get account balance
               const balance = await getAccountBalance();
+              
+              // Calculate position size using BOTH methods, take the smaller
+              // Method 1: Risk-based (current logic)
               const riskAmount = balance * (config.risk_per_trade_percent / 100);
               const stopLossDistance = Math.abs(analysis.indicators.price - analysis.stopLoss);
-              const rawQuantity = (riskAmount / stopLossDistance) * config.leverage;
+              const riskBasedQuantity = (riskAmount / stopLossDistance) * config.leverage;
+              
+              // Method 2: Direct percentage of balance
+              const directPositionValue = balance * (config.position_size_percent / 100);
+              const directQuantity = (directPositionValue / analysis.indicators.price) * config.leverage;
+              
+              // Use the SMALLER of the two (more conservative)
+              const rawQuantity = Math.min(riskBasedQuantity, directQuantity);
 
               // Apply Binance filters (minQty/stepSize and pricing tick)
               const filters = symbolFilters[symbol];
