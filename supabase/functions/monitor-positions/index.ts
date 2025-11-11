@@ -15,7 +15,7 @@ async function getCurrentPrice(symbol: string): Promise<number> {
   return parseFloat(data.price);
 }
 
-async function closePositionOnBinance(symbol: string, side: string) {
+async function closePositionOnBinance(symbol: string, side: string, quantity: number) {
   const apiKey = Deno.env.get('BINANCE_API_KEY');
   const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
   
@@ -26,12 +26,62 @@ async function closePositionOnBinance(symbol: string, side: string) {
   const timestamp = Date.now();
   const closeSide = side === 'LONG' ? 'SELL' : 'BUY';
   
+  // First get position to find exact quantity
+  const positionParams = new URLSearchParams({
+    timestamp: timestamp.toString(),
+    recvWindow: '10000',
+  });
+
+  let positionSignature = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(apiSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  ).then(key => 
+    crypto.subtle.sign('HMAC', key, new TextEncoder().encode(positionParams.toString()))
+  ).then(sig => 
+    Array.from(new Uint8Array(sig))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+  );
+
+  positionParams.append('signature', positionSignature);
+
+  const positionResponse = await fetch(
+    `https://fapi.binance.com/fapi/v2/positionRisk?${positionParams.toString()}`,
+    {
+      headers: {
+        'X-MBX-APIKEY': apiKey,
+      },
+    }
+  );
+
+  if (!positionResponse.ok) {
+    const error = await positionResponse.text();
+    console.error('Failed to get position:', error);
+    throw new Error(`Failed to get position: ${error}`);
+  }
+
+  const positions = await positionResponse.json();
+  const position = positions.find((p: any) => p.symbol === symbol && parseFloat(p.positionAmt) !== 0);
+  
+  if (!position) {
+    console.log(`No open position found for ${symbol}, skipping close`);
+    return { message: 'No position to close' };
+  }
+
+  const positionAmt = Math.abs(parseFloat(position.positionAmt));
+  
+  // Now place the closing order with exact quantity
+  const orderTimestamp = Date.now();
   const params = new URLSearchParams({
     symbol,
     side: closeSide,
     type: 'MARKET',
-    closePosition: 'true',
-    timestamp: timestamp.toString(),
+    quantity: positionAmt.toString(),
+    timestamp: orderTimestamp.toString(),
+    recvWindow: '10000',
   });
 
   const signature = await crypto.subtle.importKey(
@@ -62,6 +112,7 @@ async function closePositionOnBinance(symbol: string, side: string) {
 
   if (!response.ok) {
     const error = await response.text();
+    console.error('Failed to close position:', error);
     throw new Error(`Failed to close position: ${error}`);
   }
 
@@ -154,7 +205,7 @@ serve(async (req) => {
           
           try {
             // Close position on Binance
-            await closePositionOnBinance(position.symbol, position.side);
+            await closePositionOnBinance(position.symbol, position.side, position.quantity);
             
             // Update position status
             await supabaseClient
