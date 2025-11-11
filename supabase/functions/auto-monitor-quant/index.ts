@@ -14,13 +14,23 @@ serve(async (req) => {
   try {
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
     console.log('Starting automated trading workflow...');
 
-    // Step 1: Monitor open positions
-    console.log('Step 1: Monitoring open positions...');
+    // Step 1: Sync Binance positions with database
+    console.log('Step 1: Syncing Binance positions...');
+    const syncResponse = await supabaseClient.functions.invoke('sync-binance-futures-positions');
+    
+    if (syncResponse.error) {
+      console.error('Error syncing positions:', syncResponse.error);
+    } else {
+      console.log('Position sync completed:', syncResponse.data);
+    }
+
+    // Step 2: Monitor open positions
+    console.log('Step 2: Monitoring open positions...');
     const monitorResponse = await supabaseClient.functions.invoke('monitor-positions');
     
     if (monitorResponse.error) {
@@ -29,8 +39,8 @@ serve(async (req) => {
       console.log('Position monitoring completed:', monitorResponse.data);
     }
 
-    // Step 2: Scan for new signals
-    console.log('Step 2: Scanning for new trading signals...');
+    // Step 3: Scan for new signals
+    console.log('Step 3: Scanning for new trading signals...');
     const scanResponse = await supabaseClient.functions.invoke('auto-trade-quant');
     
     if (scanResponse.error) {
@@ -41,6 +51,7 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({ 
       message: 'Workflow completed',
+      syncResult: syncResponse.data,
       monitorResult: monitorResponse.data,
       scanResult: scanResponse.data,
     }), {

@@ -88,18 +88,6 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error('No authorization header');
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
-    
-    if (userError || !user) {
-      throw new Error('Unauthorized');
-    }
-
     const apiKey = Deno.env.get('BINANCE_API_KEY');
     const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
     
@@ -114,104 +102,157 @@ serve(async (req) => {
     const totalUnrealizedProfit = parseFloat(accountData.totalUnrealizedProfit);
     const availableBalance = parseFloat(accountData.availableBalance);
 
-    // Update or insert user portfolio with balance
-    const { data: existingPortfolio } = await supabaseClient
-      .from('user_portfolio')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
+    // Get all active users from trading_session
+    const { data: activeSessions } = await supabaseClient
+      .from('trading_session')
+      .select('user_id')
+      .eq('is_active', true);
 
-    if (existingPortfolio) {
-      await supabaseClient
-        .from('user_portfolio')
-        .update({
-          futures_capital: totalMarginBalance,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', user.id);
-    } else {
-      await supabaseClient
-        .from('user_portfolio')
-        .insert({
-          user_id: user.id,
-          futures_capital: totalMarginBalance,
-        });
+    if (!activeSessions || activeSessions.length === 0) {
+      console.log('No active trading sessions');
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: 'No active sessions to sync',
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    // Fetch positions from Binance
-    const binancePositions = await getBinancePositions(apiKey, apiSecret);
-    
-    // Get current positions from database
-    const { data: dbPositions } = await supabaseClient
-      .from('positions')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('status', 'OPEN');
+    const allUpdates = [];
 
-    const updates = [];
+    // Process each active user
+    for (const session of activeSessions) {
+      const userId = session.user_id;
+      console.log(`Syncing positions for user ${userId}`);
 
-    // Sync each Binance position to database
-    for (const binancePos of binancePositions) {
-      const quantity = parseFloat(binancePos.positionAmt);
-      const side = quantity > 0 ? 'LONG' : 'SHORT';
-      const absQuantity = Math.abs(quantity);
-      
-      const existingPos = dbPositions?.find(p => p.symbol === binancePos.symbol);
-      
-      if (existingPos) {
-        // Update existing position
-        const { error } = await supabaseClient
-          .from('positions')
+      // Update or insert user portfolio with balance
+      const { data: existingPortfolio } = await supabaseClient
+        .from('user_portfolio')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (existingPortfolio) {
+        await supabaseClient
+          .from('user_portfolio')
           .update({
-            current_price: parseFloat(binancePos.markPrice),
-            unrealized_pnl: parseFloat(binancePos.unRealizedProfit),
+            futures_capital: totalMarginBalance,
+            updated_at: new Date().toISOString(),
           })
-          .eq('id', existingPos.id);
-        
-        if (error) console.error('Update error:', error);
-        updates.push({ symbol: binancePos.symbol, action: 'updated' });
+          .eq('user_id', userId);
       } else {
-        // Create new position
-        const { error } = await supabaseClient
-          .from('positions')
+        await supabaseClient
+          .from('user_portfolio')
           .insert({
-            user_id: user.id,
-            symbol: binancePos.symbol,
-            side,
-            entry_price: parseFloat(binancePos.entryPrice),
-            quantity: absQuantity,
-            current_price: parseFloat(binancePos.markPrice),
-            unrealized_pnl: parseFloat(binancePos.unRealizedProfit),
-            status: 'OPEN',
+            user_id: userId,
+            futures_capital: totalMarginBalance,
           });
-        
-        if (error) console.error('Insert error:', error);
-        updates.push({ symbol: binancePos.symbol, action: 'created' });
       }
-    }
 
-    // Close positions that are no longer on Binance
-    if (dbPositions) {
-      for (const dbPos of dbPositions) {
-        const stillOpen = binancePositions.find((bp: any) => bp.symbol === dbPos.symbol);
-        if (!stillOpen) {
-          await supabaseClient
+      // Fetch positions from Binance
+      const binancePositions = await getBinancePositions(apiKey, apiSecret);
+      
+      // Get current positions from database for this user
+      const { data: dbPositions } = await supabaseClient
+        .from('positions')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'OPEN');
+
+      const updates = [];
+
+      // Sync each Binance position to database
+      const binanceSymbols = new Set<string>();
+      
+      for (const binancePos of binancePositions) {
+        const quantity = parseFloat(binancePos.positionAmt);
+        const side = quantity > 0 ? 'LONG' : 'SHORT';
+        const absQuantity = Math.abs(quantity);
+        binanceSymbols.add(binancePos.symbol);
+        
+        // Find ALL matching positions in DB for this symbol
+        const matchingPositions = dbPositions?.filter(p => p.symbol === binancePos.symbol) || [];
+        
+        if (matchingPositions.length > 0) {
+          // Update the FIRST position
+          const mainPos = matchingPositions[0];
+          const { error } = await supabaseClient
             .from('positions')
             .update({
-              status: 'CLOSED',
-              closed_at: new Date().toISOString(),
+              current_price: parseFloat(binancePos.markPrice),
+              unrealized_pnl: parseFloat(binancePos.unRealizedProfit),
+              quantity: absQuantity,
+              side: side,
             })
-            .eq('id', dbPos.id);
+            .eq('id', mainPos.id);
           
-          updates.push({ symbol: dbPos.symbol, action: 'closed' });
+          if (error) console.error('Update error:', error);
+          updates.push({ symbol: binancePos.symbol, action: 'updated', id: mainPos.id });
+          
+          // Close DUPLICATES (all except the first one)
+          for (let i = 1; i < matchingPositions.length; i++) {
+            const duplicate = matchingPositions[i];
+            console.log(`Closing duplicate position ${duplicate.symbol} (ID: ${duplicate.id})`);
+            
+            await supabaseClient
+              .from('positions')
+              .update({
+                status: 'CLOSED',
+                closed_at: new Date().toISOString(),
+              })
+              .eq('id', duplicate.id);
+            
+            updates.push({ symbol: duplicate.symbol, action: 'closed_duplicate', id: duplicate.id });
+          }
+        } else {
+          // Create new position if none exists
+          const { error } = await supabaseClient
+            .from('positions')
+            .insert({
+              user_id: userId,
+              symbol: binancePos.symbol,
+              side,
+              entry_price: parseFloat(binancePos.entryPrice),
+              quantity: absQuantity,
+              current_price: parseFloat(binancePos.markPrice),
+              unrealized_pnl: parseFloat(binancePos.unRealizedProfit),
+              status: 'OPEN',
+            });
+          
+          if (error) console.error('Insert error:', error);
+          updates.push({ symbol: binancePos.symbol, action: 'created' });
         }
       }
+
+      // Close positions that are no longer on Binance
+      if (dbPositions) {
+        for (const dbPos of dbPositions) {
+          if (!binanceSymbols.has(dbPos.symbol)) {
+            console.log(`Closing position ${dbPos.symbol} - not found on Binance`);
+            
+            await supabaseClient
+              .from('positions')
+              .update({
+                status: 'CLOSED',
+                closed_at: new Date().toISOString(),
+              })
+              .eq('id', dbPos.id);
+            
+            updates.push({ symbol: dbPos.symbol, action: 'closed', id: dbPos.id });
+          }
+        }
+      }
+
+      allUpdates.push({
+        userId: userId,
+        updates: updates,
+      });
     }
 
     return new Response(JSON.stringify({ 
       success: true, 
-      updates,
-      totalPositions: binancePositions.length,
+      userUpdates: allUpdates,
+      totalPositions: (await getBinancePositions(apiKey, apiSecret)).length,
       balance: {
         totalMarginBalance,
         totalWalletBalance,
