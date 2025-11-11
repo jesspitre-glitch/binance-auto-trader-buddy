@@ -111,6 +111,21 @@ export const PositionManager = () => {
               const pnl = position.unrealized_pnl || 0;
               const isProfitable = pnl >= 0;
               
+              // Use currentTime directly to ensure re-calculation on every update
+              const openedTime = new Date(position.opened_at).getTime();
+              const secondsAgo = Math.floor((currentTime - openedTime) / 1000);
+              const minutesAgo = Math.floor(secondsAgo / 60);
+              
+              let timeAgo = '';
+              if (minutesAgo < 1) {
+                timeAgo = `${secondsAgo} sekunder siden`;
+              } else if (minutesAgo < 60) {
+                timeAgo = `${minutesAgo} ${minutesAgo === 1 ? 'minut' : 'minutter'} siden`;
+              } else {
+                const hoursAgo = Math.floor(minutesAgo / 60);
+                timeAgo = `${hoursAgo} ${hoursAgo === 1 ? 'time' : 'timer'} siden`;
+              }
+              
               return (
                 <div
                   key={position.id}
@@ -152,10 +167,7 @@ export const PositionManager = () => {
                         {isProfitable ? "+" : ""}{pnl.toFixed(2)} USDT
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        {formatDistanceToNow(new Date(position.opened_at), { 
-                          addSuffix: true,
-                          locale: da 
-                        })}
+                        {timeAgo}
                       </div>
                     </div>
                     
