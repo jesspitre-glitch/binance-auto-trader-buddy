@@ -229,12 +229,14 @@ serve(async (req) => {
               newPeakPrice = currentPrice;
             }
             
-            // Calculate trailing stop from peak
+            // Calculate trailing stop from peak, clamped to never go past TP
             const trailingPercent = position.trailing_stop_percent || 2.0;
             if (position.side === 'LONG') {
-              newTrailingStop = newPeakPrice * (1 - trailingPercent / 100);
+              const raw = newPeakPrice * (1 - trailingPercent / 100);
+              newTrailingStop = Math.max(position.take_profit, raw); // Never below TP
             } else {
-              newTrailingStop = newPeakPrice * (1 + trailingPercent / 100);
+              const raw = newPeakPrice * (1 + trailingPercent / 100);
+              newTrailingStop = Math.min(position.take_profit, raw); // Never above TP
             }
             
             // Check if trailing stop is hit
