@@ -101,7 +101,17 @@ function calculateBollingerBands(prices: number[], period: number, stdDev: numbe
 async function fetchKlines(symbol: string, interval: string, limit: number) {
   const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
   const response = await fetch(url);
+  
+  if (!response.ok) {
+    throw new Error(`Binance API error: ${response.status} ${response.statusText}`);
+  }
+  
   const data = await response.json();
+  
+  if (!Array.isArray(data)) {
+    console.error('Binance API response:', data);
+    throw new Error(`Invalid Binance response for ${symbol}: ${JSON.stringify(data)}`);
+  }
   
   return data.map((k: any) => ({
     time: k[0],
