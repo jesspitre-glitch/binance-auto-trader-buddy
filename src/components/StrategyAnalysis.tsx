@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { TrendingUp, TrendingDown, Activity, Hash } from "lucide-react";
+import { ExportTradesDialog } from "./ExportTradesDialog";
 import {
   Table,
   TableBody,
@@ -211,6 +212,11 @@ export const StrategyAnalysis = () => {
                         <code className="text-xs font-mono bg-muted px-2 py-1 rounded">
                           {strategy.config_name}
                         </code>
+                        <ExportTradesDialog 
+                          strategyHash={strategy.strategy_hash}
+                          buttonVariant="ghost"
+                          buttonSize="icon"
+                        />
                       </div>
                     </TableCell>
                     <TableCell className="text-right">

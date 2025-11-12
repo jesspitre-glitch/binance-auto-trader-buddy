@@ -7,6 +7,7 @@ import { Loader2, TrendingUp, TrendingDown } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { da } from "date-fns/locale";
 import { TradeDetailsDialog } from "./TradeDetailsDialog";
+import { ExportTradesDialog } from "./ExportTradesDialog";
 
 export const TradeHistoryTable = () => {
   const [trades, setTrades] = useState<any[]>([]);
@@ -82,7 +83,10 @@ export const TradeHistoryTable = () => {
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Lukkede Handler ({trades.length})</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Lukkede Handler ({trades.length})</CardTitle>
+            <ExportTradesDialog />
+          </div>
         </CardHeader>
         <CardContent>
           {trades.length === 0 ? (
