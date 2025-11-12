@@ -42,36 +42,51 @@ export const StrategyAnalysis = () => {
     try {
       setLoading(true);
       
-      // Fetch active strategy config
-      const { data: sessionData } = await supabase
-        .from("trading_session")
-        .select("active_config_id")
-        .maybeSingle();
-      
+      // 1) Find aktiv strategi via åbne positioner (mest tydeligt for brugeren)
+      const { data: openPositions } = await supabase
+        .from("positions")
+        .select("strategy_hash")
+        .eq("status", "OPEN")
+        .order("opened_at", { ascending: false });
+
       let activeHash: string | null = null;
-      if (sessionData?.active_config_id) {
-        // Fetch the config and calculate its hash
-        const { data: configData } = await supabase
-          .from("indicator_config")
-          .select("*")
-          .eq("id", sessionData.active_config_id)
+      const openHashes = (openPositions || [])
+        .map((p: any) => p.strategy_hash)
+        .filter(Boolean) as string[];
+
+      if (openHashes.length) {
+        // Vælg den hyppigste hash blandt åbne positioner
+        const counts: Record<string, number> = {};
+        openHashes.forEach((h) => (counts[h] = (counts[h] || 0) + 1));
+        activeHash = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+      } else {
+        // 2) Fallback: beregn ud fra aktiv konfiguration i sessionen
+        const { data: sessionData } = await supabase
+          .from("trading_session")
+          .select("active_config_id")
           .maybeSingle();
         
-        if (configData) {
-          // Calculate the strategy hash the same way as in auto-trade-quant
-          const configString = JSON.stringify(configData, Object.keys(configData).sort());
-          const encoder = new TextEncoder();
-          const data = encoder.encode(configString);
-          const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-          const hashArray = Array.from(new Uint8Array(hashBuffer));
-          activeHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-          console.log("Active strategy hash:", activeHash);
+        if (sessionData?.active_config_id) {
+          const { data: configData } = await supabase
+            .from("indicator_config")
+            .select("*")
+            .eq("id", sessionData.active_config_id)
+            .maybeSingle();
+          
+          if (configData) {
+            const configString = JSON.stringify(configData, Object.keys(configData).sort());
+            const encoder = new TextEncoder();
+            const data = encoder.encode(configString);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            activeHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+          }
         }
       }
       
       setActiveStrategyHash(activeHash);
       
-      // Get all trade history with strategy_hash (filter out old trades without hash)
+      // Hent alle trades med strategy_hash (filtrer gamle uden hash)
       const { data: trades, error } = await supabase
         .from("trade_history")
         .select("*")
@@ -143,7 +158,7 @@ export const StrategyAnalysis = () => {
   useEffect(() => {
     fetchStrategyStats();
 
-    // Subscribe to trade_history changes
+    // Subscribe to trade_history and positions changes
     const channel = supabase
       .channel("strategy-analysis")
       .on(
@@ -152,6 +167,17 @@ export const StrategyAnalysis = () => {
           event: "*",
           schema: "public",
           table: "trade_history",
+        },
+        () => {
+          fetchStrategyStats();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "positions",
         },
         () => {
           fetchStrategyStats();
@@ -246,7 +272,7 @@ export const StrategyAnalysis = () => {
                 {strategies.map((strategy) => (
                   <TableRow 
                     key={strategy.strategy_hash}
-                    className="cursor-pointer hover:bg-muted/50"
+                    className={`cursor-pointer hover:bg-muted/50 ${strategy.strategy_hash === activeStrategyHash ? "bg-accent/40 border-l-4 border-primary" : ""}`}
                     onClick={() => setSelectedStrategy({ 
                       stats: strategy, 
                       trades: allTrades.filter(t => t.strategy_hash === strategy.strategy_hash) 
