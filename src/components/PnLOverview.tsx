@@ -15,7 +15,15 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
+  Cell,
 } from "recharts";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type TimeRange = "24h" | "7d" | "30d" | "90d" | "1y";
 
@@ -26,6 +34,9 @@ export const PnLOverview = () => {
   const [stats, setStats] = useState<any>(null);
   const [chartData, setChartData] = useState<any[]>([]);
   const [aggregatedData, setAggregatedData] = useState<any[]>([]);
+  const [allTrades, setAllTrades] = useState<any[]>([]);
+  const [selectedPeriodTrades, setSelectedPeriodTrades] = useState<any[]>([]);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const fetchPnLData = async (range: TimeRange) => {
@@ -63,6 +74,8 @@ export const PnLOverview = () => {
         .order("closed_at", { ascending: true });
 
       if (error) throw error;
+
+      setAllTrades(trades || []);
 
       if (!trades || trades.length === 0) {
         setStats({
@@ -275,16 +288,43 @@ export const PnLOverview = () => {
                       />
                     </LineChart>
                   ) : (
-                    <BarChart data={aggregatedData}>
+                    <BarChart 
+                      data={aggregatedData}
+                      onClick={(data) => {
+                        if (data && data.activePayload && data.activePayload[0]) {
+                          const clickedTime = data.activePayload[0].payload.time;
+                          const tradesInPeriod = allTrades.filter(trade => {
+                            const date = new Date(trade.closed_at);
+                            let timeKey: string;
+                            
+                            if (timeRange === "24h") {
+                              timeKey = new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours()).toLocaleString("da-DK", {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                              });
+                            } else {
+                              timeKey = new Date(date.getFullYear(), date.getMonth(), date.getDate()).toLocaleString("da-DK", {
+                                month: "short",
+                                day: "numeric",
+                              });
+                            }
+                            
+                            return timeKey === clickedTime;
+                          });
+                          setSelectedPeriodTrades(tradesInPeriod);
+                          setDialogOpen(true);
+                        }
+                      }}
+                    >
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="time" />
                       <YAxis />
                       <Tooltip />
-                      <Bar dataKey="pnl">
+                      <Bar dataKey="pnl" cursor="pointer">
                         {aggregatedData.map((entry, index) => (
-                          <Bar
+                          <Cell
                             key={`cell-${index}`}
-                            dataKey="pnl"
                             fill={entry.pnl >= 0 ? "#10b981" : "#ef4444"}
                           />
                         ))}
@@ -334,6 +374,79 @@ export const PnLOverview = () => {
           </TabsContent>
         </Tabs>
       </CardContent>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Trades i perioden</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <div className="text-sm text-muted-foreground">Total P&L</div>
+                <div className={`text-xl font-bold ${
+                  selectedPeriodTrades.reduce((sum, t) => sum + Number(t.pnl), 0) >= 0 
+                    ? "text-profit" 
+                    : "text-loss"
+                }`}>
+                  ${selectedPeriodTrades.reduce((sum, t) => sum + Number(t.pnl), 0).toFixed(2)}
+                </div>
+              </div>
+              <div>
+                <div className="text-sm text-muted-foreground">Antal Trades</div>
+                <div className="text-xl font-bold">{selectedPeriodTrades.length}</div>
+              </div>
+              <div>
+                <div className="text-sm text-muted-foreground">Win Rate</div>
+                <div className="text-xl font-bold">
+                  {selectedPeriodTrades.length > 0
+                    ? ((selectedPeriodTrades.filter(t => Number(t.pnl) > 0).length / selectedPeriodTrades.length) * 100).toFixed(1)
+                    : 0}%
+                </div>
+              </div>
+            </div>
+
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Symbol</TableHead>
+                  <TableHead>Side</TableHead>
+                  <TableHead>Entry</TableHead>
+                  <TableHead>Exit</TableHead>
+                  <TableHead>Quantity</TableHead>
+                  <TableHead>P&L</TableHead>
+                  <TableHead>P&L %</TableHead>
+                  <TableHead>Tidspunkt</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {selectedPeriodTrades.map((trade) => (
+                  <TableRow key={trade.id}>
+                    <TableCell className="font-medium">{trade.symbol}</TableCell>
+                    <TableCell>
+                      <span className={trade.side === "LONG" ? "text-profit" : "text-loss"}>
+                        {trade.side}
+                      </span>
+                    </TableCell>
+                    <TableCell>${Number(trade.entry_price).toFixed(2)}</TableCell>
+                    <TableCell>${Number(trade.exit_price).toFixed(2)}</TableCell>
+                    <TableCell>{Number(trade.quantity).toFixed(4)}</TableCell>
+                    <TableCell className={Number(trade.pnl) >= 0 ? "text-profit" : "text-loss"}>
+                      {Number(trade.pnl) >= 0 ? "+" : ""}${Number(trade.pnl).toFixed(2)}
+                    </TableCell>
+                    <TableCell className={Number(trade.pnl_percent) >= 0 ? "text-profit" : "text-loss"}>
+                      {Number(trade.pnl_percent) >= 0 ? "+" : ""}{Number(trade.pnl_percent).toFixed(2)}%
+                    </TableCell>
+                    <TableCell>
+                      {new Date(trade.closed_at).toLocaleString("da-DK")}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };
