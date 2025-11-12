@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { TrendingUp, TrendingDown, Activity, Hash } from "lucide-react";
 import { ExportTradesDialog } from "./ExportTradesDialog";
+import { StrategyDetailsDialog } from "./StrategyDetailsDialog";
 import {
   Table,
   TableBody,
@@ -31,6 +32,8 @@ interface StrategyStats {
 export const StrategyAnalysis = () => {
   const [strategies, setStrategies] = useState<StrategyStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedStrategy, setSelectedStrategy] = useState<{ stats: StrategyStats; trades: any[] } | null>(null);
+  const [allTrades, setAllTrades] = useState<any[]>([]);
   const { toast } = useToast();
 
   const fetchStrategyStats = async () => {
@@ -48,9 +51,13 @@ export const StrategyAnalysis = () => {
 
       if (!trades || trades.length === 0) {
         setStrategies([]);
+        setAllTrades([]);
         setLoading(false);
         return;
       }
+
+      // Store all trades for dialog
+      setAllTrades(trades);
 
       // Group trades by strategy_hash
       const strategyMap = new Map<string, any[]>();
@@ -206,7 +213,14 @@ export const StrategyAnalysis = () => {
               </TableHeader>
               <TableBody>
                 {strategies.map((strategy) => (
-                  <TableRow key={strategy.strategy_hash}>
+                  <TableRow 
+                    key={strategy.strategy_hash}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => setSelectedStrategy({ 
+                      stats: strategy, 
+                      trades: allTrades.filter(t => t.strategy_hash === strategy.strategy_hash) 
+                    })}
+                  >
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Hash className="h-4 w-4 text-muted-foreground" />
@@ -265,6 +279,16 @@ export const StrategyAnalysis = () => {
           </div>
         </CardContent>
       </Card>
+
+      {selectedStrategy && (
+        <StrategyDetailsDialog
+          isOpen={!!selectedStrategy}
+          onClose={() => setSelectedStrategy(null)}
+          strategyHash={selectedStrategy.stats.strategy_hash}
+          trades={selectedStrategy.trades}
+          stats={selectedStrategy.stats}
+        />
+      )}
     </div>
   );
 };
