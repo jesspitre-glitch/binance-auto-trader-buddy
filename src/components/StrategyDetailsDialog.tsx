@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TrendingUp, TrendingDown, Copy, Check, Settings } from "lucide-react";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
@@ -176,63 +177,135 @@ export const StrategyDetailsDialog = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh]">
+      <DialogContent className="max-w-7xl h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              Strategi Detaljer
-              <code className="text-xs font-mono bg-muted px-2 py-1 rounded">
-                {strategyHash.substring(0, 12)}...
-              </code>
-            </div>
+          <DialogTitle className="flex items-center gap-2">
+            Strategi Detaljer
+            <code className="text-xs font-mono bg-muted px-2 py-1 rounded">
+              {strategyHash.substring(0, 12)}...
+            </code>
           </DialogTitle>
         </DialogHeader>
         
-        <ScrollArea className="h-full pr-4">
-          <div className="space-y-6">
-            {/* Quick Stats */}
-            <div className="grid grid-cols-4 gap-4">
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="text-sm text-muted-foreground">Trades</div>
-                  <div className="text-2xl font-bold">{stats.total_trades}</div>
-                  <div className="text-xs text-muted-foreground">{stats.winning_trades}W / {stats.losing_trades}L</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="text-sm text-muted-foreground">Win Rate</div>
-                  <div className={`text-2xl font-bold ${stats.win_rate >= 50 ? "text-success" : "text-destructive"}`}>
-                    {stats.win_rate.toFixed(1)}%
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="text-sm text-muted-foreground">Total PnL</div>
-                  <div className={`text-2xl font-bold ${stats.total_pnl >= 0 ? "text-success" : "text-destructive"}`}>
-                    ${stats.total_pnl.toFixed(2)}
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="text-sm text-muted-foreground">Avg PnL</div>
-                  <div className={`text-2xl font-bold ${stats.avg_pnl >= 0 ? "text-success" : "text-destructive"}`}>
-                    ${stats.avg_pnl.toFixed(2)}
-                  </div>
-                </CardContent>
-              </Card>
+        {/* Compact Stats Row */}
+        <div className="grid grid-cols-4 gap-3 py-2">
+          <div className="text-center">
+            <div className="text-xs text-muted-foreground">Trades</div>
+            <div className="text-xl font-bold">{stats.total_trades}</div>
+            <div className="text-xs text-muted-foreground">{stats.winning_trades}W/{stats.losing_trades}L</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xs text-muted-foreground">Win Rate</div>
+            <div className={`text-xl font-bold ${stats.win_rate >= 50 ? "text-success" : "text-destructive"}`}>
+              {stats.win_rate.toFixed(1)}%
             </div>
+          </div>
+          <div className="text-center">
+            <div className="text-xs text-muted-foreground">Total PnL</div>
+            <div className={`text-xl font-bold ${stats.total_pnl >= 0 ? "text-success" : "text-destructive"}`}>
+              ${stats.total_pnl.toFixed(2)}
+            </div>
+          </div>
+          <div className="text-center">
+            <div className="text-xs text-muted-foreground">Avg PnL</div>
+            <div className={`text-xl font-bold ${stats.avg_pnl >= 0 ? "text-success" : "text-destructive"}`}>
+              ${stats.avg_pnl.toFixed(2)}
+            </div>
+          </div>
+        </div>
 
-            {/* Indikator Konfiguration */}
-            {Object.keys(indicators).length > 0 && (
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div className="flex flex-col">
-                    <CardTitle>Indikator Konfiguration</CardTitle>
+        {/* Tabs for content */}
+        <Tabs defaultValue="trades" className="flex-1 flex flex-col min-h-0">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="trades">Trades ({trades.length})</TabsTrigger>
+            <TabsTrigger value="indicators">Indikatorer</TabsTrigger>
+          </TabsList>
+
+          {/* Trades Tab */}
+          <TabsContent value="trades" className="flex-1 mt-4 overflow-hidden">
+            <div className="flex justify-end mb-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={copyTradesToClipboard}
+              >
+                {copiedTrades ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+                {copiedTrades ? "Kopieret" : "Kopier"}
+              </Button>
+            </div>
+            <ScrollArea className="h-full border rounded">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Symbol</TableHead>
+                    <TableHead>Side</TableHead>
+                    <TableHead>Åbnet</TableHead>
+                    <TableHead>Lukket</TableHead>
+                    <TableHead className="text-right">Entry</TableHead>
+                    <TableHead className="text-right">Exit</TableHead>
+                    <TableHead className="text-right">PnL</TableHead>
+                    <TableHead className="text-right">PnL%</TableHead>
+                    <TableHead>Varighed</TableHead>
+                    <TableHead>Årsag</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {trades.map((trade) => (
+                    <TableRow key={trade.id}>
+                      <TableCell className="font-medium">{trade.symbol}</TableCell>
+                      <TableCell>
+                        <Badge variant={trade.side === "LONG" ? "default" : "secondary"} className="text-xs">
+                          {trade.side === "LONG" ? (
+                            <TrendingUp className="h-3 w-3 mr-1" />
+                          ) : (
+                            <TrendingDown className="h-3 w-3 mr-1" />
+                          )}
+                          {trade.side}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {format(new Date(trade.opened_at), 'dd/MM HH:mm', { locale: da })}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {format(new Date(trade.closed_at), 'dd/MM HH:mm', { locale: da })}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs">
+                        ${trade.entry_price}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs">
+                        ${trade.exit_price}
+                      </TableCell>
+                      <TableCell className={`text-right font-bold text-sm ${trade.pnl >= 0 ? "text-success" : "text-destructive"}`}>
+                        {trade.pnl >= 0 ? "+" : ""}{trade.pnl.toFixed(2)}
+                      </TableCell>
+                      <TableCell className={`text-right text-xs ${trade.pnl_percent >= 0 ? "text-success" : "text-destructive"}`}>
+                        {trade.pnl_percent >= 0 ? "+" : ""}{trade.pnl_percent.toFixed(2)}%
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {trade.duration_minutes || 0}m
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {trade.close_reason?.replace(/_/g, ' ') || 'N/A'}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </TabsContent>
+
+          {/* Indicators Tab */}
+          <TabsContent value="indicators" className="flex-1 mt-4 overflow-hidden">
+            {Object.keys(indicators).length > 0 ? (
+              <div className="space-y-3 h-full flex flex-col">
+                <div className="flex justify-between items-center">
+                  <div>
                     {indicatorSource && (
-                      <span className="text-xs text-muted-foreground">Kilde: {indicatorSource === 'trade' ? 'Trade snapshot' : indicatorSource === 'position' ? 'Position snapshot' : 'Seneste config'}</span>
+                      <span className="text-xs text-muted-foreground">
+                        Kilde: {indicatorSource === 'trade' ? 'Trade snapshot' : indicatorSource === 'position' ? 'Position snapshot' : 'Seneste config'}
+                      </span>
                     )}
                   </div>
                   <div className="flex gap-2">
@@ -264,103 +337,33 @@ export const StrategyDetailsDialog = ({
                       )}
                     </Button>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {Object.entries(indicators).map(([key, value]: [string, any]) => (
-                      <div key={key} className="border rounded p-3">
-                        <div className="text-xs text-muted-foreground mb-1">
-                          {key.replace(/_/g, ' ')}
-                        </div>
-                        <div className="font-mono font-bold">
-                          {typeof value === 'number' ? value.toFixed(2) : String(value)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Trades Table */}
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Alle Trades ({trades.length})</CardTitle>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={copyTradesToClipboard}
-                >
-                  {copiedTrades ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
-                  {copiedTrades ? "Kopieret" : "Kopier til Clipboard"}
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[500px]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Symbol</TableHead>
-                        <TableHead>Side</TableHead>
-                        <TableHead>Åbnet</TableHead>
-                        <TableHead>Lukket</TableHead>
-                        <TableHead className="text-right">Entry</TableHead>
-                        <TableHead className="text-right">Exit</TableHead>
-                        <TableHead className="text-right">PnL</TableHead>
-                        <TableHead className="text-right">PnL%</TableHead>
-                        <TableHead className="text-right">Varighed</TableHead>
-                        <TableHead>Årsag</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {trades.map((trade) => (
-                        <TableRow key={trade.id}>
-                          <TableCell className="font-medium">{trade.symbol}</TableCell>
-                          <TableCell>
-                            <Badge variant={trade.side === "LONG" ? "default" : "secondary"}>
-                              {trade.side === "LONG" ? (
-                                <TrendingUp className="h-3 w-3 mr-1" />
-                              ) : (
-                                <TrendingDown className="h-3 w-3 mr-1" />
-                              )}
-                              {trade.side}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {format(new Date(trade.opened_at), 'dd/MM/yyyy HH:mm', { locale: da })}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {format(new Date(trade.closed_at), 'dd/MM/yyyy HH:mm', { locale: da })}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            ${trade.entry_price}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            ${trade.exit_price}
-                          </TableCell>
-                          <TableCell className={`text-right font-bold ${trade.pnl >= 0 ? "text-success" : "text-destructive"}`}>
-                            {trade.pnl >= 0 ? "+" : ""}{trade.pnl.toFixed(2)}
-                          </TableCell>
-                          <TableCell className={`text-right ${trade.pnl_percent >= 0 ? "text-success" : "text-destructive"}`}>
-                            {trade.pnl_percent >= 0 ? "+" : ""}{trade.pnl_percent.toFixed(2)}%
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {trade.duration_minutes || 0}m
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-xs">
-                              {trade.close_reason?.replace(/_/g, ' ') || 'N/A'}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
+                </div>
+                <ScrollArea className="flex-1">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 pr-4">
+                    {Object.entries(indicators)
+                      .filter(([key]) => !['id', 'user_id', 'name', 'enabled', 'created_at', 'updated_at'].includes(key))
+                      .map(([key, value]: [string, any]) => (
+                        <Card key={key}>
+                          <CardContent className="pt-4 pb-3">
+                            <div className="text-xs text-muted-foreground mb-1">
+                              {key.replace(/_/g, ' ').toUpperCase()}
+                            </div>
+                            <div className="font-mono font-bold text-sm">
+                              {typeof value === 'number' ? value.toFixed(2) : String(value)}
+                            </div>
+                          </CardContent>
+                        </Card>
                       ))}
-                    </TableBody>
-                  </Table>
+                  </div>
                 </ScrollArea>
-              </CardContent>
-            </Card>
-          </div>
-        </ScrollArea>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                Ingen indikator data tilgængelig
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
