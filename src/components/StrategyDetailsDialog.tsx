@@ -167,6 +167,29 @@ export const StrategyDetailsDialog = ({
               </Card>
             </div>
 
+            {/* Indikator Konfiguration */}
+            {trades[0]?.indicators_snapshot && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Indikator Konfiguration</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {Object.entries(trades[0].indicators_snapshot).map(([key, value]: [string, any]) => (
+                      <div key={key} className="border rounded-lg p-3">
+                        <div className="text-xs text-muted-foreground mb-1">
+                          {key.replace(/_/g, ' ').toUpperCase()}
+                        </div>
+                        <div className="font-mono font-bold text-sm">
+                          {typeof value === 'number' ? value.toFixed(2) : String(value)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Top Performing Symbols */}
             <Card>
               <CardHeader>
