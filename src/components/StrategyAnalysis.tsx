@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { TrendingUp, TrendingDown, Activity, Hash } from "lucide-react";
+import { TrendingUp, TrendingDown, Activity, Hash, CheckCircle2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { ExportTradesDialog } from "./ExportTradesDialog";
 import { StrategyDetailsDialog } from "./StrategyDetailsDialog";
 import {
@@ -34,11 +35,40 @@ export const StrategyAnalysis = () => {
   const [loading, setLoading] = useState(true);
   const [selectedStrategy, setSelectedStrategy] = useState<{ stats: StrategyStats; trades: any[] } | null>(null);
   const [allTrades, setAllTrades] = useState<any[]>([]);
+  const [activeStrategyHash, setActiveStrategyHash] = useState<string | null>(null);
   const { toast } = useToast();
 
   const fetchStrategyStats = async () => {
     try {
       setLoading(true);
+      
+      // Fetch active strategy config
+      const { data: sessionData } = await supabase
+        .from("trading_session")
+        .select("active_config_id, indicator_config(id)")
+        .single();
+      
+      let activeHash: string | null = null;
+      if (sessionData?.active_config_id) {
+        // Fetch the config and calculate its hash
+        const { data: configData } = await supabase
+          .from("indicator_config")
+          .select("*")
+          .eq("id", sessionData.active_config_id)
+          .single();
+        
+        if (configData) {
+          // Calculate the strategy hash the same way as in auto-trade-quant
+          const configString = JSON.stringify(configData, Object.keys(configData).sort());
+          const encoder = new TextEncoder();
+          const data = encoder.encode(configString);
+          const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          activeHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+      }
+      
+      setActiveStrategyHash(activeHash);
       
       // Get all trade history with strategy_hash (filter out old trades without hash)
       const { data: trades, error } = await supabase
@@ -227,6 +257,12 @@ export const StrategyAnalysis = () => {
                         <code className="text-xs font-mono bg-muted px-2 py-1 rounded">
                           {strategy.config_name}
                         </code>
+                        {strategy.strategy_hash === activeStrategyHash && (
+                          <Badge variant="default" className="gap-1">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Aktiv
+                          </Badge>
+                        )}
                         <ExportTradesDialog 
                           strategyHash={strategy.strategy_hash}
                           buttonVariant="ghost"
