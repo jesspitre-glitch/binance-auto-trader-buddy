@@ -37,10 +37,11 @@ export const StrategyAnalysis = () => {
     try {
       setLoading(true);
       
-      // Get all trade history
+      // Get all trade history with strategy_hash (filter out old trades without hash)
       const { data: trades, error } = await supabase
         .from("trade_history")
         .select("*")
+        .not("strategy_hash", "is", null)
         .order("closed_at", { ascending: false });
 
       if (error) throw error;
@@ -54,7 +55,7 @@ export const StrategyAnalysis = () => {
       // Group trades by strategy_hash
       const strategyMap = new Map<string, any[]>();
       trades.forEach(trade => {
-        const hash = trade.strategy_hash || 'unknown';
+        const hash = trade.strategy_hash;
         if (!strategyMap.has(hash)) {
           strategyMap.set(hash, []);
         }
