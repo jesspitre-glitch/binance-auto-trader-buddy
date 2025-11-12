@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, LineChart as LineChartIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import {
   LineChart,
   Line,
@@ -21,6 +22,7 @@ type TimeRange = "24h" | "7d" | "30d" | "90d" | "1y";
 export const PnLOverview = () => {
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<TimeRange>("24h");
+  const [chartType, setChartType] = useState<"line" | "bar">("line");
   const [stats, setStats] = useState<any>(null);
   const [chartData, setChartData] = useState<any[]>([]);
   const { toast } = useToast();
@@ -207,20 +209,48 @@ export const PnLOverview = () => {
             {/* Cumulative P&L Chart */}
             {chartData.length > 0 && (
               <div>
-                <h3 className="text-sm font-medium mb-4">Kumulativ P&L</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-medium">Kumulativ P&L</h3>
+                  <div className="flex gap-1">
+                    <Button
+                      variant={chartType === "line" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setChartType("line")}
+                    >
+                      <LineChartIcon className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant={chartType === "bar" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setChartType("bar")}
+                    >
+                      <BarChart3 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
                 <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line
-                      type="monotone"
-                      dataKey="cumulative"
-                      stroke={isProfitable ? "#10b981" : "#ef4444"}
-                      strokeWidth={2}
-                    />
-                  </LineChart>
+                  {chartType === "line" ? (
+                    <LineChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" />
+                      <YAxis />
+                      <Tooltip />
+                      <Line
+                        type="monotone"
+                        dataKey="cumulative"
+                        stroke={isProfitable ? "#10b981" : "#ef4444"}
+                        strokeWidth={2}
+                      />
+                    </LineChart>
+                  ) : (
+                    <BarChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="cumulative" fill={isProfitable ? "#10b981" : "#ef4444"} />
+                    </BarChart>
+                  )}
                 </ResponsiveContainer>
               </div>
             )}
