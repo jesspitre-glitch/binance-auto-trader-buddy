@@ -3,11 +3,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, TrendingDown, Copy, Check } from "lucide-react";
+import { TrendingUp, TrendingDown, Copy, Check, Settings } from "lucide-react";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Table,
   TableBody,
@@ -46,6 +47,7 @@ export const StrategyDetailsDialog = ({
   const { toast } = useToast();
   const [copiedTrades, setCopiedTrades] = useState(false);
   const [copiedIndicators, setCopiedIndicators] = useState(false);
+  const [implementingConfig, setImplementingConfig] = useState(false);
 
   const indicators = trades[0]?.indicators_snapshot || {};
 
@@ -72,6 +74,58 @@ export const StrategyDetailsDialog = ({
     setCopiedIndicators(true);
     setTimeout(() => setCopiedIndicators(false), 2000);
     toast({ title: "Kopieret!", description: "Indikatorer kopieret til clipboard" });
+  };
+
+  const implementToConfig = async () => {
+    setImplementingConfig(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Ikke logget ind");
+
+      // Hent eksisterende configs
+      const { data: existingConfigs } = await supabase
+        .from("indicator_config")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      const configPayload = {
+        ...indicators,
+        user_id: user.id,
+        name: `Strategy ${strategyHash.substring(0, 8)}`,
+        enabled: false, // Disabled by default so user can review
+      };
+
+      let result;
+      if (existingConfigs && existingConfigs.length > 0) {
+        // Update existing config
+        result = await supabase
+          .from("indicator_config")
+          .update(configPayload)
+          .eq("id", existingConfigs[0].id);
+      } else {
+        // Create new config
+        result = await supabase
+          .from("indicator_config")
+          .insert(configPayload);
+      }
+
+      if (result.error) throw result.error;
+
+      toast({
+        title: "Implementeret!",
+        description: "Indikator værdierne er gemt i din config (disabled som standard)",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Fejl",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setImplementingConfig(false);
+    }
   };
 
   return (
@@ -130,14 +184,35 @@ export const StrategyDetailsDialog = ({
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle>Indikator Konfiguration</CardTitle>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={copyIndicatorsToClipboard}
-                  >
-                    {copiedIndicators ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
-                    {copiedIndicators ? "Kopieret" : "Kopier"}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={copyIndicatorsToClipboard}
+                      disabled={implementingConfig}
+                    >
+                      {copiedIndicators ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+                      {copiedIndicators ? "Kopieret" : "Kopier"}
+                    </Button>
+                    <Button 
+                      variant="default" 
+                      size="sm"
+                      onClick={implementToConfig}
+                      disabled={implementingConfig}
+                    >
+                      {implementingConfig ? (
+                        <>
+                          <Check className="h-4 w-4 mr-2 animate-spin" />
+                          Implementerer...
+                        </>
+                      ) : (
+                        <>
+                          <Settings className="h-4 w-4 mr-2" />
+                          Implementer til Config
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
