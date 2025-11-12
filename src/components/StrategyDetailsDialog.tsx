@@ -49,27 +49,46 @@ export const StrategyDetailsDialog = ({
   const [copiedIndicators, setCopiedIndicators] = useState(false);
   const [implementingConfig, setImplementingConfig] = useState(false);
   const [indicators, setIndicators] = useState<any>({});
+  const [indicatorSource, setIndicatorSource] = useState<"trade" | "position" | "config" | null>(null);
 
-  // Fetch indicators - prioritize from trades, fallback to positions
+  // Fetch indicators - prioritize from trades, fallback to positions, then latest config
   useEffect(() => {
     const fetchIndicators = async () => {
-      // First try to get from trades
+      // 1) From trades
       const tradeWithIndicators = trades.find(t => t.indicators_snapshot);
       if (tradeWithIndicators) {
         setIndicators(tradeWithIndicators.indicators_snapshot);
+        setIndicatorSource("trade");
         return;
       }
 
-      // Fallback: fetch from positions table with same strategy_hash
-      const { data } = await supabase
+      // 2) From positions by strategy
+      const { data: pos } = await supabase
         .from("positions")
         .select("indicators_snapshot")
         .eq("strategy_hash", strategyHash)
         .not("indicators_snapshot", "is", null)
         .limit(1);
       
-      if (data && data.length > 0 && data[0].indicators_snapshot) {
-        setIndicators(data[0].indicators_snapshot);
+      if (pos && pos.length > 0 && pos[0].indicators_snapshot) {
+        setIndicators(pos[0].indicators_snapshot as any);
+        setIndicatorSource("position");
+        return;
+      }
+
+      // 3) Fallback to user's latest config
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: cfg } = await supabase
+          .from("indicator_config")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("updated_at", { ascending: false })
+          .limit(1);
+        if (cfg && cfg.length > 0) {
+          setIndicators(cfg[0] as any);
+          setIndicatorSource("config");
+        }
       }
     };
 
@@ -210,7 +229,12 @@ export const StrategyDetailsDialog = ({
             {Object.keys(indicators).length > 0 && (
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle>Indikator Konfiguration</CardTitle>
+                  <div className="flex flex-col">
+                    <CardTitle>Indikator Konfiguration</CardTitle>
+                    {indicatorSource && (
+                      <span className="text-xs text-muted-foreground">Kilde: {indicatorSource === 'trade' ? 'Trade snapshot' : indicatorSource === 'position' ? 'Position snapshot' : 'Seneste config'}</span>
+                    )}
+                  </div>
                   <div className="flex gap-2">
                     <Button 
                       variant="outline" 
