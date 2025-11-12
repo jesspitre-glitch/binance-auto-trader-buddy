@@ -275,38 +275,22 @@ export const PnLOverview = () => {
                       />
                     </LineChart>
                   ) : (
-                    <BarChart data={chartData}>
+                    <BarChart data={aggregatedData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="time" />
                       <YAxis />
                       <Tooltip />
-                      <Bar dataKey="cumulative" fill={isProfitable ? "#10b981" : "#ef4444"} />
+                      <Bar dataKey="pnl">
+                        {aggregatedData.map((entry, index) => (
+                          <Bar
+                            key={`cell-${index}`}
+                            dataKey="pnl"
+                            fill={entry.pnl >= 0 ? "#10b981" : "#ef4444"}
+                          />
+                        ))}
+                      </Bar>
                     </BarChart>
                   )}
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {/* Aggregated P&L Bar Chart */}
-            {aggregatedData.length > 0 && (
-              <div>
-                <h3 className="text-sm font-medium mb-4">P&L per {timeRange === "24h" ? "Time" : "Dag"}</h3>
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={aggregatedData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="pnl">
-                      {aggregatedData.map((entry, index) => (
-                        <Bar
-                          key={`cell-${index}`}
-                          dataKey="pnl"
-                          fill={entry.pnl >= 0 ? "#10b981" : "#ef4444"}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
                 </ResponsiveContainer>
               </div>
             )}
