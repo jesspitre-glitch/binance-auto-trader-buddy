@@ -70,6 +70,7 @@ export const PnLOverview = () => {
         .from("trade_history")
         .select("*")
         .eq("user_id", user.id)
+        .neq("close_reason", "DUPLICATE")
         .gte("closed_at", startDate.toISOString())
         .order("closed_at", { ascending: true });
 
