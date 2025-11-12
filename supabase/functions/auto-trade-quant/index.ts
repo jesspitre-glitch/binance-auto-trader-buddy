@@ -11,8 +11,6 @@ interface IndicatorConfig {
   ema_medium: number;
   ema_slow: number;
   rsi_period: number;
-  rsi_overbought: number;
-  rsi_oversold: number;
   rsi_min_long: number;
   rsi_max_short: number;
   macd_fast: number;
@@ -48,8 +46,6 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
     ema_medium: config.ema_medium,
     ema_slow: config.ema_slow,
     rsi_period: config.rsi_period,
-    rsi_overbought: config.rsi_overbought,
-    rsi_oversold: config.rsi_oversold,
     rsi_min_long: config.rsi_min_long,
     rsi_max_short: config.rsi_max_short,
     macd_fast: config.macd_fast,
@@ -313,7 +309,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
     currentPrice > emaFastCurrent,
     emaFastCurrent > emaMediumCurrent,
     emaMediumCurrent > emaSlowCurrent,
-    rsi > (config.rsi_min_long || 30) && rsi < config.rsi_overbought,
+    rsi > (config.rsi_min_long || 30),
     macd.histogram > config.macd_histogram_threshold,
     adx > config.adx_threshold,
   ];
@@ -323,7 +319,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
     currentPrice < emaFastCurrent,
     emaFastCurrent < emaMediumCurrent,
     emaMediumCurrent < emaSlowCurrent,
-    rsi < (config.rsi_max_short || 70) && rsi > config.rsi_oversold,
+    rsi < (config.rsi_max_short || 70),
     macd.histogram < -config.macd_histogram_threshold,
     adx > config.adx_threshold,
   ];

@@ -28,8 +28,6 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     
     // RSI
     rsi_period: config?.rsi_period || 14,
-    rsi_overbought: config?.rsi_overbought || 70,
-    rsi_oversold: config?.rsi_oversold || 30,
     rsi_min_long: config?.rsi_min_long || 30,
     rsi_max_short: config?.rsi_max_short || 70,
     
@@ -87,8 +85,6 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       ema_slow: config.ema_slow ?? 50,
       // RSI
       rsi_period: config.rsi_period ?? 14,
-      rsi_overbought: config.rsi_overbought ?? 70,
-      rsi_oversold: config.rsi_oversold ?? 30,
       rsi_min_long: config.rsi_min_long ?? 30,
       rsi_max_short: config.rsi_max_short ?? 70,
       // MACD
@@ -238,7 +234,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           <CardTitle>RSI (Relative Strength Index)</CardTitle>
           <CardDescription>Overkøbt/Oversolgt niveau</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-4">
+        <CardContent className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">
             <Label htmlFor="rsi_period">RSI Periode</Label>
             <Input
@@ -250,7 +246,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <p className="text-xs text-muted-foreground">Antal bars til RSI beregning (standard 14)</p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="rsi_min_long">Min RSI (LONG)</Label>
+            <Label htmlFor="rsi_min_long">RSI for LONG</Label>
             <Input
               id="rsi_min_long"
               type="number"
@@ -261,29 +257,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <p className="text-xs text-muted-foreground">LONG kun hvis RSI over denne værdi</p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="rsi_overbought">Overkøbt &gt;</Label>
-            <Input
-              id="rsi_overbought"
-              type="number"
-              step="0.01"
-              value={formData.rsi_overbought}
-              onChange={(e) => setFormData({ ...formData, rsi_overbought: parseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Ingen LONG hvis RSI over dette</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="rsi_oversold">Oversolgt &lt;</Label>
-            <Input
-              id="rsi_oversold"
-              type="number"
-              step="0.01"
-              value={formData.rsi_oversold}
-              onChange={(e) => setFormData({ ...formData, rsi_oversold: parseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Ingen SHORT hvis RSI under dette</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="rsi_max_short">Max RSI (SHORT)</Label>
+            <Label htmlFor="rsi_max_short">RSI for SHORT</Label>
             <Input
               id="rsi_max_short"
               type="number"
