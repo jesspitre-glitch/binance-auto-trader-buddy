@@ -129,51 +129,17 @@ export const StrategyDetailsDialog = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Ikke logget ind");
 
-      // Find aktiv strategi-konfiguration fra sessionen
+      // Find den aktive config ID fra sessionen
       const { data: session } = await supabase
         .from("trading_session")
         .select("active_config_id")
         .eq("user_id", user.id)
         .maybeSingle();
 
-      // Kun gem felter der findes i indicator_config tabellen
-      const allowedKeys = [
-        "name","enabled",
-        "ema_fast","ema_medium","ema_slow",
-        "rsi_period","rsi_overbought","rsi_oversold","rsi_min_long","rsi_max_short",
-        "macd_fast","macd_slow","macd_signal","macd_histogram_threshold",
-        "bb_period","bb_std_dev",
-        "atr_period","atr_stop_loss_multiplier","atr_trailing_stop_multiplier",
-        "adx_period","adx_threshold",
-        "volume_avg_period","signal_conditions_required",
-        "scan_interval","trend_timeframe",
-        "position_size_percent","risk_per_trade_percent","max_open_positions","max_exposure_percent","daily_loss_limit_percent",
-        "risk_reward_ratio","max_position_duration_minutes",
-        "leverage",
-      ] as const;
+      let targetConfigId = session?.active_config_id;
 
-      const filtered: Record<string, any> = {};
-      allowedKeys.forEach((k) => {
-        const v = (indicators as any)[k];
-        if (v !== undefined) filtered[k] = v;
-      });
-
-      const configPayload = {
-        ...filtered,
-        user_id: user.id,
-        name: filtered.name ?? `Strategy ${strategyHash.substring(0, 8)}`,
-        enabled: filtered.enabled ?? false,
-      };
-
-      let result;
-      if (session?.active_config_id) {
-        // Opdater den AKTIVE config
-        result = await supabase
-          .from("indicator_config")
-          .update(configPayload)
-          .eq("id", session.active_config_id);
-      } else {
-        // Fallback: opdater seneste eller opret ny
+      // Hvis ingen aktiv config, brug seneste eller opret ny
+      if (!targetConfigId) {
         const { data: existingConfigs } = await supabase
           .from("indicator_config")
           .select("id")
@@ -182,24 +148,89 @@ export const StrategyDetailsDialog = ({
           .limit(1);
 
         if (existingConfigs && existingConfigs.length > 0) {
-          result = await supabase
-            .from("indicator_config")
-            .update(configPayload)
-            .eq("id", existingConfigs[0].id);
-        } else {
-          result = await supabase
-            .from("indicator_config")
-            .insert(configPayload);
+          targetConfigId = existingConfigs[0].id;
         }
       }
 
-      if ((result as any).error) throw (result as any).error;
+      // Byg payload med ALLE værdier fra indicators
+      const payload: any = {
+        user_id: user.id,
+        name: indicators.name ?? `Strategy ${strategyHash.substring(0, 8)}`,
+        enabled: indicators.enabled ?? true,
+        // EMA
+        ema_fast: indicators.ema_fast ?? 9,
+        ema_medium: indicators.ema_medium ?? 21,
+        ema_slow: indicators.ema_slow ?? 50,
+        // RSI
+        rsi_period: indicators.rsi_period ?? 14,
+        rsi_overbought: indicators.rsi_overbought ?? 70,
+        rsi_oversold: indicators.rsi_oversold ?? 30,
+        rsi_min_long: indicators.rsi_min_long ?? 30,
+        rsi_max_short: indicators.rsi_max_short ?? 70,
+        // MACD
+        macd_fast: indicators.macd_fast ?? 12,
+        macd_slow: indicators.macd_slow ?? 26,
+        macd_signal: indicators.macd_signal ?? 9,
+        macd_histogram_threshold: indicators.macd_histogram_threshold ?? 0,
+        // Bollinger Bands
+        bb_period: indicators.bb_period ?? 20,
+        bb_std_dev: indicators.bb_std_dev ?? 2,
+        // ATR
+        atr_period: indicators.atr_period ?? 14,
+        atr_stop_loss_multiplier: indicators.atr_stop_loss_multiplier ?? 2,
+        atr_trailing_stop_multiplier: indicators.atr_trailing_stop_multiplier ?? 1.5,
+        // ADX
+        adx_period: indicators.adx_period ?? 14,
+        adx_threshold: indicators.adx_threshold ?? 25,
+        // Volume & Signal
+        volume_avg_period: indicators.volume_avg_period ?? 20,
+        signal_conditions_required: indicators.signal_conditions_required ?? 5,
+        // Timeframes
+        scan_interval: indicators.scan_interval ?? "5m",
+        trend_timeframe: indicators.trend_timeframe ?? "15m",
+        // Risk Management
+        position_size_percent: indicators.position_size_percent ?? 5,
+        risk_per_trade_percent: indicators.risk_per_trade_percent ?? 1,
+        max_open_positions: indicators.max_open_positions ?? 3,
+        max_exposure_percent: indicators.max_exposure_percent ?? 5,
+        daily_loss_limit_percent: indicators.daily_loss_limit_percent ?? 5,
+        // Risk/Reward
+        risk_reward_ratio: indicators.risk_reward_ratio ?? 2,
+        max_position_duration_minutes: indicators.max_position_duration_minutes ?? 240,
+        // Leverage
+        leverage: indicators.leverage ?? 10,
+      };
+
+      let result;
+      if (targetConfigId) {
+        // Opdater eksisterende config
+        result = await supabase
+          .from("indicator_config")
+          .update(payload)
+          .eq("id", targetConfigId)
+          .select();
+      } else {
+        // Opret ny config
+        result = await supabase
+          .from("indicator_config")
+          .insert(payload)
+          .select();
+      }
+
+      if (result.error) throw result.error;
 
       toast({
-        title: "Implementeret!",
-        description: "Strategi-værdierne er opdateret i din AKTIVE config.",
+        title: "Gemt!",
+        description: "Strategiens værdier er nu indlæst i din indikator konfiguration.",
       });
+
+      // Luk dialogen så brugeren kan se ændringerne
+      setTimeout(() => {
+        onClose();
+      }, 1000);
+      
     } catch (error: any) {
+      console.error("implementToConfig error:", error);
       toast({
         title: "Fejl",
         description: error.message,
