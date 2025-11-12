@@ -86,6 +86,32 @@ async function getPositionFromBinance(symbol: string, apiKey: string, apiSecret:
   return positions.find((p: any) => p.symbol === symbol && parseFloat(p.positionAmt) !== 0);
 }
 
+async function cancelAllOpenOrders(symbol: string, apiKey: string, apiSecret: string) {
+  const timestamp = Date.now();
+  const queryString = `symbol=${symbol}&timestamp=${timestamp}&recvWindow=10000`;
+  const signature = await createSignature(queryString, apiSecret);
+  
+  const response = await fetch(
+    `https://fapi.binance.com/fapi/v1/allOpenOrders?${queryString}&signature=${signature}`,
+    {
+      method: 'DELETE',
+      headers: {
+        'X-MBX-APIKEY': apiKey,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.warn(`Failed to cancel orders for ${symbol}:`, error);
+    return { cancelled: false, error };
+  }
+
+  const result = await response.json();
+  console.log(`Cancelled orders for ${symbol}:`, result);
+  return { cancelled: true, result };
+}
+
 async function closePositionOnBinance(symbol: string, side: string, quantity: number) {
   const apiKey = Deno.env.get('BINANCE_API_KEY');
   const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
@@ -127,6 +153,9 @@ async function closePositionOnBinance(symbol: string, side: string, quantity: nu
   }
 
   const orderResult = await response.json();
+  
+  // Cancel all remaining open orders for this symbol (stop-loss, etc.)
+  await cancelAllOpenOrders(symbol, apiKey, apiSecret);
   
   // Wait a bit for order to fill
   await new Promise(resolve => setTimeout(resolve, 1000));

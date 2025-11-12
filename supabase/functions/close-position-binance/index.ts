@@ -35,6 +35,22 @@ async function getPositionRisk(symbol: string, apiKey: string, apiSecret: string
   return pos;
 }
 
+async function cancelAllOpenOrders(symbol: string, apiKey: string, apiSecret: string) {
+  const serverTime = await getBinanceServerTime();
+  const queryString = `symbol=${symbol}&timestamp=${serverTime}&recvWindow=10000`;
+  const signature = await createSignature(queryString, apiSecret);
+  const url = `https://fapi.binance.com/fapi/v1/allOpenOrders?${queryString}&signature=${signature}`;
+  const res = await fetch(url, { method: 'DELETE', headers: { 'X-MBX-APIKEY': apiKey } });
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.warn(`Failed to cancel orders for ${symbol}:`, errorText);
+    return { cancelled: false, error: errorText };
+  }
+  const result = await res.json();
+  console.log(`Cancelled ${result.code === 200 || Array.isArray(result) ? result.length || 0 : 0} orders for ${symbol}`);
+  return { cancelled: true, result };
+}
+
 async function closeOnBinance(symbol: string, apiKey: string, apiSecret: string) {
   // Fetch current position amount
   const pos = await getPositionRisk(symbol, apiKey, apiSecret);
@@ -62,6 +78,10 @@ async function closeOnBinance(symbol: string, apiKey: string, apiSecret: string)
   const res = await fetch(url, { method: 'POST', headers: { 'X-MBX-APIKEY': apiKey } });
   if (!res.ok) throw new Error(`Order failed: ${await res.text()}`);
   const order = await res.json();
+  
+  // Cancel all remaining open orders for this symbol (stop-loss, etc.)
+  await cancelAllOpenOrders(symbol, apiKey, apiSecret);
+  
   return { order };
 }
 
