@@ -49,11 +49,22 @@ serve(async (req) => {
       console.log('Market scan completed:', scanResponse.data);
     }
 
+    // Step 4: Final sync to ensure everything matches Binance
+    console.log('Step 4: Final sync with Binance...');
+    const finalSyncResponse = await supabaseClient.functions.invoke('sync-binance-futures-positions');
+    
+    if (finalSyncResponse.error) {
+      console.error('Error in final sync:', finalSyncResponse.error);
+    } else {
+      console.log('Final sync completed:', finalSyncResponse.data);
+    }
+
     return new Response(JSON.stringify({ 
       message: 'Workflow completed',
       syncResult: syncResponse.data,
       monitorResult: monitorResponse.data,
       scanResult: scanResponse.data,
+      finalSyncResult: finalSyncResponse.data,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

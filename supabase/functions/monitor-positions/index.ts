@@ -367,6 +367,10 @@ serve(async (req) => {
             } else {
               console.log(`Trade history saved for ${position.symbol}`);
             }
+            
+            // Immediately sync with Binance to ensure DB matches reality
+            console.log(`Syncing with Binance after closing ${position.symbol}`);
+            await supabaseClient.functions.invoke('sync-binance-futures-positions');
 
             // Update user portfolio with actual balance from Binance
             try {
