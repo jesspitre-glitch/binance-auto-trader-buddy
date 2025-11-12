@@ -157,6 +157,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.ema_fast}
               onChange={(e) => setFormData({ ...formData, ema_fast: parseInt(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Antal bars - lavere = hurtigere reaktion</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="ema_medium">Medium EMA</Label>
@@ -166,6 +167,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.ema_medium}
               onChange={(e) => setFormData({ ...formData, ema_medium: parseInt(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Mellemperiode for trend bekræftelse</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="ema_slow">Langsom EMA</Label>
@@ -175,6 +177,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.ema_slow}
               onChange={(e) => setFormData({ ...formData, ema_slow: parseInt(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Langsom linje - mere stabil trend</p>
           </div>
         </CardContent>
       </Card>
@@ -193,6 +196,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.rsi_period}
               onChange={(e) => setFormData({ ...formData, rsi_period: parseInt(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Antal bars til RSI beregning (standard 14)</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="rsi_min_long">Min RSI (LONG)</Label>
@@ -203,6 +207,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.rsi_min_long}
               onChange={(e) => setFormData({ ...formData, rsi_min_long: parseFloat(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">LONG kun hvis RSI over denne værdi</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="rsi_overbought">Overkøbt &gt;</Label>
@@ -213,6 +218,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.rsi_overbought}
               onChange={(e) => setFormData({ ...formData, rsi_overbought: parseFloat(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Ingen LONG hvis RSI over dette</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="rsi_oversold">Oversolgt &lt;</Label>
@@ -223,6 +229,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.rsi_oversold}
               onChange={(e) => setFormData({ ...formData, rsi_oversold: parseFloat(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Ingen SHORT hvis RSI under dette</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="rsi_max_short">Max RSI (SHORT)</Label>
@@ -233,6 +240,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.rsi_max_short}
               onChange={(e) => setFormData({ ...formData, rsi_max_short: parseFloat(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">SHORT kun hvis RSI under denne værdi</p>
           </div>
         </CardContent>
       </Card>
@@ -251,6 +259,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.macd_fast}
               onChange={(e) => setFormData({ ...formData, macd_fast: parseInt(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Hurtig EMA periode (standard 12)</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="macd_slow">Langsom</Label>
@@ -260,6 +269,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.macd_slow}
               onChange={(e) => setFormData({ ...formData, macd_slow: parseInt(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Langsom EMA periode (standard 26)</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="macd_signal">Signal</Label>
@@ -269,6 +279,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.macd_signal}
               onChange={(e) => setFormData({ ...formData, macd_signal: parseInt(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Signal linje EMA (standard 9)</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="macd_histogram_threshold">Histogram Tærskel</Label>
@@ -279,6 +290,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.macd_histogram_threshold}
               onChange={(e) => setFormData({ ...formData, macd_histogram_threshold: parseFloat(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Min histogram for signal (0 = alle)</p>
           </div>
         </CardContent>
       </Card>
@@ -297,6 +309,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.bb_period}
               onChange={(e) => setFormData({ ...formData, bb_period: parseInt(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">SMA periode for midt-båndet (standard 20)</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="bb_std_dev">Standard Afvigelse</Label>
@@ -307,6 +320,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.bb_std_dev}
               onChange={(e) => setFormData({ ...formData, bb_std_dev: parseFloat(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Hvor bredt båndet er (standard 2.0)</p>
           </div>
         </CardContent>
       </Card>
@@ -325,6 +339,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.atr_period}
               onChange={(e) => setFormData({ ...formData, atr_period: parseInt(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Antal bars til volatilitet (standard 14)</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="atr_stop_loss_multiplier">Stop-Loss Multiplikator</Label>
@@ -335,6 +350,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.atr_stop_loss_multiplier}
               onChange={(e) => setFormData({ ...formData, atr_stop_loss_multiplier: parseFloat(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Højere = løsere SL (2.0 = 2×ATR)</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="atr_trailing_stop_multiplier">Trailing Stop Multiplikator</Label>
@@ -345,6 +361,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.atr_trailing_stop_multiplier}
               onChange={(e) => setFormData({ ...formData, atr_trailing_stop_multiplier: parseFloat(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Afstand fra peak når TP nås (lavere = tættere)</p>
           </div>
         </CardContent>
       </Card>
@@ -363,6 +380,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.adx_period}
               onChange={(e) => setFormData({ ...formData, adx_period: parseInt(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Antal bars til ADX (standard 14)</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="adx_threshold">ADX Tærskel</Label>
@@ -373,6 +391,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.adx_threshold}
               onChange={(e) => setFormData({ ...formData, adx_threshold: parseFloat(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Min trend styrke - højere = stærkere trend krævet</p>
           </div>
         </CardContent>
       </Card>
@@ -485,6 +504,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.leverage}
               onChange={(e) => setFormData({ ...formData, leverage: parseInt(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Gearing - højere = større position med samme kapital</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="position_size_percent">% pr Trade</Label>
@@ -516,6 +536,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.max_open_positions}
               onChange={(e) => setFormData({ ...formData, max_open_positions: parseInt(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Antal samtidige trades tilladt</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="max_exposure_percent">Max Eksponering (%)</Label>
@@ -526,6 +547,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.max_exposure_percent}
               onChange={(e) => setFormData({ ...formData, max_exposure_percent: parseFloat(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Total eksponering max i % af balance</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="daily_loss_limit_percent">Dagligt Tab Limit (%)</Label>
@@ -536,6 +558,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.daily_loss_limit_percent}
               onChange={(e) => setFormData({ ...formData, daily_loss_limit_percent: parseFloat(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Stop trading hvis tab når denne % på en dag</p>
           </div>
         </CardContent>
       </Card>
@@ -555,6 +578,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.risk_reward_ratio}
               onChange={(e) => setFormData({ ...formData, risk_reward_ratio: parseFloat(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">TP afstand = SL afstand × dette tal (2.0 = dobbelt)</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="max_position_duration_minutes">Max Position Varighed (min)</Label>
@@ -564,6 +588,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.max_position_duration_minutes}
               onChange={(e) => setFormData({ ...formData, max_position_duration_minutes: parseInt(e.target.value) })}
             />
+            <p className="text-xs text-muted-foreground">Auto-luk position efter denne tid (240 = 4 timer)</p>
           </div>
         </CardContent>
       </Card>
