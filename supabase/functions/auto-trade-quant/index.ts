@@ -821,7 +821,7 @@ serve(async (req) => {
               const actualEntryPrice = parseFloat(binancePosition.entryPrice);
               const actualQuantity = Math.abs(parseFloat(binancePosition.positionAmt));
               
-              // Save position to database with verified Binance data
+              // Save position to database with verified Binance data and indicators
               await supabaseClient.from('positions').insert({
                 user_id: session.user_id,
                 symbol,
@@ -837,6 +837,10 @@ serve(async (req) => {
                 status: 'OPEN',
                 strategy_hash: strategyHash,
                 open_reason: openReason,
+                indicators_snapshot: {
+                  ...config,
+                  ...analysis.indicators,
+                },
               });
 
               console.log(`Position saved to DB: ${symbol} with verified Binance data`);

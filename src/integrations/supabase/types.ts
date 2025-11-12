@@ -143,6 +143,7 @@ export type Database = {
           current_price: number | null
           entry_price: number
           id: string
+          indicators_snapshot: Json | null
           open_reason: string | null
           opened_at: string | null
           peak_price: number | null
@@ -167,6 +168,7 @@ export type Database = {
           current_price?: number | null
           entry_price: number
           id?: string
+          indicators_snapshot?: Json | null
           open_reason?: string | null
           opened_at?: string | null
           peak_price?: number | null
@@ -191,6 +193,7 @@ export type Database = {
           current_price?: number | null
           entry_price?: number
           id?: string
+          indicators_snapshot?: Json | null
           open_reason?: string | null
           opened_at?: string | null
           peak_price?: number | null

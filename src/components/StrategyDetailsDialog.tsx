@@ -7,7 +7,7 @@ import { TrendingUp, TrendingDown, Copy, Check, Settings } from "lucide-react";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Table,
@@ -48,8 +48,35 @@ export const StrategyDetailsDialog = ({
   const [copiedTrades, setCopiedTrades] = useState(false);
   const [copiedIndicators, setCopiedIndicators] = useState(false);
   const [implementingConfig, setImplementingConfig] = useState(false);
+  const [indicators, setIndicators] = useState<any>({});
 
-  const indicators = trades[0]?.indicators_snapshot || {};
+  // Fetch indicators - prioritize from trades, fallback to positions
+  useEffect(() => {
+    const fetchIndicators = async () => {
+      // First try to get from trades
+      const tradeWithIndicators = trades.find(t => t.indicators_snapshot);
+      if (tradeWithIndicators) {
+        setIndicators(tradeWithIndicators.indicators_snapshot);
+        return;
+      }
+
+      // Fallback: fetch from positions table with same strategy_hash
+      const { data } = await supabase
+        .from("positions")
+        .select("indicators_snapshot")
+        .eq("strategy_hash", strategyHash)
+        .not("indicators_snapshot", "is", null)
+        .limit(1);
+      
+      if (data && data.length > 0 && data[0].indicators_snapshot) {
+        setIndicators(data[0].indicators_snapshot);
+      }
+    };
+
+    if (isOpen) {
+      fetchIndicators();
+    }
+  }, [isOpen, strategyHash, trades]);
 
   const copyTradesToClipboard = () => {
     const tradesText = trades.map(t => 

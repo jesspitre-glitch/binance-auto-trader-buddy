@@ -373,7 +373,7 @@ serve(async (req) => {
               })
               .eq('id', position.id);
 
-            // Add to trade history with actual values from Binance
+            // Add to trade history with actual values from Binance and indicators
             const { error: historyError } = await supabaseClient.from('trade_history').insert({
               user_id: position.user_id,
               symbol: position.symbol,
@@ -389,6 +389,7 @@ serve(async (req) => {
               strategy_hash: position.strategy_hash,
               open_reason: position.open_reason,
               close_reason: closeReason,
+              indicators_snapshot: position.indicators_snapshot || null,
             });
 
             if (historyError) {
