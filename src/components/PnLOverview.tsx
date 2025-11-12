@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, LineChart as LineChartIcon } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, LineChart as LineChartIcon, Copy } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
@@ -378,7 +378,42 @@ export const PnLOverview = () => {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Trades i perioden</DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle>Trades i perioden</DialogTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const totalPnL = selectedPeriodTrades.reduce((sum, t) => sum + Number(t.pnl), 0);
+                  const winRate = selectedPeriodTrades.length > 0
+                    ? ((selectedPeriodTrades.filter(t => Number(t.pnl) > 0).length / selectedPeriodTrades.length) * 100).toFixed(1)
+                    : 0;
+                  
+                  const header = `Trades i perioden\n` +
+                    `Total P&L: $${totalPnL.toFixed(2)}\n` +
+                    `Antal Trades: ${selectedPeriodTrades.length}\n` +
+                    `Win Rate: ${winRate}%\n\n`;
+                  
+                  const tableHeader = `Symbol\tSide\tEntry\tExit\tQuantity\tP&L\tP&L %\tTidspunkt\n`;
+                  
+                  const rows = selectedPeriodTrades.map(trade => 
+                    `${trade.symbol}\t${trade.side}\t$${Number(trade.entry_price).toFixed(2)}\t$${Number(trade.exit_price).toFixed(2)}\t${Number(trade.quantity).toFixed(4)}\t$${Number(trade.pnl).toFixed(2)}\t${Number(trade.pnl_percent).toFixed(2)}%\t${new Date(trade.closed_at).toLocaleString("da-DK")}`
+                  ).join('\n');
+                  
+                  const text = header + tableHeader + rows;
+                  
+                  navigator.clipboard.writeText(text).then(() => {
+                    toast({
+                      title: "Kopieret!",
+                      description: "Trades er kopieret til clipboard",
+                    });
+                  });
+                }}
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Kopier
+              </Button>
+            </div>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
