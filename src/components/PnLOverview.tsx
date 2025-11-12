@@ -25,6 +25,7 @@ export const PnLOverview = () => {
   const [chartType, setChartType] = useState<"line" | "bar">("line");
   const [stats, setStats] = useState<any>(null);
   const [chartData, setChartData] = useState<any[]>([]);
+  const [aggregatedData, setAggregatedData] = useState<any[]>([]);
   const { toast } = useToast();
 
   const fetchPnLData = async (range: TimeRange) => {
@@ -110,7 +111,7 @@ export const PnLOverview = () => {
 
       // Create cumulative P&L chart data
       let cumulativePnL = 0;
-      const chartData = trades.map(trade => {
+      const cumulativeData = trades.map(trade => {
         cumulativePnL += Number(trade.pnl);
         return {
           time: new Date(trade.closed_at).toLocaleString("da-DK", {
@@ -124,7 +125,38 @@ export const PnLOverview = () => {
         };
       });
 
-      setChartData(chartData);
+      // Create aggregated P&L data for bar chart
+      const aggregatedPnL = new Map<string, number>();
+      trades.forEach(trade => {
+        const date = new Date(trade.closed_at);
+        let timeKey: string;
+        
+        if (range === "24h") {
+          // Group by hour
+          timeKey = new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours()).toLocaleString("da-DK", {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+          });
+        } else {
+          // Group by day
+          timeKey = new Date(date.getFullYear(), date.getMonth(), date.getDate()).toLocaleString("da-DK", {
+            month: "short",
+            day: "numeric",
+          });
+        }
+        
+        const currentPnL = aggregatedPnL.get(timeKey) || 0;
+        aggregatedPnL.set(timeKey, currentPnL + Number(trade.pnl));
+      });
+
+      const aggregatedData = Array.from(aggregatedPnL.entries()).map(([time, pnl]) => ({
+        time,
+        pnl: Number(pnl.toFixed(2)),
+      }));
+
+      setChartData(cumulativeData);
+      setAggregatedData(aggregatedData);
     } catch (error: any) {
       console.error("P&L fetch error:", error);
       toast({
@@ -255,18 +287,18 @@ export const PnLOverview = () => {
               </div>
             )}
 
-            {/* Individual Trades Bar Chart */}
-            {chartData.length > 0 && (
+            {/* Aggregated P&L Bar Chart */}
+            {aggregatedData.length > 0 && (
               <div>
-                <h3 className="text-sm font-medium mb-4">Individuelle Trades</h3>
+                <h3 className="text-sm font-medium mb-4">P&L per {timeRange === "24h" ? "Time" : "Dag"}</h3>
                 <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={chartData}>
+                  <BarChart data={aggregatedData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="time" />
                     <YAxis />
                     <Tooltip />
                     <Bar dataKey="pnl">
-                      {chartData.map((entry, index) => (
+                      {aggregatedData.map((entry, index) => (
                         <Bar
                           key={`cell-${index}`}
                           dataKey="pnl"
