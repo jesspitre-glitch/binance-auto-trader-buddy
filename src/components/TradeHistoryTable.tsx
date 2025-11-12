@@ -20,13 +20,11 @@ export const TradeHistoryTable = () => {
       const { data, error } = await supabase
         .from("trade_history")
         .select("*")
-        .order("closed_at", { ascending: false })
-        .limit(50);
+        .neq("close_reason", "DUPLICATE")
+        .order("closed_at", { ascending: false });
 
       if (error) throw error;
-      // Filter out duplicates from display
-      const filteredTrades = (data || []).filter(trade => trade.close_reason !== 'DUPLICATE');
-      setTrades(filteredTrades);
+      setTrades(data || []);
     } catch (error: any) {
       toast({
         title: "Fejl",
