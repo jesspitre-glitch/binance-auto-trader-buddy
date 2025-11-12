@@ -504,6 +504,56 @@ async function placeOrder(
   return orderData;
 }
 
+async function verifyPositionOnBinance(symbol: string): Promise<any | null> {
+  const apiKey = Deno.env.get('BINANCE_API_KEY');
+  const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
+  
+  if (!apiKey || !apiSecret) {
+    throw new Error('Binance API credentials not configured');
+  }
+
+  const timestamp = Date.now();
+  const params = new URLSearchParams({
+    timestamp: timestamp.toString(),
+    recvWindow: '10000',
+  });
+
+  const signature = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(apiSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  ).then(key => 
+    crypto.subtle.sign('HMAC', key, new TextEncoder().encode(params.toString()))
+  ).then(sig => 
+    Array.from(new Uint8Array(sig))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+  );
+
+  params.append('signature', signature);
+
+  const response = await fetch(
+    `https://fapi.binance.com/fapi/v3/positionRisk?${params.toString()}`,
+    {
+      headers: {
+        'X-MBX-APIKEY': apiKey,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    console.error('Failed to verify position on Binance');
+    return null;
+  }
+
+  const positions = await response.json();
+  const position = positions.find((p: any) => p.symbol === symbol && parseFloat(p.positionAmt) !== 0);
+  
+  return position || null;
+}
+
 async function getAccountBalance() {
   const apiKey = Deno.env.get('BINANCE_API_KEY');
   const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
@@ -730,6 +780,21 @@ serve(async (req) => {
                 config.leverage
               );
               
+              console.log(`Order placed: ${symbol} ${side} ${quantityRounded} @ ${analysis.indicators.price}`);
+              
+              // Wait a moment for Binance to process the order
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              
+              // Verify position is actually open on Binance
+              const binancePosition = await verifyPositionOnBinance(symbol);
+              
+              if (!binancePosition) {
+                console.error(`Failed to verify position ${symbol} on Binance - skipping database insert`);
+                continue;
+              }
+              
+              console.log(`Position verified on Binance: ${symbol} - Qty: ${binancePosition.positionAmt}, Entry: ${binancePosition.entryPrice}`);
+              
               // Build open reason description
               const openReasonParts = [];
               if (analysis.indicators.rsi) openReasonParts.push(`RSI: ${analysis.indicators.rsi.toFixed(2)}`);
@@ -744,17 +809,21 @@ serve(async (req) => {
               const trailingStopDistance = analysis.indicators.atr * config.atr_trailing_stop_multiplier;
               const trailingStopPercent = (trailingStopDistance / analysis.indicators.price) * 100;
               
-              // Save position to database
+              // Use actual values from Binance for database insert
+              const actualEntryPrice = parseFloat(binancePosition.entryPrice);
+              const actualQuantity = Math.abs(parseFloat(binancePosition.positionAmt));
+              
+              // Save position to database with verified Binance data
               await supabaseClient.from('positions').insert({
                 user_id: session.user_id,
                 symbol,
                 side: analysis.signal,
-                entry_price: analysis.indicators.price,
-                quantity: quantityRounded,
+                entry_price: actualEntryPrice,
+                quantity: actualQuantity,
                 stop_loss: analysis.stopLoss,
                 take_profit: analysis.takeProfit,
-                current_price: analysis.indicators.price,
-                peak_price: analysis.indicators.price,
+                current_price: actualEntryPrice,
+                peak_price: actualEntryPrice,
                 trailing_stop_percent: parseFloat(trailingStopPercent.toFixed(2)),
                 binance_order_id: orderData.orderId,
                 status: 'OPEN',
@@ -762,10 +831,10 @@ serve(async (req) => {
                 open_reason: openReason,
               });
 
+              console.log(`Position saved to DB: ${symbol} with verified Binance data`);
+
               // Immediately sync with Binance so DB matches source of truth
               await supabaseClient.functions.invoke('sync-binance-futures-positions');
-              
-              console.log(`Order placed: ${symbol} ${side} ${quantityRounded} @ ${analysis.indicators.price}`);
             } catch (error) {
               console.error(`Failed to place order for ${symbol}:`, error);
             }
