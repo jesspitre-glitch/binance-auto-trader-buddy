@@ -497,41 +497,9 @@ async function placeOrder(
     }
   );
 
-  // Set take profit
-  const tpParams = new URLSearchParams({
-    symbol,
-    side: side === 'BUY' ? 'SELL' : 'BUY',
-    type: 'TAKE_PROFIT_MARKET',
-    stopPrice: takeProfit.toFixed(pricePrecision),
-    closePosition: 'true',
-    timestamp: Date.now().toString(),
-  });
-
-  const tpSignature = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(apiSecret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  ).then(key => 
-    crypto.subtle.sign('HMAC', key, new TextEncoder().encode(tpParams.toString()))
-  ).then(sig => 
-    Array.from(new Uint8Array(sig))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('')
-  );
-
-  tpParams.append('signature', tpSignature);
-
-  await fetch(
-    `https://fapi.binance.com/fapi/v1/order?${tpParams.toString()}`,
-    {
-      method: 'POST',
-      headers: {
-        'X-MBX-APIKEY': apiKey,
-      },
-    }
-  );
+  // NOTE: NO TAKE_PROFIT order is placed on Binance
+  // TP + Trailing Stop is handled entirely by monitor-positions software logic
+  console.log(`Position opened with SL only - TP/Trailing handled by software`);
 
   return orderData;
 }
