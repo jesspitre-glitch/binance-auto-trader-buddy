@@ -129,40 +129,75 @@ export const StrategyDetailsDialog = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Ikke logget ind");
 
-      // Hent eksisterende configs
-      const { data: existingConfigs } = await supabase
-        .from("indicator_config")
-        .select("*")
+      // Find aktiv strategi-konfiguration fra sessionen
+      const { data: session } = await supabase
+        .from("trading_session")
+        .select("active_config_id")
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1);
+        .maybeSingle();
+
+      // Kun gem felter der findes i indicator_config tabellen
+      const allowedKeys = [
+        "name","enabled",
+        "ema_fast","ema_medium","ema_slow",
+        "rsi_period","rsi_overbought","rsi_oversold","rsi_min_long","rsi_max_short",
+        "macd_fast","macd_slow","macd_signal","macd_histogram_threshold",
+        "bb_period","bb_std_dev",
+        "atr_period","atr_stop_loss_multiplier","atr_trailing_stop_multiplier",
+        "adx_period","adx_threshold",
+        "volume_avg_period","signal_conditions_required",
+        "scan_interval","trend_timeframe",
+        "position_size_percent","risk_per_trade_percent","max_open_positions","max_exposure_percent","daily_loss_limit_percent",
+        "risk_reward_ratio","max_position_duration_minutes",
+        "leverage",
+      ] as const;
+
+      const filtered: Record<string, any> = {};
+      allowedKeys.forEach((k) => {
+        const v = (indicators as any)[k];
+        if (v !== undefined) filtered[k] = v;
+      });
 
       const configPayload = {
-        ...indicators,
+        ...filtered,
         user_id: user.id,
-        name: `Strategy ${strategyHash.substring(0, 8)}`,
-        enabled: false, // Disabled by default so user can review
+        name: filtered.name ?? `Strategy ${strategyHash.substring(0, 8)}`,
+        enabled: filtered.enabled ?? false,
       };
 
       let result;
-      if (existingConfigs && existingConfigs.length > 0) {
-        // Update existing config
+      if (session?.active_config_id) {
+        // Opdater den AKTIVE config
         result = await supabase
           .from("indicator_config")
           .update(configPayload)
-          .eq("id", existingConfigs[0].id);
+          .eq("id", session.active_config_id);
       } else {
-        // Create new config
-        result = await supabase
+        // Fallback: opdater seneste eller opret ny
+        const { data: existingConfigs } = await supabase
           .from("indicator_config")
-          .insert(configPayload);
+          .select("id")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (existingConfigs && existingConfigs.length > 0) {
+          result = await supabase
+            .from("indicator_config")
+            .update(configPayload)
+            .eq("id", existingConfigs[0].id);
+        } else {
+          result = await supabase
+            .from("indicator_config")
+            .insert(configPayload);
+        }
       }
 
-      if (result.error) throw result.error;
+      if ((result as any).error) throw (result as any).error;
 
       toast({
         title: "Implementeret!",
-        description: "Indikator værdierne er gemt i din config (disabled som standard)",
+        description: "Strategi-værdierne er opdateret i din AKTIVE config.",
       });
     } catch (error: any) {
       toast({
