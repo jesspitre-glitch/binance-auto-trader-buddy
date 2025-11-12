@@ -42,7 +42,7 @@ interface IndicatorConfig {
 
 // Calculate strategy hash from config
 async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
-  // Create a stable string representation of the config (excluding id, user_id, name, created_at, updated_at, enabled)
+  // Create a stable string representation of ALL config values (excluding id, user_id, name, created_at, updated_at, enabled)
   const configStr = JSON.stringify({
     ema_fast: config.ema_fast,
     ema_medium: config.ema_medium,
@@ -50,6 +50,8 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
     rsi_period: config.rsi_period,
     rsi_overbought: config.rsi_overbought,
     rsi_oversold: config.rsi_oversold,
+    rsi_min_long: config.rsi_min_long,
+    rsi_max_short: config.rsi_max_short,
     macd_fast: config.macd_fast,
     macd_slow: config.macd_slow,
     macd_signal: config.macd_signal,
@@ -61,8 +63,14 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
     atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier,
     adx_period: config.adx_period,
     adx_threshold: config.adx_threshold,
+    volume_avg_period: config.volume_avg_period,
+    signal_conditions_required: config.signal_conditions_required,
+    position_size_percent: config.position_size_percent,
     risk_per_trade_percent: config.risk_per_trade_percent,
     max_open_positions: config.max_open_positions,
+    max_exposure_percent: config.max_exposure_percent,
+    daily_loss_limit_percent: config.daily_loss_limit_percent,
+    max_position_duration_minutes: config.max_position_duration_minutes,
     risk_reward_ratio: config.risk_reward_ratio,
     leverage: config.leverage,
     scan_interval: config.scan_interval,
