@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -74,6 +74,57 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     // Leverage
     leverage: config?.leverage || 10,
   });
+  
+  // Sync form with incoming config changes
+  useEffect(() => {
+    if (!config) return;
+    setFormData({
+      name: config.name ?? "Default Strategy",
+      enabled: config.enabled ?? true,
+      // EMA
+      ema_fast: config.ema_fast ?? 9,
+      ema_medium: config.ema_medium ?? 21,
+      ema_slow: config.ema_slow ?? 50,
+      // RSI
+      rsi_period: config.rsi_period ?? 14,
+      rsi_overbought: config.rsi_overbought ?? 70,
+      rsi_oversold: config.rsi_oversold ?? 30,
+      rsi_min_long: config.rsi_min_long ?? 30,
+      rsi_max_short: config.rsi_max_short ?? 70,
+      // MACD
+      macd_fast: config.macd_fast ?? 12,
+      macd_slow: config.macd_slow ?? 26,
+      macd_signal: config.macd_signal ?? 9,
+      macd_histogram_threshold: config.macd_histogram_threshold ?? 0,
+      // Bollinger Bands
+      bb_period: config.bb_period ?? 20,
+      bb_std_dev: config.bb_std_dev ?? 2,
+      // ATR
+      atr_period: config.atr_period ?? 14,
+      atr_stop_loss_multiplier: config.atr_stop_loss_multiplier ?? 2,
+      atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier ?? 1.5,
+      // ADX
+      adx_period: config.adx_period ?? 14,
+      adx_threshold: config.adx_threshold ?? 25,
+      // Volume & Signal
+      volume_avg_period: config.volume_avg_period ?? 20,
+      signal_conditions_required: config.signal_conditions_required ?? 5,
+      // Timeframes
+      scan_interval: config.scan_interval ?? "5m",
+      trend_timeframe: config.trend_timeframe ?? config.mtf_timeframe ?? "15m",
+      // Risk Management
+      position_size_percent: config.position_size_percent ?? 5,
+      risk_per_trade_percent: config.risk_per_trade_percent ?? 1,
+      max_open_positions: config.max_open_positions ?? 3,
+      max_exposure_percent: config.max_exposure_percent ?? 5,
+      daily_loss_limit_percent: config.daily_loss_limit_percent ?? 5,
+      // Risk/Reward
+      risk_reward_ratio: config.risk_reward_ratio ?? 2,
+      max_position_duration_minutes: config.max_position_duration_minutes ?? 240,
+      // Leverage
+      leverage: config.leverage ?? 10,
+    });
+  }, [config]);
 
   const handleSave = async () => {
     setLoading(true);

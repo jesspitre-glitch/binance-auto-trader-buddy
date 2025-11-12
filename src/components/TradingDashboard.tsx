@@ -79,6 +79,21 @@ export const TradingDashboard = () => {
   useEffect(() => {
     fetchConfigs();
     fetchSession();
+
+    const channel = supabase
+      .channel("indicator-config-listener")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "indicator_config" },
+        () => {
+          fetchConfigs();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const toggleTrading = async () => {
