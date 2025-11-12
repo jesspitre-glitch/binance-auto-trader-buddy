@@ -45,8 +45,8 @@ export const StrategyAnalysis = () => {
       // Fetch active strategy config
       const { data: sessionData } = await supabase
         .from("trading_session")
-        .select("active_config_id, indicator_config(id)")
-        .single();
+        .select("active_config_id")
+        .maybeSingle();
       
       let activeHash: string | null = null;
       if (sessionData?.active_config_id) {
@@ -55,7 +55,7 @@ export const StrategyAnalysis = () => {
           .from("indicator_config")
           .select("*")
           .eq("id", sessionData.active_config_id)
-          .single();
+          .maybeSingle();
         
         if (configData) {
           // Calculate the strategy hash the same way as in auto-trade-quant
@@ -65,6 +65,7 @@ export const StrategyAnalysis = () => {
           const hashBuffer = await crypto.subtle.digest('SHA-256', data);
           const hashArray = Array.from(new Uint8Array(hashBuffer));
           activeHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+          console.log("Active strategy hash:", activeHash);
         }
       }
       
