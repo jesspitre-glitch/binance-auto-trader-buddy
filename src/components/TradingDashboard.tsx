@@ -13,6 +13,7 @@ import { PnLOverview } from "./PnLOverview";
 import { ScanResults } from "./ScanResults";
 import { StrategyAnalysis } from "./StrategyAnalysis";
 import { TradeHistoryTable } from "./TradeHistoryTable";
+import { ContinuousSyncControl } from "./ContinuousSyncControl";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -187,6 +188,8 @@ export const TradingDashboard = () => {
       </Card>
 
       <PortfolioBalance />
+
+      <ContinuousSyncControl />
 
       <PositionManager />
 

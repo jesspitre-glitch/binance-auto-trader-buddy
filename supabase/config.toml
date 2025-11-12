@@ -1,1 +1,4 @@
 project_id = "kgtrlsmhqtnwynpjnpnm"
+
+[functions.continuous-sync-binance]
+verify_jwt = false
