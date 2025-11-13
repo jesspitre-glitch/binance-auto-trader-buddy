@@ -559,11 +559,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="signal_conditions_required"
               type="number"
               min="1"
-              max="8"
+              max={7 + (formData.pivot_points_enabled ? 1 : 0)}
               value={formData.signal_conditions_required}
-              onChange={(e) => setFormData({ ...formData, signal_conditions_required: Math.min(8, Math.max(1, parseInt(e.target.value) || 1)) })}
+              onChange={(e) => {
+                const maxConditions = 7 + (formData.pivot_points_enabled ? 1 : 0);
+                setFormData({ ...formData, signal_conditions_required: Math.min(maxConditions, Math.max(1, parseInt(e.target.value) || 1)) });
+              }}
             />
-            <p className="text-xs text-muted-foreground">Hvor mange ud af 8 betingelser skal være opfyldt</p>
+            <p className="text-xs text-muted-foreground">
+              Hvor mange ud af {7 + (formData.pivot_points_enabled ? 1 : 0)} betingelser skal være opfyldt 
+              (EMA×3 + RSI + StochRSI + MACD + ADX{formData.pivot_points_enabled ? ' + Pivot Points' : ''})
+            </p>
           </div>
         </CardContent>
       </Card>
