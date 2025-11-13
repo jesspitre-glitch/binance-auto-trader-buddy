@@ -581,9 +581,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
     stopLoss: longSignal 
       ? currentPrice - (atr * config.atr_stop_loss_multiplier)
       : currentPrice + (atr * config.atr_stop_loss_multiplier),
-    takeProfit: longSignal
-      ? currentPrice + (atr * config.atr_take_profit_multiplier)
-      : currentPrice - (atr * config.atr_take_profit_multiplier),
+    takeProfit: null, // Kun trailing stop bruges til profit
   };
 }
 
@@ -641,7 +639,7 @@ async function placeOrder(
   side: 'BUY' | 'SELL',
   quantity: number,
   stopLoss: number,
-  takeProfit: number,
+  takeProfit: number | null,
   quantityPrecision: number,
   pricePrecision: number,
   leverage: number

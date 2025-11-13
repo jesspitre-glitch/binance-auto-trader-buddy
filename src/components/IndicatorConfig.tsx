@@ -64,7 +64,6 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     atr_enabled: config?.atr_enabled ?? true,
     atr_period: config?.atr_period || 14,
     atr_stop_loss_multiplier: config?.atr_stop_loss_multiplier || 2,
-    atr_take_profit_multiplier: config?.atr_take_profit_multiplier || 3,
     atr_trailing_stop_multiplier: config?.atr_trailing_stop_multiplier || 1.5,
     
     // ADX
@@ -138,7 +137,6 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       atr_enabled: config.atr_enabled ?? true,
       atr_period: config.atr_period ?? 14,
       atr_stop_loss_multiplier: config.atr_stop_loss_multiplier ?? 2,
-      atr_take_profit_multiplier: config.atr_take_profit_multiplier ?? 3,
       atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier ?? 1.5,
       // ADX
       adx_enabled: config.adx_enabled ?? true,
@@ -594,17 +592,6 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               onChange={(e) => setFormData({ ...formData, atr_stop_loss_multiplier: parseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Højere = løsere SL (2.0 = 2×ATR)</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="atr_take_profit_multiplier">Take-Profit Multiplikator</Label>
-            <Input
-              id="atr_take_profit_multiplier"
-              type="number"
-              step="0.1"
-              value={formData.atr_take_profit_multiplier}
-              onChange={(e) => setFormData({ ...formData, atr_take_profit_multiplier: parseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">TP afstand fra entry (3.0 = 3×ATR)</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="atr_trailing_stop_multiplier">Trailing Stop Multiplikator</Label>
