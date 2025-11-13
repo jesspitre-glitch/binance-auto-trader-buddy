@@ -20,6 +20,8 @@ interface IndicatorConfig {
   stochrsi_oversold: number;
   pivot_points_enabled: boolean;
   pivot_points_timeframe: string;
+  pivot_points_lookback: number;
+  pivot_points_near_threshold: number;
   macd_fast: number;
   macd_slow: number;
   macd_signal: number;
@@ -43,6 +45,7 @@ interface IndicatorConfig {
   leverage: number;
   scan_interval: string;
   trend_timeframe: string;
+  higher_trend_timeframe: string;
 }
 
 // Calculate strategy hash from config
@@ -62,6 +65,8 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
     stochrsi_oversold: config.stochrsi_oversold,
     pivot_points_enabled: config.pivot_points_enabled,
     pivot_points_timeframe: config.pivot_points_timeframe,
+    pivot_points_lookback: config.pivot_points_lookback,
+    pivot_points_near_threshold: config.pivot_points_near_threshold,
     macd_fast: config.macd_fast,
     macd_slow: config.macd_slow,
     macd_signal: config.macd_signal,
@@ -85,6 +90,7 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
     leverage: config.leverage,
     scan_interval: config.scan_interval,
     trend_timeframe: config.trend_timeframe,
+    higher_trend_timeframe: config.higher_trend_timeframe,
   });
   
   const msgUint8 = new TextEncoder().encode(configStr);
@@ -407,22 +413,22 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   const emaSlowCurrent = emaSlow[emaSlow.length - 1];
   
   // Calculate Pivot Points from previous period
-  const pivotHigh = Math.max(...highs.slice(-24)); // Last 24 candles for daily pivot on 1h charts
-  const pivotLow = Math.min(...lows.slice(-24));
-  const pivotClose = closes[closes.length - 25] || closes[0]; // Close from 24 candles ago
+  const pivotHigh = Math.max(...highs.slice(-config.pivot_points_lookback));
+  const pivotLow = Math.min(...lows.slice(-config.pivot_points_lookback));
+  const pivotClose = closes[closes.length - (config.pivot_points_lookback + 1)] || closes[0];
   const pivotPoints = calculatePivotPoints(pivotHigh, pivotLow, pivotClose);
   
   // Check if price is near support (potential LONG) or resistance (potential SHORT)
   const nearSupport = config.pivot_points_enabled && (
-    Math.abs(currentPrice - pivotPoints.s1) / currentPrice < 0.005 ||
-    Math.abs(currentPrice - pivotPoints.s2) / currentPrice < 0.005 ||
-    Math.abs(currentPrice - pivotPoints.pp) / currentPrice < 0.005
+    Math.abs(currentPrice - pivotPoints.s1) / currentPrice < config.pivot_points_near_threshold ||
+    Math.abs(currentPrice - pivotPoints.s2) / currentPrice < config.pivot_points_near_threshold ||
+    Math.abs(currentPrice - pivotPoints.pp) / currentPrice < config.pivot_points_near_threshold
   );
   
   const nearResistance = config.pivot_points_enabled && (
-    Math.abs(currentPrice - pivotPoints.r1) / currentPrice < 0.005 ||
-    Math.abs(currentPrice - pivotPoints.r2) / currentPrice < 0.005 ||
-    Math.abs(currentPrice - pivotPoints.pp) / currentPrice < 0.005
+    Math.abs(currentPrice - pivotPoints.r1) / currentPrice < config.pivot_points_near_threshold ||
+    Math.abs(currentPrice - pivotPoints.r2) / currentPrice < config.pivot_points_near_threshold ||
+    Math.abs(currentPrice - pivotPoints.pp) / currentPrice < config.pivot_points_near_threshold
   );
   
   // LONG signal - RSI crossover detection
@@ -760,9 +766,9 @@ serve(async (req) => {
       for (const symbol of symbols) {
         try {
           // Fetch klines for scan interval, trend timeframe, and higher trend timeframe
-          const scanKlines = await fetchKlines(symbol, config.scan_interval || '5m', 100);
-          const trendKlines = await fetchKlines(symbol, config.trend_timeframe || '15m', 100);
-          const higherTrendKlines = await fetchKlines(symbol, config.higher_trend_timeframe || '1h', 100);
+          const scanKlines = await fetchKlines(symbol, config.scan_interval, 100);
+          const trendKlines = await fetchKlines(symbol, config.trend_timeframe, 100);
+          const higherTrendKlines = await fetchKlines(symbol, config.higher_trend_timeframe, 100);
           
           // Determine trend on both timeframes
           const trend = analyzeTrend(trendKlines, config);
