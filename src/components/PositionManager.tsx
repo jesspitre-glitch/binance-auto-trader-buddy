@@ -161,6 +161,7 @@ export const PositionManager = () => {
                         <div>SL: <span className="font-mono">${position.stop_loss}</span></div>
                         {position.trailing_stop && (() => {
                           const trailingPercent = position.trailing_stop_percent || 2.0;
+                          const trailingStopPrice = Number(position.trailing_stop);
                           
                           return (
                             <div className="border-t pt-2 mt-2 space-y-1">
@@ -170,9 +171,11 @@ export const PositionManager = () => {
                                   AKTIV
                                 </Badge>
                               </div>
-                              <div className="text-xs">
-                                Stop: <span className="font-mono">${Number(position.trailing_stop).toFixed(4)}</span>
-                                <span className="text-muted-foreground ml-1">({trailingPercent.toFixed(1)}% fra peak)</span>
+                              <div className="text-sm font-mono font-bold text-foreground">
+                                ${trailingStopPrice.toFixed(4)}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {trailingPercent.toFixed(1)}% fra peak
                               </div>
                               {position.peak_price && (
                                 <div className="text-xs text-muted-foreground">
