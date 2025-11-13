@@ -112,14 +112,20 @@ export const TradingDashboard = () => {
 
       const newState = !isActive;
       
+      const updateData: any = {
+        user_id: user.id,
+        is_active: newState,
+        active_config_id: activeConfigId,
+      };
+      
+      // Only set started_at when starting the bot
+      if (newState) {
+        updateData.started_at = new Date().toISOString();
+      }
+      
       const { error } = await supabase
         .from("trading_session")
-        .upsert({
-          user_id: user.id,
-          is_active: newState,
-          active_config_id: activeConfigId,
-          started_at: newState ? new Date().toISOString() : undefined,
-        });
+        .upsert(updateData);
 
       if (error) throw error;
 
