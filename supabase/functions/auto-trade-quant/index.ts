@@ -760,22 +760,35 @@ serve(async (req) => {
       
       for (const symbol of symbols) {
         try {
-          // Fetch klines for both scan interval and trend timeframe
+          // Fetch klines for scan interval, trend timeframe, and higher trend timeframe
           const scanKlines = await fetchKlines(symbol, config.scan_interval || '5m', 100);
           const trendKlines = await fetchKlines(symbol, config.trend_timeframe || '15m', 100);
+          const higherTrendKlines = await fetchKlines(symbol, config.higher_trend_timeframe || '1h', 100);
           
-          // Determine higher timeframe trend
+          // Determine trend on both timeframes
           const trend = analyzeTrend(trendKlines, config);
+          const higherTrend = analyzeTrend(higherTrendKlines, config);
           
           // Analyze signal on scan interval
           const analysis = analyzeSignal(scanKlines, config);
           
-          // Filter signal based on trend
+          // Filter signal based on BOTH trend timeframes
           let filteredSignal = analysis.signal;
+          
+          // First filter: medium timeframe trend
           if (filteredSignal === 'LONG' && trend === 'BEARISH') {
-            filteredSignal = 'NONE'; // Skip LONG if trend is bearish
+            filteredSignal = 'NONE'; // Skip LONG if medium trend is bearish
           } else if (filteredSignal === 'SHORT' && trend === 'BULLISH') {
-            filteredSignal = 'NONE'; // Skip SHORT if trend is bullish
+            filteredSignal = 'NONE'; // Skip SHORT if medium trend is bullish
+          }
+          
+          // Second filter: higher timeframe trend (overordnet filter)
+          if (filteredSignal === 'LONG' && higherTrend === 'BEARISH') {
+            filteredSignal = 'NONE'; // Skip LONG if higher trend is bearish
+            console.log(`Blocked LONG on ${symbol} due to bearish higher trend (${config.higher_trend_timeframe})`);
+          } else if (filteredSignal === 'SHORT' && higherTrend === 'BULLISH') {
+            filteredSignal = 'NONE'; // Skip SHORT if higher trend is bullish
+            console.log(`Blocked SHORT on ${symbol} due to bullish higher trend (${config.higher_trend_timeframe})`);
           }
 
           // Log scan result to database
