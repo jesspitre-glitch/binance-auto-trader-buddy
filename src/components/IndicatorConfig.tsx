@@ -22,17 +22,20 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     enabled: config?.enabled ?? true,
     
     // EMA
+    ema_enabled: config?.ema_enabled ?? true,
     ema_fast: config?.ema_fast || 9,
     ema_medium: config?.ema_medium || 21,
     ema_slow: config?.ema_slow || 50,
     ema_medium_trend: config?.ema_medium_trend || 50,
     
     // RSI
+    rsi_enabled: config?.rsi_enabled ?? true,
     rsi_period: config?.rsi_period || 14,
     rsi_min_long: config?.rsi_min_long || 30,
     rsi_max_short: config?.rsi_max_short || 70,
     
     // StochRSI
+    stochrsi_enabled: config?.stochrsi_enabled ?? true,
     stochrsi_period: config?.stochrsi_period || 14,
     stochrsi_k_period: config?.stochrsi_k_period || 3,
     stochrsi_d_period: config?.stochrsi_d_period || 3,
@@ -46,26 +49,31 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     pivot_points_near_threshold: config?.pivot_points_near_threshold || 0.002,
     
     // MACD
+    macd_enabled: config?.macd_enabled ?? true,
     macd_fast: config?.macd_fast || 12,
     macd_slow: config?.macd_slow || 26,
     macd_signal: config?.macd_signal || 9,
     macd_histogram_threshold: config?.macd_histogram_threshold || 0,
     
     // Bollinger Bands
+    bb_enabled: config?.bb_enabled ?? true,
     bb_period: config?.bb_period || 20,
     bb_std_dev: config?.bb_std_dev || 2,
     
     // ATR
+    atr_enabled: config?.atr_enabled ?? true,
     atr_period: config?.atr_period || 14,
     atr_stop_loss_multiplier: config?.atr_stop_loss_multiplier || 2,
     atr_take_profit_multiplier: config?.atr_take_profit_multiplier || 3,
     atr_trailing_stop_multiplier: config?.atr_trailing_stop_multiplier || 1.5,
     
     // ADX
+    adx_enabled: config?.adx_enabled ?? true,
     adx_period: config?.adx_period || 14,
     adx_threshold: config?.adx_threshold || 25,
     
     // Volume & Signal
+    volume_enabled: config?.volume_enabled ?? true,
     volume_avg_period: config?.volume_avg_period || 20,
     signal_conditions_required: config?.signal_conditions_required || 5,
     
@@ -94,15 +102,18 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       name: config.name ?? "Default Strategy",
       enabled: config.enabled ?? true,
       // EMA
+      ema_enabled: config.ema_enabled ?? true,
       ema_fast: config.ema_fast ?? 9,
       ema_medium: config.ema_medium ?? 21,
       ema_slow: config.ema_slow ?? 50,
       ema_medium_trend: config.ema_medium_trend ?? 50,
       // RSI
+      rsi_enabled: config.rsi_enabled ?? true,
       rsi_period: config.rsi_period ?? 14,
       rsi_min_long: config.rsi_min_long ?? 30,
       rsi_max_short: config.rsi_max_short ?? 70,
       // StochRSI
+      stochrsi_enabled: config.stochrsi_enabled ?? true,
       stochrsi_period: config.stochrsi_period ?? 14,
       stochrsi_k_period: config.stochrsi_k_period ?? 3,
       stochrsi_d_period: config.stochrsi_d_period ?? 3,
@@ -114,22 +125,27 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       pivot_points_lookback: config.pivot_points_lookback ?? 24,
       pivot_points_near_threshold: config.pivot_points_near_threshold ?? 0.002,
       // MACD
+      macd_enabled: config.macd_enabled ?? true,
       macd_fast: config.macd_fast ?? 12,
       macd_slow: config.macd_slow ?? 26,
       macd_signal: config.macd_signal ?? 9,
       macd_histogram_threshold: config.macd_histogram_threshold ?? 0,
       // Bollinger Bands
+      bb_enabled: config.bb_enabled ?? true,
       bb_period: config.bb_period ?? 20,
       bb_std_dev: config.bb_std_dev ?? 2,
       // ATR
+      atr_enabled: config.atr_enabled ?? true,
       atr_period: config.atr_period ?? 14,
       atr_stop_loss_multiplier: config.atr_stop_loss_multiplier ?? 2,
       atr_take_profit_multiplier: config.atr_take_profit_multiplier ?? 3,
       atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier ?? 1.5,
       // ADX
+      adx_enabled: config.adx_enabled ?? true,
       adx_period: config.adx_period ?? 14,
       adx_threshold: config.adx_threshold ?? 25,
       // Volume & Signal
+      volume_enabled: config.volume_enabled ?? true,
       volume_avg_period: config.volume_avg_period ?? 20,
       signal_conditions_required: config.signal_conditions_required ?? 5,
       // Timeframes
@@ -223,6 +239,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           <CardDescription>Trendretning og dynamisk støtte/modstand</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
+          <div className="flex items-center space-x-2 sm:col-span-3">
+            <Switch
+              id="ema_enabled"
+              checked={formData.ema_enabled}
+              onCheckedChange={(checked) => setFormData({ ...formData, ema_enabled: checked })}
+            />
+            <Label htmlFor="ema_enabled">Aktiver EMA</Label>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="ema_fast">Hurtig EMA</Label>
             <Input
@@ -272,6 +296,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           <CardDescription>Overkøbt/Oversolgt niveau</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
+          <div className="flex items-center space-x-2 sm:col-span-3">
+            <Switch
+              id="rsi_enabled"
+              checked={formData.rsi_enabled}
+              onCheckedChange={(checked) => setFormData({ ...formData, rsi_enabled: checked })}
+            />
+            <Label htmlFor="rsi_enabled">Aktiver RSI</Label>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="rsi_period">RSI Periode</Label>
             <Input
@@ -313,6 +345,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           <CardDescription>Overkøbt/Oversolgt baseret på RSI</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-5">
+          <div className="flex items-center space-x-2 sm:col-span-5">
+            <Switch
+              id="stochrsi_enabled"
+              checked={formData.stochrsi_enabled}
+              onCheckedChange={(checked) => setFormData({ ...formData, stochrsi_enabled: checked })}
+            />
+            <Label htmlFor="stochrsi_enabled">Aktiver StochRSI</Label>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="stochrsi_period">RSI Periode</Label>
             <Input
@@ -430,6 +470,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           <CardDescription>Momentum bekræftelse</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-4">
+          <div className="flex items-center space-x-2 sm:col-span-4">
+            <Switch
+              id="macd_enabled"
+              checked={formData.macd_enabled}
+              onCheckedChange={(checked) => setFormData({ ...formData, macd_enabled: checked })}
+            />
+            <Label htmlFor="macd_enabled">Aktiver MACD</Label>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="macd_fast">Hurtig</Label>
             <Input
@@ -480,6 +528,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           <CardDescription>Volatilitet og breakouts</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="flex items-center space-x-2 sm:col-span-2">
+            <Switch
+              id="bb_enabled"
+              checked={formData.bb_enabled}
+              onCheckedChange={(checked) => setFormData({ ...formData, bb_enabled: checked })}
+            />
+            <Label htmlFor="bb_enabled">Aktiver Bollinger Bands</Label>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="bb_period">Periode</Label>
             <Input
@@ -510,6 +566,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           <CardDescription>Stop-loss og trailing stop multiplikatorer</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
+          <div className="flex items-center space-x-2 sm:col-span-3">
+            <Switch
+              id="atr_enabled"
+              checked={formData.atr_enabled}
+              onCheckedChange={(checked) => setFormData({ ...formData, atr_enabled: checked })}
+            />
+            <Label htmlFor="atr_enabled">Aktiver ATR</Label>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="atr_period">ATR Periode</Label>
             <Input
@@ -562,6 +626,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           <CardDescription>Kun trades ved ADX over tærskel</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="flex items-center space-x-2 sm:col-span-2">
+            <Switch
+              id="adx_enabled"
+              checked={formData.adx_enabled}
+              onCheckedChange={(checked) => setFormData({ ...formData, adx_enabled: checked })}
+            />
+            <Label htmlFor="adx_enabled">Aktiver ADX</Label>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="adx_period">ADX Periode</Label>
             <Input
@@ -592,6 +664,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           <CardDescription>Volumen analyse og signal krav</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="flex items-center space-x-2 sm:col-span-2">
+            <Switch
+              id="volume_enabled"
+              checked={formData.volume_enabled}
+              onCheckedChange={(checked) => setFormData({ ...formData, volume_enabled: checked })}
+            />
+            <Label htmlFor="volume_enabled">Aktiver Volume Check</Label>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="volume_avg_period">Volumen Gennemsnit Periode</Label>
             <Input
