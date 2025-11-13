@@ -604,7 +604,9 @@ async function getAccountBalance() {
   }
 
   const account = await response.json();
-  return parseFloat(account.totalMarginBalance || '0');
+  // Use availableBalance instead of totalMarginBalance for accurate position sizing
+  // totalMarginBalance includes unrealized PnL which can't be used for new trades
+  return parseFloat(account.availableBalance || '0');
 }
 
 serve(async (req) => {
