@@ -390,7 +390,9 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   const emaMedium = calculateEMA(closes, config.ema_medium);
   const emaSlow = calculateEMA(closes, config.ema_slow);
   
-  const rsi = calculateRSI(closes, config.rsi_period);
+  const rsiCurrent = calculateRSI(closes, config.rsi_period);
+  const rsiPrevious = calculateRSI(closes.slice(0, -1), config.rsi_period);
+  
   const stochRSI = calculateStochRSI(closes, config.stochrsi_period, config.stochrsi_k_period, config.stochrsi_d_period);
   const macd = calculateMACD(closes, config.macd_fast, config.macd_slow, config.macd_signal);
   const atr = calculateATR(highs, lows, closes, config.atr_period);
@@ -424,24 +426,30 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
     Math.abs(currentPrice - pivotPoints.pp) / currentPrice < 0.005
   );
   
-  // LONG signal
+  // LONG signal - RSI crossover detection
+  const rsiLongThreshold = config.rsi_min_long || 30;
+  const rsiCrossedUpForLong = rsiCurrent > rsiLongThreshold && rsiPrevious <= rsiLongThreshold;
+  
   const longConditions = [
     currentPrice > emaFastCurrent,
     emaFastCurrent > emaMediumCurrent,
     emaMediumCurrent > emaSlowCurrent,
-    rsi > (config.rsi_min_long || 30),
+    rsiCrossedUpForLong, // RSI krydser OP over threshold
     stochRSI.k > config.stochrsi_oversold && stochRSI.k < config.stochrsi_overbought,
     macd.histogram > config.macd_histogram_threshold,
     adx > config.adx_threshold,
     !config.pivot_points_enabled || nearSupport, // Pivot point confirmation
   ];
   
-  // SHORT signal
+  // SHORT signal - RSI crossunder detection
+  const rsiShortThreshold = config.rsi_max_short || 70;
+  const rsiCrossedDownForShort = rsiCurrent < rsiShortThreshold && rsiPrevious >= rsiShortThreshold;
+  
   const shortConditions = [
     currentPrice < emaFastCurrent,
     emaFastCurrent < emaMediumCurrent,
     emaMediumCurrent < emaSlowCurrent,
-    rsi < (config.rsi_max_short || 70),
+    rsiCrossedDownForShort, // RSI krydser NED under threshold
     stochRSI.k < config.stochrsi_overbought && stochRSI.k > config.stochrsi_oversold,
     macd.histogram < -config.macd_histogram_threshold,
     adx > config.adx_threshold,
@@ -459,7 +467,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
       emaFast: emaFastCurrent,
       emaMedium: emaMediumCurrent,
       emaSlow: emaSlowCurrent,
-      rsi,
+      rsi: rsiCurrent,
       stochRSI_k: stochRSI.k,
       stochRSI_d: stochRSI.d,
       macd: macd.histogram,
