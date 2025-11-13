@@ -10,6 +10,7 @@ interface IndicatorConfig {
   ema_fast: number;
   ema_medium: number;
   ema_slow: number;
+  ema_medium_trend: number;
   rsi_period: number;
   rsi_min_long: number;
   rsi_max_short: number;
@@ -46,6 +47,7 @@ interface IndicatorConfig {
   scan_interval: string;
   trend_timeframe: string;
   higher_trend_timeframe: string;
+  klines_limit: number;
 }
 
 // Calculate strategy hash from config
@@ -55,6 +57,7 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
     ema_fast: config.ema_fast,
     ema_medium: config.ema_medium,
     ema_slow: config.ema_slow,
+    ema_medium_trend: config.ema_medium_trend,
     rsi_period: config.rsi_period,
     rsi_min_long: config.rsi_min_long,
     rsi_max_short: config.rsi_max_short,
@@ -91,6 +94,7 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
     scan_interval: config.scan_interval,
     trend_timeframe: config.trend_timeframe,
     higher_trend_timeframe: config.higher_trend_timeframe,
+    klines_limit: config.klines_limit,
   });
   
   const msgUint8 = new TextEncoder().encode(configStr);
@@ -105,15 +109,21 @@ function analyzeMediumTrend(klines: any[], config: IndicatorConfig): 'BULLISH' |
   const closes = klines.map(k => k.close);
   const currentPrice = closes[closes.length - 1];
   
-  // Calculate slow EMA for trend analysis
-  const emaSlow = calculateEMA(closes, config.ema_slow);
-  const currentEmaSlow = emaSlow[emaSlow.length - 1];
+  // Calculate EMA for medium trend analysis (f.eks. EMA50)
+  const emaMediumTrend = calculateEMA(closes, config.ema_medium_trend);
+  const currentEmaMediumTrend = emaMediumTrend[emaMediumTrend.length - 1];
+  const previousEmaMediumTrend = emaMediumTrend[emaMediumTrend.length - 2];
   
-  // Trend filter baseret på pris vs Langsom EMA
-  // LONG kun hvis pris > EMA slow
-  // SHORT kun hvis pris < EMA slow
-  if (currentPrice > currentEmaSlow) return 'BULLISH';
-  if (currentPrice < currentEmaSlow) return 'BEARISH';
+  // Tjek EMA retning
+  const emaIsRising = currentEmaMediumTrend > previousEmaMediumTrend;
+  const emaIsFalling = currentEmaMediumTrend < previousEmaMediumTrend;
+  
+  // LONG kun hvis: Pris > EMA OG EMA er stigende
+  if (currentPrice > currentEmaMediumTrend && emaIsRising) return 'BULLISH';
+  
+  // SHORT kun hvis: Pris < EMA OG EMA er faldende
+  if (currentPrice < currentEmaMediumTrend && emaIsFalling) return 'BEARISH';
+  
   return 'NEUTRAL';
 }
 
@@ -784,9 +794,9 @@ serve(async (req) => {
       for (const symbol of symbols) {
         try {
           // Fetch klines for scan interval, trend timeframe, and higher trend timeframe
-          const scanKlines = await fetchKlines(symbol, config.scan_interval, 100);
-          const trendKlines = await fetchKlines(symbol, config.trend_timeframe, 100);
-          const higherTrendKlines = await fetchKlines(symbol, config.higher_trend_timeframe, 100);
+          const scanKlines = await fetchKlines(symbol, config.scan_interval, config.klines_limit);
+          const trendKlines = await fetchKlines(symbol, config.trend_timeframe, config.klines_limit);
+          const higherTrendKlines = await fetchKlines(symbol, config.higher_trend_timeframe, config.klines_limit);
           
           // Determine trend on both timeframes
           const trend = analyzeMediumTrend(trendKlines, config);
