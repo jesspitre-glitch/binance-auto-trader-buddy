@@ -7,13 +7,16 @@ const corsHeaders = {
 };
 
 interface IndicatorConfig {
+  ema_enabled: boolean;
   ema_fast: number;
   ema_medium: number;
   ema_slow: number;
   ema_medium_trend: number;
+  rsi_enabled: boolean;
   rsi_period: number;
   rsi_min_long: number;
   rsi_max_short: number;
+  stochrsi_enabled: boolean;
   stochrsi_period: number;
   stochrsi_k_period: number;
   stochrsi_d_period: number;
@@ -23,18 +26,23 @@ interface IndicatorConfig {
   pivot_points_timeframe: string;
   pivot_points_lookback: number;
   pivot_points_near_threshold: number;
+  macd_enabled: boolean;
   macd_fast: number;
   macd_slow: number;
   macd_signal: number;
   macd_histogram_threshold: number;
+  bb_enabled: boolean;
   bb_period: number;
   bb_std_dev: number;
+  atr_enabled: boolean;
   atr_period: number;
   atr_stop_loss_multiplier: number;
   atr_take_profit_multiplier: number;
   atr_trailing_stop_multiplier: number;
+  adx_enabled: boolean;
   adx_period: number;
   adx_threshold: number;
+  volume_enabled: boolean;
   volume_avg_period: number;
   signal_conditions_required: number;
   position_size_percent: number;
@@ -54,13 +62,16 @@ interface IndicatorConfig {
 async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
   // Create a stable string representation of ALL config values (excluding id, user_id, name, created_at, updated_at, enabled)
   const configStr = JSON.stringify({
+    ema_enabled: config.ema_enabled,
     ema_fast: config.ema_fast,
     ema_medium: config.ema_medium,
     ema_slow: config.ema_slow,
     ema_medium_trend: config.ema_medium_trend,
+    rsi_enabled: config.rsi_enabled,
     rsi_period: config.rsi_period,
     rsi_min_long: config.rsi_min_long,
     rsi_max_short: config.rsi_max_short,
+    stochrsi_enabled: config.stochrsi_enabled,
     stochrsi_period: config.stochrsi_period,
     stochrsi_k_period: config.stochrsi_k_period,
     stochrsi_d_period: config.stochrsi_d_period,
@@ -70,18 +81,23 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
     pivot_points_timeframe: config.pivot_points_timeframe,
     pivot_points_lookback: config.pivot_points_lookback,
     pivot_points_near_threshold: config.pivot_points_near_threshold,
+    macd_enabled: config.macd_enabled,
     macd_fast: config.macd_fast,
     macd_slow: config.macd_slow,
     macd_signal: config.macd_signal,
     macd_histogram_threshold: config.macd_histogram_threshold,
+    bb_enabled: config.bb_enabled,
     bb_period: config.bb_period,
     bb_std_dev: config.bb_std_dev,
+    atr_enabled: config.atr_enabled,
     atr_period: config.atr_period,
     atr_stop_loss_multiplier: config.atr_stop_loss_multiplier,
     atr_take_profit_multiplier: config.atr_take_profit_multiplier,
     atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier,
+    adx_enabled: config.adx_enabled,
     adx_period: config.adx_period,
     adx_threshold: config.adx_threshold,
+    volume_enabled: config.volume_enabled,
     volume_avg_period: config.volume_avg_period,
     signal_conditions_required: config.signal_conditions_required,
     position_size_percent: config.position_size_percent,
@@ -446,48 +462,99 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   const pivotClose = closes[closes.length - (config.pivot_points_lookback + 1)] || closes[0];
   const pivotPoints = calculatePivotPoints(pivotHigh, pivotLow, pivotClose);
   
-  // PIVOT LOGIC: Block trades near key levels
-  // LONG må IKKE åbnes hvis pris er tæt på R1 eller R2 (resistance)
-  // SHORT må IKKE åbnes hvis pris er tæt på S1 eller S2 (support)
-  const nearResistance = config.pivot_points_enabled && (
-    Math.abs(currentPrice - pivotPoints.r1) / currentPrice < config.pivot_points_near_threshold ||
-    Math.abs(currentPrice - pivotPoints.r2) / currentPrice < config.pivot_points_near_threshold
-  );
+  // Build conditions arrays dynamically based on enabled indicators
+  const longConditions: boolean[] = [];
+  const shortConditions: boolean[] = [];
   
-  const nearSupport = config.pivot_points_enabled && (
-    Math.abs(currentPrice - pivotPoints.s1) / currentPrice < config.pivot_points_near_threshold ||
-    Math.abs(currentPrice - pivotPoints.s2) / currentPrice < config.pivot_points_near_threshold
-  );
+  // EMA Trend (hvis enabled)
+  if (config.ema_enabled) {
+    const emaFastPrev = emaFast[emaFast.length - 2];
+    const emaMediumPrev = emaMedium[emaMedium.length - 2];
+    const emaSlowPrev = emaSlow[emaSlow.length - 2];
+    
+    // LONG: Hurtig > Medium > Slow og prisen stiger
+    const emaLongTrend = emaFastCurrent > emaMediumCurrent && emaMediumCurrent > emaSlowCurrent && currentPrice > closes[closes.length - 2];
+    longConditions.push(emaLongTrend);
+    
+    // SHORT: Hurtig < Medium < Slow og prisen falder
+    const emaShortTrend = emaFastCurrent < emaMediumCurrent && emaMediumCurrent < emaSlowCurrent && currentPrice < closes[closes.length - 2];
+    shortConditions.push(emaShortTrend);
+  }
   
-  // LONG signal - RSI crossover detection + MACD farveskift
-  const rsiLongThreshold = config.rsi_min_long;
-  const rsiCrossedUpForLong = rsiCurrent > rsiLongThreshold && rsiPrevious <= rsiLongThreshold;
+  // RSI Crossover (hvis enabled)
+  if (config.rsi_enabled) {
+    const rsiCrossedUpForLong = rsiCurrent > config.rsi_min_long && rsiPrevious <= config.rsi_min_long;
+    longConditions.push(rsiCrossedUpForLong);
+    
+    const rsiCrossedDownForShort = rsiCurrent < config.rsi_max_short && rsiPrevious >= config.rsi_max_short;
+    shortConditions.push(rsiCrossedDownForShort);
+  }
   
-  // MACD histogram farveskift: fra rød (negativ) til grøn (positiv)
-  const macdColorChangeToGreen = macd.histogram > 0 && macdPrevious.histogram <= 0;
+  // StochRSI (hvis enabled)
+  if (config.stochrsi_enabled) {
+    // LONG: StochRSI under oversold niveau
+    const stochRSILong = stochRSI.k < config.stochrsi_oversold;
+    longConditions.push(stochRSILong);
+    
+    // SHORT: StochRSI over overbought niveau
+    const stochRSIShort = stochRSI.k > config.stochrsi_overbought;
+    shortConditions.push(stochRSIShort);
+  }
   
-  // Blokér LONG hvis tæt på resistance
-  const longConditions = [
-    rsiCrossedUpForLong, // RSI krydser OP over threshold
-    macdColorChangeToGreen, // MACD histogram skifter fra rød til grøn
-    adx > config.adx_threshold, // ADX trendstyrke
-    !nearResistance, // Blokér hvis tæt på R1 eller R2
-  ];
+  // MACD Histogram (hvis enabled)
+  if (config.macd_enabled) {
+    // LONG: Histogram skifter fra rød til grøn
+    const macdColorChangeToGreen = macd.histogram > config.macd_histogram_threshold && macdPrevious.histogram <= config.macd_histogram_threshold;
+    longConditions.push(macdColorChangeToGreen);
+    
+    // SHORT: Histogram skifter fra grøn til rød
+    const macdColorChangeToRed = macd.histogram < -config.macd_histogram_threshold && macdPrevious.histogram >= -config.macd_histogram_threshold;
+    shortConditions.push(macdColorChangeToRed);
+  }
   
-  // SHORT signal - RSI crossunder detection + MACD farveskift
-  const rsiShortThreshold = config.rsi_max_short;
-  const rsiCrossedDownForShort = rsiCurrent < rsiShortThreshold && rsiPrevious >= rsiShortThreshold;
+  // Bollinger Bands (hvis enabled)
+  if (config.bb_enabled) {
+    // LONG: Pris nær nedre bånd (køb når billigt)
+    const nearLowerBand = currentPrice <= bb.lower * 1.01; // Inden for 1% af nedre bånd
+    longConditions.push(nearLowerBand);
+    
+    // SHORT: Pris nær øvre bånd (sælg når dyrt)
+    const nearUpperBand = currentPrice >= bb.upper * 0.99; // Inden for 1% af øvre bånd
+    shortConditions.push(nearUpperBand);
+  }
   
-  // MACD histogram farveskift: fra grøn (positiv) til rød (negativ)
-  const macdColorChangeToRed = macd.histogram < 0 && macdPrevious.histogram >= 0;
+  // ADX Trend Strength (hvis enabled)
+  if (config.adx_enabled) {
+    const strongTrend = adx > config.adx_threshold;
+    longConditions.push(strongTrend);
+    shortConditions.push(strongTrend);
+  }
   
-  // Blokér SHORT hvis tæt på support
-  const shortConditions = [
-    rsiCrossedDownForShort, // RSI krydser NED under threshold
-    macdColorChangeToRed, // MACD histogram skifter fra grøn til rød
-    adx > config.adx_threshold, // ADX trendstyrke
-    !nearSupport, // Blokér hvis tæt på S1 eller S2
-  ];
+  // Volume (hvis enabled)
+  if (config.volume_enabled) {
+    const highVolume = currentVolume > avgVolume;
+    longConditions.push(highVolume);
+    shortConditions.push(highVolume);
+  }
+  
+  // Pivot Points - Blokerer trades nær key levels (hvis enabled)
+  if (config.pivot_points_enabled) {
+    const nearResistance = (
+      Math.abs(currentPrice - pivotPoints.r1) / currentPrice < config.pivot_points_near_threshold ||
+      Math.abs(currentPrice - pivotPoints.r2) / currentPrice < config.pivot_points_near_threshold
+    );
+    
+    const nearSupport = (
+      Math.abs(currentPrice - pivotPoints.s1) / currentPrice < config.pivot_points_near_threshold ||
+      Math.abs(currentPrice - pivotPoints.s2) / currentPrice < config.pivot_points_near_threshold
+    );
+    
+    // LONG blokeres hvis tæt på resistance
+    longConditions.push(!nearResistance);
+    
+    // SHORT blokeres hvis tæt på support
+    shortConditions.push(!nearSupport);
+  }
   
   const requiredConditions = config.signal_conditions_required;
   const longSignal = longConditions.filter(c => c).length >= requiredConditions;
