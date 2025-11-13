@@ -427,7 +427,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   );
   
   // LONG signal - RSI crossover detection
-  const rsiLongThreshold = config.rsi_min_long || 30;
+  const rsiLongThreshold = config.rsi_min_long;
   const rsiCrossedUpForLong = rsiCurrent > rsiLongThreshold && rsiPrevious <= rsiLongThreshold;
   
   const longConditions = [
@@ -442,7 +442,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   ];
   
   // SHORT signal - RSI crossunder detection
-  const rsiShortThreshold = config.rsi_max_short || 70;
+  const rsiShortThreshold = config.rsi_max_short;
   const rsiCrossedDownForShort = rsiCurrent < rsiShortThreshold && rsiPrevious >= rsiShortThreshold;
   
   const shortConditions = [
@@ -456,7 +456,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
     !config.pivot_points_enabled || nearResistance, // Pivot point confirmation
   ];
   
-  const requiredConditions = config.signal_conditions_required || 5;
+  const requiredConditions = config.signal_conditions_required;
   const longSignal = longConditions.filter(c => c).length >= requiredConditions;
   const shortSignal = shortConditions.filter(c => c).length >= requiredConditions;
   
