@@ -31,6 +31,7 @@ interface IndicatorConfig {
   bb_std_dev: number;
   atr_period: number;
   atr_stop_loss_multiplier: number;
+  atr_take_profit_multiplier: number;
   atr_trailing_stop_multiplier: number;
   adx_period: number;
   adx_threshold: number;
@@ -42,7 +43,6 @@ interface IndicatorConfig {
   max_exposure_percent: number;
   daily_loss_limit_percent: number;
   max_position_duration_minutes: number;
-  risk_reward_ratio: number;
   leverage: number;
   scan_interval: string;
   trend_timeframe: string;
@@ -78,6 +78,7 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
     bb_std_dev: config.bb_std_dev,
     atr_period: config.atr_period,
     atr_stop_loss_multiplier: config.atr_stop_loss_multiplier,
+    atr_take_profit_multiplier: config.atr_take_profit_multiplier,
     atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier,
     adx_period: config.adx_period,
     adx_threshold: config.adx_threshold,
@@ -89,7 +90,6 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
     max_exposure_percent: config.max_exposure_percent,
     daily_loss_limit_percent: config.daily_loss_limit_percent,
     max_position_duration_minutes: config.max_position_duration_minutes,
-    risk_reward_ratio: config.risk_reward_ratio,
     leverage: config.leverage,
     scan_interval: config.scan_interval,
     trend_timeframe: config.trend_timeframe,
@@ -515,8 +515,8 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
       ? currentPrice - (atr * config.atr_stop_loss_multiplier)
       : currentPrice + (atr * config.atr_stop_loss_multiplier),
     takeProfit: longSignal
-      ? currentPrice + (atr * config.atr_stop_loss_multiplier * config.risk_reward_ratio)
-      : currentPrice - (atr * config.atr_stop_loss_multiplier * config.risk_reward_ratio),
+      ? currentPrice + (atr * config.atr_take_profit_multiplier)
+      : currentPrice - (atr * config.atr_take_profit_multiplier),
   };
 }
 
