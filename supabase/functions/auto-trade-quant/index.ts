@@ -465,45 +465,9 @@ async function placeOrder(
 
   const orderData = await orderResponse.json();
   
-  // Set stop loss
-  const slParams = new URLSearchParams({
-    symbol,
-    side: side === 'BUY' ? 'SELL' : 'BUY',
-    type: 'STOP_MARKET',
-    stopPrice: stopLoss.toFixed(pricePrecision),
-    closePosition: 'true',
-    timestamp: Date.now().toString(),
-  });
-
-  const slSignature = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(apiSecret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  ).then(key => 
-    crypto.subtle.sign('HMAC', key, new TextEncoder().encode(slParams.toString()))
-  ).then(sig => 
-    Array.from(new Uint8Array(sig))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('')
-  );
-
-  slParams.append('signature', slSignature);
-
-  await fetch(
-    `https://fapi.binance.com/fapi/v1/order?${slParams.toString()}`,
-    {
-      method: 'POST',
-      headers: {
-        'X-MBX-APIKEY': apiKey,
-      },
-    }
-  );
-
-  // NOTE: NO TAKE_PROFIT order is placed on Binance
-  // TP + Trailing Stop is handled entirely by monitor-positions software logic
-  console.log(`Position opened with SL only - TP/Trailing handled by software`);
+  // NOTE: NO stop loss or take profit orders are placed on Binance
+  // All SL/TP/Trailing logic is handled entirely by monitor-positions software
+  console.log(`Market order placed - all SL/TP logic handled by software`);
 
   return orderData;
 }
