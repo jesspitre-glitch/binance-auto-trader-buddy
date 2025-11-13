@@ -38,6 +38,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     stochrsi_overbought: config?.stochrsi_overbought || 80,
     stochrsi_oversold: config?.stochrsi_oversold || 20,
     
+    // Pivot Points
+    pivot_points_enabled: config?.pivot_points_enabled ?? true,
+    pivot_points_timeframe: config?.pivot_points_timeframe || "1d",
+    
     // MACD
     macd_fast: config?.macd_fast || 12,
     macd_slow: config?.macd_slow || 26,
@@ -100,6 +104,9 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       stochrsi_d_period: config.stochrsi_d_period ?? 3,
       stochrsi_overbought: config.stochrsi_overbought ?? 80,
       stochrsi_oversold: config.stochrsi_oversold ?? 20,
+      // Pivot Points
+      pivot_points_enabled: config.pivot_points_enabled ?? true,
+      pivot_points_timeframe: config.pivot_points_timeframe ?? "1d",
       // MACD
       macd_fast: config.macd_fast ?? 12,
       macd_slow: config.macd_slow ?? 26,
@@ -340,6 +347,41 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               onChange={(e) => setFormData({ ...formData, stochrsi_oversold: parseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Oversolgt niveau (standard 20)</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Pivot Points */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Pivot Points</CardTitle>
+          <CardDescription>Support og resistance niveauer</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="pivot_points_enabled"
+              checked={formData.pivot_points_enabled}
+              onCheckedChange={(checked) => setFormData({ ...formData, pivot_points_enabled: checked })}
+            />
+            <Label htmlFor="pivot_points_enabled">Brug Pivot Points</Label>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="pivot_points_timeframe">Tidsramme</Label>
+            <Select
+              value={formData.pivot_points_timeframe}
+              onValueChange={(value) => setFormData({ ...formData, pivot_points_timeframe: value })}
+            >
+              <SelectTrigger id="pivot_points_timeframe">
+                <SelectValue placeholder="Vælg tidsramme" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1d">Daily</SelectItem>
+                <SelectItem value="1w">Weekly</SelectItem>
+                <SelectItem value="1M">Monthly</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Tidsramme for pivot points beregning</p>
           </div>
         </CardContent>
       </Card>
