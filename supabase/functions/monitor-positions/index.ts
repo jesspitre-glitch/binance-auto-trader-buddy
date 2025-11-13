@@ -6,13 +6,45 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-async function getCurrentPrice(symbol: string): Promise<number> {
-  const response = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch price for ${symbol}`);
+async function getCurrentPrice(symbol: string, supabaseClient: any): Promise<number> {
+  // Try to get price from cache first (much faster, no rate limits)
+  const { data: cached, error: cacheError } = await supabaseClient
+    .from('price_cache')
+    .select('price, updated_at')
+    .eq('symbol', symbol)
+    .single();
+  
+  // Use cached price if it's less than 5 seconds old
+  if (cached && !cacheError) {
+    const age = Date.now() - new Date(cached.updated_at).getTime();
+    if (age < 5000) {
+      return parseFloat(cached.price);
+    }
   }
-  const data = await response.json();
-  return parseFloat(data.price);
+  
+  // Fallback to API if cache miss or stale
+  try {
+    const response = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch price for ${symbol}`);
+    }
+    const data = await response.json();
+    const price = parseFloat(data.price);
+    
+    // Update cache for next time
+    await supabaseClient
+      .from('price_cache')
+      .upsert({ symbol, price, updated_at: new Date().toISOString() });
+    
+    return price;
+  } catch (error) {
+    // If API fails but we have cached data, use it even if stale
+    if (cached) {
+      console.warn(`API failed for ${symbol}, using stale cache (age: ${Date.now() - new Date(cached.updated_at).getTime()}ms)`);
+      return parseFloat(cached.price);
+    }
+    throw error;
+  }
 }
 
 async function createSignature(queryString: string, apiSecret: string): Promise<string> {
@@ -220,8 +252,8 @@ serve(async (req) => {
 
     for (const position of positions) {
       try {
-        // Get current price
-        const currentPrice = await getCurrentPrice(position.symbol);
+        // Get current price from cache (much faster, avoids rate limits)
+        const currentPrice = await getCurrentPrice(position.symbol, supabaseClient);
         
         // Update current price in database
         await supabaseClient

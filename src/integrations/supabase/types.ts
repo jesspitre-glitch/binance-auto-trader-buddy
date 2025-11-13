@@ -212,6 +212,30 @@ export type Database = {
         }
         Relationships: []
       }
+      price_cache: {
+        Row: {
+          change_24h: number | null
+          price: number
+          symbol: string
+          updated_at: string
+          volume: number | null
+        }
+        Insert: {
+          change_24h?: number | null
+          price: number
+          symbol: string
+          updated_at?: string
+          volume?: number | null
+        }
+        Update: {
+          change_24h?: number | null
+          price?: number
+          symbol?: string
+          updated_at?: string
+          volume?: number | null
+        }
+        Relationships: []
+      }
       scan_results: {
         Row: {
           action_taken: string | null

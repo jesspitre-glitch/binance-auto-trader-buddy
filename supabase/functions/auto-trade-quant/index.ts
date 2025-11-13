@@ -192,7 +192,18 @@ function calculateADX(high: number[], low: number[], close: number[], period: nu
   return dx;
 }
 
+// Cache for symbol filters and USDC symbols to reduce API calls
+const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+let symbolFiltersCache: { data: Record<string, SymbolFilters>, timestamp: number } | null = null;
+let usdcSymbolsCache: { data: string[], timestamp: number } | null = null;
+
 async function fetchAllUSDCSymbols(): Promise<string[]> {
+  // Return cached data if still fresh
+  if (usdcSymbolsCache && Date.now() - usdcSymbolsCache.timestamp < CACHE_DURATION_MS) {
+    console.log(`Using cached USDC symbols (age: ${Date.now() - usdcSymbolsCache.timestamp}ms)`);
+    return usdcSymbolsCache.data;
+  }
+
   try {
     const response = await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo');
     if (!response.ok) {
@@ -209,9 +220,21 @@ async function fetchAllUSDCSymbols(): Promise<string[]> {
       .map((s: any) => s.symbol);
     
     console.log(`Found ${usdcSymbols.length} USDC perpetual futures pairs`);
+    
+    // Update cache
+    usdcSymbolsCache = {
+      data: usdcSymbols,
+      timestamp: Date.now()
+    };
+    
     return usdcSymbols;
   } catch (error) {
     console.error('Error fetching USDC symbols:', error);
+    // Return cached data if available, even if stale
+    if (usdcSymbolsCache) {
+      console.log('Using stale cache due to API error');
+      return usdcSymbolsCache.data;
+    }
     // Fallback to known pairs if API fails
     return ['BTCUSDC', 'ETHUSDC', 'BNBUSDC', 'SOLUSDC'];
   }
@@ -257,10 +280,23 @@ function getPrecisionFromStep(step: number): number {
 }
 
 async function fetchSymbolFilters(): Promise<Record<string, SymbolFilters>> {
+  // Return cached data if still fresh
+  if (symbolFiltersCache && Date.now() - symbolFiltersCache.timestamp < CACHE_DURATION_MS) {
+    console.log(`Using cached symbol filters (age: ${Date.now() - symbolFiltersCache.timestamp}ms)`);
+    return symbolFiltersCache.data;
+  }
+
   const map: Record<string, SymbolFilters> = {};
   try {
     const response = await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo');
-    if (!response.ok) return map;
+    if (!response.ok) {
+      // Return cached data if API fails
+      if (symbolFiltersCache) {
+        console.log('Using stale filter cache due to API error');
+        return symbolFiltersCache.data;
+      }
+      return map;
+    }
     const data = await response.json();
     for (const s of data.symbols) {
       if (s.quoteAsset !== 'USDC' || s.status !== 'TRADING' || s.contractType !== 'PERPETUAL') continue;
@@ -273,8 +309,20 @@ async function fetchSymbolFilters(): Promise<Record<string, SymbolFilters>> {
         tickSize: parseFloat(price.tickSize),
       };
     }
+    
+    // Update cache
+    symbolFiltersCache = {
+      data: map,
+      timestamp: Date.now()
+    };
+    
   } catch (e) {
     console.error('Failed to fetch symbol filters', e);
+    // Return cached data if available
+    if (symbolFiltersCache) {
+      console.log('Using stale filter cache due to exception');
+      return symbolFiltersCache.data;
+    }
   }
   return map;
 }

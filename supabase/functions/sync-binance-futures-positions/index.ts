@@ -77,11 +77,43 @@ async function getBinancePositions(apiKey: string, apiSecret: string) {
   return positions.filter((p: any) => parseFloat(p.positionAmt) !== 0);
 }
 
-async function getCurrentPrice(symbol: string): Promise<number> {
-  const res = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
-  if (!res.ok) return NaN;
-  const data = await res.json();
-  return parseFloat(data.price);
+async function getCurrentPrice(symbol: string, supabaseClient: any): Promise<number> {
+  // Try to get price from cache first (much faster, no rate limits)
+  const { data: cached, error: cacheError } = await supabaseClient
+    .from('price_cache')
+    .select('price, updated_at')
+    .eq('symbol', symbol)
+    .single();
+  
+  // Use cached price if it's less than 5 seconds old
+  if (cached && !cacheError) {
+    const age = Date.now() - new Date(cached.updated_at).getTime();
+    if (age < 5000) {
+      return parseFloat(cached.price);
+    }
+  }
+  
+  // Fallback to API if cache miss or stale
+  try {
+    const res = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
+    if (!res.ok) return NaN;
+    const data = await res.json();
+    const price = parseFloat(data.price);
+    
+    // Update cache for next time
+    await supabaseClient
+      .from('price_cache')
+      .upsert({ symbol, price, updated_at: new Date().toISOString() });
+    
+    return price;
+  } catch (error) {
+    // If API fails but we have cached data, use it even if stale
+    if (cached) {
+      console.warn(`API failed for ${symbol}, using stale cache`);
+      return parseFloat(cached.price);
+    }
+    return NaN;
+  }
 }
 
 // Try to detect the actual close order type from Binance (TP/SL/Trailing)
@@ -249,7 +281,7 @@ serve(async (req) => {
             console.log(`Closing duplicate position ${duplicate.symbol} (ID: ${duplicate.id})`);
             
             // Fetch a current price snapshot to log history
-            const exitPrice = await getCurrentPrice(duplicate.symbol);
+            const exitPrice = await getCurrentPrice(duplicate.symbol, supabaseClient);
             const qty = Number(duplicate.quantity) || 0;
             const entry = Number(duplicate.entry_price) || 0;
             const sideDup = duplicate.side as 'LONG' | 'SHORT';
@@ -331,7 +363,7 @@ serve(async (req) => {
             const nowIso = new Date().toISOString();
 
             // Best-effort snapshot price for history
-            const exitPrice = await getCurrentPrice(dbPos.symbol);
+            const exitPrice = await getCurrentPrice(dbPos.symbol, supabaseClient);
             const qty = Number(dbPos.quantity) || 0;
             const entry = Number(dbPos.entry_price) || 0;
             const sideDb = dbPos.side as 'LONG' | 'SHORT';
