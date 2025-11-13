@@ -159,31 +159,40 @@ export const PositionManager = () => {
                       
                       <div className="text-sm space-y-1">
                         <div>SL: <span className="font-mono">${position.stop_loss}</span></div>
-                        <div>TP: <span className="font-mono">${position.take_profit}</span></div>
+                        <div>TP: <span className="font-mono">${position.take_profit || 'Ingen'}</span></div>
                         {position.trailing_stop && (() => {
                           // Trailing stop is only active if TP has been reached
                           const currentPrice = livePrices[position.symbol] ?? position.current_price ?? position.entry_price;
-                          const tpReached = position.side === "LONG"
+                          const tpReached = position.take_profit && (position.side === "LONG"
                             ? currentPrice >= Number(position.take_profit)
-                            : currentPrice <= Number(position.take_profit);
+                            : currentPrice <= Number(position.take_profit));
+                          
+                          const trailingPercent = position.trailing_stop_percent || 2.0;
                           
                           return (
-                            <>
+                            <div className="border-t pt-2 mt-2 space-y-1">
                               <div className="flex items-center gap-2">
-                                <span>Trail:</span>
-                                <span className="font-mono">${Number(position.trailing_stop).toFixed(4)}</span>
-                                {tpReached && (
-                                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-profit/10 text-profit border-profit/20">
+                                <span className="text-xs font-semibold">Trailing Stop:</span>
+                                {tpReached ? (
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-profit/10 text-profit border-profit/20">
                                     AKTIV
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground border-border">
+                                    VENTER
                                   </Badge>
                                 )}
                               </div>
-                              {tpReached && (
+                              <div className="text-xs">
+                                Stop: <span className="font-mono">${Number(position.trailing_stop).toFixed(4)}</span>
+                                <span className="text-muted-foreground ml-1">(-{trailingPercent}%)</span>
+                              </div>
+                              {tpReached && position.peak_price && (
                                 <div className="text-xs text-muted-foreground">
                                   Peak: <span className="font-mono">${Number(position.peak_price).toFixed(4)}</span>
                                 </div>
                               )}
-                            </>
+                            </div>
                           );
                         })()}
                       </div>
