@@ -417,6 +417,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   
   const stochRSI = calculateStochRSI(closes, config.stochrsi_period, config.stochrsi_k_period, config.stochrsi_d_period);
   const macd = calculateMACD(closes, config.macd_fast, config.macd_slow, config.macd_signal);
+  const macdPrevious = calculateMACD(closes.slice(0, -1), config.macd_fast, config.macd_slow, config.macd_signal);
   const atr = calculateATR(highs, lows, closes, config.atr_period);
   const bb = calculateBollingerBands(closes, config.bb_period, config.bb_std_dev);
   const adx = calculateADX(highs, lows, closes, config.adx_period);
@@ -448,34 +449,30 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
     Math.abs(currentPrice - pivotPoints.pp) / currentPrice < config.pivot_points_near_threshold
   );
   
-  // LONG signal - RSI crossover detection
+  // LONG signal - RSI crossover detection + MACD farveskift
   const rsiLongThreshold = config.rsi_min_long;
   const rsiCrossedUpForLong = rsiCurrent > rsiLongThreshold && rsiPrevious <= rsiLongThreshold;
   
+  // MACD histogram farveskift: fra rød (negativ) til grøn (positiv)
+  const macdColorChangeToGreen = macd.histogram > 0 && macdPrevious.histogram <= 0;
+  
   const longConditions = [
-    currentPrice > emaFastCurrent,
-    emaFastCurrent > emaMediumCurrent,
-    emaMediumCurrent > emaSlowCurrent,
     rsiCrossedUpForLong, // RSI krydser OP over threshold
-    stochRSI.k > config.stochrsi_oversold && stochRSI.k < config.stochrsi_overbought,
-    macd.histogram > config.macd_histogram_threshold,
-    adx > config.adx_threshold,
-    !config.pivot_points_enabled || nearSupport, // Pivot point confirmation
+    macdColorChangeToGreen, // MACD histogram skifter fra rød til grøn
+    adx > config.adx_threshold, // ADX trendstyrke
   ];
   
-  // SHORT signal - RSI crossunder detection
+  // SHORT signal - RSI crossunder detection + MACD farveskift
   const rsiShortThreshold = config.rsi_max_short;
   const rsiCrossedDownForShort = rsiCurrent < rsiShortThreshold && rsiPrevious >= rsiShortThreshold;
   
+  // MACD histogram farveskift: fra grøn (positiv) til rød (negativ)
+  const macdColorChangeToRed = macd.histogram < 0 && macdPrevious.histogram >= 0;
+  
   const shortConditions = [
-    currentPrice < emaFastCurrent,
-    emaFastCurrent < emaMediumCurrent,
-    emaMediumCurrent < emaSlowCurrent,
     rsiCrossedDownForShort, // RSI krydser NED under threshold
-    stochRSI.k < config.stochrsi_overbought && stochRSI.k > config.stochrsi_oversold,
-    macd.histogram < -config.macd_histogram_threshold,
-    adx > config.adx_threshold,
-    !config.pivot_points_enabled || nearResistance, // Pivot point confirmation
+    macdColorChangeToRed, // MACD histogram skifter fra grøn til rød
+    adx > config.adx_threshold, // ADX trendstyrke
   ];
   
   const requiredConditions = config.signal_conditions_required;
