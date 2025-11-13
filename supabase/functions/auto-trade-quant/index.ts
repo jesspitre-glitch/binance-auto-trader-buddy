@@ -100,8 +100,25 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
   return hashHex;
 }
 
+// Determine trend direction from medium timeframe using EMA
+function analyzeMediumTrend(klines: any[], config: IndicatorConfig): 'BULLISH' | 'BEARISH' | 'NEUTRAL' {
+  const closes = klines.map(k => k.close);
+  const currentPrice = closes[closes.length - 1];
+  
+  // Calculate slow EMA for trend analysis
+  const emaSlow = calculateEMA(closes, config.ema_slow);
+  const currentEmaSlow = emaSlow[emaSlow.length - 1];
+  
+  // Trend filter baseret på pris vs Langsom EMA
+  // LONG kun hvis pris > EMA slow
+  // SHORT kun hvis pris < EMA slow
+  if (currentPrice > currentEmaSlow) return 'BULLISH';
+  if (currentPrice < currentEmaSlow) return 'BEARISH';
+  return 'NEUTRAL';
+}
+
 // Determine trend direction from higher timeframe using MACD histogram
-function analyzeTrend(klines: any[], config: IndicatorConfig): 'BULLISH' | 'BEARISH' | 'NEUTRAL' {
+function analyzeHigherTrend(klines: any[], config: IndicatorConfig): 'BULLISH' | 'BEARISH' | 'NEUTRAL' {
   const closes = klines.map(k => k.close);
   
   // Calculate MACD using config values
@@ -771,8 +788,8 @@ serve(async (req) => {
           const higherTrendKlines = await fetchKlines(symbol, config.higher_trend_timeframe, 100);
           
           // Determine trend on both timeframes
-          const trend = analyzeTrend(trendKlines, config);
-          const higherTrend = analyzeTrend(higherTrendKlines, config);
+          const trend = analyzeMediumTrend(trendKlines, config);
+          const higherTrend = analyzeHigherTrend(higherTrendKlines, config);
           
           // Analyze signal on scan interval
           const analysis = analyzeSignal(scanKlines, config);
