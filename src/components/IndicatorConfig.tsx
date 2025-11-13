@@ -31,6 +31,13 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     rsi_min_long: config?.rsi_min_long || 30,
     rsi_max_short: config?.rsi_max_short || 70,
     
+    // StochRSI
+    stochrsi_period: config?.stochrsi_period || 14,
+    stochrsi_k_period: config?.stochrsi_k_period || 3,
+    stochrsi_d_period: config?.stochrsi_d_period || 3,
+    stochrsi_overbought: config?.stochrsi_overbought || 80,
+    stochrsi_oversold: config?.stochrsi_oversold || 20,
+    
     // MACD
     macd_fast: config?.macd_fast || 12,
     macd_slow: config?.macd_slow || 26,
@@ -87,6 +94,12 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       rsi_period: config.rsi_period ?? 14,
       rsi_min_long: config.rsi_min_long ?? 30,
       rsi_max_short: config.rsi_max_short ?? 70,
+      // StochRSI
+      stochrsi_period: config.stochrsi_period ?? 14,
+      stochrsi_k_period: config.stochrsi_k_period ?? 3,
+      stochrsi_d_period: config.stochrsi_d_period ?? 3,
+      stochrsi_overbought: config.stochrsi_overbought ?? 80,
+      stochrsi_oversold: config.stochrsi_oversold ?? 20,
       // MACD
       macd_fast: config.macd_fast ?? 12,
       macd_slow: config.macd_slow ?? 26,
@@ -266,6 +279,67 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               onChange={(e) => setFormData({ ...formData, rsi_max_short: parseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">SHORT kun hvis RSI under denne værdi</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>StochRSI (Stochastic RSI)</CardTitle>
+          <CardDescription>Overkøbt/Oversolgt baseret på RSI</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-5">
+          <div className="space-y-2">
+            <Label htmlFor="stochrsi_period">RSI Periode</Label>
+            <Input
+              id="stochrsi_period"
+              type="number"
+              value={formData.stochrsi_period}
+              onChange={(e) => setFormData({ ...formData, stochrsi_period: parseInt(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">RSI periode for StochRSI (standard 14)</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="stochrsi_k_period">%K Periode</Label>
+            <Input
+              id="stochrsi_k_period"
+              type="number"
+              value={formData.stochrsi_k_period}
+              onChange={(e) => setFormData({ ...formData, stochrsi_k_period: parseInt(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">%K smoothing periode (standard 3)</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="stochrsi_d_period">%D Periode</Label>
+            <Input
+              id="stochrsi_d_period"
+              type="number"
+              value={formData.stochrsi_d_period}
+              onChange={(e) => setFormData({ ...formData, stochrsi_d_period: parseInt(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">%D smoothing periode (standard 3)</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="stochrsi_overbought">Overkøbt</Label>
+            <Input
+              id="stochrsi_overbought"
+              type="number"
+              step="0.01"
+              value={formData.stochrsi_overbought}
+              onChange={(e) => setFormData({ ...formData, stochrsi_overbought: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Overkøbt niveau (standard 80)</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="stochrsi_oversold">Oversolgt</Label>
+            <Input
+              id="stochrsi_oversold"
+              type="number"
+              step="0.01"
+              value={formData.stochrsi_oversold}
+              onChange={(e) => setFormData({ ...formData, stochrsi_oversold: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Oversolgt niveau (standard 20)</p>
           </div>
         </CardContent>
       </Card>
