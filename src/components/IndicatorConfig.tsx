@@ -68,6 +68,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     // Timeframes
     scan_interval: config?.scan_interval || "5m",
     trend_timeframe: config?.trend_timeframe || config?.mtf_timeframe || "15m",
+    higher_trend_timeframe: config?.higher_trend_timeframe || "1h",
     
     // Risk Management
     position_size_percent: config?.position_size_percent || 5,
@@ -128,6 +129,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       // Timeframes
       scan_interval: config.scan_interval ?? "5m",
       trend_timeframe: config.trend_timeframe ?? config.mtf_timeframe ?? "15m",
+      higher_trend_timeframe: config.higher_trend_timeframe ?? "1h",
       // Risk Management
       position_size_percent: config.position_size_percent ?? 5,
       risk_per_trade_percent: config.risk_per_trade_percent ?? 1,
@@ -635,6 +637,31 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">Højere TF for trend-retning</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="higher_trend_timeframe">Overordnet Trend Filter (Valgfrit)</Label>
+            <Select
+              value={formData.higher_trend_timeframe}
+              onValueChange={(value) => setFormData({ ...formData, higher_trend_timeframe: value })}
+            >
+              <SelectTrigger id="higher_trend_timeframe">
+                <SelectValue placeholder="Vælg overordnet trend" />
+              </SelectTrigger>
+              <SelectContent className="bg-background">
+                <SelectItem value="15m">15 minutter</SelectItem>
+                <SelectItem value="30m">30 minutter</SelectItem>
+                <SelectItem value="1h">1 time</SelectItem>
+                <SelectItem value="2h">2 timer</SelectItem>
+                <SelectItem value="4h">4 timer</SelectItem>
+                <SelectItem value="6h">6 timer</SelectItem>
+                <SelectItem value="8h">8 timer</SelectItem>
+                <SelectItem value="12h">12 timer</SelectItem>
+                <SelectItem value="1d">1 dag</SelectItem>
+                <SelectItem value="3d">3 dage</SelectItem>
+                <SelectItem value="1w">1 uge</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Blokerer LONG hvis trend er bearish, SHORT hvis bullish</p>
           </div>
         </CardContent>
       </Card>
