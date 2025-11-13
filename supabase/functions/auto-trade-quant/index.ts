@@ -18,6 +18,8 @@ interface IndicatorConfig {
   stochrsi_d_period: number;
   stochrsi_overbought: number;
   stochrsi_oversold: number;
+  pivot_points_enabled: boolean;
+  pivot_points_timeframe: string;
   macd_fast: number;
   macd_slow: number;
   macd_signal: number;
@@ -58,6 +60,8 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
     stochrsi_d_period: config.stochrsi_d_period,
     stochrsi_overbought: config.stochrsi_overbought,
     stochrsi_oversold: config.stochrsi_oversold,
+    pivot_points_enabled: config.pivot_points_enabled,
+    pivot_points_timeframe: config.pivot_points_timeframe,
     macd_fast: config.macd_fast,
     macd_slow: config.macd_slow,
     macd_signal: config.macd_signal,
@@ -362,6 +366,19 @@ async function fetchSymbolFilters(): Promise<Record<string, SymbolFilters>> {
   return map;
 }
 
+// Calculate Pivot Points
+function calculatePivotPoints(high: number, low: number, close: number) {
+  const pp = (high + low + close) / 3;
+  const r1 = (2 * pp) - low;
+  const s1 = (2 * pp) - high;
+  const r2 = pp + (high - low);
+  const s2 = pp - (high - low);
+  const r3 = high + 2 * (pp - low);
+  const s3 = low - 2 * (high - pp);
+  
+  return { pp, r1, s1, r2, s2, r3, s3 };
+}
+
 function analyzeSignal(klines: any[], config: IndicatorConfig) {
   const closes = klines.map(k => k.close);
   const highs = klines.map(k => k.high);
@@ -388,6 +405,25 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   const emaMediumCurrent = emaMedium[emaMedium.length - 1];
   const emaSlowCurrent = emaSlow[emaSlow.length - 1];
   
+  // Calculate Pivot Points from previous period
+  const pivotHigh = Math.max(...highs.slice(-24)); // Last 24 candles for daily pivot on 1h charts
+  const pivotLow = Math.min(...lows.slice(-24));
+  const pivotClose = closes[closes.length - 25] || closes[0]; // Close from 24 candles ago
+  const pivotPoints = calculatePivotPoints(pivotHigh, pivotLow, pivotClose);
+  
+  // Check if price is near support (potential LONG) or resistance (potential SHORT)
+  const nearSupport = config.pivot_points_enabled && (
+    Math.abs(currentPrice - pivotPoints.s1) / currentPrice < 0.005 ||
+    Math.abs(currentPrice - pivotPoints.s2) / currentPrice < 0.005 ||
+    Math.abs(currentPrice - pivotPoints.pp) / currentPrice < 0.005
+  );
+  
+  const nearResistance = config.pivot_points_enabled && (
+    Math.abs(currentPrice - pivotPoints.r1) / currentPrice < 0.005 ||
+    Math.abs(currentPrice - pivotPoints.r2) / currentPrice < 0.005 ||
+    Math.abs(currentPrice - pivotPoints.pp) / currentPrice < 0.005
+  );
+  
   // LONG signal
   const longConditions = [
     currentPrice > emaFastCurrent,
@@ -397,6 +433,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
     stochRSI.k > config.stochrsi_oversold && stochRSI.k < config.stochrsi_overbought,
     macd.histogram > config.macd_histogram_threshold,
     adx > config.adx_threshold,
+    !config.pivot_points_enabled || nearSupport, // Pivot point confirmation
   ];
   
   // SHORT signal
@@ -408,6 +445,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
     stochRSI.k < config.stochrsi_overbought && stochRSI.k > config.stochrsi_oversold,
     macd.histogram < -config.macd_histogram_threshold,
     adx > config.adx_threshold,
+    !config.pivot_points_enabled || nearResistance, // Pivot point confirmation
   ];
   
   const requiredConditions = config.signal_conditions_required || 5;
@@ -430,6 +468,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
       adx,
       volume: currentVolume,
       avgVolume,
+      pivotPoints: config.pivot_points_enabled ? pivotPoints : null,
     },
     stopLoss: longSignal 
       ? currentPrice - (atr * config.atr_stop_loss_multiplier)
