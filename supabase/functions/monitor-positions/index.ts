@@ -264,72 +264,42 @@ serve(async (req) => {
         let shouldClose = false;
         let closeReason = '';
 
-        // Check if trailing stop is already active or should be activated
-        let trailingStopActive = false;
+        // Trailing stop er ALTID aktiv fra start (ingen TP tjek længere)
         let newPeakPrice = position.peak_price || position.entry_price;
         let newTrailingStop = position.trailing_stop;
         
-        if (position.take_profit) {
-          // Check if trailing was previously activated (peak has moved past TP)
-          const trailingAlreadyActive = position.side === 'LONG'
-            ? (position.peak_price && position.peak_price >= position.take_profit)
-            : (position.peak_price && position.peak_price <= position.take_profit);
-          
-          // Check if TP is currently reached
-          const tpReached = position.side === 'LONG' 
-            ? currentPrice >= position.take_profit 
-            : currentPrice <= position.take_profit;
-          
-          // Activate trailing if TP reached OR if already active
-          if (tpReached || trailingAlreadyActive) {
-            trailingStopActive = true;
-            
-            if (tpReached && !trailingAlreadyActive) {
-              console.log(`TP reached for ${position.symbol}, activating trailing stop`);
-            }
-            
-            // Initialize peak at TP level if trailing just activated
-            if (!position.peak_price || position.peak_price === position.entry_price) {
-              newPeakPrice = position.take_profit;
-              console.log(`Initializing peak at TP: ${newPeakPrice} for ${position.symbol}`);
-            }
-            
-            // Update peak from current price if better than peak
-            if (position.side === 'LONG' && currentPrice > newPeakPrice) {
-              console.log(`Updating peak: ${newPeakPrice} → ${currentPrice} for ${position.symbol}`);
-              newPeakPrice = currentPrice;
-            } else if (position.side === 'SHORT' && currentPrice < newPeakPrice) {
-              console.log(`Updating peak: ${newPeakPrice} → ${currentPrice} for ${position.symbol}`);
-              newPeakPrice = currentPrice;
-            }
-            
-            // Calculate trailing stop from peak, clamped to never go past TP
-            const trailingPercent = position.trailing_stop_percent || 2.0;
-            if (position.side === 'LONG') {
-              const raw = newPeakPrice * (1 - trailingPercent / 100);
-              newTrailingStop = Math.max(position.take_profit, raw); // Never below TP
-              console.log(`Trailing stop calc (LONG): peak=${newPeakPrice}, raw=${raw.toFixed(4)}, final=${newTrailingStop.toFixed(4)} for ${position.symbol}`);
-            } else {
-              const raw = newPeakPrice * (1 + trailingPercent / 100);
-              newTrailingStop = Math.min(position.take_profit, raw); // Never above TP
-              console.log(`Trailing stop calc (SHORT): peak=${newPeakPrice}, raw=${raw.toFixed(4)}, final=${newTrailingStop.toFixed(4)} for ${position.symbol}`);
-            }
-            
-            // Check if trailing stop is hit
-            if (position.side === 'LONG' && currentPrice <= newTrailingStop) {
-              shouldClose = true;
-              closeReason = 'TRAILING_STOP_HIT';
-              console.log(`TRAILING STOP HIT (LONG): price=${currentPrice} <= trailing=${newTrailingStop} for ${position.symbol}`);
-            } else if (position.side === 'SHORT' && currentPrice >= newTrailingStop) {
-              shouldClose = true;
-              closeReason = 'TRAILING_STOP_HIT';
-              console.log(`TRAILING STOP HIT (SHORT): price=${currentPrice} >= trailing=${newTrailingStop} for ${position.symbol}`);
-            }
-          }
+        // Update peak price hvis prisen er bedre
+        if (position.side === 'LONG' && currentPrice > newPeakPrice) {
+          console.log(`Updating peak: ${newPeakPrice} → ${currentPrice} for ${position.symbol}`);
+          newPeakPrice = currentPrice;
+        } else if (position.side === 'SHORT' && currentPrice < newPeakPrice) {
+          console.log(`Updating peak: ${newPeakPrice} → ${currentPrice} for ${position.symbol}`);
+          newPeakPrice = currentPrice;
+        }
+        
+        // Beregn trailing stop fra peak med ATR-baseret procent
+        const trailingPercent = position.trailing_stop_percent || 2.0;
+        if (position.side === 'LONG') {
+          newTrailingStop = newPeakPrice * (1 - trailingPercent / 100);
+          console.log(`Trailing stop (LONG): peak=${newPeakPrice}, percent=${trailingPercent}%, stop=${newTrailingStop.toFixed(4)} for ${position.symbol}`);
+        } else {
+          newTrailingStop = newPeakPrice * (1 + trailingPercent / 100);
+          console.log(`Trailing stop (SHORT): peak=${newPeakPrice}, percent=${trailingPercent}%, stop=${newTrailingStop.toFixed(4)} for ${position.symbol}`);
+        }
+        
+        // Tjek om trailing stop er ramt
+        if (position.side === 'LONG' && currentPrice <= newTrailingStop) {
+          shouldClose = true;
+          closeReason = 'TRAILING_STOP_HIT';
+          console.log(`TRAILING STOP HIT (LONG): price=${currentPrice} <= trailing=${newTrailingStop} for ${position.symbol}`);
+        } else if (position.side === 'SHORT' && currentPrice >= newTrailingStop) {
+          shouldClose = true;
+          closeReason = 'TRAILING_STOP_HIT';
+          console.log(`TRAILING STOP HIT (SHORT): price=${currentPrice} >= trailing=${newTrailingStop} for ${position.symbol}`);
         }
 
-        // Check stop loss (only if TP not reached)
-        if (!trailingStopActive && !shouldClose && position.stop_loss) {
+        // Check stop loss (kun hvis trailing stop ikke ramt)
+        if (!shouldClose && position.stop_loss) {
           if (position.side === 'LONG' && currentPrice <= position.stop_loss) {
             shouldClose = true;
             closeReason = 'STOP_LOSS_HIT';

@@ -1075,7 +1075,7 @@ serve(async (req) => {
               if (analysis.indicators.adx) openReasonParts.push(`ADX: ${analysis.indicators.adx.toFixed(2)}`);
               const openReason = `${analysis.signal} signal på ${symbol} - Trend: ${trend}. ${openReasonParts.join(', ')}`;
               
-              // Calculate trailing stop percentage from ATR and config
+              // Calculate trailing stop from ATR and config
               const atrValue = analysis.indicators.atr || (analysis.indicators.price * 0.01); // Fallback til 1% hvis ATR disabled
               const trailingStopDistance = atrValue * config.atr_trailing_stop_multiplier;
               const trailingStopPercent = (trailingStopDistance / analysis.indicators.price) * 100;
@@ -1083,6 +1083,11 @@ serve(async (req) => {
               // Use actual values from Binance for database insert
               const actualEntryPrice = parseFloat(binancePosition.entryPrice);
               const actualQuantity = Math.abs(parseFloat(binancePosition.positionAmt));
+              
+              // Calculate initial trailing stop level (aktiveres med det samme, ikke efter TP)
+              const initialTrailingStop = analysis.signal === 'LONG'
+                ? actualEntryPrice * (1 - trailingStopPercent / 100)
+                : actualEntryPrice * (1 + trailingStopPercent / 100);
               
               // Save position to database with verified Binance data and indicators
               await supabaseClient.from('positions').insert({
@@ -1092,7 +1097,8 @@ serve(async (req) => {
                 entry_price: actualEntryPrice,
                 quantity: actualQuantity,
                 stop_loss: analysis.stopLoss,
-                take_profit: analysis.takeProfit,
+                take_profit: null, // TP er fjernet, vi bruger kun trailing stop
+                trailing_stop: parseFloat(initialTrailingStop.toFixed(8)),
                 current_price: actualEntryPrice,
                 peak_price: actualEntryPrice,
                 trailing_stop_percent: parseFloat(trailingStopPercent.toFixed(2)),
