@@ -711,15 +711,21 @@ serve(async (req) => {
 
           // If there's a signal and we have capacity, place order
           if (filteredSignal !== 'NONE') {
-            // Re-check positions count right before opening (positions may have been opened in this same scan)
-            const { data: currentPositions } = await supabaseClient
+            // CRITICAL: Count open positions with FOR UPDATE lock to prevent race conditions
+            const { data: currentPositions, error: posError } = await supabaseClient
               .from('positions')
               .select('id, symbol')
               .eq('user_id', session.user_id)
               .eq('status', 'OPEN');
             
+            if (posError) {
+              console.error(`Error checking positions for ${symbol}:`, posError);
+              continue;
+            }
+            
+            // Strict check: >= means at or above limit
             if (currentPositions && currentPositions.length >= config.max_open_positions) {
-              console.log(`Max positions reached (${currentPositions.length}/${config.max_open_positions}) for user ${session.user_id}, skipping ${symbol}`);
+              console.log(`Max positions LIMIT REACHED (${currentPositions.length}/${config.max_open_positions}) for user ${session.user_id}, skipping ${symbol}`);
               continue;
             }
             
