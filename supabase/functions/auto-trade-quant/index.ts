@@ -435,6 +435,8 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   const currentPrice = closes[closes.length - 1];
   
   // Calculate indicators only if enabled
+  console.log(`Indicator config: EMA=${config.ema_enabled}, RSI=${config.rsi_enabled}, StochRSI=${config.stochrsi_enabled}, MACD=${config.macd_enabled}, BB=${config.bb_enabled}, ATR=${config.atr_enabled}, ADX=${config.adx_enabled}`);
+  
   const emaFast = config.ema_enabled ? calculateEMA(closes, config.ema_fast) : null;
   const emaMedium = config.ema_enabled ? calculateEMA(closes, config.ema_medium) : null;
   const emaSlow = config.ema_enabled ? calculateEMA(closes, config.ema_slow) : null;
@@ -448,6 +450,10 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   const stochRSI = config.stochrsi_enabled 
     ? calculateStochRSI(closes, config.stochrsi_period, config.stochrsi_k_period, config.stochrsi_d_period)
     : null;
+  
+  if (!config.stochrsi_enabled) {
+    console.log(`StochRSI DISABLED - set to null`);
+  }
   
   const macd = config.macd_enabled 
     ? calculateMACD(closes, config.macd_fast, config.macd_slow, config.macd_signal)
@@ -570,24 +576,28 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   // Calculate stop loss using ATR (fallback to 1% if ATR disabled)
   const atrValue = atr || (currentPrice * 0.01);
   
+  const indicators = {
+    price: currentPrice,
+    emaFast: emaFastCurrent,
+    emaMedium: emaMediumCurrent,
+    emaSlow: emaSlowCurrent,
+    rsi: rsiCurrent,
+    stochRSI_k: stochRSI?.k || null,
+    stochRSI_d: stochRSI?.d || null,
+    macd: macd?.histogram || null,
+    atr: atr,
+    bb,
+    adx,
+    volume: currentVolume,
+    avgVolume,
+    pivotPoints,
+  };
+  
+  console.log(`Indicators being saved: stochRSI_k=${indicators.stochRSI_k}, rsi=${indicators.rsi}, macd=${indicators.macd}`);
+  
   return {
     signal: longSignal ? 'LONG' : shortSignal ? 'SHORT' : 'NONE',
-    indicators: {
-      price: currentPrice,
-      emaFast: emaFastCurrent,
-      emaMedium: emaMediumCurrent,
-      emaSlow: emaSlowCurrent,
-      rsi: rsiCurrent,
-      stochRSI_k: stochRSI?.k || null,
-      stochRSI_d: stochRSI?.d || null,
-      macd: macd?.histogram || null,
-      atr: atr,
-      bb,
-      adx,
-      volume: currentVolume,
-      avgVolume,
-      pivotPoints,
-    },
+    indicators,
     stopLoss: longSignal 
       ? currentPrice - (atrValue * config.atr_stop_loss_multiplier)
       : currentPrice + (atrValue * config.atr_stop_loss_multiplier),
