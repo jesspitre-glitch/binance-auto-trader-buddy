@@ -891,22 +891,27 @@ serve(async (req) => {
           const analysis = analyzeSignal(scanKlines, config);
           
           // Filter signal based on BOTH trend timeframes
+          // BEGGE trends skal godkende handlen - ellers blokeres den
           let filteredSignal = analysis.signal;
           
-          // First filter: medium timeframe trend
-          if (filteredSignal === 'LONG' && trend === 'BEARISH') {
-            filteredSignal = 'NONE'; // Skip LONG if medium trend is bearish
-          } else if (filteredSignal === 'SHORT' && trend === 'BULLISH') {
-            filteredSignal = 'NONE'; // Skip SHORT if medium trend is bullish
-          }
-          
-          // Second filter: higher timeframe trend (overordnet filter)
-          if (filteredSignal === 'LONG' && higherTrend === 'BEARISH') {
-            filteredSignal = 'NONE'; // Skip LONG if higher trend is bearish
-            console.log(`Blocked LONG on ${symbol} due to bearish higher trend (${config.higher_trend_timeframe})`);
-          } else if (filteredSignal === 'SHORT' && higherTrend === 'BULLISH') {
-            filteredSignal = 'NONE'; // Skip SHORT if higher trend is bullish
-            console.log(`Blocked SHORT on ${symbol} due to bullish higher trend (${config.higher_trend_timeframe})`);
+          if (filteredSignal === 'LONG') {
+            // LONG kræver BULLISH på begge timeframes
+            if (higherTrend !== 'BULLISH') {
+              filteredSignal = 'NONE';
+              console.log(`Blocked LONG on ${symbol}: Higher trend (${config.higher_trend_timeframe}) not BULLISH (is ${higherTrend})`);
+            } else if (trend !== 'BULLISH') {
+              filteredSignal = 'NONE';
+              console.log(`Blocked LONG on ${symbol}: Medium trend (${config.trend_timeframe}) not BULLISH (is ${trend})`);
+            }
+          } else if (filteredSignal === 'SHORT') {
+            // SHORT kræver BEARISH på begge timeframes
+            if (higherTrend !== 'BEARISH') {
+              filteredSignal = 'NONE';
+              console.log(`Blocked SHORT on ${symbol}: Higher trend (${config.higher_trend_timeframe}) not BEARISH (is ${higherTrend})`);
+            } else if (trend !== 'BEARISH') {
+              filteredSignal = 'NONE';
+              console.log(`Blocked SHORT on ${symbol}: Medium trend (${config.trend_timeframe}) not BEARISH (is ${trend})`);
+            }
           }
 
           // Log scan result to database
