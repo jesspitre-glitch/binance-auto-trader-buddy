@@ -94,19 +94,18 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
   return hashHex;
 }
 
-// Determine trend direction from higher timeframe
+// Determine trend direction from higher timeframe using MACD histogram
 function analyzeTrend(klines: any[], config: IndicatorConfig): 'BULLISH' | 'BEARISH' | 'NEUTRAL' {
   const closes = klines.map(k => k.close);
   
-  // Use config EMAs for trend analysis
-  const emaMedium = calculateEMA(closes, config.ema_medium);
-  const emaSlow = calculateEMA(closes, config.ema_slow);
+  // Calculate MACD using config values
+  const macd = calculateMACD(closes, config.macd_fast, config.macd_slow, config.macd_signal);
   
-  const currentEmaMedium = emaMedium[emaMedium.length - 1];
-  const currentEmaSlow = emaSlow[emaSlow.length - 1];
-  
-  if (currentEmaMedium > currentEmaSlow * 1.001) return 'BULLISH';
-  if (currentEmaMedium < currentEmaSlow * 0.999) return 'BEARISH';
+  // Trend filter: MACD histogram
+  // LONG kun hvis histogram > 0 (grøn)
+  // SHORT kun hvis histogram < 0 (rød)
+  if (macd.histogram > 0) return 'BULLISH';
+  if (macd.histogram < 0) return 'BEARISH';
   return 'NEUTRAL';
 }
 
