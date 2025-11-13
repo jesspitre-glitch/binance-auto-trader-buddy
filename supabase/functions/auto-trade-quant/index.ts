@@ -436,17 +436,17 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   const pivotClose = closes[closes.length - (config.pivot_points_lookback + 1)] || closes[0];
   const pivotPoints = calculatePivotPoints(pivotHigh, pivotLow, pivotClose);
   
-  // Check if price is near support (potential LONG) or resistance (potential SHORT)
-  const nearSupport = config.pivot_points_enabled && (
-    Math.abs(currentPrice - pivotPoints.s1) / currentPrice < config.pivot_points_near_threshold ||
-    Math.abs(currentPrice - pivotPoints.s2) / currentPrice < config.pivot_points_near_threshold ||
-    Math.abs(currentPrice - pivotPoints.pp) / currentPrice < config.pivot_points_near_threshold
-  );
-  
+  // PIVOT LOGIC: Block trades near key levels
+  // LONG må IKKE åbnes hvis pris er tæt på R1 eller R2 (resistance)
+  // SHORT må IKKE åbnes hvis pris er tæt på S1 eller S2 (support)
   const nearResistance = config.pivot_points_enabled && (
     Math.abs(currentPrice - pivotPoints.r1) / currentPrice < config.pivot_points_near_threshold ||
-    Math.abs(currentPrice - pivotPoints.r2) / currentPrice < config.pivot_points_near_threshold ||
-    Math.abs(currentPrice - pivotPoints.pp) / currentPrice < config.pivot_points_near_threshold
+    Math.abs(currentPrice - pivotPoints.r2) / currentPrice < config.pivot_points_near_threshold
+  );
+  
+  const nearSupport = config.pivot_points_enabled && (
+    Math.abs(currentPrice - pivotPoints.s1) / currentPrice < config.pivot_points_near_threshold ||
+    Math.abs(currentPrice - pivotPoints.s2) / currentPrice < config.pivot_points_near_threshold
   );
   
   // LONG signal - RSI crossover detection + MACD farveskift
@@ -456,10 +456,12 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   // MACD histogram farveskift: fra rød (negativ) til grøn (positiv)
   const macdColorChangeToGreen = macd.histogram > 0 && macdPrevious.histogram <= 0;
   
+  // Blokér LONG hvis tæt på resistance
   const longConditions = [
     rsiCrossedUpForLong, // RSI krydser OP over threshold
     macdColorChangeToGreen, // MACD histogram skifter fra rød til grøn
     adx > config.adx_threshold, // ADX trendstyrke
+    !nearResistance, // Blokér hvis tæt på R1 eller R2
   ];
   
   // SHORT signal - RSI crossunder detection + MACD farveskift
@@ -469,10 +471,12 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   // MACD histogram farveskift: fra grøn (positiv) til rød (negativ)
   const macdColorChangeToRed = macd.histogram < 0 && macdPrevious.histogram >= 0;
   
+  // Blokér SHORT hvis tæt på support
   const shortConditions = [
     rsiCrossedDownForShort, // RSI krydser NED under threshold
     macdColorChangeToRed, // MACD histogram skifter fra grøn til rød
     adx > config.adx_threshold, // ADX trendstyrke
+    !nearSupport, // Blokér hvis tæt på S1 eller S2
   ];
   
   const requiredConditions = config.signal_conditions_required;
