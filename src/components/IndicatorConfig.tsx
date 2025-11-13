@@ -25,6 +25,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     ema_fast: config?.ema_fast || 9,
     ema_medium: config?.ema_medium || 21,
     ema_slow: config?.ema_slow || 50,
+    ema_medium_trend: config?.ema_medium_trend || 50,
     
     // RSI
     rsi_period: config?.rsi_period || 14,
@@ -41,6 +42,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     // Pivot Points
     pivot_points_enabled: config?.pivot_points_enabled ?? true,
     pivot_points_timeframe: config?.pivot_points_timeframe || "1d",
+    pivot_points_lookback: config?.pivot_points_lookback || 24,
+    pivot_points_near_threshold: config?.pivot_points_near_threshold || 0.002,
     
     // MACD
     macd_fast: config?.macd_fast || 12,
@@ -70,6 +73,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     scan_interval: config?.scan_interval || "5m",
     trend_timeframe: config?.trend_timeframe || config?.mtf_timeframe || "15m",
     higher_trend_timeframe: config?.higher_trend_timeframe || "1h",
+    klines_limit: config?.klines_limit || 100,
     
     // Risk Management
     position_size_percent: config?.position_size_percent || 5,
@@ -93,6 +97,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       ema_fast: config.ema_fast ?? 9,
       ema_medium: config.ema_medium ?? 21,
       ema_slow: config.ema_slow ?? 50,
+      ema_medium_trend: config.ema_medium_trend ?? 50,
       // RSI
       rsi_period: config.rsi_period ?? 14,
       rsi_min_long: config.rsi_min_long ?? 30,
@@ -106,6 +111,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       // Pivot Points
       pivot_points_enabled: config.pivot_points_enabled ?? true,
       pivot_points_timeframe: config.pivot_points_timeframe ?? "1d",
+      pivot_points_lookback: config.pivot_points_lookback ?? 24,
+      pivot_points_near_threshold: config.pivot_points_near_threshold ?? 0.002,
       // MACD
       macd_fast: config.macd_fast ?? 12,
       macd_slow: config.macd_slow ?? 26,
@@ -129,6 +136,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       scan_interval: config.scan_interval ?? "5m",
       trend_timeframe: config.trend_timeframe ?? config.mtf_timeframe ?? "15m",
       higher_trend_timeframe: config.higher_trend_timeframe ?? "1h",
+      klines_limit: config.klines_limit ?? 100,
       // Risk Management
       position_size_percent: config.position_size_percent ?? 5,
       risk_per_trade_percent: config.risk_per_trade_percent ?? 1,
@@ -244,6 +252,16 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               onChange={(e) => setFormData({ ...formData, ema_slow: parseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Langsom linje - mere stabil trend</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="ema_medium_trend">Medium Trend EMA</Label>
+            <Input
+              id="ema_medium_trend"
+              type="number"
+              value={formData.ema_medium_trend}
+              onChange={(e) => setFormData({ ...formData, ema_medium_trend: parseInt(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">EMA for medium trend analyse (f.eks. 50)</p>
           </div>
         </CardContent>
       </Card>
@@ -380,7 +398,28 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 <SelectItem value="1M">Monthly</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">Tidsramme for pivot points beregning</p>
+            <p className="text-xs text-muted-foreground">Beregningsperiode for pivot points</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="pivot_points_lookback">Lookback Periode</Label>
+            <Input
+              id="pivot_points_lookback"
+              type="number"
+              value={formData.pivot_points_lookback}
+              onChange={(e) => setFormData({ ...formData, pivot_points_lookback: parseInt(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Antal bars tilbage til pivot beregning (f.eks. 24)</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="pivot_points_near_threshold">Near Threshold</Label>
+            <Input
+              id="pivot_points_near_threshold"
+              type="number"
+              step="0.0001"
+              value={formData.pivot_points_near_threshold}
+              onChange={(e) => setFormData({ ...formData, pivot_points_near_threshold: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Tærskel for "tæt på" pivot (0.002 = 0.2%)</p>
           </div>
         </CardContent>
       </Card>
@@ -670,6 +709,16 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">Blokerer LONG hvis trend er bearish, SHORT hvis bullish</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="klines_limit">Klines Limit</Label>
+            <Input
+              id="klines_limit"
+              type="number"
+              value={formData.klines_limit}
+              onChange={(e) => setFormData({ ...formData, klines_limit: parseInt(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Antal bars at hente til analyse (f.eks. 100)</p>
           </div>
         </CardContent>
       </Card>
