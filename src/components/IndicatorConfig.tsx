@@ -55,6 +55,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     // ATR
     atr_period: config?.atr_period || 14,
     atr_stop_loss_multiplier: config?.atr_stop_loss_multiplier || 2,
+    atr_take_profit_multiplier: config?.atr_take_profit_multiplier || 3,
     atr_trailing_stop_multiplier: config?.atr_trailing_stop_multiplier || 1.5,
     
     // ADX
@@ -76,9 +77,6 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     max_open_positions: config?.max_open_positions || 3,
     max_exposure_percent: config?.max_exposure_percent || 5,
     daily_loss_limit_percent: config?.daily_loss_limit_percent || 5,
-    
-    // Risk/Reward
-    risk_reward_ratio: config?.risk_reward_ratio || 2,
     max_position_duration_minutes: config?.max_position_duration_minutes || 240,
     
     // Leverage
@@ -119,6 +117,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       // ATR
       atr_period: config.atr_period ?? 14,
       atr_stop_loss_multiplier: config.atr_stop_loss_multiplier ?? 2,
+      atr_take_profit_multiplier: config.atr_take_profit_multiplier ?? 3,
       atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier ?? 1.5,
       // ADX
       adx_period: config.adx_period ?? 14,
@@ -136,8 +135,6 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       max_open_positions: config.max_open_positions ?? 3,
       max_exposure_percent: config.max_exposure_percent ?? 5,
       daily_loss_limit_percent: config.daily_loss_limit_percent ?? 5,
-      // Risk/Reward
-      risk_reward_ratio: config.risk_reward_ratio ?? 2,
       max_position_duration_minutes: config.max_position_duration_minutes ?? 240,
       // Leverage
       leverage: config.leverage ?? 10,
@@ -496,6 +493,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <p className="text-xs text-muted-foreground">Højere = løsere SL (2.0 = 2×ATR)</p>
           </div>
           <div className="space-y-2">
+            <Label htmlFor="atr_take_profit_multiplier">Take-Profit Multiplikator</Label>
+            <Input
+              id="atr_take_profit_multiplier"
+              type="number"
+              step="0.1"
+              value={formData.atr_take_profit_multiplier}
+              onChange={(e) => setFormData({ ...formData, atr_take_profit_multiplier: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">TP afstand fra entry (3.0 = 3×ATR)</p>
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="atr_trailing_stop_multiplier">Trailing Stop Multiplikator</Label>
             <Input
               id="atr_trailing_stop_multiplier"
@@ -741,21 +749,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Risk/Reward & Exit</CardTitle>
-          <CardDescription>Take-profit forhold og max position varighed</CardDescription>
+          <CardTitle>Position Exit</CardTitle>
+          <CardDescription>Max position varighed før auto-luk</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="risk_reward_ratio">Risk/Reward Ratio</Label>
-            <Input
-              id="risk_reward_ratio"
-              type="number"
-              step="0.1"
-              value={formData.risk_reward_ratio}
-              onChange={(e) => setFormData({ ...formData, risk_reward_ratio: parseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">TP afstand = SL afstand × dette tal (2.0 = dobbelt)</p>
-          </div>
+        <CardContent className="grid gap-4">
           <div className="space-y-2">
             <Label htmlFor="max_position_duration_minutes">Max Position Varighed (min)</Label>
             <Input
