@@ -741,14 +741,37 @@ serve(async (req) => {
               continue;
             }
             
-            // Check if there's already an open position for this specific symbol
+            // Check if there's already an open position for this specific symbol (snapshot)
             const existingPositionForSymbol = currentPositions?.find(p => p.symbol === symbol);
             if (existingPositionForSymbol) {
-              console.log(`Skipping ${symbol}: Already have an open position for this symbol`);
+              console.log(`Skipping ${symbol}: Already have an open position for this symbol (snapshot)`);
               continue;
             }
             
-            console.log(`Signal detected for ${session.user_id}: ${filteredSignal} on ${symbol} (Trend: ${trend}) - Current positions: ${currentPositions?.length || 0}/${config.max_open_positions}`);
+            // Fresh DB check to avoid races with concurrent scans
+            const { data: existingOpenForSymbol, error: existingOpenErr } = await supabaseClient
+              .from('positions')
+              .select('id')
+              .eq('user_id', session.user_id)
+              .eq('symbol', symbol)
+              .eq('status', 'OPEN')
+              .maybeSingle();
+
+            if (existingOpenErr) {
+              console.error(`Error during fresh open-position check for ${symbol}:`, existingOpenErr);
+              continue;
+            }
+            if (existingOpenForSymbol) {
+              console.log(`Skipping ${symbol}: Already open (fresh DB check)`);
+              continue;
+            }
+
+            // Exchange-level guard: if a position exists on Binance, don't place another
+            const existingOnExchange = await verifyPositionOnBinance(symbol);
+            if (existingOnExchange) {
+              console.log(`Skipping ${symbol}: Position already open on Binance`);
+              continue;
+            }
             
             try {
               // Get account balance
