@@ -125,7 +125,9 @@ export const TradingDashboard = () => {
       
       const { error } = await supabase
         .from("trading_session")
-        .upsert(updateData);
+        .upsert(updateData, {
+          onConflict: 'user_id'
+        });
 
       if (error) throw error;
 
