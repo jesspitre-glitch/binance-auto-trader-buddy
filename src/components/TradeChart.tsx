@@ -228,10 +228,11 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         {/* Take Profit line */}
         <ReferenceLine 
           y={trade.take_profit} 
-          stroke="#22c55e" 
-          strokeDasharray="3 3"
-          strokeOpacity={0.7}
-          label="TP"
+          stroke="#10b981" 
+          strokeWidth={2}
+          strokeDasharray="5 5"
+          strokeOpacity={0.9}
+          label={{ value: "TP", fill: "#10b981", fontSize: 12, fontWeight: "bold" }}
         />
         
         {/* Stop Loss line */}
