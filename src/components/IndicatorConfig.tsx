@@ -559,11 +559,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="signal_conditions_required"
               type="number"
               min="1"
-              max="7"
+              max="8"
               value={formData.signal_conditions_required}
-              onChange={(e) => setFormData({ ...formData, signal_conditions_required: Math.min(7, Math.max(1, parseInt(e.target.value) || 1)) })}
+              onChange={(e) => setFormData({ ...formData, signal_conditions_required: Math.min(8, Math.max(1, parseInt(e.target.value) || 1)) })}
             />
-            <p className="text-xs text-muted-foreground">Hvor mange ud af 7 betingelser skal være opfyldt</p>
+            <p className="text-xs text-muted-foreground">Hvor mange ud af 8 betingelser skal være opfyldt</p>
           </div>
         </CardContent>
       </Card>
