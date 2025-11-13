@@ -51,6 +51,43 @@ async function cancelAllOpenOrders(symbol: string, apiKey: string, apiSecret: st
   return { cancelled: true, result };
 }
 
+async function getCurrentPrice(symbol: string, supabaseClient: any): Promise<number> {
+  // Try to get price from cache first (much faster, no rate limits)
+  const { data: cached, error: cacheError } = await supabaseClient
+    .from('price_cache')
+    .select('price, updated_at')
+    .eq('symbol', symbol)
+    .maybeSingle();
+  
+  // Use cached price if it's less than 5 seconds old
+  if (cached && !cacheError) {
+    const age = Date.now() - new Date(cached.updated_at).getTime();
+    if (age < 5000) {
+      return parseFloat(cached.price);
+    }
+  }
+  
+  // Fallback to API if cache miss or stale
+  try {
+    const res = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
+    if (!res.ok) return NaN;
+    const data = await res.json();
+    const price = parseFloat(data.price);
+    
+    // Update cache for future requests
+    if (price && isFinite(price)) {
+      await supabaseClient
+        .from('price_cache')
+        .upsert({ symbol, price, updated_at: new Date().toISOString() });
+    }
+    
+    return price;
+  } catch (e) {
+    console.error(`Failed to fetch price for ${symbol}:`, e);
+    return NaN;
+  }
+}
+
 async function closeOnBinance(symbol: string, apiKey: string, apiSecret: string) {
   // Fetch current position amount
   const pos = await getPositionRisk(symbol, apiKey, apiSecret);
@@ -121,19 +158,19 @@ serve(async (req) => {
     const closeRes = await closeOnBinance(symbol, apiKey, apiSecret);
     const order = (closeRes as any).order ?? {};
 
-    // 3) Resolve execution details from Binance response (fallback to ticker if missing)
+    // 3) Resolve execution details from Binance response (fallback to cache/ticker if missing)
     const avgPrice = Number(order.avgPrice) || Number(order.price) || 0;
     const executedQty = Number(order.executedQty) || Number(order.origQty) || Number(position?.quantity) || 0;
 
     let exitPrice = avgPrice;
     if (!exitPrice || !isFinite(exitPrice) || exitPrice === 0) {
-      try {
-        const tRes = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
-        if (tRes.ok) {
-          const tData = await tRes.json();
-          exitPrice = parseFloat(tData.price);
-        }
-      } catch (_) {}
+      // Use price cache as primary fallback (avoids rate limits)
+      exitPrice = await getCurrentPrice(symbol, supabaseClient);
+      
+      // If still no valid price, use position's current_price as last resort
+      if (!exitPrice || !isFinite(exitPrice) || exitPrice === 0) {
+        exitPrice = Number(position?.current_price) || 0;
+      }
     }
 
     // 4) If we have the DB position, persist CLOSED state and insert trade history immediately
