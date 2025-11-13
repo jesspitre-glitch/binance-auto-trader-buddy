@@ -432,46 +432,53 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   const highs = klines.map(k => k.high);
   const lows = klines.map(k => k.low);
   const volumes = klines.map(k => k.volume);
-  
-  // Calculate all indicators
-  const emaFast = calculateEMA(closes, config.ema_fast);
-  const emaMedium = calculateEMA(closes, config.ema_medium);
-  const emaSlow = calculateEMA(closes, config.ema_slow);
-  
-  const rsiCurrent = calculateRSI(closes, config.rsi_period);
-  const rsiPrevious = calculateRSI(closes.slice(0, -1), config.rsi_period);
-  
-  const stochRSI = calculateStochRSI(closes, config.stochrsi_period, config.stochrsi_k_period, config.stochrsi_d_period);
-  const macd = calculateMACD(closes, config.macd_fast, config.macd_slow, config.macd_signal);
-  const macdPrevious = calculateMACD(closes.slice(0, -1), config.macd_fast, config.macd_slow, config.macd_signal);
-  const atr = calculateATR(highs, lows, closes, config.atr_period);
-  const bb = calculateBollingerBands(closes, config.bb_period, config.bb_std_dev);
-  const adx = calculateADX(highs, lows, closes, config.adx_period);
-  
   const currentPrice = closes[closes.length - 1];
-  const avgVolume = volumes.slice(-config.volume_avg_period).reduce((a, b) => a + b, 0) / config.volume_avg_period;
-  const currentVolume = volumes[volumes.length - 1];
   
-  const emaFastCurrent = emaFast[emaFast.length - 1];
-  const emaMediumCurrent = emaMedium[emaMedium.length - 1];
-  const emaSlowCurrent = emaSlow[emaSlow.length - 1];
+  // Calculate indicators only if enabled
+  const emaFast = config.ema_enabled ? calculateEMA(closes, config.ema_fast) : null;
+  const emaMedium = config.ema_enabled ? calculateEMA(closes, config.ema_medium) : null;
+  const emaSlow = config.ema_enabled ? calculateEMA(closes, config.ema_slow) : null;
+  const emaFastCurrent = emaFast ? emaFast[emaFast.length - 1] : null;
+  const emaMediumCurrent = emaMedium ? emaMedium[emaMedium.length - 1] : null;
+  const emaSlowCurrent = emaSlow ? emaSlow[emaSlow.length - 1] : null;
   
-  // Calculate Pivot Points from previous period
-  const pivotHigh = Math.max(...highs.slice(-config.pivot_points_lookback));
-  const pivotLow = Math.min(...lows.slice(-config.pivot_points_lookback));
-  const pivotClose = closes[closes.length - (config.pivot_points_lookback + 1)] || closes[0];
-  const pivotPoints = calculatePivotPoints(pivotHigh, pivotLow, pivotClose);
+  const rsiCurrent = config.rsi_enabled ? calculateRSI(closes, config.rsi_period) : null;
+  const rsiPrevious = config.rsi_enabled ? calculateRSI(closes.slice(0, -1), config.rsi_period) : null;
+  
+  const stochRSI = config.stochrsi_enabled 
+    ? calculateStochRSI(closes, config.stochrsi_period, config.stochrsi_k_period, config.stochrsi_d_period)
+    : null;
+  
+  const macd = config.macd_enabled 
+    ? calculateMACD(closes, config.macd_fast, config.macd_slow, config.macd_signal)
+    : null;
+  const macdPrevious = config.macd_enabled 
+    ? calculateMACD(closes.slice(0, -1), config.macd_fast, config.macd_slow, config.macd_signal)
+    : null;
+  
+  const atr = config.atr_enabled ? calculateATR(highs, lows, closes, config.atr_period) : null;
+  const bb = config.bb_enabled ? calculateBollingerBands(closes, config.bb_period, config.bb_std_dev) : null;
+  const adx = config.adx_enabled ? calculateADX(highs, lows, closes, config.adx_period) : null;
+  
+  const avgVolume = config.volume_enabled 
+    ? volumes.slice(-config.volume_avg_period).reduce((a, b) => a + b, 0) / config.volume_avg_period
+    : null;
+  const currentVolume = config.volume_enabled ? volumes[volumes.length - 1] : null;
+  
+  // Calculate Pivot Points only if enabled
+  const pivotPoints = config.pivot_points_enabled ? (() => {
+    const pivotHigh = Math.max(...highs.slice(-config.pivot_points_lookback));
+    const pivotLow = Math.min(...lows.slice(-config.pivot_points_lookback));
+    const pivotClose = closes[closes.length - (config.pivot_points_lookback + 1)] || closes[0];
+    return calculatePivotPoints(pivotHigh, pivotLow, pivotClose);
+  })() : null;
   
   // Build conditions arrays dynamically based on enabled indicators
   const longConditions: boolean[] = [];
   const shortConditions: boolean[] = [];
   
   // EMA Trend (hvis enabled)
-  if (config.ema_enabled) {
-    const emaFastPrev = emaFast[emaFast.length - 2];
-    const emaMediumPrev = emaMedium[emaMedium.length - 2];
-    const emaSlowPrev = emaSlow[emaSlow.length - 2];
-    
+  if (config.ema_enabled && emaFast && emaMedium && emaSlow && emaFastCurrent !== null && emaMediumCurrent !== null && emaSlowCurrent !== null) {
     // LONG: Hurtig > Medium > Slow og prisen stiger
     const emaLongTrend = emaFastCurrent > emaMediumCurrent && emaMediumCurrent > emaSlowCurrent && currentPrice > closes[closes.length - 2];
     longConditions.push(emaLongTrend);
@@ -482,7 +489,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   }
   
   // RSI Crossover (hvis enabled)
-  if (config.rsi_enabled) {
+  if (config.rsi_enabled && rsiCurrent !== null && rsiPrevious !== null) {
     const rsiCrossedUpForLong = rsiCurrent > config.rsi_min_long && rsiPrevious <= config.rsi_min_long;
     longConditions.push(rsiCrossedUpForLong);
     
@@ -491,7 +498,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   }
   
   // StochRSI (hvis enabled)
-  if (config.stochrsi_enabled) {
+  if (config.stochrsi_enabled && stochRSI) {
     // LONG: StochRSI under oversold niveau
     const stochRSILong = stochRSI.k < config.stochrsi_oversold;
     longConditions.push(stochRSILong);
@@ -502,7 +509,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   }
   
   // MACD Histogram (hvis enabled)
-  if (config.macd_enabled) {
+  if (config.macd_enabled && macd && macdPrevious) {
     // LONG: Histogram skifter fra rød til grøn
     const macdColorChangeToGreen = macd.histogram > config.macd_histogram_threshold && macdPrevious.histogram <= config.macd_histogram_threshold;
     longConditions.push(macdColorChangeToGreen);
@@ -513,7 +520,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   }
   
   // Bollinger Bands (hvis enabled)
-  if (config.bb_enabled) {
+  if (config.bb_enabled && bb) {
     // LONG: Pris nær nedre bånd (køb når billigt)
     const nearLowerBand = currentPrice <= bb.lower * 1.01; // Inden for 1% af nedre bånd
     longConditions.push(nearLowerBand);
@@ -524,21 +531,21 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   }
   
   // ADX Trend Strength (hvis enabled)
-  if (config.adx_enabled) {
+  if (config.adx_enabled && adx !== null) {
     const strongTrend = adx > config.adx_threshold;
     longConditions.push(strongTrend);
     shortConditions.push(strongTrend);
   }
   
   // Volume (hvis enabled)
-  if (config.volume_enabled) {
+  if (config.volume_enabled && currentVolume !== null && avgVolume !== null) {
     const highVolume = currentVolume > avgVolume;
     longConditions.push(highVolume);
     shortConditions.push(highVolume);
   }
   
   // Pivot Points - Blokerer trades nær key levels (hvis enabled)
-  if (config.pivot_points_enabled) {
+  if (config.pivot_points_enabled && pivotPoints) {
     const nearResistance = (
       Math.abs(currentPrice - pivotPoints.r1) / currentPrice < config.pivot_points_near_threshold ||
       Math.abs(currentPrice - pivotPoints.r2) / currentPrice < config.pivot_points_near_threshold
@@ -560,6 +567,9 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   const longSignal = longConditions.filter(c => c).length >= requiredConditions;
   const shortSignal = shortConditions.filter(c => c).length >= requiredConditions;
   
+  // Calculate stop loss using ATR (fallback to 1% if ATR disabled)
+  const atrValue = atr || (currentPrice * 0.01);
+  
   return {
     signal: longSignal ? 'LONG' : shortSignal ? 'SHORT' : 'NONE',
     indicators: {
@@ -568,19 +578,19 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
       emaMedium: emaMediumCurrent,
       emaSlow: emaSlowCurrent,
       rsi: rsiCurrent,
-      stochRSI_k: stochRSI.k,
-      stochRSI_d: stochRSI.d,
-      macd: macd.histogram,
-      atr,
+      stochRSI_k: stochRSI?.k || null,
+      stochRSI_d: stochRSI?.d || null,
+      macd: macd?.histogram || null,
+      atr: atr,
       bb,
       adx,
       volume: currentVolume,
       avgVolume,
-      pivotPoints: config.pivot_points_enabled ? pivotPoints : null,
+      pivotPoints,
     },
     stopLoss: longSignal 
-      ? currentPrice - (atr * config.atr_stop_loss_multiplier)
-      : currentPrice + (atr * config.atr_stop_loss_multiplier),
+      ? currentPrice - (atrValue * config.atr_stop_loss_multiplier)
+      : currentPrice + (atrValue * config.atr_stop_loss_multiplier),
     takeProfit: null, // Kun trailing stop bruges til profit
   };
 }
@@ -1051,7 +1061,8 @@ serve(async (req) => {
               const openReason = `${analysis.signal} signal på ${symbol} - Trend: ${trend}. ${openReasonParts.join(', ')}`;
               
               // Calculate trailing stop percentage from ATR and config
-              const trailingStopDistance = analysis.indicators.atr * config.atr_trailing_stop_multiplier;
+              const atrValue = analysis.indicators.atr || (analysis.indicators.price * 0.01); // Fallback til 1% hvis ATR disabled
+              const trailingStopDistance = atrValue * config.atr_trailing_stop_multiplier;
               const trailingStopPercent = (trailingStopDistance / analysis.indicators.price) * 100;
               
               // Use actual values from Binance for database insert
