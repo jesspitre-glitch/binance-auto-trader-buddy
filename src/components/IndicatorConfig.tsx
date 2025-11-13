@@ -274,7 +274,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.rsi_min_long}
               onChange={(e) => setFormData({ ...formData, rsi_min_long: parseFloat(e.target.value) })}
             />
-            <p className="text-xs text-muted-foreground">LONG kun hvis RSI over denne værdi</p>
+            <p className="text-xs text-muted-foreground">LONG når RSI krydser OP over denne værdi</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="rsi_max_short">RSI for SHORT</Label>
@@ -285,7 +285,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.rsi_max_short}
               onChange={(e) => setFormData({ ...formData, rsi_max_short: parseFloat(e.target.value) })}
             />
-            <p className="text-xs text-muted-foreground">SHORT kun hvis RSI under denne værdi</p>
+            <p className="text-xs text-muted-foreground">SHORT når RSI krydser NED under denne værdi</p>
           </div>
         </CardContent>
       </Card>
