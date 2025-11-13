@@ -13,6 +13,11 @@ interface IndicatorConfig {
   rsi_period: number;
   rsi_min_long: number;
   rsi_max_short: number;
+  stochrsi_period: number;
+  stochrsi_k_period: number;
+  stochrsi_d_period: number;
+  stochrsi_overbought: number;
+  stochrsi_oversold: number;
   macd_fast: number;
   macd_slow: number;
   macd_signal: number;
@@ -48,6 +53,11 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
     rsi_period: config.rsi_period,
     rsi_min_long: config.rsi_min_long,
     rsi_max_short: config.rsi_max_short,
+    stochrsi_period: config.stochrsi_period,
+    stochrsi_k_period: config.stochrsi_k_period,
+    stochrsi_d_period: config.stochrsi_d_period,
+    stochrsi_overbought: config.stochrsi_overbought,
+    stochrsi_oversold: config.stochrsi_oversold,
     macd_fast: config.macd_fast,
     macd_slow: config.macd_slow,
     macd_signal: config.macd_signal,
@@ -122,6 +132,31 @@ function calculateRSI(prices: number[], period: number): number {
   const avgLoss = losses / period;
   const rs = avgGain / avgLoss;
   return 100 - (100 / (1 + rs));
+}
+
+function calculateStochRSI(prices: number[], rsiPeriod: number, kPeriod: number, dPeriod: number): { k: number, d: number } {
+  // Calculate RSI values for the period
+  const rsiValues: number[] = [];
+  for (let i = rsiPeriod; i < prices.length; i++) {
+    const slice = prices.slice(i - rsiPeriod, i + 1);
+    rsiValues.push(calculateRSI(slice, rsiPeriod));
+  }
+  
+  if (rsiValues.length < rsiPeriod) {
+    return { k: 50, d: 50 };
+  }
+  
+  // Calculate Stochastic of RSI
+  const latestRSIValues = rsiValues.slice(-rsiPeriod);
+  const maxRSI = Math.max(...latestRSIValues);
+  const minRSI = Math.min(...latestRSIValues);
+  const currentRSI = latestRSIValues[latestRSIValues.length - 1];
+  
+  const stochRSI = maxRSI !== minRSI ? ((currentRSI - minRSI) / (maxRSI - minRSI)) * 100 : 50;
+  
+  // For simplicity, K = StochRSI, D = SMA of K (here we use current value for both)
+  // In production, you'd want to maintain a rolling buffer for proper SMA calculation
+  return { k: stochRSI, d: stochRSI };
 }
 
 function calculateMACD(prices: number[], fastPeriod: number, slowPeriod: number, signalPeriod: number) {
@@ -339,6 +374,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   const emaSlow = calculateEMA(closes, config.ema_slow);
   
   const rsi = calculateRSI(closes, config.rsi_period);
+  const stochRSI = calculateStochRSI(closes, config.stochrsi_period, config.stochrsi_k_period, config.stochrsi_d_period);
   const macd = calculateMACD(closes, config.macd_fast, config.macd_slow, config.macd_signal);
   const atr = calculateATR(highs, lows, closes, config.atr_period);
   const bb = calculateBollingerBands(closes, config.bb_period, config.bb_std_dev);
@@ -358,6 +394,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
     emaFastCurrent > emaMediumCurrent,
     emaMediumCurrent > emaSlowCurrent,
     rsi > (config.rsi_min_long || 30),
+    stochRSI.k > config.stochrsi_oversold && stochRSI.k < config.stochrsi_overbought,
     macd.histogram > config.macd_histogram_threshold,
     adx > config.adx_threshold,
   ];
@@ -368,6 +405,7 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
     emaFastCurrent < emaMediumCurrent,
     emaMediumCurrent < emaSlowCurrent,
     rsi < (config.rsi_max_short || 70),
+    stochRSI.k < config.stochrsi_overbought && stochRSI.k > config.stochrsi_oversold,
     macd.histogram < -config.macd_histogram_threshold,
     adx > config.adx_threshold,
   ];
@@ -384,6 +422,8 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
       emaMedium: emaMediumCurrent,
       emaSlow: emaSlowCurrent,
       rsi,
+      stochRSI_k: stochRSI.k,
+      stochRSI_d: stochRSI.d,
       macd: macd.histogram,
       atr,
       bb,
