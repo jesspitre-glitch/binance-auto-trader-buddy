@@ -465,6 +465,33 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     : null;
   
   const atr = config.atr_enabled ? calculateATR(highs, lows, closes, config.atr_period) : null;
+  
+  // HÅRDT ATR FILTER - Hvis ATR er enabled og = 0, NO TRADE!
+  if (config.atr_enabled && atr !== null && atr === 0) {
+    console.log(`❌ ATR FILTER: ATR=0. Stop-loss og trailing stop kan ikke beregnes. Ingen trade.`);
+    return {
+      signal: 'NONE',
+      indicators: {
+        price: closes[closes.length - 1],
+        atr: 0,
+        emaFast: null,
+        emaMedium: null,
+        emaSlow: null,
+        rsi: null,
+        stochRSI_k: null,
+        stochRSI_d: null,
+        macd: null,
+        bb: null,
+        adx: null,
+        volume: null,
+        avgVolume: null,
+        pivotPoints: null,
+      },
+      stopLoss: 0,
+      takeProfit: null,
+    };
+  }
+  
   const bb = config.bb_enabled ? calculateBollingerBands(closes, config.bb_period, config.bb_std_dev) : null;
   
   // ADX beregnes på TREND timeframe, ikke scan interval
