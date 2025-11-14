@@ -18,7 +18,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: config?.name || "Default Strategy",
+    name: config?.name || "1",
     enabled: config?.enabled ?? true,
     
     // EMA
@@ -171,21 +171,47 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const payload = {
+      let finalPayload = {
         ...formData,
         user_id: user.id,
       };
+
+      // Hvis ny config (ikke update), find næste nummer i rækken
+      if (!config?.id) {
+        const { data: existingConfigs, error: fetchError } = await supabase
+          .from("indicator_config")
+          .select("name")
+          .eq("user_id", user.id);
+
+        if (fetchError) throw fetchError;
+
+        // Find højeste nummer i eksisterende navne
+        let maxNumber = 0;
+        existingConfigs?.forEach(c => {
+          const num = parseInt(c.name);
+          if (!isNaN(num) && num > maxNumber) {
+            maxNumber = num;
+          }
+        });
+
+        // Næste nummer i rækken
+        const nextNumber = maxNumber + 1;
+        finalPayload = {
+          ...finalPayload,
+          name: nextNumber.toString(),
+        };
+      }
 
       let result;
       if (config?.id) {
         result = await supabase
           .from("indicator_config")
-          .update(payload)
+          .update(finalPayload)
           .eq("id", config.id);
       } else {
         result = await supabase
           .from("indicator_config")
-          .insert(payload);
+          .insert(finalPayload);
       }
 
       if (result.error) throw result.error;
