@@ -443,44 +443,13 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // Calculate indicators only if enabled
   console.log(`Indicator config: EMA=${config.ema_enabled}, RSI=${config.rsi_enabled}, StochRSI=${config.stochrsi_enabled}, MACD=${config.macd_enabled}, BB=${config.bb_enabled}, ATR=${config.atr_enabled}, ADX=${config.adx_enabled}`);
   
+  // BEREGN ALLE INDICATORS FØRST (så de kan vises i UI selv når filtre fejler)
   const emaFast = config.ema_enabled ? calculateEMA(closes, config.ema_fast) : null;
   const emaMedium = config.ema_enabled ? calculateEMA(closes, config.ema_medium) : null;
   const emaSlow = config.ema_enabled ? calculateEMA(closes, config.ema_slow) : null;
   const emaFastCurrent = emaFast ? emaFast[emaFast.length - 1] : null;
   const emaMediumCurrent = emaMedium ? emaMedium[emaMedium.length - 1] : null;
   const emaSlowCurrent = emaSlow ? emaSlow[emaSlow.length - 1] : null;
-  
-  // HÅRDT EMA SPREAD FILTER - Tjek at EMA'erne har nok spread (ikke sidelæns marked)
-  if (config.ema_enabled && emaFastCurrent !== null && emaSlowCurrent !== null) {
-    const emaSpread = Math.abs(emaFastCurrent - emaSlowCurrent);
-    const emaSpreadPercent = (emaSpread / currentPrice) * 100;
-    
-    if (emaSpreadPercent < config.min_ema_spread_percent) {
-      console.log(`❌ EMA SPREAD FILTER: Spread=${emaSpreadPercent.toFixed(3)}% er under minimum=${config.min_ema_spread_percent}%. Sidelæns marked - ingen trade.`);
-      return {
-        signal: 'NONE',
-        indicators: {
-          price: currentPrice,
-          emaFast: emaFastCurrent,
-          emaMedium: emaMediumCurrent,
-          emaSlow: emaSlowCurrent,
-          emaSpreadPercent,
-          rsi: null,
-          stochRSI_k: null,
-          stochRSI_d: null,
-          macd: null,
-          atr: null,
-          bb: null,
-          adx: null,
-          volume: null,
-          avgVolume: null,
-          pivotPoints: null,
-        },
-        stopLoss: 0,
-        takeProfit: null,
-      };
-    }
-  }
   
   const rsiCurrent = config.rsi_enabled ? calculateRSI(closes, config.rsi_period) : null;
   const rsiPrevious = config.rsi_enabled ? calculateRSI(closes.slice(0, -1), config.rsi_period) : null;
@@ -501,6 +470,54 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     : null;
   
   const atr = config.atr_enabled ? calculateATR(highs, lows, closes, config.atr_period) : null;
+  const bb = config.bb_enabled ? calculateBollingerBands(closes, config.bb_period, config.bb_std_dev) : null;
+  
+  // ADX beregnes på TREND timeframe, ikke scan interval
+  const trendHighs = trendKlines.map(k => k.high);
+  const trendLows = trendKlines.map(k => k.low);
+  const trendCloses = trendKlines.map(k => k.close);
+  const adx = config.adx_enabled ? calculateADX(trendHighs, trendLows, trendCloses, config.adx_period) : null;
+  
+  const avgVolume = config.volume_enabled
+    ? volumes.slice(-config.volume_avg_period).reduce((a, b) => a + b, 0) / config.volume_avg_period
+    : null;
+  const currentVolume = config.volume_enabled ? volumes[volumes.length - 1] : null;
+  
+  // HÅRDT EMA SPREAD FILTER - Tjek at EMA'erne har nok spread (ikke sidelæns marked)
+  if (config.ema_enabled && emaFastCurrent !== null && emaSlowCurrent !== null) {
+    const emaSpread = Math.abs(emaFastCurrent - emaSlowCurrent);
+    const emaSpreadPercent = (emaSpread / currentPrice) * 100;
+    
+    if (emaSpreadPercent < config.min_ema_spread_percent) {
+      console.log(`❌ EMA SPREAD FILTER: Spread=${emaSpreadPercent.toFixed(3)}% er under minimum=${config.min_ema_spread_percent}%. Sidelæns marked - ingen trade.`);
+      return {
+        signal: 'NONE',
+        indicators: {
+          price: currentPrice,
+          emaFast: emaFastCurrent,
+          emaMedium: emaMediumCurrent,
+          emaSlow: emaSlowCurrent,
+          emaSpreadPercent,
+          rsi: rsiCurrent,
+          stochRSI_k: stochRSI?.k || null,
+          stochRSI_d: stochRSI?.d || null,
+          macd: macd?.histogram || null,
+          macdLine: macd?.macd || null,
+          macdSignal: macd?.signal || null,
+          atr: atr,
+          bb,
+          adx,
+          volume: currentVolume,
+          avgVolume,
+          volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
+          pivotPoints: null,
+        },
+        stopLoss: 0,
+        takeProfit: null,
+      };
+    }
+  }
+  
   
   // HÅRDT ATR FILTER - Hvis ATR er enabled og = 0, NO TRADE!
   if (config.atr_enabled && atr !== null && atr === 0) {
@@ -510,17 +527,20 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       indicators: {
         price: closes[closes.length - 1],
         atr: 0,
-        emaFast: null,
-        emaMedium: null,
-        emaSlow: null,
-        rsi: null,
-        stochRSI_k: null,
-        stochRSI_d: null,
-        macd: null,
-        bb: null,
-        adx: null,
-        volume: null,
-        avgVolume: null,
+        emaFast: emaFastCurrent,
+        emaMedium: emaMediumCurrent,
+        emaSlow: emaSlowCurrent,
+        rsi: rsiCurrent,
+        stochRSI_k: stochRSI?.k || null,
+        stochRSI_d: stochRSI?.d || null,
+        macd: macd?.histogram || null,
+        macdLine: macd?.macd || null,
+        macdSignal: macd?.signal || null,
+        bb,
+        adx,
+        volume: currentVolume,
+        avgVolume,
+        volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
         pivotPoints: null,
       },
       stopLoss: 0,
@@ -528,13 +548,6 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     };
   }
   
-  const bb = config.bb_enabled ? calculateBollingerBands(closes, config.bb_period, config.bb_std_dev) : null;
-  
-  // ADX beregnes på TREND timeframe, ikke scan interval
-  const trendHighs = trendKlines.map(k => k.high);
-  const trendLows = trendKlines.map(k => k.low);
-  const trendCloses = trendKlines.map(k => k.close);
-  const adx = config.adx_enabled ? calculateADX(trendHighs, trendLows, trendCloses, config.adx_period) : null;
   
   // HÅRDT ADX FILTER - Hvis ADX er enabled og under threshold, NO TRADE!
   if (config.adx_enabled && adx !== null && adx < config.adx_threshold) {
@@ -544,17 +557,20 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       indicators: {
         price: closes[closes.length - 1],
         adx,
-        emaFast: null,
-        emaMedium: null,
-        emaSlow: null,
-        rsi: null,
-        stochRSI_k: null,
-        stochRSI_d: null,
-        macd: null,
-        atr: null,
-        bb: null,
-        volume: null,
-        avgVolume: null,
+        emaFast: emaFastCurrent,
+        emaMedium: emaMediumCurrent,
+        emaSlow: emaSlowCurrent,
+        rsi: rsiCurrent,
+        stochRSI_k: stochRSI?.k || null,
+        stochRSI_d: stochRSI?.d || null,
+        macd: macd?.histogram || null,
+        macdLine: macd?.macd || null,
+        macdSignal: macd?.signal || null,
+        atr: atr,
+        bb,
+        volume: currentVolume,
+        avgVolume,
+        volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
         pivotPoints: null,
       },
       stopLoss: 0,
@@ -562,10 +578,6 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     };
   }
   
-  const avgVolume = config.volume_enabled
-    ? volumes.slice(-config.volume_avg_period).reduce((a, b) => a + b, 0) / config.volume_avg_period
-    : null;
-  const currentVolume = config.volume_enabled ? volumes[volumes.length - 1] : null;
   
   // HÅRDT VOLUMEN FILTER - Hvis volumen er enabled og under threshold, NO TRADE!
   if (config.volume_enabled && currentVolume !== null && avgVolume !== null) {
@@ -579,16 +591,18 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
           volume: currentVolume,
           avgVolume,
           volumeRatio: currentVolume / avgVolume,
-          emaFast: null,
-          emaMedium: null,
-          emaSlow: null,
-          rsi: null,
-          stochRSI_k: null,
-          stochRSI_d: null,
-          macd: null,
-          atr: null,
-          bb: null,
-          adx: null,
+          emaFast: emaFastCurrent,
+          emaMedium: emaMediumCurrent,
+          emaSlow: emaSlowCurrent,
+          rsi: rsiCurrent,
+          stochRSI_k: stochRSI?.k || null,
+          stochRSI_d: stochRSI?.d || null,
+          macd: macd?.histogram || null,
+          macdLine: macd?.macd || null,
+          macdSignal: macd?.signal || null,
+          atr: atr,
+          bb,
+          adx,
           pivotPoints: null,
         },
         stopLoss: 0,
