@@ -784,7 +784,14 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     avgVolume,
     volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
     pivotPoints,
-    conditionsMet, // Tilføjet for Live Monitor
+    conditionsMet,
+    // Tilføj condition details for historisk analyse
+    conditionDetails: {
+      ...conditionDetails,
+      longConditionsMet,
+      shortConditionsMet,
+      requiredConditions
+    }
   };
   
   console.log(`Indicators being saved: stochRSI_k=${indicators.stochRSI_k}, rsi=${indicators.rsi}, macd=${indicators.macd}, conditionsMet=${conditionsMet}`);
