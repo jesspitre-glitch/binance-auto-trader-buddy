@@ -65,6 +65,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     atr_period: config?.atr_period || 14,
     atr_stop_loss_multiplier: config?.atr_stop_loss_multiplier || 2,
     atr_trailing_stop_multiplier: config?.atr_trailing_stop_multiplier || 1.5,
+    break_even_atr: config?.break_even_atr || 1.0,
     
     // ADX
     adx_enabled: config?.adx_enabled ?? true,
@@ -138,6 +139,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       atr_period: config.atr_period ?? 14,
       atr_stop_loss_multiplier: config.atr_stop_loss_multiplier ?? 2,
       atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier ?? 1.5,
+      break_even_atr: config.break_even_atr ?? 1.0,
       // ADX
       adx_enabled: config.adx_enabled ?? true,
       adx_period: config.adx_period ?? 14,
@@ -594,7 +596,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <p className="text-xs text-muted-foreground">Højere = løsere SL (2.0 = 2×ATR)</p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="atr_trailing_stop_multiplier">Trailing Stop Multiplikator</Label>
+            <Label htmlFor="atr_trailing_stop_multiplier">ATR Trailing Stop Multiplier</Label>
             <Input
               id="atr_trailing_stop_multiplier"
               type="number"
@@ -602,7 +604,18 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.atr_trailing_stop_multiplier}
               onChange={(e) => setFormData({ ...formData, atr_trailing_stop_multiplier: parseFloat(e.target.value) })}
             />
-            <p className="text-xs text-muted-foreground">Afstand fra peak når TP nås (lavere = tættere)</p>
+            <p className="text-xs text-muted-foreground">Trailing stop afstand fra peak (× ATR)</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="break_even_atr">Break-Even ATR Multiplier</Label>
+            <Input
+              id="break_even_atr"
+              type="number"
+              step="0.1"
+              value={formData.break_even_atr}
+              onChange={(e) => setFormData({ ...formData, break_even_atr: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Flyt SL til entry når profit = (× ATR)</p>
           </div>
         </CardContent>
       </Card>
