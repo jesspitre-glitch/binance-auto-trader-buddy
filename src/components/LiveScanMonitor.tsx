@@ -46,23 +46,24 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
           table: "scan_results",
         },
         (payload) => {
-          console.log("Live Monitor - Real-time update:", payload);
           if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
             const newResult = payload.new as any;
-            console.log(`Live Monitor - Updating ${newResult.symbol} with conditionsMet:`, newResult.indicators?.conditionsMet);
             updateCoinStrength(newResult);
           }
         }
       )
-      .subscribe((status) => {
-        console.log("Live Monitor subscription status:", status);
-      });
+      .subscribe();
+
+    // Poll også hvert 2. sekund for at matche hovedscanneren's tempo
+    const interval = setInterval(() => {
+      fetchInitialScans();
+    }, 2000);
 
     return () => {
-      console.log("Live Monitor - Cleaning up subscription");
       supabase.removeChannel(channel);
+      clearInterval(interval);
     };
-  }, [open, config]); // Tilføjet config dependency
+  }, [open, config]);
 
   const fetchConfig = async () => {
     try {
