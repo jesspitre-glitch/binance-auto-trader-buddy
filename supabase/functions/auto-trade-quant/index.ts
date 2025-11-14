@@ -46,6 +46,7 @@ interface IndicatorConfig {
   adx_threshold: number;
   volume_enabled: boolean;
   volume_avg_period: number;
+  volume_multiplier: number;
   signal_conditions_required: number;
   position_size_percent: number;
   risk_per_trade_percent: number;
@@ -103,6 +104,7 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
     adx_threshold: config.adx_threshold,
     volume_enabled: config.volume_enabled,
     volume_avg_period: config.volume_avg_period,
+    volume_multiplier: config.volume_multiplier,
     signal_conditions_required: config.signal_conditions_required,
     position_size_percent: config.position_size_percent,
     risk_per_trade_percent: config.risk_per_trade_percent,
@@ -564,6 +566,36 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     ? volumes.slice(-config.volume_avg_period).reduce((a, b) => a + b, 0) / config.volume_avg_period
     : null;
   const currentVolume = config.volume_enabled ? volumes[volumes.length - 1] : null;
+  
+  // HÅRDT VOLUMEN FILTER - Hvis volumen er enabled og under threshold, NO TRADE!
+  if (config.volume_enabled && currentVolume !== null && avgVolume !== null) {
+    const requiredVolume = avgVolume * config.volume_multiplier;
+    if (currentVolume < requiredVolume) {
+      console.log(`❌ VOLUMEN FILTER: Volume=${currentVolume.toFixed(2)} er under required=${requiredVolume.toFixed(2)} (avg=${avgVolume.toFixed(2)} × ${config.volume_multiplier}). Ingen trade.`);
+      return {
+        signal: 'NONE',
+        indicators: {
+          price: closes[closes.length - 1],
+          volume: currentVolume,
+          avgVolume,
+          volumeRatio: currentVolume / avgVolume,
+          emaFast: null,
+          emaMedium: null,
+          emaSlow: null,
+          rsi: null,
+          stochRSI_k: null,
+          stochRSI_d: null,
+          macd: null,
+          atr: null,
+          bb: null,
+          adx: null,
+          pivotPoints: null,
+        },
+        stopLoss: 0,
+        takeProfit: null,
+      };
+    }
+  }
   
   // Calculate Pivot Points only if enabled
   const pivotPoints = config.pivot_points_enabled ? (() => {

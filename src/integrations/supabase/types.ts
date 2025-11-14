@@ -75,6 +75,7 @@ export type Database = {
           user_id: string
           volume_avg_period: number | null
           volume_enabled: boolean | null
+          volume_multiplier: number | null
         }
         Insert: {
           adx_enabled?: boolean | null
@@ -136,6 +137,7 @@ export type Database = {
           user_id: string
           volume_avg_period?: number | null
           volume_enabled?: boolean | null
+          volume_multiplier?: number | null
         }
         Update: {
           adx_enabled?: boolean | null
@@ -197,6 +199,7 @@ export type Database = {
           user_id?: string
           volume_avg_period?: number | null
           volume_enabled?: boolean | null
+          volume_multiplier?: number | null
         }
         Relationships: []
       }
