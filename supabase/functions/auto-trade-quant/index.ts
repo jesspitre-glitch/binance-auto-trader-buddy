@@ -741,27 +741,115 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   const shortConditionsMet = shortConditions.filter(c => c).length;
   const conditionsMet = Math.max(longConditionsMet, shortConditionsMet);
   
-  // 🔍 DETALJERET SIGNAL LOGGING
-  console.log(`\n═══ SIGNAL EVALUERING ═══`);
-  console.log(`Betingelser påkrævet: ${requiredConditions}`);
-  console.log(`\n📊 LONG betingelser (${longConditionsMet}/${longConditions.length} opfyldt):`);
-  console.log(`  - EMA:          ${conditionDetails.ema.enabled ? (conditionDetails.ema.long === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
-  console.log(`  - RSI:          ${conditionDetails.rsi.enabled ? (conditionDetails.rsi.long === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
-  console.log(`  - StochRSI:     ${conditionDetails.stochRSI.enabled ? (conditionDetails.stochRSI.long === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
-  console.log(`  - MACD:         ${conditionDetails.macd.enabled ? (conditionDetails.macd.long === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
-  console.log(`  - BB:           ${conditionDetails.bb.enabled ? (conditionDetails.bb.long === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
-  console.log(`  - Volume:       ${conditionDetails.volume.enabled ? (conditionDetails.volume.long === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
-  console.log(`  - Pivot Points: ${conditionDetails.pivotPoints.enabled ? (conditionDetails.pivotPoints.long === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
-  console.log(`\n📊 SHORT betingelser (${shortConditionsMet}/${shortConditions.length} opfyldt):`);
-  console.log(`  - EMA:          ${conditionDetails.ema.enabled ? (conditionDetails.ema.short === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
-  console.log(`  - RSI:          ${conditionDetails.rsi.enabled ? (conditionDetails.rsi.short === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
-  console.log(`  - StochRSI:     ${conditionDetails.stochRSI.enabled ? (conditionDetails.stochRSI.short === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
-  console.log(`  - MACD:         ${conditionDetails.macd.enabled ? (conditionDetails.macd.short === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
-  console.log(`  - BB:           ${conditionDetails.bb.enabled ? (conditionDetails.bb.short === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
-  console.log(`  - Volume:       ${conditionDetails.volume.enabled ? (conditionDetails.volume.short === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
-  console.log(`  - Pivot Points: ${conditionDetails.pivotPoints.enabled ? (conditionDetails.pivotPoints.short === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
-  console.log(`\n🎯 RESULTAT: ${longSignal ? '🟢 LONG SIGNAL' : shortSignal ? '🔴 SHORT SIGNAL' : '⚪ INGEN SIGNAL'}`);
-  console.log(`═══════════════════════\n`);
+  // 🔍 ULTRA-DETALJERET SIGNAL LOGGING MED VÆRDIER & THRESHOLDS
+  console.log(`\n═══════════════════════════════════════════`);
+  console.log(`📊 SIGNAL EVALUERING - Betingelser påkrævet: ${requiredConditions}`);
+  console.log(`═══════════════════════════════════════════\n`);
+  
+  // RÅ ARRAYS
+  console.log(`🔢 RÅ longConditions ARRAY: [${longConditions.map(c => c ? 'TRUE' : 'FALSE').join(', ')}]`);
+  console.log(`🔢 RÅ shortConditions ARRAY: [${shortConditions.map(c => c ? 'TRUE' : 'FALSE').join(', ')}]\n`);
+  
+  // EMA DETALJERET
+  if (config.ema_enabled && emaFastCurrent !== null && emaMediumCurrent !== null && emaSlowCurrent !== null) {
+    console.log(`📈 EMA:`);
+    console.log(`   Values: Fast=${emaFastCurrent.toFixed(4)}, Medium=${emaMediumCurrent.toFixed(4)}, Slow=${emaSlowCurrent.toFixed(4)}`);
+    console.log(`   Price: Current=${currentPrice.toFixed(4)}, Previous=${closes[closes.length - 2].toFixed(4)}`);
+    console.log(`   LONG (Fast>Med>Slow && Price↑): ${emaFastCurrent > emaMediumCurrent} && ${emaMediumCurrent > emaSlowCurrent} && ${currentPrice > closes[closes.length - 2]} = ${conditionDetails.ema.long ? '✅ TRUE' : '❌ FALSE'}`);
+    console.log(`   SHORT (Fast<Med<Slow && Price↓): ${emaFastCurrent < emaMediumCurrent} && ${emaMediumCurrent < emaSlowCurrent} && ${currentPrice < closes[closes.length - 2]} = ${conditionDetails.ema.short ? '✅ TRUE' : '❌ FALSE'}\n`);
+  } else {
+    console.log(`📈 EMA: ⚪ DISABLED\n`);
+  }
+  
+  // RSI DETALJERET
+  if (config.rsi_enabled && rsiCurrent !== null) {
+    console.log(`📊 RSI:`);
+    console.log(`   Current Value: ${rsiCurrent.toFixed(2)}`);
+    console.log(`   LONG threshold (oversolgt): < ${config.rsi_min_long}`);
+    console.log(`   SHORT threshold (overkøbt): > ${config.rsi_max_short}`);
+    console.log(`   LONG (${rsiCurrent.toFixed(2)} < ${config.rsi_min_long}): ${conditionDetails.rsi.long ? '✅ TRUE' : '❌ FALSE'}`);
+    console.log(`   SHORT (${rsiCurrent.toFixed(2)} > ${config.rsi_max_short}): ${conditionDetails.rsi.short ? '✅ TRUE' : '❌ FALSE'}\n`);
+  } else {
+    console.log(`📊 RSI: ⚪ DISABLED\n`);
+  }
+  
+  // STOCHRSI DETALJERET
+  if (config.stochrsi_enabled && stochRSI) {
+    console.log(`📉 StochRSI:`);
+    console.log(`   K Value: ${stochRSI.k.toFixed(2)}, D Value: ${stochRSI.d.toFixed(2)}`);
+    console.log(`   LONG threshold (oversolgt): < ${config.stochrsi_oversold}`);
+    console.log(`   SHORT threshold (overkøbt): > ${config.stochrsi_overbought}`);
+    console.log(`   LONG (${stochRSI.k.toFixed(2)} < ${config.stochrsi_oversold}): ${conditionDetails.stochRSI.long ? '✅ TRUE' : '❌ FALSE'}`);
+    console.log(`   SHORT (${stochRSI.k.toFixed(2)} > ${config.stochrsi_overbought}): ${conditionDetails.stochRSI.short ? '✅ TRUE' : '❌ FALSE'}\n`);
+  } else {
+    console.log(`📉 StochRSI: ⚪ DISABLED\n`);
+  }
+  
+  // MACD DETALJERET
+  if (config.macd_enabled && macd && macdPrevious) {
+    console.log(`📈 MACD:`);
+    console.log(`   Current Histogram: ${macd.histogram.toFixed(6)}`);
+    console.log(`   Previous Histogram: ${macdPrevious.histogram.toFixed(6)}`);
+    console.log(`   Threshold: ${config.macd_histogram_threshold}`);
+    console.log(`   LONG (Shift red→green): Current=${macd.histogram.toFixed(6)} > ${config.macd_histogram_threshold} && Prev=${macdPrevious.histogram.toFixed(6)} <= ${config.macd_histogram_threshold} = ${conditionDetails.macd.long ? '✅ TRUE' : '❌ FALSE'}`);
+    console.log(`   SHORT (Shift green→red): Current=${macd.histogram.toFixed(6)} < -${config.macd_histogram_threshold} && Prev=${macdPrevious.histogram.toFixed(6)} >= -${config.macd_histogram_threshold} = ${conditionDetails.macd.short ? '✅ TRUE' : '❌ FALSE'}\n`);
+  } else {
+    console.log(`📈 MACD: ⚪ DISABLED\n`);
+  }
+  
+  // BOLLINGER BANDS DETALJERET
+  if (config.bb_enabled && bb) {
+    console.log(`📊 Bollinger Bands:`);
+    console.log(`   Current Price: ${currentPrice.toFixed(4)}`);
+    console.log(`   Upper Band: ${bb.upper.toFixed(4)} (99% = ${(bb.upper * 0.99).toFixed(4)})`);
+    console.log(`   Lower Band: ${bb.lower.toFixed(4)} (101% = ${(bb.lower * 1.01).toFixed(4)})`);
+    console.log(`   LONG (Price near lower): ${currentPrice.toFixed(4)} <= ${(bb.lower * 1.01).toFixed(4)} = ${conditionDetails.bb.long ? '✅ TRUE' : '❌ FALSE'}`);
+    console.log(`   SHORT (Price near upper): ${currentPrice.toFixed(4)} >= ${(bb.upper * 0.99).toFixed(4)} = ${conditionDetails.bb.short ? '✅ TRUE' : '❌ FALSE'}\n`);
+  } else {
+    console.log(`📊 Bollinger Bands: ⚪ DISABLED\n`);
+  }
+  
+  // VOLUME DETALJERET
+  if (config.volume_enabled && currentVolume !== null && avgVolume !== null) {
+    const ratio = currentVolume / avgVolume;
+    console.log(`🔊 Volume:`);
+    console.log(`   Current Volume: ${currentVolume.toFixed(2)}`);
+    console.log(`   Average Volume: ${avgVolume.toFixed(2)}`);
+    console.log(`   Ratio: ${ratio.toFixed(2)}x`);
+    console.log(`   HIGH VOLUME (Current > Avg): ${currentVolume.toFixed(2)} > ${avgVolume.toFixed(2)} = ${conditionDetails.volume.long ? '✅ TRUE' : '❌ FALSE'}`);
+    console.log(`   (Samme for både LONG & SHORT)\n`);
+  } else {
+    console.log(`🔊 Volume: ⚪ DISABLED\n`);
+  }
+  
+  // PIVOT POINTS DETALJERET
+  if (config.pivot_points_enabled && pivotPoints) {
+    console.log(`📍 Pivot Points:`);
+    console.log(`   Current Price: ${currentPrice.toFixed(4)}`);
+    console.log(`   R1: ${pivotPoints.r1.toFixed(4)}, R2: ${pivotPoints.r2.toFixed(4)}`);
+    console.log(`   S1: ${pivotPoints.s1.toFixed(4)}, S2: ${pivotPoints.s2.toFixed(4)}`);
+    console.log(`   Threshold: ${(config.pivot_points_near_threshold * 100).toFixed(2)}%`);
+    const distR1 = Math.abs(currentPrice - pivotPoints.r1) / currentPrice;
+    const distR2 = Math.abs(currentPrice - pivotPoints.r2) / currentPrice;
+    const distS1 = Math.abs(currentPrice - pivotPoints.s1) / currentPrice;
+    const distS2 = Math.abs(currentPrice - pivotPoints.s2) / currentPrice;
+    console.log(`   Distance to R1: ${(distR1 * 100).toFixed(2)}%, R2: ${(distR2 * 100).toFixed(2)}%`);
+    console.log(`   Distance to S1: ${(distS1 * 100).toFixed(2)}%, S2: ${(distS2 * 100).toFixed(2)}%`);
+    const nearResistance = distR1 < config.pivot_points_near_threshold || distR2 < config.pivot_points_near_threshold;
+    const nearSupport = distS1 < config.pivot_points_near_threshold || distS2 < config.pivot_points_near_threshold;
+    console.log(`   LONG (NOT near resistance): !${nearResistance} = ${conditionDetails.pivotPoints.long ? '✅ TRUE' : '❌ FALSE'}`);
+    console.log(`   SHORT (NOT near support): !${nearSupport} = ${conditionDetails.pivotPoints.short ? '✅ TRUE' : '❌ FALSE'}\n`);
+  } else {
+    console.log(`📍 Pivot Points: ⚪ DISABLED\n`);
+  }
+  
+  // FINAL RESULTAT
+  console.log(`═══════════════════════════════════════════`);
+  console.log(`🎯 FINAL RESULTAT:`);
+  console.log(`   LONG: ${longConditionsMet}/${longConditions.length} betingelser opfyldt (kræver ${requiredConditions})`);
+  console.log(`   SHORT: ${shortConditionsMet}/${shortConditions.length} betingelser opfyldt (kræver ${requiredConditions})`);
+  console.log(`   SIGNAL: ${longSignal ? '🟢 LONG SIGNAL' : shortSignal ? '🔴 SHORT SIGNAL' : '⚪ INGEN SIGNAL'}`);
+  console.log(`═══════════════════════════════════════════\n`);
   
   // Calculate stop loss using ATR (fallback to 1% if ATR disabled)
   const atrValue = atr || (currentPrice * 0.01);
