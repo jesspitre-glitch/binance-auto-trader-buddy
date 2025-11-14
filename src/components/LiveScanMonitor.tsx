@@ -31,7 +31,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     fetchConfig();
     fetchInitialScans();
 
-    // Real-time subscription
+    // Real-time subscription med live opdatering
     const channel = supabase
       .channel("live-scan-monitor")
       .on(
@@ -44,14 +44,21 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
         (payload) => {
           if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
             const newResult = payload.new as any;
+            console.log("Live scan update:", newResult.symbol, newResult.indicators?.conditionsMet);
             updateCoinStrength(newResult);
           }
         }
       )
       .subscribe();
 
+    // Auto-refresh hvert 5 sekund for at holde data frisk
+    const interval = setInterval(() => {
+      fetchInitialScans();
+    }, 5000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(interval);
     };
   }, [open]);
 
@@ -180,85 +187,45 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 overflow-y-auto pr-2">
+        <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-1.5 overflow-y-auto pr-2">
           {sortedCoins.map((coin) => (
             <Card
               key={coin.symbol}
-              className={`p-2 border-2 transition-all duration-300 hover:scale-105 ${getBackgroundColor(
+              className={`p-1.5 border-2 transition-all duration-500 hover:scale-105 ${getBackgroundColor(
                 coin.strength
               )} ${getBorderColor(coin.strength)}`}
             >
-              <div className="space-y-2">
-                {/* Header */}
-                <div className="flex items-start justify-between gap-1">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm truncate">{coin.symbol}</div>
-                    <div className="text-xs opacity-70">
-                      {new Date(coin.lastUpdate).toLocaleTimeString("da-DK", { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                      })}
-                    </div>
+              <div className="space-y-1">
+                {/* Header - kun symbol og trend ikon */}
+                <div className="flex items-center justify-between gap-0.5">
+                  <div className="font-bold text-xs truncate flex-1 min-w-0">
+                    {coin.symbol.replace('USDC', '')}
                   </div>
                   {coin.trend === "BULLISH" ? (
-                    <TrendingUp className="h-4 w-4 flex-shrink-0" />
+                    <TrendingUp className="h-3 w-3 flex-shrink-0" />
                   ) : coin.trend === "BEARISH" ? (
-                    <TrendingDown className="h-4 w-4 flex-shrink-0" />
+                    <TrendingDown className="h-3 w-3 flex-shrink-0" />
                   ) : null}
                 </div>
 
-                {/* Signal Strength */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="opacity-70">Signal Styrke</span>
-                    <span className={`font-bold ${getTextColor(coin.strength)}`}>
-                      {coin.conditionsMet}/{coin.conditionsRequired}
-                    </span>
-                  </div>
-                  <div className="h-1.5 rounded-full overflow-hidden bg-muted/50">
+                {/* Signal Strength Bar */}
+                <div className="space-y-0.5">
+                  <div className="h-1 rounded-full overflow-hidden bg-muted/50">
                     <div 
-                      className={`h-full transition-all duration-300 ${getStrengthBarColor(coin.strength)}`}
+                      className={`h-full transition-all duration-500 ${getStrengthBarColor(coin.strength)}`}
                       style={{ width: `${Math.min(coin.strength, 100)}%` }}
                     />
                   </div>
-                  <div className={`text-center text-xs font-bold ${getTextColor(coin.strength)}`}>
-                    {coin.strength.toFixed(0)}%
+                  <div className={`text-center text-[10px] font-bold leading-none ${getTextColor(coin.strength)}`}>
+                    {coin.conditionsMet}/{coin.conditionsRequired}
                   </div>
                 </div>
 
-                {/* Quick Indicators */}
-                <div className="space-y-0.5 text-xs">
-                  {coin.indicators.rsi && (
-                    <div className="flex justify-between">
-                      <span className="opacity-70">RSI:</span>
-                      <span className="font-mono font-bold">
-                        {coin.indicators.rsi.toFixed(1)}
-                      </span>
-                    </div>
-                  )}
-                  {coin.indicators.adx && (
-                    <div className="flex justify-between">
-                      <span className="opacity-70">ADX:</span>
-                      <span className="font-mono font-bold">
-                        {coin.indicators.adx.toFixed(1)}
-                      </span>
-                    </div>
-                  )}
-                  {coin.indicators.volumeRatio !== undefined && coin.indicators.volumeRatio !== null && (
-                    <div className="flex justify-between">
-                      <span className="opacity-70">Vol:</span>
-                      <span className="font-mono font-bold">
-                        {(coin.indicators.volumeRatio * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Signal Badge */}
+                {/* Signal Badge - kun hvis der er signal */}
                 {coin.signal !== "NONE" && (
                   <Badge
                     variant={coin.signal === "LONG" ? "default" : "destructive"}
-                    className="w-full justify-center text-xs py-0"
+                    className="w-full justify-center text-[10px] py-0 h-4"
                   >
                     {coin.signal}
                   </Badge>
