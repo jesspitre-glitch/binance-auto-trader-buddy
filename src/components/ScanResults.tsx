@@ -4,14 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Search, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
+import { Loader2, Search, TrendingUp, TrendingDown, RefreshCw, Activity } from "lucide-react";
 import { ScanResultVisual } from "./ScanResultVisual";
+import { LiveScanMonitor } from "./LiveScanMonitor";
 
 export const ScanResults = () => {
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [selectedResult, setSelectedResult] = useState<any>(null);
+  const [liveMonitorOpen, setLiveMonitorOpen] = useState(false);
   const [config, setConfig] = useState<any>(null);
   const { toast } = useToast();
 
@@ -140,19 +142,29 @@ export const ScanResults = () => {
           <Search className="h-5 w-5" />
           Scan Resultater
         </CardTitle>
-        <Button onClick={triggerScan} disabled={scanning} size="sm">
-          {scanning ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Scanner...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Scan Nu
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={() => setLiveMonitorOpen(true)} 
+            variant="outline"
+            size="sm"
+          >
+            <Activity className="mr-2 h-4 w-4" />
+            Live Monitor
+          </Button>
+          <Button onClick={triggerScan} disabled={scanning} size="sm">
+            {scanning ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Scanner...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Scan Nu
+              </>
+            )}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {results.length === 0 ? (
@@ -235,6 +247,11 @@ export const ScanResults = () => {
         onOpenChange={(open) => !open && setSelectedResult(null)}
         result={selectedResult}
         config={config}
+      />
+      
+      <LiveScanMonitor
+        open={liveMonitorOpen}
+        onOpenChange={setLiveMonitorOpen}
       />
     </Card>
   );
