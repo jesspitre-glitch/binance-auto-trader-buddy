@@ -53,58 +53,12 @@ export const ExportTradesDialog = ({
       pnl: t.pnl.toFixed(2),
       pnl_pct: t.pnl_percent.toFixed(2) + "%",
       dur: Math.round((new Date(t.closed_at).getTime() - new Date(t.opened_at).getTime()) / 60000) + "m",
-      reason: t.close_reason,
-      indicators: t.indicators_snapshot ? {
-        ema: {
-          fast_9: t.indicators_snapshot.ema_fast,
-          medium_21: t.indicators_snapshot.ema_medium,
-          slow_50: t.indicators_snapshot.ema_slow,
-          trend_50: t.indicators_snapshot.ema_medium_trend
-        },
-        rsi: {
-          period_14: 14,
-          value: t.indicators_snapshot.rsi,
-          min_long: 20,
-          max_short: 80,
-          overbought: 80,
-          oversold: 30
-        },
-        macd: {
-          fast_12: 12,
-          slow_26: 26,
-          signal_9: 9,
-          histogram: t.indicators_snapshot.macd,
-          threshold: 0.0
-        },
-        atr: {
-          period_14: 14,
-          value: t.indicators_snapshot.atr,
-          stop_loss_multiplier: 2.80,
-          trailing_stop_multiplier: 2.00,
-          break_even_atr: 0.8
-        },
-        adx: {
-          period_14: 14,
-          value: t.indicators_snapshot.adx,
-          threshold: 40
-        },
-        volume: {
-          avg_period_20: 20,
-          value: t.indicators_snapshot.volume
-        },
-        config: {
-          scan_interval: "1m",
-          trend_timeframe: "5m",
-          higher_trend_timeframe: "15m",
-          klines_limit: 100,
-          leverage: 3,
-          position_size_percent: 20,
-          risk_per_trade_percent: 5,
-          max_positions: 5,
-          max_duration_minutes: 240,
-          signal_conditions_required: 3
-        }
-      } : null
+      open_reason: t.open_reason,
+      close_reason: t.close_reason,
+      opened_at: new Date(t.opened_at).toISOString(),
+      closed_at: new Date(t.closed_at).toISOString(),
+      // Inkluder ALLE indikator værdier og configuration der var aktiv ved trade open
+      all_indicators_and_config: t.indicators_snapshot || null
     }));
 
     return {
