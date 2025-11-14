@@ -224,10 +224,20 @@ export const StrategyAnalysis = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5" />
-            Strategi Performance Oversigt
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Strategi Performance Oversigt
+            </CardTitle>
+            {activeStrategyHash && (
+              <Badge variant="default" className="gap-2 px-3 py-1">
+                <CheckCircle2 className="h-4 w-4" />
+                <span className="font-mono text-sm">
+                  Aktiv: {strategies.find(s => s.strategy_hash === activeStrategyHash)?.config_name || activeStrategyHash.slice(0, 8)}
+                </span>
+              </Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -269,10 +279,21 @@ export const StrategyAnalysis = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {strategies.map((strategy) => (
+                {strategies
+                  .sort((a, b) => {
+                    // Sorter så aktiv strategi er øverst
+                    if (a.strategy_hash === activeStrategyHash) return -1;
+                    if (b.strategy_hash === activeStrategyHash) return 1;
+                    return b.total_pnl - a.total_pnl;
+                  })
+                  .map((strategy) => (
                   <TableRow 
                     key={strategy.strategy_hash}
-                    className={`cursor-pointer hover:bg-muted/50 ${strategy.strategy_hash === activeStrategyHash ? "bg-accent/40 border-l-4 border-primary" : ""}`}
+                    className={`cursor-pointer hover:bg-muted/50 transition-colors ${
+                      strategy.strategy_hash === activeStrategyHash 
+                        ? "bg-primary/10 border-l-4 border-l-primary font-semibold" 
+                        : ""
+                    }`}
                     onClick={() => setSelectedStrategy({ 
                       stats: strategy, 
                       trades: allTrades.filter(t => t.strategy_hash === strategy.strategy_hash) 
@@ -285,9 +306,9 @@ export const StrategyAnalysis = () => {
                           {strategy.config_name}
                         </code>
                         {strategy.strategy_hash === activeStrategyHash && (
-                          <Badge variant="default" className="gap-1">
+                          <Badge variant="default" className="gap-1 animate-pulse">
                             <CheckCircle2 className="h-3 w-3" />
-                            Aktiv
+                            Aktiv Nu
                           </Badge>
                         )}
                         <ExportTradesDialog 
