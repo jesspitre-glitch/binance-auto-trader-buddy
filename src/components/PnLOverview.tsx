@@ -390,23 +390,39 @@ export const PnLOverview = () => {
                     ? ((selectedPeriodTrades.filter(t => Number(t.pnl) > 0).length / selectedPeriodTrades.length) * 100).toFixed(1)
                     : 0;
                   
-                  const header = `Trades i perioden\n` +
-                    `Total P&L: $${totalPnL.toFixed(2)}\n` +
-                    `Antal Trades: ${selectedPeriodTrades.length}\n` +
-                    `Win Rate: ${winRate}%\n\n`;
+                  // Opbyg JSON format med ALLE detaljer for AI analyse
+                  const exportData = {
+                    summary: {
+                      total_pnl: totalPnL.toFixed(2) + " USDC",
+                      total_trades: selectedPeriodTrades.length,
+                      win_rate: winRate + "%",
+                      period: `${new Date(selectedPeriodTrades[selectedPeriodTrades.length - 1]?.closed_at).toLocaleDateString('da-DK')} - ${new Date(selectedPeriodTrades[0]?.closed_at).toLocaleDateString('da-DK')}`
+                    },
+                    trades: selectedPeriodTrades.map(t => ({
+                      symbol: t.symbol,
+                      side: t.side,
+                      entry_price: t.entry_price,
+                      exit_price: t.exit_price,
+                      quantity: t.quantity,
+                      pnl: Number(t.pnl).toFixed(2),
+                      pnl_percent: Number(t.pnl_percent).toFixed(2) + "%",
+                      duration_minutes: t.duration_minutes,
+                      opened_at: new Date(t.opened_at).toISOString(),
+                      closed_at: new Date(t.closed_at).toISOString(),
+                      open_reason: t.open_reason,
+                      close_reason: t.close_reason,
+                      strategy_hash: t.strategy_hash,
+                      // ALLE indikator værdier og konfiguration
+                      all_indicators_and_config: t.indicators_snapshot
+                    }))
+                  };
                   
-                  const tableHeader = `Symbol\tSide\tEntry\tExit\tQuantity\tP&L\tP&L %\tTidspunkt\n`;
+                  const jsonStr = JSON.stringify(exportData, null, 2);
                   
-                  const rows = selectedPeriodTrades.map(trade => 
-                    `${trade.symbol}\t${trade.side}\t$${Number(trade.entry_price).toFixed(2)}\t$${Number(trade.exit_price).toFixed(2)}\t${Number(trade.quantity).toFixed(4)}\t$${Number(trade.pnl).toFixed(2)}\t${Number(trade.pnl_percent).toFixed(2)}%\t${new Date(trade.closed_at).toLocaleString("da-DK")}`
-                  ).join('\n');
-                  
-                  const text = header + tableHeader + rows;
-                  
-                  navigator.clipboard.writeText(text).then(() => {
+                  navigator.clipboard.writeText(jsonStr).then(() => {
                     toast({
                       title: "Kopieret!",
-                      description: "Trades er kopieret til clipboard",
+                      description: `${selectedPeriodTrades.length} trades med ALLE indikator-værdier kopieret til clipboard`,
                     });
                   });
                 }}
