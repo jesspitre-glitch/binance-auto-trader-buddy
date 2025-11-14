@@ -448,34 +448,47 @@ export const PnLOverview = () => {
                     return lines.join(", ");
                   };
                   
-                  // Opbyg læsbar tekst
-                  const header = `=== TRADES I PERIODEN ===\n` +
-                    `Total P&L: $${totalPnL.toFixed(2)}\n` +
-                    `Antal Trades: ${selectedPeriodTrades.length}\n` +
-                    `Win Rate: ${winRate}%\n\n`;
-                  
-                  const tradesText = selectedPeriodTrades.map((trade, idx) => {
-                    return `\n--- TRADE ${idx + 1} ---\n` +
-                      `Symbol: ${trade.symbol}\n` +
-                      `Side: ${trade.side}\n` +
-                      `Entry: $${Number(trade.entry_price).toFixed(2)}, Exit: $${Number(trade.exit_price).toFixed(2)}\n` +
-                      `Quantity: ${Number(trade.quantity).toFixed(4)}\n` +
-                      `P&L: $${Number(trade.pnl).toFixed(2)} (${Number(trade.pnl_percent).toFixed(2)}%)\n` +
-                      `Varighed: ${trade.duration_minutes}m\n` +
-                      `Åbnet: ${new Date(trade.opened_at).toLocaleString("da-DK")}\n` +
-                      `Lukket: ${new Date(trade.closed_at).toLocaleString("da-DK")}\n` +
-                      `Open Reason: ${trade.open_reason || "N/A"}\n` +
-                      `Close Reason: ${trade.close_reason}\n` +
-                      `Strategi: ${trade.strategy_hash || "N/A"}\n` +
-                      `\nINDIKATORER:\n${formatIndicatorsText(trade.indicators_snapshot)}\n`;
-                  }).join('\n');
-                  
-                  const text = header + tradesText;
+                  // Byg TSV tabel med indikatorer i én kolonne som 'NAVN værdi'
+                  const header = `Symbol\tSide\tÅbnet\tLukket\tEntry\tExit\tP&L\tP&L%\tVarighed\tÅrsag\tIndikatorer\n`;
+
+                  const formatIndicatorLine = (s: any) => {
+                    if (!s) return "";
+                    const parts: string[] = [];
+                    const pushNum = (label: string, val?: number | null, digits = 2) => {
+                      if (val === undefined || val === null || isNaN(Number(val))) return;
+                      parts.push(`${label} ${Number(val).toFixed(digits)}`);
+                    };
+                    pushNum("ADX", s.adx, 2);
+                    pushNum("RSI", s.rsi, 2);
+                    pushNum("MACD", s.macd, 6);
+                    pushNum("ATR", s.atr, 2);
+                    pushNum("EMA9", s.emaFast, 2);
+                    pushNum("EMA21", s.emaMedium, 2);
+                    pushNum("EMA50", s.emaSlow, 2);
+                    pushNum("VOL", s.volume, 2);
+                    if (s.pivotPoints) pushNum("PP", s.pivotPoints.pp, 2);
+                    return parts.join(" ");
+                  };
+
+                  const rows = selectedPeriodTrades.map((t) => {
+                    const opened = new Date(t.opened_at).toLocaleString("da-DK");
+                    const closed = new Date(t.closed_at).toLocaleString("da-DK");
+                    const entry = String(t.entry_price);
+                    const exit = String(t.exit_price);
+                    const pnl = `${Number(t.pnl) >= 0 ? "" : "-"}$${Math.abs(Number(t.pnl)).toFixed(2)}`;
+                    const pnlPct = `${Number(t.pnl_percent).toFixed(2)}%`;
+                    const duration = `${t.duration_minutes}m`;
+                    const reason = t.close_reason || "";
+                    const ind = formatIndicatorLine(t.indicators_snapshot);
+                    return `${t.symbol}\t${t.side}\t${opened}\t${closed}\t${entry}\t${exit}\t${pnl}\t${pnlPct}\t${duration}\t${reason}\t${ind}`;
+                  }).join("\n");
+
+                  const text = header + rows;
                   
                   navigator.clipboard.writeText(text).then(() => {
                     toast({
                       title: "Kopieret!",
-                      description: `${selectedPeriodTrades.length} trades med ALLE indikator-værdier kopieret til clipboard`,
+                      description: `${selectedPeriodTrades.length} trades med indikatorer kopieret`,
                     });
                   });
                 }}
