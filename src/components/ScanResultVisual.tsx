@@ -69,6 +69,221 @@ export const ScanResultVisual = ({ open, onOpenChange, result, config }: ScanRes
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Condition Details - NY SEKTION */}
+          {indicators.conditionDetails && (
+            <Card className="border-primary/20">
+              <CardContent className="pt-6">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Activity className="h-4 w-4" />
+                    <span className="text-sm font-medium">Betingelser Evaluering</span>
+                    <Badge variant="outline" className="ml-auto">
+                      {indicators.conditionDetails.longConditionsMet || 0} LONG / {indicators.conditionDetails.shortConditionsMet || 0} SHORT
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* LONG Column */}
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold text-muted-foreground mb-2">LONG Betingelser</div>
+                      
+                      <div className="flex items-center justify-between text-sm">
+                        <span>EMA</span>
+                        {indicators.conditionDetails.ema.enabled ? (
+                          indicators.conditionDetails.ema.long ? (
+                            <Badge variant="default" className="bg-profit">✅ TRUE</Badge>
+                          ) : (
+                            <Badge variant="destructive">❌ FALSE</Badge>
+                          )
+                        ) : (
+                          <Badge variant="outline">⚪ OFF</Badge>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-sm">
+                        <span>RSI</span>
+                        {indicators.conditionDetails.rsi.enabled ? (
+                          indicators.conditionDetails.rsi.long ? (
+                            <Badge variant="default" className="bg-profit">✅ TRUE</Badge>
+                          ) : (
+                            <Badge variant="destructive">❌ FALSE</Badge>
+                          )
+                        ) : (
+                          <Badge variant="outline">⚪ OFF</Badge>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-sm">
+                        <span>StochRSI</span>
+                        {indicators.conditionDetails.stochRSI.enabled ? (
+                          indicators.conditionDetails.stochRSI.long ? (
+                            <Badge variant="default" className="bg-profit">✅ TRUE</Badge>
+                          ) : (
+                            <Badge variant="destructive">❌ FALSE</Badge>
+                          )
+                        ) : (
+                          <Badge variant="outline">⚪ OFF</Badge>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-sm">
+                        <span>MACD</span>
+                        {indicators.conditionDetails.macd.enabled ? (
+                          indicators.conditionDetails.macd.long ? (
+                            <Badge variant="default" className="bg-profit">✅ TRUE</Badge>
+                          ) : (
+                            <Badge variant="destructive">❌ FALSE</Badge>
+                          )
+                        ) : (
+                          <Badge variant="outline">⚪ OFF</Badge>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-sm">
+                        <span>BB</span>
+                        {indicators.conditionDetails.bb.enabled ? (
+                          indicators.conditionDetails.bb.long ? (
+                            <Badge variant="default" className="bg-profit">✅ TRUE</Badge>
+                          ) : (
+                            <Badge variant="destructive">❌ FALSE</Badge>
+                          )
+                        ) : (
+                          <Badge variant="outline">⚪ OFF</Badge>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Volume</span>
+                        {indicators.conditionDetails.volume.enabled ? (
+                          indicators.conditionDetails.volume.long ? (
+                            <Badge variant="default" className="bg-profit">✅ TRUE</Badge>
+                          ) : (
+                            <Badge variant="destructive">❌ FALSE</Badge>
+                          )
+                        ) : (
+                          <Badge variant="outline">⚪ OFF</Badge>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Pivot</span>
+                        {indicators.conditionDetails.pivotPoints.enabled ? (
+                          indicators.conditionDetails.pivotPoints.long ? (
+                            <Badge variant="default" className="bg-profit">✅ TRUE</Badge>
+                          ) : (
+                            <Badge variant="destructive">❌ FALSE</Badge>
+                          )
+                        ) : (
+                          <Badge variant="outline">⚪ OFF</Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* SHORT Column */}
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold text-muted-foreground mb-2">SHORT Betingelser</div>
+                      
+                      <div className="flex items-center justify-between text-sm">
+                        <span>EMA</span>
+                        {indicators.conditionDetails.ema.enabled ? (
+                          indicators.conditionDetails.ema.short ? (
+                            <Badge variant="default" className="bg-loss">✅ TRUE</Badge>
+                          ) : (
+                            <Badge variant="destructive">❌ FALSE</Badge>
+                          )
+                        ) : (
+                          <Badge variant="outline">⚪ OFF</Badge>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-sm">
+                        <span>RSI</span>
+                        {indicators.conditionDetails.rsi.enabled ? (
+                          indicators.conditionDetails.rsi.short ? (
+                            <Badge variant="default" className="bg-loss">✅ TRUE</Badge>
+                          ) : (
+                            <Badge variant="destructive">❌ FALSE</Badge>
+                          )
+                        ) : (
+                          <Badge variant="outline">⚪ OFF</Badge>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-sm">
+                        <span>StochRSI</span>
+                        {indicators.conditionDetails.stochRSI.enabled ? (
+                          indicators.conditionDetails.stochRSI.short ? (
+                            <Badge variant="default" className="bg-loss">✅ TRUE</Badge>
+                          ) : (
+                            <Badge variant="destructive">❌ FALSE</Badge>
+                          )
+                        ) : (
+                          <Badge variant="outline">⚪ OFF</Badge>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-sm">
+                        <span>MACD</span>
+                        {indicators.conditionDetails.macd.enabled ? (
+                          indicators.conditionDetails.macd.short ? (
+                            <Badge variant="default" className="bg-loss">✅ TRUE</Badge>
+                          ) : (
+                            <Badge variant="destructive">❌ FALSE</Badge>
+                          )
+                        ) : (
+                          <Badge variant="outline">⚪ OFF</Badge>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-sm">
+                        <span>BB</span>
+                        {indicators.conditionDetails.bb.enabled ? (
+                          indicators.conditionDetails.bb.short ? (
+                            <Badge variant="default" className="bg-loss">✅ TRUE</Badge>
+                          ) : (
+                            <Badge variant="destructive">❌ FALSE</Badge>
+                          )
+                        ) : (
+                          <Badge variant="outline">⚪ OFF</Badge>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Volume</span>
+                        {indicators.conditionDetails.volume.enabled ? (
+                          indicators.conditionDetails.volume.short ? (
+                            <Badge variant="default" className="bg-loss">✅ TRUE</Badge>
+                          ) : (
+                            <Badge variant="destructive">❌ FALSE</Badge>
+                          )
+                        ) : (
+                          <Badge variant="outline">⚪ OFF</Badge>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Pivot</span>
+                        {indicators.conditionDetails.pivotPoints.enabled ? (
+                          indicators.conditionDetails.pivotPoints.short ? (
+                            <Badge variant="default" className="bg-loss">✅ TRUE</Badge>
+                          ) : (
+                            <Badge variant="destructive">❌ FALSE</Badge>
+                          )
+                        ) : (
+                          <Badge variant="outline">⚪ OFF</Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground mt-3 pt-3 border-t">
+                    Påkrævet betingelser: {indicators.conditionDetails.requiredConditions || config.signal_conditions_required || 5}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Signal Strength */}
           <Card>
             <CardContent className="pt-6">
