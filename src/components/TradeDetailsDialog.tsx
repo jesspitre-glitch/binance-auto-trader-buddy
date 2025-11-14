@@ -158,15 +158,227 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
             <div className="border rounded-lg p-4">
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-1">
                 <AlertTriangle className="h-4 w-4" />
-                Indikator Snapshot
+                Alle Indikator Værdier
               </h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-                {Object.entries(trade.indicators_snapshot).map(([key, value]) => (
-                  <div key={key} className="flex justify-between">
-                    <span className="text-muted-foreground">{key}:</span>
-                    <span className="font-mono">{typeof value === 'number' ? value.toFixed(2) : String(value)}</span>
+              <div className="space-y-4">
+                {/* EMA Section */}
+                {(trade.indicators_snapshot.ema_fast || trade.indicators_snapshot.ema_medium || trade.indicators_snapshot.ema_slow) && (
+                  <div>
+                    <div className="text-xs font-semibold mb-2 text-primary">EMA (Exponential Moving Average)</div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                      {trade.indicators_snapshot.ema_fast && (
+                        <div className="flex justify-between border rounded p-2">
+                          <span className="text-muted-foreground">Fast (9):</span>
+                          <span className="font-mono">{Number(trade.indicators_snapshot.ema_fast).toFixed(2)}</span>
+                        </div>
+                      )}
+                      {trade.indicators_snapshot.ema_medium && (
+                        <div className="flex justify-between border rounded p-2">
+                          <span className="text-muted-foreground">Medium (21):</span>
+                          <span className="font-mono">{Number(trade.indicators_snapshot.ema_medium).toFixed(2)}</span>
+                        </div>
+                      )}
+                      {trade.indicators_snapshot.ema_slow && (
+                        <div className="flex justify-between border rounded p-2">
+                          <span className="text-muted-foreground">Slow (50):</span>
+                          <span className="font-mono">{Number(trade.indicators_snapshot.ema_slow).toFixed(2)}</span>
+                        </div>
+                      )}
+                      {trade.indicators_snapshot.ema_medium_trend && (
+                        <div className="flex justify-between border rounded p-2">
+                          <span className="text-muted-foreground">Trend (50):</span>
+                          <span className="font-mono">{Number(trade.indicators_snapshot.ema_medium_trend).toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                ))}
+                )}
+
+                {/* RSI Section */}
+                {trade.indicators_snapshot.rsi !== undefined && (
+                  <div>
+                    <div className="text-xs font-semibold mb-2 text-primary">RSI (Relative Strength Index)</div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Period:</span>
+                        <span className="font-mono">14</span>
+                      </div>
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Værdi:</span>
+                        <span className="font-mono font-semibold">{Number(trade.indicators_snapshot.rsi).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Min LONG:</span>
+                        <span className="font-mono">20</span>
+                      </div>
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Max SHORT:</span>
+                        <span className="font-mono">80</span>
+                      </div>
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Overbought:</span>
+                        <span className="font-mono">80</span>
+                      </div>
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Oversold:</span>
+                        <span className="font-mono">30</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* MACD Section */}
+                {trade.indicators_snapshot.macd !== undefined && (
+                  <div>
+                    <div className="text-xs font-semibold mb-2 text-primary">MACD (Moving Average Convergence Divergence)</div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Fast:</span>
+                        <span className="font-mono">12</span>
+                      </div>
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Slow:</span>
+                        <span className="font-mono">26</span>
+                      </div>
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Signal:</span>
+                        <span className="font-mono">9</span>
+                      </div>
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Histogram:</span>
+                        <span className="font-mono font-semibold">{Number(trade.indicators_snapshot.macd).toFixed(6)}</span>
+                      </div>
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Threshold:</span>
+                        <span className="font-mono">0.0</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ATR Section */}
+                {trade.indicators_snapshot.atr !== undefined && (
+                  <div>
+                    <div className="text-xs font-semibold mb-2 text-primary">ATR (Average True Range)</div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Period:</span>
+                        <span className="font-mono">14</span>
+                      </div>
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Værdi:</span>
+                        <span className="font-mono font-semibold">{Number(trade.indicators_snapshot.atr).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Stop Loss:</span>
+                        <span className="font-mono">2.80x ATR</span>
+                      </div>
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Trailing:</span>
+                        <span className="font-mono">2.00x ATR</span>
+                      </div>
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Break-even:</span>
+                        <span className="font-mono">0.8x ATR</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ADX Section */}
+                {trade.indicators_snapshot.adx !== undefined && (
+                  <div>
+                    <div className="text-xs font-semibold mb-2 text-primary">ADX (Average Directional Index)</div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Period:</span>
+                        <span className="font-mono">14</span>
+                      </div>
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Værdi:</span>
+                        <span className="font-mono font-semibold">{Number(trade.indicators_snapshot.adx).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Threshold:</span>
+                        <span className="font-mono">40</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Volume Section */}
+                {trade.indicators_snapshot.volume !== undefined && (
+                  <div>
+                    <div className="text-xs font-semibold mb-2 text-primary">Volume</div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Avg Period:</span>
+                        <span className="font-mono">20</span>
+                      </div>
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">Værdi:</span>
+                        <span className="font-mono font-semibold">{Number(trade.indicators_snapshot.volume).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Timeframes & Risk Section */}
+                <div>
+                  <div className="text-xs font-semibold mb-2 text-primary">Timeframes & Risk Management</div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                    <div className="flex justify-between border rounded p-2">
+                      <span className="text-muted-foreground">Scan Interval:</span>
+                      <span className="font-mono">1m</span>
+                    </div>
+                    <div className="flex justify-between border rounded p-2">
+                      <span className="text-muted-foreground">Trend TF:</span>
+                      <span className="font-mono">5m</span>
+                    </div>
+                    <div className="flex justify-between border rounded p-2">
+                      <span className="text-muted-foreground">Higher TF:</span>
+                      <span className="font-mono">15m</span>
+                    </div>
+                    <div className="flex justify-between border rounded p-2">
+                      <span className="text-muted-foreground">Klines:</span>
+                      <span className="font-mono">100</span>
+                    </div>
+                    <div className="flex justify-between border rounded p-2">
+                      <span className="text-muted-foreground">Leverage:</span>
+                      <span className="font-mono">3x</span>
+                    </div>
+                    <div className="flex justify-between border rounded p-2">
+                      <span className="text-muted-foreground">Position Size:</span>
+                      <span className="font-mono">20%</span>
+                    </div>
+                    <div className="flex justify-between border rounded p-2">
+                      <span className="text-muted-foreground">Risk/Trade:</span>
+                      <span className="font-mono">5%</span>
+                    </div>
+                    <div className="flex justify-between border rounded p-2">
+                      <span className="text-muted-foreground">Max Positions:</span>
+                      <span className="font-mono">5</span>
+                    </div>
+                    <div className="flex justify-between border rounded p-2">
+                      <span className="text-muted-foreground">Max Duration:</span>
+                      <span className="font-mono">240m</span>
+                    </div>
+                    <div className="flex justify-between border rounded p-2">
+                      <span className="text-muted-foreground">Signal Conditions:</span>
+                      <span className="font-mono">3</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Other indicators if any */}
+                {Object.entries(trade.indicators_snapshot)
+                  .filter(([key]) => !['ema_fast', 'ema_medium', 'ema_slow', 'ema_medium_trend', 'rsi', 'macd', 'atr', 'adx', 'volume', 'stochRSI_k'].includes(key))
+                  .map(([key, value]) => (
+                    <div key={key} className="flex justify-between text-xs border rounded p-2">
+                      <span className="text-muted-foreground">{key}:</span>
+                      <span className="font-mono">{typeof value === 'number' ? value.toFixed(2) : String(value)}</span>
+                    </div>
+                  ))}
               </div>
             </div>
           )}
