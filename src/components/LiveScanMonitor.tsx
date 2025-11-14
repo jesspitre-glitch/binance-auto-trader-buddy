@@ -28,12 +28,16 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
   useEffect(() => {
     if (!open) return;
 
-    fetchConfig();
-    fetchInitialScans();
+    const initMonitor = async () => {
+      await fetchConfig();
+      await fetchInitialScans();
+    };
 
-    // Real-time subscription med live opdatering
+    initMonitor();
+
+    // Real-time subscription - samme setup som ScanResults
     const channel = supabase
-      .channel("live-scan-monitor")
+      .channel("live-scan-monitor-realtime")
       .on(
         "postgres_changes",
         {
@@ -42,25 +46,23 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
           table: "scan_results",
         },
         (payload) => {
+          console.log("Live Monitor - Real-time update:", payload);
           if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
             const newResult = payload.new as any;
-            console.log("Live scan update:", newResult.symbol, newResult.indicators?.conditionsMet);
+            console.log(`Live Monitor - Updating ${newResult.symbol} with conditionsMet:`, newResult.indicators?.conditionsMet);
             updateCoinStrength(newResult);
           }
         }
       )
-      .subscribe();
-
-    // Auto-refresh hvert 5 sekund for at holde data frisk
-    const interval = setInterval(() => {
-      fetchInitialScans();
-    }, 5000);
+      .subscribe((status) => {
+        console.log("Live Monitor subscription status:", status);
+      });
 
     return () => {
+      console.log("Live Monitor - Cleaning up subscription");
       supabase.removeChannel(channel);
-      clearInterval(interval);
     };
-  }, [open]);
+  }, [open, config]); // Tilføjet config dependency
 
   const fetchConfig = async () => {
     try {
@@ -68,9 +70,10 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
         .from("indicator_config")
         .select("*")
         .eq("enabled", true)
-        .single();
+        .maybeSingle();
       
       if (error) throw error;
+      console.log("Live Monitor - Config loaded:", data?.signal_conditions_required);
       setConfig(data);
     } catch (error) {
       console.error("Error fetching config:", error);
@@ -79,13 +82,16 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
 
   const fetchInitialScans = async () => {
     try {
+      console.log("Live Monitor - Fetching initial scans");
       const { data, error } = await supabase
         .from("scan_results")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(100);
+        .limit(200); // Øget limit for at få flere coins
 
       if (error) throw error;
+
+      console.log(`Live Monitor - Fetched ${data?.length || 0} scan results`);
 
       // Keep only latest for each symbol
       const latestBySymbol = new Map<string, any>();
@@ -94,6 +100,8 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
           latestBySymbol.set(row.symbol, row);
         }
       });
+
+      console.log(`Live Monitor - Processing ${latestBySymbol.size} unique symbols`);
 
       latestBySymbol.forEach((result) => {
         updateCoinStrength(result);
@@ -104,12 +112,17 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
   };
 
   const updateCoinStrength = (result: any) => {
-    if (!result.indicators) return;
+    if (!result.indicators) {
+      console.log(`No indicators for ${result.symbol}`);
+      return;
+    }
 
     const indicators = result.indicators;
     const conditionsMet = indicators.conditionsMet || 0;
     const conditionsRequired = config?.signal_conditions_required || 5;
     const strength = (conditionsMet / conditionsRequired) * 100;
+
+    console.log(`Updating ${result.symbol}: strength=${strength.toFixed(1)}%, conditions=${conditionsMet}/${conditionsRequired}`);
 
     setCoins((prev) => {
       const newMap = new Map(prev);
