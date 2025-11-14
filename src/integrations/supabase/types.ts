@@ -16,21 +16,31 @@ export type Database = {
     Tables: {
       indicator_config: {
         Row: {
+          adx_enabled: boolean | null
           adx_period: number | null
           adx_threshold: number | null
+          atr_enabled: boolean | null
           atr_period: number | null
           atr_stop_loss_multiplier: number | null
+          atr_take_profit_multiplier: number | null
           atr_trailing_stop_multiplier: number | null
+          bb_enabled: boolean | null
           bb_period: number | null
           bb_std_dev: number | null
+          break_even_atr: number | null
           created_at: string | null
           daily_loss_limit_percent: number | null
+          ema_enabled: boolean | null
           ema_fast: number | null
           ema_medium: number | null
+          ema_medium_trend: number | null
           ema_slow: number | null
           enabled: boolean | null
+          higher_trend_timeframe: string | null
           id: string
+          klines_limit: number | null
           leverage: number | null
+          macd_enabled: boolean | null
           macd_fast: number | null
           macd_histogram_threshold: number | null
           macd_signal: number | null
@@ -39,9 +49,13 @@ export type Database = {
           max_open_positions: number | null
           max_position_duration_minutes: number | null
           name: string
+          pivot_points_enabled: boolean | null
+          pivot_points_lookback: number | null
+          pivot_points_near_threshold: number | null
+          pivot_points_timeframe: string | null
           position_size_percent: number | null
           risk_per_trade_percent: number | null
-          risk_reward_ratio: number | null
+          rsi_enabled: boolean | null
           rsi_max_short: number | null
           rsi_min_long: number | null
           rsi_overbought: number | null
@@ -49,27 +63,44 @@ export type Database = {
           rsi_period: number | null
           scan_interval: string | null
           signal_conditions_required: number | null
+          stochrsi_d_period: number | null
+          stochrsi_enabled: boolean | null
+          stochrsi_k_period: number | null
+          stochrsi_overbought: number | null
+          stochrsi_oversold: number | null
+          stochrsi_period: number | null
           trend_timeframe: string | null
           updated_at: string | null
           user_id: string
           volume_avg_period: number | null
+          volume_enabled: boolean | null
         }
         Insert: {
+          adx_enabled?: boolean | null
           adx_period?: number | null
           adx_threshold?: number | null
+          atr_enabled?: boolean | null
           atr_period?: number | null
           atr_stop_loss_multiplier?: number | null
+          atr_take_profit_multiplier?: number | null
           atr_trailing_stop_multiplier?: number | null
+          bb_enabled?: boolean | null
           bb_period?: number | null
           bb_std_dev?: number | null
+          break_even_atr?: number | null
           created_at?: string | null
           daily_loss_limit_percent?: number | null
+          ema_enabled?: boolean | null
           ema_fast?: number | null
           ema_medium?: number | null
+          ema_medium_trend?: number | null
           ema_slow?: number | null
           enabled?: boolean | null
+          higher_trend_timeframe?: string | null
           id?: string
+          klines_limit?: number | null
           leverage?: number | null
+          macd_enabled?: boolean | null
           macd_fast?: number | null
           macd_histogram_threshold?: number | null
           macd_signal?: number | null
@@ -78,9 +109,13 @@ export type Database = {
           max_open_positions?: number | null
           max_position_duration_minutes?: number | null
           name: string
+          pivot_points_enabled?: boolean | null
+          pivot_points_lookback?: number | null
+          pivot_points_near_threshold?: number | null
+          pivot_points_timeframe?: string | null
           position_size_percent?: number | null
           risk_per_trade_percent?: number | null
-          risk_reward_ratio?: number | null
+          rsi_enabled?: boolean | null
           rsi_max_short?: number | null
           rsi_min_long?: number | null
           rsi_overbought?: number | null
@@ -88,27 +123,44 @@ export type Database = {
           rsi_period?: number | null
           scan_interval?: string | null
           signal_conditions_required?: number | null
+          stochrsi_d_period?: number | null
+          stochrsi_enabled?: boolean | null
+          stochrsi_k_period?: number | null
+          stochrsi_overbought?: number | null
+          stochrsi_oversold?: number | null
+          stochrsi_period?: number | null
           trend_timeframe?: string | null
           updated_at?: string | null
           user_id: string
           volume_avg_period?: number | null
+          volume_enabled?: boolean | null
         }
         Update: {
+          adx_enabled?: boolean | null
           adx_period?: number | null
           adx_threshold?: number | null
+          atr_enabled?: boolean | null
           atr_period?: number | null
           atr_stop_loss_multiplier?: number | null
+          atr_take_profit_multiplier?: number | null
           atr_trailing_stop_multiplier?: number | null
+          bb_enabled?: boolean | null
           bb_period?: number | null
           bb_std_dev?: number | null
+          break_even_atr?: number | null
           created_at?: string | null
           daily_loss_limit_percent?: number | null
+          ema_enabled?: boolean | null
           ema_fast?: number | null
           ema_medium?: number | null
+          ema_medium_trend?: number | null
           ema_slow?: number | null
           enabled?: boolean | null
+          higher_trend_timeframe?: string | null
           id?: string
+          klines_limit?: number | null
           leverage?: number | null
+          macd_enabled?: boolean | null
           macd_fast?: number | null
           macd_histogram_threshold?: number | null
           macd_signal?: number | null
@@ -117,9 +169,13 @@ export type Database = {
           max_open_positions?: number | null
           max_position_duration_minutes?: number | null
           name?: string
+          pivot_points_enabled?: boolean | null
+          pivot_points_lookback?: number | null
+          pivot_points_near_threshold?: number | null
+          pivot_points_timeframe?: string | null
           position_size_percent?: number | null
           risk_per_trade_percent?: number | null
-          risk_reward_ratio?: number | null
+          rsi_enabled?: boolean | null
           rsi_max_short?: number | null
           rsi_min_long?: number | null
           rsi_overbought?: number | null
@@ -127,16 +183,24 @@ export type Database = {
           rsi_period?: number | null
           scan_interval?: string | null
           signal_conditions_required?: number | null
+          stochrsi_d_period?: number | null
+          stochrsi_enabled?: boolean | null
+          stochrsi_k_period?: number | null
+          stochrsi_overbought?: number | null
+          stochrsi_oversold?: number | null
+          stochrsi_period?: number | null
           trend_timeframe?: string | null
           updated_at?: string | null
           user_id?: string
           volume_avg_period?: number | null
+          volume_enabled?: boolean | null
         }
         Relationships: []
       }
       positions: {
         Row: {
           binance_order_id: string | null
+          break_even_activated: boolean | null
           close_reason: string | null
           closed_at: string | null
           created_at: string | null
@@ -162,6 +226,7 @@ export type Database = {
         }
         Insert: {
           binance_order_id?: string | null
+          break_even_activated?: boolean | null
           close_reason?: string | null
           closed_at?: string | null
           created_at?: string | null
@@ -187,6 +252,7 @@ export type Database = {
         }
         Update: {
           binance_order_id?: string | null
+          break_even_activated?: boolean | null
           close_reason?: string | null
           closed_at?: string | null
           created_at?: string | null

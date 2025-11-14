@@ -473,7 +473,33 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   const trendCloses = trendKlines.map(k => k.close);
   const adx = config.adx_enabled ? calculateADX(trendHighs, trendLows, trendCloses, config.adx_period) : null;
   
-  const avgVolume = config.volume_enabled 
+  // HÅRDT ADX FILTER - Hvis ADX er enabled og under threshold, NO TRADE!
+  if (config.adx_enabled && adx !== null && adx < config.adx_threshold) {
+    console.log(`❌ ADX FILTER: ADX=${adx.toFixed(2)} er under threshold=${config.adx_threshold}. Ingen trade.`);
+    return {
+      signal: 'NONE',
+      indicators: {
+        price: closes[closes.length - 1],
+        adx,
+        emaFast: null,
+        emaMedium: null,
+        emaSlow: null,
+        rsi: null,
+        stochRSI_k: null,
+        stochRSI_d: null,
+        macd: null,
+        atr: null,
+        bb: null,
+        volume: null,
+        avgVolume: null,
+        pivotPoints: null,
+      },
+      stopLoss: 0,
+      takeProfit: null,
+    };
+  }
+  
+  const avgVolume = config.volume_enabled
     ? volumes.slice(-config.volume_avg_period).reduce((a, b) => a + b, 0) / config.volume_avg_period
     : null;
   const currentVolume = config.volume_enabled ? volumes[volumes.length - 1] : null;
@@ -543,12 +569,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     shortConditions.push(nearUpperBand);
   }
   
-  // ADX Trend Strength (hvis enabled)
-  if (config.adx_enabled && adx !== null) {
-    const strongTrend = adx > config.adx_threshold;
-    longConditions.push(strongTrend);
-    shortConditions.push(strongTrend);
-  }
+  // ADX er nu et HÅRDT filter - checket sker tidligt i funktionen
+  // Ingen condition push nødvendig her
   
   // Volume (hvis enabled)
   if (config.volume_enabled && currentVolume !== null && avgVolume !== null) {
