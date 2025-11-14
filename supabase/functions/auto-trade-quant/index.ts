@@ -429,7 +429,7 @@ function calculatePivotPoints(high: number, low: number, close: number) {
   return { pp, r1, s1, r2, s2, r3, s3 };
 }
 
-function analyzeSignal(klines: any[], config: IndicatorConfig) {
+function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfig) {
   const closes = klines.map(k => k.close);
   const highs = klines.map(k => k.high);
   const lows = klines.map(k => k.low);
@@ -466,7 +466,12 @@ function analyzeSignal(klines: any[], config: IndicatorConfig) {
   
   const atr = config.atr_enabled ? calculateATR(highs, lows, closes, config.atr_period) : null;
   const bb = config.bb_enabled ? calculateBollingerBands(closes, config.bb_period, config.bb_std_dev) : null;
-  const adx = config.adx_enabled ? calculateADX(highs, lows, closes, config.adx_period) : null;
+  
+  // ADX beregnes på TREND timeframe, ikke scan interval
+  const trendHighs = trendKlines.map(k => k.high);
+  const trendLows = trendKlines.map(k => k.low);
+  const trendCloses = trendKlines.map(k => k.close);
+  const adx = config.adx_enabled ? calculateADX(trendHighs, trendLows, trendCloses, config.adx_period) : null;
   
   const avgVolume = config.volume_enabled 
     ? volumes.slice(-config.volume_avg_period).reduce((a, b) => a + b, 0) / config.volume_avg_period
@@ -889,8 +894,8 @@ serve(async (req) => {
           const trend = analyzeMediumTrend(trendKlines, config);
           const higherTrend = analyzeHigherTrend(higherTrendKlines, config);
           
-          // Analyze signal on scan interval
-          const analysis = analyzeSignal(scanKlines, config);
+          // Analyze signal on scan interval (men ADX beregnes på trend timeframe)
+          const analysis = analyzeSignal(scanKlines, trendKlines, config);
           
           // Filter signal based on BOTH trend timeframes
           // BEGGE trends skal godkende handlen - ellers blokeres den
