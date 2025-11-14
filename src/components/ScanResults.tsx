@@ -5,11 +5,14 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Search, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
+import { ScanResultVisual } from "./ScanResultVisual";
 
 export const ScanResults = () => {
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const [selectedResult, setSelectedResult] = useState<any>(null);
+  const [config, setConfig] = useState<any>(null);
   const { toast } = useToast();
 
   const fetchResults = async () => {
@@ -38,6 +41,7 @@ export const ScanResults = () => {
 
   useEffect(() => {
     fetchResults();
+    fetchConfig();
 
     // Realtime subscription
     const channel = supabase
@@ -72,6 +76,21 @@ export const ScanResults = () => {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  const fetchConfig = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("indicator_config")
+        .select("*")
+        .eq("enabled", true)
+        .single();
+      
+      if (error) throw error;
+      setConfig(data);
+    } catch (error) {
+      console.error("Error fetching config:", error);
+    }
+  };
 
   const triggerScan = async () => {
     setScanning(true);
@@ -145,7 +164,8 @@ export const ScanResults = () => {
             {results.map((result) => (
               <div
                 key={result.id}
-                className="flex items-center justify-between border rounded-lg p-4"
+                className="flex items-center justify-between border rounded-lg p-4 hover:bg-accent transition-colors cursor-pointer"
+                onClick={() => setSelectedResult(result)}
               >
                 <div className="flex items-center gap-4">
                   {result.signal === "LONG" ? (
@@ -209,6 +229,13 @@ export const ScanResults = () => {
           </div>
         )}
       </CardContent>
+      
+      <ScanResultVisual
+        open={!!selectedResult}
+        onOpenChange={(open) => !open && setSelectedResult(null)}
+        result={selectedResult}
+        config={config}
+      />
     </Card>
   );
 };
