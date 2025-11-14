@@ -27,6 +27,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     ema_medium: config?.ema_medium || 21,
     ema_slow: config?.ema_slow || 50,
     ema_medium_trend: config?.ema_medium_trend || 50,
+    min_ema_spread_percent: config?.min_ema_spread_percent ?? 0.2,
     
     // RSI
     rsi_enabled: config?.rsi_enabled ?? true,
@@ -107,6 +108,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       ema_medium: config.ema_medium ?? 21,
       ema_slow: config.ema_slow ?? 50,
       ema_medium_trend: config.ema_medium_trend ?? 50,
+      min_ema_spread_percent: config.min_ema_spread_percent ?? 0.2,
       // RSI
       rsi_enabled: config.rsi_enabled ?? true,
       rsi_period: config.rsi_period ?? 14,
@@ -312,6 +314,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               onChange={(e) => setFormData({ ...formData, ema_medium_trend: parseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">EMA for medium trend analyse (f.eks. 50)</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="min_ema_spread_percent">Minimum EMA Spread (%)</Label>
+            <Input
+              id="min_ema_spread_percent"
+              type="number"
+              step="0.01"
+              value={formData.min_ema_spread_percent}
+              onChange={(e) => setFormData({ ...formData, min_ema_spread_percent: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Minimum afstand mellem Fast og Slow EMA i % af pris (f.eks. 0.15-0.20)</p>
           </div>
         </CardContent>
       </Card>

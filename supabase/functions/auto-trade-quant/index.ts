@@ -12,6 +12,7 @@ interface IndicatorConfig {
   ema_medium: number;
   ema_slow: number;
   ema_medium_trend: number;
+  min_ema_spread_percent: number;
   rsi_enabled: boolean;
   rsi_period: number;
   rsi_min_long: number;
@@ -68,6 +69,7 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
     ema_medium: config.ema_medium,
     ema_slow: config.ema_slow,
     ema_medium_trend: config.ema_medium_trend,
+    min_ema_spread_percent: config.min_ema_spread_percent,
     rsi_enabled: config.rsi_enabled,
     rsi_period: config.rsi_period,
     rsi_min_long: config.rsi_min_long,
@@ -445,6 +447,38 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   const emaFastCurrent = emaFast ? emaFast[emaFast.length - 1] : null;
   const emaMediumCurrent = emaMedium ? emaMedium[emaMedium.length - 1] : null;
   const emaSlowCurrent = emaSlow ? emaSlow[emaSlow.length - 1] : null;
+  
+  // HÅRDT EMA SPREAD FILTER - Tjek at EMA'erne har nok spread (ikke sidelæns marked)
+  if (config.ema_enabled && emaFastCurrent !== null && emaSlowCurrent !== null) {
+    const emaSpread = Math.abs(emaFastCurrent - emaSlowCurrent);
+    const emaSpreadPercent = (emaSpread / currentPrice) * 100;
+    
+    if (emaSpreadPercent < config.min_ema_spread_percent) {
+      console.log(`❌ EMA SPREAD FILTER: Spread=${emaSpreadPercent.toFixed(3)}% er under minimum=${config.min_ema_spread_percent}%. Sidelæns marked - ingen trade.`);
+      return {
+        signal: 'NONE',
+        indicators: {
+          price: currentPrice,
+          emaFast: emaFastCurrent,
+          emaMedium: emaMediumCurrent,
+          emaSlow: emaSlowCurrent,
+          emaSpreadPercent,
+          rsi: null,
+          stochRSI_k: null,
+          stochRSI_d: null,
+          macd: null,
+          atr: null,
+          bb: null,
+          adx: null,
+          volume: null,
+          avgVolume: null,
+          pivotPoints: null,
+        },
+        stopLoss: 0,
+        takeProfit: null,
+      };
+    }
+  }
   
   const rsiCurrent = config.rsi_enabled ? calculateRSI(closes, config.rsi_period) : null;
   const rsiPrevious = config.rsi_enabled ? calculateRSI(closes.slice(0, -1), config.rsi_period) : null;
