@@ -99,11 +99,33 @@ export const StrategyDetailsDialog = ({
   }, [isOpen, strategyHash, trades]);
 
   const copyTradesToClipboard = () => {
-    const tradesText = trades.map(t => 
-      `${t.symbol}\t${t.side}\t${format(new Date(t.opened_at), 'dd/MM/yyyy HH:mm', { locale: da })}\t${format(new Date(t.closed_at), 'dd/MM/yyyy HH:mm', { locale: da })}\t${t.entry_price}\t${t.exit_price}\t${t.pnl.toFixed(2)}\t${t.pnl_percent.toFixed(2)}%\t${t.duration_minutes || 0}m\t${t.close_reason || ''}`
-    ).join('\n');
+    const formatIndicatorLine = (s: any) => {
+      if (!s) return "";
+      const parts: string[] = [];
+      const pushNum = (label: string, val?: number | null, digits = 2) => {
+        if (val === undefined || val === null || isNaN(Number(val))) return;
+        parts.push(`${label} ${Number(val).toFixed(digits)}`);
+      };
+      pushNum("ADX", s.adx, 2);
+      pushNum("RSI", s.rsi, 2);
+      pushNum("MACD", s.macd, 6);
+      pushNum("ATR", s.atr, 2);
+      pushNum("EMA9", s.emaFast, 2);
+      pushNum("EMA21", s.emaMedium, 2);
+      pushNum("EMA50", s.emaSlow, 2);
+      pushNum("VOL", s.volume, 2);
+      if (s.pivotPoints) pushNum("PP", s.pivotPoints.pp, 2);
+      return parts.join(" ");
+    };
+
+    const tradesText = trades.map(t => {
+      const opened = format(new Date(t.opened_at), 'dd/MM/yyyy HH:mm', { locale: da });
+      const closed = format(new Date(t.closed_at), 'dd/MM/yyyy HH:mm', { locale: da });
+      const indicators = formatIndicatorLine(t.indicators_snapshot);
+      return `${t.symbol}\t${t.side}\t${opened}\t${closed}\t${t.entry_price}\t${t.exit_price}\t${t.pnl.toFixed(2)}\t${t.pnl_percent.toFixed(2)}%\t${(t.duration_minutes || 0)}m\t${t.close_reason || ''}\t${indicators}`;
+    }).join('\n');
     
-    const header = 'Symbol\tSide\tÅbnet\tLukket\tEntry\tExit\tPnL\tPnL%\tVarighed\tÅrsag\n';
+    const header = 'Symbol\tSide\tÅbnet\tLukket\tEntry\tExit\tPnL\tPnL%\tVarighed\tÅrsag\tIndikatorer\n';
     navigator.clipboard.writeText(header + tradesText);
     
     setCopiedTrades(true);
