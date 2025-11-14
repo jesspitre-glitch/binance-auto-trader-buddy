@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { TrendingUp, TrendingDown, Activity } from "lucide-react";
+import { useBinanceFuturesPrices } from "@/hooks/useBinanceFuturesPrices";
 
 interface LiveScanMonitorProps {
   open: boolean;
@@ -27,6 +28,11 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
 
   useEffect(() => {
     if (!open) return;
+
+    // Start continuous scanner (3s interval) when monitor opens; stop on close
+    supabase.functions.invoke('continuous-scan-quant', {
+      body: { action: 'start', interval_ms: 3000 },
+    }).catch(console.error);
 
     const initMonitor = async () => {
       await fetchConfig();
@@ -62,6 +68,8 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     return () => {
       supabase.removeChannel(channel);
       clearInterval(interval);
+      // Stop continuous scanner when monitor closes
+      supabase.functions.invoke('continuous-scan-quant', { body: { action: 'stop' } }).catch(console.error);
     };
   }, [open, config]);
 
