@@ -187,45 +187,106 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-1.5 overflow-y-auto pr-2">
+        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 overflow-y-auto pr-2">
           {sortedCoins.map((coin) => (
             <Card
               key={coin.symbol}
-              className={`p-1.5 border-2 transition-all duration-500 hover:scale-105 ${getBackgroundColor(
+              className={`p-3 border-2 transition-all duration-500 hover:scale-105 ${getBackgroundColor(
                 coin.strength
               )} ${getBorderColor(coin.strength)}`}
             >
-              <div className="space-y-1">
-                {/* Header - kun symbol og trend ikon */}
-                <div className="flex items-center justify-between gap-0.5">
-                  <div className="font-bold text-xs truncate flex-1 min-w-0">
-                    {coin.symbol.replace('USDC', '')}
+              <div className="space-y-2">
+                {/* Header */}
+                <div className="flex items-center justify-between gap-1">
+                  <div className="font-bold text-sm truncate flex-1 min-w-0">
+                    {coin.symbol}
                   </div>
                   {coin.trend === "BULLISH" ? (
-                    <TrendingUp className="h-3 w-3 flex-shrink-0" />
+                    <TrendingUp className="h-4 w-4 flex-shrink-0" />
                   ) : coin.trend === "BEARISH" ? (
-                    <TrendingDown className="h-3 w-3 flex-shrink-0" />
+                    <TrendingDown className="h-4 w-4 flex-shrink-0" />
                   ) : null}
                 </div>
 
-                {/* Signal Strength Bar */}
-                <div className="space-y-0.5">
-                  <div className="h-1 rounded-full overflow-hidden bg-muted/50">
+                {/* Tidsstempel */}
+                <div className="text-[10px] opacity-60">
+                  {new Date(coin.lastUpdate).toLocaleTimeString("da-DK", { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    second: '2-digit'
+                  })}
+                </div>
+
+                {/* Signal Strength */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="opacity-70">Styrke</span>
+                    <span className={`font-bold ${getTextColor(coin.strength)}`}>
+                      {coin.conditionsMet}/{coin.conditionsRequired}
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full overflow-hidden bg-muted/50">
                     <div 
                       className={`h-full transition-all duration-500 ${getStrengthBarColor(coin.strength)}`}
                       style={{ width: `${Math.min(coin.strength, 100)}%` }}
                     />
                   </div>
-                  <div className={`text-center text-[10px] font-bold leading-none ${getTextColor(coin.strength)}`}>
-                    {coin.conditionsMet}/{coin.conditionsRequired}
+                  <div className={`text-center text-xs font-bold ${getTextColor(coin.strength)}`}>
+                    {coin.strength.toFixed(0)}%
                   </div>
                 </div>
 
-                {/* Signal Badge - kun hvis der er signal */}
+                {/* Live Indicators - vises altid */}
+                <div className="space-y-1 text-xs border-t border-border/50 pt-2">
+                  <div className="flex justify-between">
+                    <span className="opacity-70">Pris:</span>
+                    <span className="font-mono font-bold transition-all duration-500">
+                      ${coin.indicators.price?.toFixed(coin.indicators.price < 1 ? 4 : 2) || 'N/A'}
+                    </span>
+                  </div>
+                  
+                  {coin.indicators.rsi !== null && coin.indicators.rsi !== undefined && (
+                    <div className="flex justify-between">
+                      <span className="opacity-70">RSI:</span>
+                      <span className="font-mono font-bold transition-all duration-500">
+                        {coin.indicators.rsi.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {coin.indicators.adx !== null && coin.indicators.adx !== undefined && (
+                    <div className="flex justify-between">
+                      <span className="opacity-70">ADX:</span>
+                      <span className="font-mono font-bold transition-all duration-500">
+                        {coin.indicators.adx.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {coin.indicators.volumeRatio !== undefined && coin.indicators.volumeRatio !== null && (
+                    <div className="flex justify-between">
+                      <span className="opacity-70">Vol:</span>
+                      <span className="font-mono font-bold transition-all duration-500">
+                        {(coin.indicators.volumeRatio * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  )}
+                  
+                  {coin.indicators.stochRSI_k !== null && coin.indicators.stochRSI_k !== undefined && (
+                    <div className="flex justify-between">
+                      <span className="opacity-70">StochK:</span>
+                      <span className="font-mono font-bold transition-all duration-500">
+                        {coin.indicators.stochRSI_k.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Signal Badge */}
                 {coin.signal !== "NONE" && (
                   <Badge
                     variant={coin.signal === "LONG" ? "default" : "destructive"}
-                    className="w-full justify-center text-[10px] py-0 h-4"
+                    className="w-full justify-center text-xs"
                   >
                     {coin.signal}
                   </Badge>
