@@ -120,36 +120,49 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     });
   };
 
-  const getColorClass = (strength: number, signal: string) => {
+  const getBackgroundColor = (strength: number) => {
     // Grønnere jo tættere på signal (80%+)
     if (strength >= 80) {
-      return signal === "LONG" 
-        ? "bg-green-500/20 border-green-500 text-green-500" 
-        : signal === "SHORT"
-        ? "bg-red-500/20 border-red-500 text-red-500"
-        : "bg-yellow-500/20 border-yellow-500 text-yellow-500";
+      return "bg-green-500/30";
     }
-    // Mellem niveau (50-79%)
-    if (strength >= 50) {
-      return signal === "LONG"
-        ? "bg-green-500/10 border-green-500/50 text-green-600"
-        : signal === "SHORT"
-        ? "bg-red-500/10 border-red-500/50 text-red-600"
-        : "bg-yellow-500/10 border-yellow-500/50 text-yellow-600";
+    // Mellem niveau (60-79%)
+    if (strength >= 60) {
+      return "bg-green-500/20";
     }
-    // Rødt/svagt signal (under 50%)
-    return "bg-muted/50 border-muted-foreground/20 text-muted-foreground";
+    // Lav niveau (40-59%)
+    if (strength >= 40) {
+      return "bg-yellow-500/20";
+    }
+    // Meget lav (20-39%)
+    if (strength >= 20) {
+      return "bg-orange-500/20";
+    }
+    // Rødt/svagt signal (under 20%)
+    return "bg-red-500/20";
   };
 
-  const getStrengthGradient = (strength: number) => {
-    const percentage = Math.min(strength, 100);
-    if (percentage >= 80) {
-      return `linear-gradient(90deg, hsl(var(--green-500)) ${percentage}%, hsl(var(--muted)) ${percentage}%)`;
-    } else if (percentage >= 50) {
-      return `linear-gradient(90deg, hsl(var(--yellow-500)) ${percentage}%, hsl(var(--muted)) ${percentage}%)`;
-    } else {
-      return `linear-gradient(90deg, hsl(var(--red-500)) ${percentage}%, hsl(var(--muted)) ${percentage}%)`;
-    }
+  const getBorderColor = (strength: number) => {
+    if (strength >= 80) return "border-green-500";
+    if (strength >= 60) return "border-green-400";
+    if (strength >= 40) return "border-yellow-500";
+    if (strength >= 20) return "border-orange-500";
+    return "border-red-500";
+  };
+
+  const getTextColor = (strength: number) => {
+    if (strength >= 80) return "text-green-500";
+    if (strength >= 60) return "text-green-400";
+    if (strength >= 40) return "text-yellow-500";
+    if (strength >= 20) return "text-orange-500";
+    return "text-red-500";
+  };
+
+  const getStrengthBarColor = (strength: number) => {
+    if (strength >= 80) return "bg-green-500";
+    if (strength >= 60) return "bg-green-400";
+    if (strength >= 40) return "bg-yellow-500";
+    if (strength >= 20) return "bg-orange-500";
+    return "bg-red-500";
   };
 
   const sortedCoins = Array.from(coins.values()).sort((a, b) => b.strength - a.strength);
@@ -167,52 +180,54 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 overflow-y-auto pr-2">
+        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 overflow-y-auto pr-2">
           {sortedCoins.map((coin) => (
             <Card
               key={coin.symbol}
-              className={`p-4 border-2 transition-all duration-300 hover:scale-105 ${getColorClass(
-                coin.strength,
-                coin.signal
-              )}`}
+              className={`p-2 border-2 transition-all duration-300 hover:scale-105 ${getBackgroundColor(
+                coin.strength
+              )} ${getBorderColor(coin.strength)}`}
             >
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {/* Header */}
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="font-bold text-lg">{coin.symbol}</div>
+                <div className="flex items-start justify-between gap-1">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm truncate">{coin.symbol}</div>
                     <div className="text-xs opacity-70">
-                      {new Date(coin.lastUpdate).toLocaleTimeString("da-DK")}
+                      {new Date(coin.lastUpdate).toLocaleTimeString("da-DK", { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                      })}
                     </div>
                   </div>
                   {coin.trend === "BULLISH" ? (
-                    <TrendingUp className="h-5 w-5" />
+                    <TrendingUp className="h-4 w-4 flex-shrink-0" />
                   ) : coin.trend === "BEARISH" ? (
-                    <TrendingDown className="h-5 w-5" />
+                    <TrendingDown className="h-4 w-4 flex-shrink-0" />
                   ) : null}
                 </div>
 
-                {/* Signal Strength Bar */}
+                {/* Signal Strength */}
                 <div className="space-y-1">
                   <div className="flex items-center justify-between text-xs">
-                    <span>Signal Styrke</span>
-                    <span className="font-bold">
+                    <span className="opacity-70">Signal Styrke</span>
+                    <span className={`font-bold ${getTextColor(coin.strength)}`}>
                       {coin.conditionsMet}/{coin.conditionsRequired}
                     </span>
                   </div>
-                  <div
-                    className="h-2 rounded-full overflow-hidden bg-muted"
-                    style={{
-                      background: getStrengthGradient(coin.strength),
-                    }}
-                  />
-                  <div className="text-center text-xs font-bold">
+                  <div className="h-1.5 rounded-full overflow-hidden bg-muted/50">
+                    <div 
+                      className={`h-full transition-all duration-300 ${getStrengthBarColor(coin.strength)}`}
+                      style={{ width: `${Math.min(coin.strength, 100)}%` }}
+                    />
+                  </div>
+                  <div className={`text-center text-xs font-bold ${getTextColor(coin.strength)}`}>
                     {coin.strength.toFixed(0)}%
                   </div>
                 </div>
 
                 {/* Quick Indicators */}
-                <div className="space-y-1 text-xs">
+                <div className="space-y-0.5 text-xs">
                   {coin.indicators.rsi && (
                     <div className="flex justify-between">
                       <span className="opacity-70">RSI:</span>
@@ -229,7 +244,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                       </span>
                     </div>
                   )}
-                  {coin.indicators.volumeRatio && (
+                  {coin.indicators.volumeRatio !== undefined && coin.indicators.volumeRatio !== null && (
                     <div className="flex justify-between">
                       <span className="opacity-70">Vol:</span>
                       <span className="font-mono font-bold">
@@ -243,7 +258,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                 {coin.signal !== "NONE" && (
                   <Badge
                     variant={coin.signal === "LONG" ? "default" : "destructive"}
-                    className="w-full justify-center"
+                    className="w-full justify-center text-xs py-0"
                   >
                     {coin.signal}
                   </Badge>
