@@ -713,6 +713,11 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   const longSignal = longConditions.filter(c => c).length >= requiredConditions;
   const shortSignal = shortConditions.filter(c => c).length >= requiredConditions;
   
+  // Calculate conditions met for signal strength
+  const longConditionsMet = longConditions.filter(c => c).length;
+  const shortConditionsMet = shortConditions.filter(c => c).length;
+  const conditionsMet = Math.max(longConditionsMet, shortConditionsMet);
+  
   // Calculate stop loss using ATR (fallback to 1% if ATR disabled)
   const atrValue = atr || (currentPrice * 0.01);
   
@@ -725,15 +730,19 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     stochRSI_k: stochRSI?.k || null,
     stochRSI_d: stochRSI?.d || null,
     macd: macd?.histogram || null,
+    macdLine: macd?.macd || null,
+    macdSignal: macd?.signal || null,
     atr: atr,
     bb,
     adx,
     volume: currentVolume,
     avgVolume,
+    volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
     pivotPoints,
+    conditionsMet, // Tilføjet for Live Monitor
   };
   
-  console.log(`Indicators being saved: stochRSI_k=${indicators.stochRSI_k}, rsi=${indicators.rsi}, macd=${indicators.macd}`);
+  console.log(`Indicators being saved: stochRSI_k=${indicators.stochRSI_k}, rsi=${indicators.rsi}, macd=${indicators.macd}, conditionsMet=${conditionsMet}`);
   
   return {
     signal: longSignal ? 'LONG' : shortSignal ? 'SHORT' : 'NONE',
