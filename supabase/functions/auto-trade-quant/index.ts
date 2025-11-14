@@ -588,13 +588,17 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     shortConditions.push(emaShortTrend);
   }
   
-  // RSI Crossover (hvis enabled)
-  if (config.rsi_enabled && rsiCurrent !== null && rsiPrevious !== null) {
-    const rsiCrossedUpForLong = rsiCurrent > config.rsi_min_long && rsiPrevious <= config.rsi_min_long;
-    longConditions.push(rsiCrossedUpForLong);
+  // RSI Overbought/Oversold (hvis enabled)
+  if (config.rsi_enabled && rsiCurrent !== null) {
+    // LONG: RSI er oversolgt (under threshold) - køb lavt
+    const rsiOversoldLong = rsiCurrent < config.rsi_min_long;
+    longConditions.push(rsiOversoldLong);
     
-    const rsiCrossedDownForShort = rsiCurrent < config.rsi_max_short && rsiPrevious >= config.rsi_max_short;
-    shortConditions.push(rsiCrossedDownForShort);
+    // SHORT: RSI er overkøbt (over threshold) - sælg højt
+    const rsiOverboughtShort = rsiCurrent > config.rsi_max_short;
+    shortConditions.push(rsiOverboughtShort);
+    
+    console.log(`RSI Check: Current=${rsiCurrent.toFixed(2)}, LONG threshold=${config.rsi_min_long}, SHORT threshold=${config.rsi_max_short}`);
   }
   
   // StochRSI (hvis enabled)
