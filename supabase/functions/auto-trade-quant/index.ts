@@ -39,6 +39,7 @@ interface IndicatorConfig {
   atr_stop_loss_multiplier: number;
   atr_take_profit_multiplier: number;
   atr_trailing_stop_multiplier: number;
+  break_even_atr: number;
   adx_enabled: boolean;
   adx_period: number;
   adx_threshold: number;
@@ -94,6 +95,7 @@ async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
     atr_stop_loss_multiplier: config.atr_stop_loss_multiplier,
     atr_take_profit_multiplier: config.atr_take_profit_multiplier,
     atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier,
+    break_even_atr: config.break_even_atr,
     adx_enabled: config.adx_enabled,
     adx_period: config.adx_period,
     adx_threshold: config.adx_threshold,

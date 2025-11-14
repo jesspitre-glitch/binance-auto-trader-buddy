@@ -298,14 +298,41 @@ serve(async (req) => {
           console.log(`TRAILING STOP HIT (SHORT): price=${currentPrice} >= trailing=${newTrailingStop} for ${position.symbol}`);
         }
 
+        // Break-even logic: Move SL to entry hvis profit er nået
+        let newStopLoss = position.stop_loss;
+        if (!position.break_even_activated && position.indicators_snapshot?.atr && position.indicators_snapshot?.break_even_atr) {
+          const atr = position.indicators_snapshot.atr;
+          const breakEvenAtr = position.indicators_snapshot.break_even_atr;
+          const breakEvenDistance = breakEvenAtr * atr;
+          
+          let breakEvenReached = false;
+          if (position.side === 'LONG') {
+            breakEvenReached = currentPrice >= (position.entry_price + breakEvenDistance);
+          } else {
+            breakEvenReached = currentPrice <= (position.entry_price - breakEvenDistance);
+          }
+          
+          if (breakEvenReached) {
+            newStopLoss = position.entry_price;
+            await supabaseClient
+              .from('positions')
+              .update({ 
+                stop_loss: newStopLoss, 
+                break_even_activated: true 
+              })
+              .eq('id', position.id);
+            console.log(`BREAK-EVEN ACTIVATED: SL moved to entry ${newStopLoss} for ${position.symbol}`);
+          }
+        }
+
         // Check stop loss (kun hvis trailing stop ikke ramt)
-        if (!shouldClose && position.stop_loss) {
-          if (position.side === 'LONG' && currentPrice <= position.stop_loss) {
+        if (!shouldClose && newStopLoss) {
+          if (position.side === 'LONG' && currentPrice <= newStopLoss) {
             shouldClose = true;
-            closeReason = 'STOP_LOSS_HIT';
-          } else if (position.side === 'SHORT' && currentPrice >= position.stop_loss) {
+            closeReason = position.break_even_activated ? 'BREAK_EVEN_HIT' : 'STOP_LOSS_HIT';
+          } else if (position.side === 'SHORT' && currentPrice >= newStopLoss) {
             shouldClose = true;
-            closeReason = 'STOP_LOSS_HIT';
+            closeReason = position.break_even_activated ? 'BREAK_EVEN_HIT' : 'STOP_LOSS_HIT';
           }
         }
 

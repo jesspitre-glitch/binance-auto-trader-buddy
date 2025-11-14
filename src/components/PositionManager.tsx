@@ -157,8 +157,16 @@ export const PositionManager = () => {
                         )}
                       </div>
                       
-                      <div className="text-sm space-y-1">
-                        <div>SL: <span className="font-mono">${position.stop_loss}</span></div>
+                       <div className="text-sm space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span>SL:</span>
+                          <span className="font-mono">${position.stop_loss}</span>
+                          {position.break_even_activated && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-blue-500/10 text-blue-500 border-blue-500/20">
+                              BREAK-EVEN
+                            </Badge>
+                          )}
+                        </div>
                         {position.trailing_stop && (() => {
                           const trailingPercent = position.trailing_stop_percent || 2.0;
                           const trailingStopPrice = Number(position.trailing_stop);
