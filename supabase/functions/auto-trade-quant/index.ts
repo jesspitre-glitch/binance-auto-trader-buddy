@@ -483,13 +483,21 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     : null;
   const currentVolume = config.volume_enabled ? volumes[volumes.length - 1] : null;
   
-  // HÅRDT EMA SPREAD FILTER - Tjek at EMA'erne har nok spread (ikke sidelæns marked)
+  // ════════════════════════════════════════════════════════════════
+  // 🚫 HÅRDE FILTRE - BLOKERER TRADE FØR SIGNAL EVALUERING
+  // ════════════════════════════════════════════════════════════════
+  
+  console.log(`\n🚫 HÅRDE FILTRE CHECK (blokerer trade før signal evaluering):`);
+  
+  // HÅRDT EMA SPREAD FILTER
   if (config.ema_enabled && emaFastCurrent !== null && emaSlowCurrent !== null) {
     const emaSpread = Math.abs(emaFastCurrent - emaSlowCurrent);
     const emaSpreadPercent = (emaSpread / currentPrice) * 100;
+    console.log(`   📏 EMA Spread: ${emaSpreadPercent.toFixed(3)}% (min ${config.min_ema_spread_percent}%)`);
     
     if (emaSpreadPercent < config.min_ema_spread_percent) {
-      console.log(`❌ EMA SPREAD FILTER: Spread=${emaSpreadPercent.toFixed(3)}% er under minimum=${config.min_ema_spread_percent}%. Sidelæns marked - ingen trade.`);
+      console.log(`   ❌ BLOKERET - EMA SPREAD FOR LAV`);
+      console.log(`   ⛔ Sidelæns marked - INGEN TRADE EVALUERING\n`);
       return {
         signal: 'NONE',
         indicators: {
@@ -516,74 +524,94 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
         takeProfit: null,
       };
     }
+    console.log(`   ✅ EMA Spread OK`);
+  } else {
+    console.log(`   ⚪ EMA Spread: DISABLED`);
   }
   
   
-  // HÅRDT ATR FILTER - Hvis ATR er enabled og = 0, NO TRADE!
-  if (config.atr_enabled && atr !== null && atr === 0) {
-    console.log(`❌ ATR FILTER: ATR=0. Stop-loss og trailing stop kan ikke beregnes. Ingen trade.`);
-    return {
-      signal: 'NONE',
-      indicators: {
-        price: closes[closes.length - 1],
-        atr: 0,
-        emaFast: emaFastCurrent,
-        emaMedium: emaMediumCurrent,
-        emaSlow: emaSlowCurrent,
-        rsi: rsiCurrent,
-        stochRSI_k: stochRSI?.k || null,
-        stochRSI_d: stochRSI?.d || null,
-        macd: macd?.histogram || null,
-        macdLine: macd?.macd || null,
-        macdSignal: macd?.signal || null,
-        bb,
-        adx,
-        volume: currentVolume,
-        avgVolume,
-        volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
-        pivotPoints: null,
-      },
-      stopLoss: 0,
-      takeProfit: null,
-    };
+  // HÅRDT ATR FILTER
+  if (config.atr_enabled && atr !== null) {
+    console.log(`   📊 ATR: ${atr.toFixed(6)}`);
+    if (atr === 0) {
+      console.log(`   ❌ BLOKERET - ATR = 0`);
+      console.log(`   ⛔ Stop-loss kan ikke beregnes - INGEN TRADE EVALUERING\n`);
+      return {
+        signal: 'NONE',
+        indicators: {
+          price: closes[closes.length - 1],
+          atr: 0,
+          emaFast: emaFastCurrent,
+          emaMedium: emaMediumCurrent,
+          emaSlow: emaSlowCurrent,
+          rsi: rsiCurrent,
+          stochRSI_k: stochRSI?.k || null,
+          stochRSI_d: stochRSI?.d || null,
+          macd: macd?.histogram || null,
+          macdLine: macd?.macd || null,
+          macdSignal: macd?.signal || null,
+          bb,
+          adx,
+          volume: currentVolume,
+          avgVolume,
+          volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
+          pivotPoints: null,
+        },
+        stopLoss: 0,
+        takeProfit: null,
+      };
+    }
+    console.log(`   ✅ ATR OK`);
+  } else {
+    console.log(`   ⚪ ATR: DISABLED`);
   }
   
   
-  // HÅRDT ADX FILTER - Hvis ADX er enabled og under threshold, NO TRADE!
-  if (config.adx_enabled && adx !== null && adx < config.adx_threshold) {
-    console.log(`❌ ADX FILTER: ADX=${adx.toFixed(2)} er under threshold=${config.adx_threshold}. Ingen trade.`);
-    return {
-      signal: 'NONE',
-      indicators: {
-        price: closes[closes.length - 1],
-        adx,
-        emaFast: emaFastCurrent,
-        emaMedium: emaMediumCurrent,
-        emaSlow: emaSlowCurrent,
-        rsi: rsiCurrent,
-        stochRSI_k: stochRSI?.k || null,
-        stochRSI_d: stochRSI?.d || null,
-        macd: macd?.histogram || null,
-        macdLine: macd?.macd || null,
-        macdSignal: macd?.signal || null,
-        atr: atr,
-        bb,
-        volume: currentVolume,
-        avgVolume,
-        volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
-        pivotPoints: null,
-      },
-      stopLoss: 0,
-      takeProfit: null,
-    };
+  // HÅRDT ADX FILTER
+  if (config.adx_enabled && adx !== null) {
+    console.log(`   📈 ADX: ${adx.toFixed(2)} (min ${config.adx_threshold})`);
+    if (adx < config.adx_threshold) {
+      console.log(`   ❌ BLOKERET - ADX UNDER THRESHOLD`);
+      console.log(`   ⛔ Trend ikke stærk nok - INGEN TRADE EVALUERING\n`);
+      return {
+        signal: 'NONE',
+        indicators: {
+          price: closes[closes.length - 1],
+          adx,
+          emaFast: emaFastCurrent,
+          emaMedium: emaMediumCurrent,
+          emaSlow: emaSlowCurrent,
+          rsi: rsiCurrent,
+          stochRSI_k: stochRSI?.k || null,
+          stochRSI_d: stochRSI?.d || null,
+          macd: macd?.histogram || null,
+          macdLine: macd?.macd || null,
+          macdSignal: macd?.signal || null,
+          atr: atr,
+          bb,
+          volume: currentVolume,
+          avgVolume,
+          volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
+          pivotPoints: null,
+        },
+        stopLoss: 0,
+        takeProfit: null,
+      };
+    }
+    console.log(`   ✅ ADX OK`);
+  } else {
+    console.log(`   ⚪ ADX: DISABLED`);
   }
   
   
-  // HÅRDT VOLUMEN FILTER - Hvis volumen er enabled og under threshold, NO TRADE!
+  // HÅRDT VOLUMEN FILTER
   if (config.volume_enabled && currentVolume !== null && avgVolume !== null) {
     const requiredVolume = avgVolume * config.volume_multiplier;
+    const volumeRatio = currentVolume / avgVolume;
+    console.log(`   🔊 Volume: ${currentVolume.toFixed(2)} / Required: ${requiredVolume.toFixed(2)} (${volumeRatio.toFixed(2)}x)`);
     if (currentVolume < requiredVolume) {
-      console.log(`❌ VOLUMEN FILTER: Volume=${currentVolume.toFixed(2)} er under required=${requiredVolume.toFixed(2)} (avg=${avgVolume.toFixed(2)} × ${config.volume_multiplier}). Ingen trade.`);
+      console.log(`   ❌ BLOKERET - VOLUME FOR LAV`);
+      console.log(`   ⛔ Ikke nok aktivitet - INGEN TRADE EVALUERING\n`);
       return {
         signal: 'NONE',
         indicators: {
@@ -609,7 +637,12 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
         takeProfit: null,
       };
     }
+    console.log(`   ✅ Volume OK`);
+  } else {
+    console.log(`   ⚪ Volume: DISABLED`);
   }
+  
+  console.log(`✅ ALLE HÅRDE FILTRE PASSERET - Fortsætter til signal evaluering\n`);
   
   // Calculate Pivot Points only if enabled
   const pivotPoints = config.pivot_points_enabled ? (() => {
