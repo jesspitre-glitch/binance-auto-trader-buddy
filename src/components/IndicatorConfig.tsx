@@ -76,6 +76,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     // Volume & Signal
     volume_enabled: config?.volume_enabled ?? true,
     volume_avg_period: config?.volume_avg_period || 20,
+    volume_multiplier: config?.volume_multiplier ?? 1.2,
     signal_conditions_required: config?.signal_conditions_required || 5,
     
     // Timeframes
@@ -149,6 +150,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       // Volume & Signal
       volume_enabled: config.volume_enabled ?? true,
       volume_avg_period: config.volume_avg_period ?? 20,
+      volume_multiplier: config.volume_multiplier ?? 1.2,
       signal_conditions_required: config.signal_conditions_required ?? 5,
       // Timeframes
       scan_interval: config.scan_interval ?? "5m",
@@ -722,6 +724,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <p className="text-xs text-muted-foreground">Antal bars for gennemsnit</p>
           </div>
           <div className="space-y-2">
+            <Label htmlFor="volume_multiplier">Volumen Multiplier</Label>
+            <Input
+              id="volume_multiplier"
+              type="number"
+              step="0.1"
+              value={formData.volume_multiplier}
+              onChange={(e) => setFormData({ ...formData, volume_multiplier: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Min volumen = gennemsnit × multiplier (f.eks. 1.2 = 120%)</p>
+          </div>
+          <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="signal_conditions_required">Signal Betingelser Påkrævet</Label>
             <Input
               id="signal_conditions_required"
