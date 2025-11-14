@@ -622,16 +622,27 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // Build conditions arrays dynamically based on enabled indicators
   const longConditions: boolean[] = [];
   const shortConditions: boolean[] = [];
+  const conditionDetails: any = {
+    ema: { enabled: config.ema_enabled, long: null, short: null },
+    rsi: { enabled: config.rsi_enabled, long: null, short: null },
+    stochRSI: { enabled: config.stochrsi_enabled, long: null, short: null },
+    macd: { enabled: config.macd_enabled, long: null, short: null },
+    bb: { enabled: config.bb_enabled, long: null, short: null },
+    volume: { enabled: config.volume_enabled, long: null, short: null },
+    pivotPoints: { enabled: config.pivot_points_enabled, long: null, short: null }
+  };
   
   // EMA Trend (hvis enabled)
   if (config.ema_enabled && emaFast && emaMedium && emaSlow && emaFastCurrent !== null && emaMediumCurrent !== null && emaSlowCurrent !== null) {
     // LONG: Hurtig > Medium > Slow og prisen stiger
     const emaLongTrend = emaFastCurrent > emaMediumCurrent && emaMediumCurrent > emaSlowCurrent && currentPrice > closes[closes.length - 2];
     longConditions.push(emaLongTrend);
+    conditionDetails.ema.long = emaLongTrend;
     
     // SHORT: Hurtig < Medium < Slow og prisen falder
     const emaShortTrend = emaFastCurrent < emaMediumCurrent && emaMediumCurrent < emaSlowCurrent && currentPrice < closes[closes.length - 2];
     shortConditions.push(emaShortTrend);
+    conditionDetails.ema.short = emaShortTrend;
   }
   
   // RSI Overbought/Oversold (hvis enabled)
@@ -639,12 +650,12 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     // LONG: RSI er oversolgt (under threshold) - køb lavt
     const rsiOversoldLong = rsiCurrent < config.rsi_min_long;
     longConditions.push(rsiOversoldLong);
+    conditionDetails.rsi.long = rsiOversoldLong;
     
     // SHORT: RSI er overkøbt (over threshold) - sælg højt
     const rsiOverboughtShort = rsiCurrent > config.rsi_max_short;
     shortConditions.push(rsiOverboughtShort);
-    
-    console.log(`RSI Check: Current=${rsiCurrent.toFixed(2)}, LONG threshold=${config.rsi_min_long}, SHORT threshold=${config.rsi_max_short}`);
+    conditionDetails.rsi.short = rsiOverboughtShort;
   }
   
   // StochRSI (hvis enabled)
@@ -652,10 +663,12 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     // LONG: StochRSI under oversold niveau
     const stochRSILong = stochRSI.k < config.stochrsi_oversold;
     longConditions.push(stochRSILong);
+    conditionDetails.stochRSI.long = stochRSILong;
     
     // SHORT: StochRSI over overbought niveau
     const stochRSIShort = stochRSI.k > config.stochrsi_overbought;
     shortConditions.push(stochRSIShort);
+    conditionDetails.stochRSI.short = stochRSIShort;
   }
   
   // MACD Histogram (hvis enabled)
@@ -663,10 +676,12 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     // LONG: Histogram skifter fra rød til grøn
     const macdColorChangeToGreen = macd.histogram > config.macd_histogram_threshold && macdPrevious.histogram <= config.macd_histogram_threshold;
     longConditions.push(macdColorChangeToGreen);
+    conditionDetails.macd.long = macdColorChangeToGreen;
     
     // SHORT: Histogram skifter fra grøn til rød
     const macdColorChangeToRed = macd.histogram < -config.macd_histogram_threshold && macdPrevious.histogram >= -config.macd_histogram_threshold;
     shortConditions.push(macdColorChangeToRed);
+    conditionDetails.macd.short = macdColorChangeToRed;
   }
   
   // Bollinger Bands (hvis enabled)
@@ -674,10 +689,12 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     // LONG: Pris nær nedre bånd (køb når billigt)
     const nearLowerBand = currentPrice <= bb.lower * 1.01; // Inden for 1% af nedre bånd
     longConditions.push(nearLowerBand);
+    conditionDetails.bb.long = nearLowerBand;
     
     // SHORT: Pris nær øvre bånd (sælg når dyrt)
     const nearUpperBand = currentPrice >= bb.upper * 0.99; // Inden for 1% af øvre bånd
     shortConditions.push(nearUpperBand);
+    conditionDetails.bb.short = nearUpperBand;
   }
   
   // ADX er nu et HÅRDT filter - checket sker tidligt i funktionen
@@ -688,6 +705,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     const highVolume = currentVolume > avgVolume;
     longConditions.push(highVolume);
     shortConditions.push(highVolume);
+    conditionDetails.volume.long = highVolume;
+    conditionDetails.volume.short = highVolume;
   }
   
   // Pivot Points - Blokerer trades nær key levels (hvis enabled)
@@ -703,10 +722,14 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     );
     
     // LONG blokeres hvis tæt på resistance
-    longConditions.push(!nearResistance);
+    const longPivotOk = !nearResistance;
+    longConditions.push(longPivotOk);
+    conditionDetails.pivotPoints.long = longPivotOk;
     
     // SHORT blokeres hvis tæt på support
-    shortConditions.push(!nearSupport);
+    const shortPivotOk = !nearSupport;
+    shortConditions.push(shortPivotOk);
+    conditionDetails.pivotPoints.short = shortPivotOk;
   }
   
   const requiredConditions = config.signal_conditions_required;
@@ -717,6 +740,28 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   const longConditionsMet = longConditions.filter(c => c).length;
   const shortConditionsMet = shortConditions.filter(c => c).length;
   const conditionsMet = Math.max(longConditionsMet, shortConditionsMet);
+  
+  // 🔍 DETALJERET SIGNAL LOGGING
+  console.log(`\n═══ SIGNAL EVALUERING ═══`);
+  console.log(`Betingelser påkrævet: ${requiredConditions}`);
+  console.log(`\n📊 LONG betingelser (${longConditionsMet}/${longConditions.length} opfyldt):`);
+  console.log(`  - EMA:          ${conditionDetails.ema.enabled ? (conditionDetails.ema.long === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
+  console.log(`  - RSI:          ${conditionDetails.rsi.enabled ? (conditionDetails.rsi.long === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
+  console.log(`  - StochRSI:     ${conditionDetails.stochRSI.enabled ? (conditionDetails.stochRSI.long === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
+  console.log(`  - MACD:         ${conditionDetails.macd.enabled ? (conditionDetails.macd.long === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
+  console.log(`  - BB:           ${conditionDetails.bb.enabled ? (conditionDetails.bb.long === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
+  console.log(`  - Volume:       ${conditionDetails.volume.enabled ? (conditionDetails.volume.long === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
+  console.log(`  - Pivot Points: ${conditionDetails.pivotPoints.enabled ? (conditionDetails.pivotPoints.long === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
+  console.log(`\n📊 SHORT betingelser (${shortConditionsMet}/${shortConditions.length} opfyldt):`);
+  console.log(`  - EMA:          ${conditionDetails.ema.enabled ? (conditionDetails.ema.short === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
+  console.log(`  - RSI:          ${conditionDetails.rsi.enabled ? (conditionDetails.rsi.short === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
+  console.log(`  - StochRSI:     ${conditionDetails.stochRSI.enabled ? (conditionDetails.stochRSI.short === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
+  console.log(`  - MACD:         ${conditionDetails.macd.enabled ? (conditionDetails.macd.short === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
+  console.log(`  - BB:           ${conditionDetails.bb.enabled ? (conditionDetails.bb.short === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
+  console.log(`  - Volume:       ${conditionDetails.volume.enabled ? (conditionDetails.volume.short === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
+  console.log(`  - Pivot Points: ${conditionDetails.pivotPoints.enabled ? (conditionDetails.pivotPoints.short === true ? '✅ TRUE' : '❌ FALSE') : '⚪ DISABLED'}`);
+  console.log(`\n🎯 RESULTAT: ${longSignal ? '🟢 LONG SIGNAL' : shortSignal ? '🔴 SHORT SIGNAL' : '⚪ INGEN SIGNAL'}`);
+  console.log(`═══════════════════════\n`);
   
   // Calculate stop loss using ATR (fallback to 1% if ATR disabled)
   const atrValue = atr || (currentPrice * 0.01);
