@@ -685,17 +685,17 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     conditionDetails.ema.short = emaShortTrend;
   }
   
-  // RSI Overbought/Oversold (hvis enabled)
-  if (config.rsi_enabled && rsiCurrent !== null) {
-    // LONG: RSI er oversolgt (under threshold) - køb lavt
-    const rsiOversoldLong = rsiCurrent < config.rsi_min_long;
-    longConditions.push(rsiOversoldLong);
-    conditionDetails.rsi.long = rsiOversoldLong;
+  // RSI Momentum Crossover (hvis enabled) - OBLIGATORISK REGEL
+  if (config.rsi_enabled && rsiCurrent !== null && rsiPrevious !== null) {
+    // LONG: RSI krydser OP over rsi_min_long (momentum starter)
+    const rsiCrossoverLong = rsiPrevious <= config.rsi_min_long && rsiCurrent > config.rsi_min_long;
+    longConditions.push(rsiCrossoverLong);
+    conditionDetails.rsi.long = rsiCrossoverLong;
     
-    // SHORT: RSI er overkøbt (over threshold) - sælg højt
-    const rsiOverboughtShort = rsiCurrent > config.rsi_max_short;
-    shortConditions.push(rsiOverboughtShort);
-    conditionDetails.rsi.short = rsiOverboughtShort;
+    // SHORT: RSI krydser NED under rsi_max_short (momentum vender)
+    const rsiCrossoverShort = rsiPrevious >= config.rsi_max_short && rsiCurrent < config.rsi_max_short;
+    shortConditions.push(rsiCrossoverShort);
+    conditionDetails.rsi.short = rsiCrossoverShort;
   }
   
   // StochRSI (hvis enabled)
@@ -801,14 +801,14 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     console.log(`📈 EMA: ⚪ DISABLED\n`);
   }
   
-  // RSI DETALJERET
-  if (config.rsi_enabled && rsiCurrent !== null) {
-    console.log(`📊 RSI:`);
-    console.log(`   Current Value: ${rsiCurrent.toFixed(2)}`);
-    console.log(`   LONG threshold (oversolgt): < ${config.rsi_min_long}`);
-    console.log(`   SHORT threshold (overkøbt): > ${config.rsi_max_short}`);
-    console.log(`   LONG (${rsiCurrent.toFixed(2)} < ${config.rsi_min_long}): ${conditionDetails.rsi.long ? '✅ TRUE' : '❌ FALSE'}`);
-    console.log(`   SHORT (${rsiCurrent.toFixed(2)} > ${config.rsi_max_short}): ${conditionDetails.rsi.short ? '✅ TRUE' : '❌ FALSE'}\n`);
+  // RSI MOMENTUM CROSSOVER DETALJERET
+  if (config.rsi_enabled && rsiCurrent !== null && rsiPrevious !== null) {
+    console.log(`📊 RSI Momentum Crossover:`);
+    console.log(`   Previous: ${rsiPrevious.toFixed(2)}, Current: ${rsiCurrent.toFixed(2)}`);
+    console.log(`   LONG threshold (krydser OP over): ${config.rsi_min_long}`);
+    console.log(`   SHORT threshold (krydser NED under): ${config.rsi_max_short}`);
+    console.log(`   LONG (${rsiPrevious.toFixed(2)} ≤ ${config.rsi_min_long} && ${rsiCurrent.toFixed(2)} > ${config.rsi_min_long}): ${conditionDetails.rsi.long ? '✅ TRUE' : '❌ FALSE'}`);
+    console.log(`   SHORT (${rsiPrevious.toFixed(2)} ≥ ${config.rsi_max_short} && ${rsiCurrent.toFixed(2)} < ${config.rsi_max_short}): ${conditionDetails.rsi.short ? '✅ TRUE' : '❌ FALSE'}\n`);
   } else {
     console.log(`📊 RSI: ⚪ DISABLED\n`);
   }
