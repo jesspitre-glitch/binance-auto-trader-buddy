@@ -45,19 +45,25 @@ export const StrategyAnalysis = () => {
       // Bestem aktiv strategi ud fra sessionens aktive konfiguration (foretrukket)
       let activeHash: string | null = null;
 
-      const { data: sessionData } = await supabase
-        .from("trading_session")
-        .select("active_config_id")
-        .maybeSingle();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: sessionRow } = await supabase
+          .from("trading_session")
+          .select("active_config_id, updated_at")
+          .eq("user_id", user.id)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .single();
 
-      if (sessionData?.active_config_id) {
-        const { data: configData } = await supabase
-          .from("indicator_config")
-          .select("name")
-          .eq("id", sessionData.active_config_id)
-          .maybeSingle();
-        if (configData?.name) {
-          activeHash = String(configData.name);
+        if (sessionRow?.active_config_id) {
+          const { data: configData } = await supabase
+            .from("indicator_config")
+            .select("name")
+            .eq("id", sessionRow.active_config_id)
+            .maybeSingle();
+          if (configData?.name) {
+            activeHash = String(configData.name);
+          }
         }
       }
 
@@ -80,6 +86,7 @@ export const StrategyAnalysis = () => {
         }
       }
       
+      console.debug("[StrategyAnalysis] activeHash resolved =", activeHash);
       setActiveStrategyHash(activeHash);
       
       // Hent alle trades med strategy_hash (filtrer gamle uden hash)
