@@ -685,17 +685,17 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     conditionDetails.ema.short = emaShortTrend;
   }
   
-  // RSI Momentum Crossover (hvis enabled) - OBLIGATORISK REGEL
-  if (config.rsi_enabled && rsiCurrent !== null && rsiPrevious !== null) {
-    // LONG: RSI krydser OP over rsi_min_long (momentum starter)
-    const rsiCrossoverLong = rsiPrevious <= config.rsi_min_long && rsiCurrent > config.rsi_min_long;
-    longConditions.push(rsiCrossoverLong);
-    conditionDetails.rsi.long = rsiCrossoverLong;
+  // RSI Momentum (hvis enabled)
+  if (config.rsi_enabled && rsiCurrent !== null) {
+    // LONG: RSI under oversold niveau
+    const rsiLong = rsiCurrent < config.rsi_min_long;
+    longConditions.push(rsiLong);
+    conditionDetails.rsi.long = rsiLong;
     
-    // SHORT: RSI krydser NED under rsi_max_short (momentum vender)
-    const rsiCrossoverShort = rsiPrevious >= config.rsi_max_short && rsiCurrent < config.rsi_max_short;
-    shortConditions.push(rsiCrossoverShort);
-    conditionDetails.rsi.short = rsiCrossoverShort;
+    // SHORT: RSI over overbought niveau
+    const rsiShort = rsiCurrent > config.rsi_max_short;
+    shortConditions.push(rsiShort);
+    conditionDetails.rsi.short = rsiShort;
   }
   
   // StochRSI (hvis enabled)
@@ -776,12 +776,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   const longConditionsMet = longConditions.filter(c => c).length;
   const shortConditionsMet = shortConditions.filter(c => c).length;
 
-  // RSI er en FAST, obligatorisk regel: ingen trades uden crossover
-  const rsiLongRequiredOK = conditionDetails.rsi.long === true;
-  const rsiShortRequiredOK = conditionDetails.rsi.short === true;
-
-  const longSignal = rsiLongRequiredOK && longConditionsMet >= requiredConditions;
-  const shortSignal = rsiShortRequiredOK && shortConditionsMet >= requiredConditions;
+  const longSignal = longConditionsMet >= requiredConditions;
+  const shortSignal = shortConditionsMet >= requiredConditions;
   
   // Calculate conditions met for signal strength
   const conditionsMet = Math.max(longConditionsMet, shortConditionsMet);
