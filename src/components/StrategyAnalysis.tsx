@@ -42,41 +42,41 @@ export const StrategyAnalysis = () => {
     try {
       setLoading(true);
       
-      // Find aktiv strategi via åbne positioner
-      const { data: openPositions } = await supabase
-        .from("positions")
-        .select("strategy_hash")
-        .eq("status", "OPEN")
-        .order("opened_at", { ascending: false });
-
+      // Bestem aktiv strategi ud fra sessionens aktive konfiguration (foretrukket)
       let activeHash: string | null = null;
-      const openHashes = (openPositions || [])
-        .map((p: any) => p.strategy_hash)
-        .filter(Boolean) as string[];
 
-      if (openHashes.length) {
-        // Vælg den hyppigste hash blandt åbne positioner
-        const counts: Record<string, number> = {};
-        openHashes.forEach((h) => (counts[h] = (counts[h] || 0) + 1));
-        activeHash = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
-      } else {
-        // Fallback: Hent aktiv config navn fra sessionen
-        const { data: sessionData } = await supabase
-          .from("trading_session")
-          .select("active_config_id")
+      const { data: sessionData } = await supabase
+        .from("trading_session")
+        .select("active_config_id")
+        .maybeSingle();
+
+      if (sessionData?.active_config_id) {
+        const { data: configData } = await supabase
+          .from("indicator_config")
+          .select("name")
+          .eq("id", sessionData.active_config_id)
           .maybeSingle();
-        
-        if (sessionData?.active_config_id) {
-          const { data: configData } = await supabase
-            .from("indicator_config")
-            .select("name")
-            .eq("id", sessionData.active_config_id)
-            .maybeSingle();
-          
-          if (configData) {
-            // Brug config navnet direkte som strategy identifier
-            activeHash = configData.name;
-          }
+        if (configData?.name) {
+          activeHash = String(configData.name);
+        }
+      }
+
+      if (!activeHash) {
+        // Fallback: find dominerende strategi blandt åbne positioner
+        const { data: openPositions } = await supabase
+          .from("positions")
+          .select("strategy_hash")
+          .eq("status", "OPEN")
+          .order("opened_at", { ascending: false });
+
+        const openHashes = (openPositions || [])
+          .map((p: any) => p.strategy_hash)
+          .filter(Boolean) as string[];
+
+        if (openHashes.length) {
+          const counts: Record<string, number> = {};
+          openHashes.forEach((h) => (counts[h] = (counts[h] || 0) + 1));
+          activeHash = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
         }
       }
       
