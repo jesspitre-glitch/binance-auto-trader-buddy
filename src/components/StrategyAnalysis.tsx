@@ -37,6 +37,7 @@ export const StrategyAnalysis = () => {
   const [allTrades, setAllTrades] = useState<any[]>([]);
   const [activeStrategyHash, setActiveStrategyHash] = useState<string | null>(null);
   const [activeConfigName, setActiveConfigName] = useState<string | null>(null);
+  const [activeConfigUpdatedAt, setActiveConfigUpdatedAt] = useState<string | null>(null);
   const { toast } = useToast();
 
   const fetchStrategyStats = async () => {
@@ -59,11 +60,12 @@ export const StrategyAnalysis = () => {
         if (sessionRow?.active_config_id) {
           const { data: configData } = await supabase
             .from("indicator_config")
-            .select("name")
+            .select("name, updated_at")
             .eq("id", sessionRow.active_config_id)
             .maybeSingle();
           activeHash = String(sessionRow.active_config_id);
           setActiveConfigName(configData?.name ?? null);
+          setActiveConfigUpdatedAt(configData?.updated_at ?? null);
         }
       }
 
@@ -116,15 +118,30 @@ export const StrategyAnalysis = () => {
       const nameById: Record<string, string> = Object.fromEntries(
         (configList || []).map((c: any) => [String(c.id), String(c.name)])
       );
+      const idByName: Record<string, string> = Object.fromEntries(
+        (configList || []).map((c: any) => [String(c.name), String(c.id)])
+      );
 
       // Group trades by strategy_hash
       const strategyMap = new Map<string, any[]>();
-      trades.forEach(trade => {
-        const hash = trade.strategy_hash;
-        if (!strategyMap.has(hash)) {
-          strategyMap.set(hash, []);
+      trades.forEach((trade: any) => {
+        const snapshot = (trade.indicators_snapshot || null) as any;
+        let key: string;
+
+        if (snapshot && snapshot.id) {
+          key = String(snapshot.id);
+        } else if (trade.strategy_hash && /^[0-9a-fA-F-]{36}$/.test(String(trade.strategy_hash))) {
+          key = String(trade.strategy_hash);
+        } else if (trade.strategy_hash && idByName[String(trade.strategy_hash)]) {
+          key = idByName[String(trade.strategy_hash)];
+        } else {
+          key = String(trade.strategy_hash);
         }
-        strategyMap.get(hash)!.push(trade);
+
+        if (!strategyMap.has(key)) {
+          strategyMap.set(key, []);
+        }
+        strategyMap.get(key)!.push(trade);
       });
 
       // Calculate stats for each strategy
