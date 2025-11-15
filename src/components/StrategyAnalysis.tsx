@@ -308,6 +308,8 @@ export const StrategyAnalysis = () => {
     }
   });
 
+  const activeStat = strategies.find((s) => s.strategy_hash === activeStrategyHash) || null;
+
   return (
     <div className="space-y-6">
       <Card>
