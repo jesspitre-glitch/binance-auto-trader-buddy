@@ -351,14 +351,21 @@ export const StrategyAnalysis = () => {
               <Activity className="h-5 w-5" />
               Strategi Performance Oversigt
             </CardTitle>
-            {activeStrategyHash && (
+            {activeStrategyHash && activeStat && (
               <div className="flex items-center gap-2">
                 <Badge variant="default" className="gap-2 px-3 py-1 bg-primary text-primary-foreground">
-                  Aktiv: {activeStat ? `Strategi ${activeStat.strategy_number}` : `${String(activeStrategyHash).slice(0, 8)}`}
+                  Aktiv: Strategi {activeStat.strategy_number}
                 </Badge>
                 {activeSource && (
                   <span className="text-xs text-muted-foreground">via {activeSource === 'open_positions' ? 'åbne positioner' : activeSource === 'latest_trade' ? 'seneste trade' : 'aktiv konfiguration'}</span>
                 )}
+              </div>
+            )}
+            {activeStrategyHash && !activeStat && (
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="gap-2 px-3 py-1">
+                  Aktiv strategi har endnu ingen lukkede trades
+                </Badge>
               </div>
             )}
           </div>
