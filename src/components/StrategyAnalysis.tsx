@@ -42,6 +42,7 @@ export const StrategyAnalysis = () => {
   const [activeStrategyHash, setActiveStrategyHash] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>('total_pnl');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [activeSource, setActiveSource] = useState<string | null>(null);
   const { toast } = useToast();
 
   const handleSort = (field: SortField) => {
@@ -59,6 +60,7 @@ export const StrategyAnalysis = () => {
       
       // Find active strategy hash from current session
       let activeHash: string | null = null;
+      let source: string | null = null;
       const { data: { user } } = await supabase.auth.getUser();
       
       if (user) {
@@ -81,6 +83,7 @@ export const StrategyAnalysis = () => {
           if (configData) {
             // Generate hash from config parameters (same logic as backend)
             activeHash = await generateConfigHash(configData);
+            source = 'session';
           }
         }
       }
@@ -101,11 +104,12 @@ export const StrategyAnalysis = () => {
           const counts: Record<string, number> = {};
           openHashes.forEach((h) => { counts[h] = (counts[h] || 0) + 1; });
           activeHash = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+          source = 'open_positions';
         }
       }
       
       setActiveStrategyHash(activeHash);
-      
+      setActiveSource(source);
       // Fetch all trades with strategy_hash
       const { data: trades, error } = await supabase
         .from("trade_history")
@@ -128,7 +132,10 @@ export const StrategyAnalysis = () => {
       if (!activeHash && trades.length > 0) {
         activeHash = String(trades[0].strategy_hash);
         setActiveStrategyHash(activeHash);
+        setActiveSource('latest_trade');
       }
+
+      console.debug('[StrategyAnalysis] active detection', { activeStrategyHash: activeHash, source, strategiesCount: strategies.length });
 
       // Group trades by strategy_hash
       const strategyMap = new Map<string, any[]>();
@@ -345,9 +352,14 @@ export const StrategyAnalysis = () => {
               Strategi Performance Oversigt
             </CardTitle>
             {activeStrategyHash && (
-              <Badge variant="default" className="gap-2 px-3 py-1 bg-primary text-primary-foreground">
-                Aktiv: {activeStat ? `Strategi ${activeStat.strategy_number}` : `${String(activeStrategyHash).slice(0, 8)}`}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="default" className="gap-2 px-3 py-1 bg-primary text-primary-foreground">
+                  Aktiv: {activeStat ? `Strategi ${activeStat.strategy_number}` : `${String(activeStrategyHash).slice(0, 8)}`}
+                </Badge>
+                {activeSource && (
+                  <span className="text-xs text-muted-foreground">via {activeSource === 'open_positions' ? 'åbne positioner' : activeSource === 'latest_trade' ? 'seneste trade' : 'aktiv konfiguration'}</span>
+                )}
+              </div>
             )}
           </div>
         </CardHeader>
