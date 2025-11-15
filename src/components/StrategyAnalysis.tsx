@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { TrendingUp, TrendingDown, Activity, Hash, CheckCircle2 } from "lucide-react";
+import { Activity, ArrowUpDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ExportTradesDialog } from "./ExportTradesDialog";
 import { StrategyDetailsDialog } from "./StrategyDetailsDialog";
@@ -14,10 +14,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 
 interface StrategyStats {
   strategy_hash: string;
-  config_name: string;
+  strategy_number: number;
   total_trades: number;
   winning_trades: number;
   losing_trades: number;
@@ -30,69 +31,63 @@ interface StrategyStats {
   last_trade_date: string;
 }
 
+type SortField = 'strategy_number' | 'total_trades' | 'win_rate' | 'total_pnl' | 'avg_pnl' | 'largest_win' | 'largest_loss';
+type SortDirection = 'asc' | 'desc';
+
 export const StrategyAnalysis = () => {
   const [strategies, setStrategies] = useState<StrategyStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStrategy, setSelectedStrategy] = useState<{ stats: StrategyStats; trades: any[] } | null>(null);
   const [allTrades, setAllTrades] = useState<any[]>([]);
   const [activeStrategyHash, setActiveStrategyHash] = useState<string | null>(null);
-  const [activeConfigName, setActiveConfigName] = useState<string | null>(null);
-  const [activeConfigUpdatedAt, setActiveConfigUpdatedAt] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<SortField>('total_pnl');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const { toast } = useToast();
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
 
   const fetchStrategyStats = async () => {
     try {
       setLoading(true);
       
-      // Bestem aktiv strategi ud fra sessionens aktive konfiguration (foretrukket)
+      // Find active strategy hash from current session
       let activeHash: string | null = null;
-
       const { data: { user } } = await supabase.auth.getUser();
+      
       if (user) {
         const { data: sessionRow } = await supabase
           .from("trading_session")
-          .select("active_config_id, updated_at")
+          .select("active_config_id")
           .eq("user_id", user.id)
           .order("updated_at", { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle();
 
         if (sessionRow?.active_config_id) {
+          // Fetch the config to generate its hash
           const { data: configData } = await supabase
             .from("indicator_config")
-            .select("name, updated_at")
+            .select("*")
             .eq("id", sessionRow.active_config_id)
             .maybeSingle();
-          activeHash = String(sessionRow.active_config_id);
-          setActiveConfigName(configData?.name ?? null);
-          setActiveConfigUpdatedAt(configData?.updated_at ?? null);
-        }
-      }
-
-      if (!activeHash) {
-        // Fallback: find dominerende strategi blandt åbne positioner
-        const { data: openPositions } = await supabase
-          .from("positions")
-          .select("strategy_hash")
-          .eq("status", "OPEN")
-          .order("opened_at", { ascending: false });
-
-        const openHashes = (openPositions || [])
-          .map((p: any) => p.strategy_hash)
-          .filter(Boolean) as string[];
-
-        if (openHashes.length) {
-          const counts: Record<string, number> = {};
-          openHashes.forEach((h) => (counts[h] = (counts[h] || 0) + 1));
-          activeHash = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
-          setActiveConfigName(null);
+          
+          if (configData) {
+            // Generate hash from config parameters (same logic as backend)
+            activeHash = await generateConfigHash(configData);
+          }
         }
       }
       
-      console.debug("[StrategyAnalysis] activeHash resolved =", activeHash);
       setActiveStrategyHash(activeHash);
       
-      // Hent alle trades med strategy_hash (filtrer gamle uden hash)
+      // Fetch all trades with strategy_hash
       const { data: trades, error } = await supabase
         .from("trade_history")
         .select("*")
@@ -108,63 +103,39 @@ export const StrategyAnalysis = () => {
         return;
       }
 
-      // Store all trades for dialog
       setAllTrades(trades);
-
-      // Hent konfig-navne map for at vise navn for UUID-baserede strategier
-      const { data: configList } = await supabase
-        .from("indicator_config")
-        .select("id, name");
-      const nameById: Record<string, string> = Object.fromEntries(
-        (configList || []).map((c: any) => [String(c.id), String(c.name)])
-      );
 
       // Group trades by strategy_hash
       const strategyMap = new Map<string, any[]>();
       trades.forEach((trade: any) => {
-        const snapshot = (trade.indicators_snapshot || null) as any;
-        let key: string;
-
-        if (snapshot && snapshot.id) {
-          key = String(snapshot.id);
-        } else if (trade.strategy_hash && /^[0-9a-fA-F-]{36}$/.test(String(trade.strategy_hash))) {
-          key = String(trade.strategy_hash);
-        } else {
-          key = String(trade.strategy_hash);
+        const hash = String(trade.strategy_hash);
+        if (!strategyMap.has(hash)) {
+          strategyMap.set(hash, []);
         }
-
-        if (!strategyMap.has(key)) {
-          strategyMap.set(key, []);
-        }
-        strategyMap.get(key)!.push(trade);
+        strategyMap.get(hash)!.push(trade);
       });
 
       // Calculate stats for each strategy
       const stats: StrategyStats[] = [];
+      let strategyNumber = 1;
       
-      for (const [hash, strategyTrades] of strategyMap.entries()) {
+      // Sort by first trade date to assign numbers chronologically
+      const sortedHashes = Array.from(strategyMap.entries())
+        .sort((a, b) => {
+          const dateA = new Date(a[1][a[1].length - 1].closed_at).getTime();
+          const dateB = new Date(b[1][b[1].length - 1].closed_at).getTime();
+          return dateA - dateB;
+        });
+      
+      for (const [hash, strategyTrades] of sortedHashes) {
         const winningTrades = strategyTrades.filter(t => t.pnl > 0);
         const losingTrades = strategyTrades.filter(t => t.pnl <= 0);
         const totalPnl = strategyTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
         const avgPnl = totalPnl / strategyTrades.length;
         
-        // Intelligent navn-mapping:
-        let displayName: string;
-
-        if (nameById[hash]) {
-          // UUID matcher en konfiguration – brug det menneskelige navn
-          displayName = nameById[hash];
-        } else if (/^[a-zA-Z0-9]{1,3}$/.test(hash)) {
-          // Simpelt tal/navn (ældre strategier)
-          displayName = hash;
-        } else {
-          // Fallback: kort UUID/hash
-          displayName = `#${String(hash).substring(0, 6)}`;
-        }
-        
         stats.push({
           strategy_hash: hash,
-          config_name: displayName,
+          strategy_number: strategyNumber++,
           total_trades: strategyTrades.length,
           winning_trades: winningTrades.length,
           losing_trades: losingTrades.length,
@@ -177,9 +148,6 @@ export const StrategyAnalysis = () => {
           last_trade_date: strategyTrades[0].closed_at,
         });
       }
-
-      // Sort by total PnL descending
-      stats.sort((a, b) => b.total_pnl - a.total_pnl);
       
       setStrategies(stats);
     } catch (error: any) {
@@ -193,10 +161,76 @@ export const StrategyAnalysis = () => {
     }
   };
 
+  // Generate hash from config (must match backend logic)
+  async function generateConfigHash(config: any): Promise<string> {
+    const strategyParams = {
+      ema_enabled: config.ema_enabled,
+      ema_fast: config.ema_fast,
+      ema_medium: config.ema_medium,
+      ema_slow: config.ema_slow,
+      ema_medium_trend: config.ema_medium_trend,
+      min_ema_spread_percent: config.min_ema_spread_percent,
+      rsi_enabled: config.rsi_enabled,
+      rsi_period: config.rsi_period,
+      rsi_min_long: config.rsi_min_long,
+      rsi_max_short: config.rsi_max_short,
+      stochrsi_enabled: config.stochrsi_enabled,
+      stochrsi_period: config.stochrsi_period,
+      stochrsi_k_period: config.stochrsi_k_period,
+      stochrsi_d_period: config.stochrsi_d_period,
+      stochrsi_overbought: config.stochrsi_overbought,
+      stochrsi_oversold: config.stochrsi_oversold,
+      pivot_points_enabled: config.pivot_points_enabled,
+      pivot_points_timeframe: config.pivot_points_timeframe,
+      pivot_points_lookback: config.pivot_points_lookback,
+      pivot_points_near_threshold: config.pivot_points_near_threshold,
+      macd_enabled: config.macd_enabled,
+      macd_fast: config.macd_fast,
+      macd_slow: config.macd_slow,
+      macd_signal: config.macd_signal,
+      macd_histogram_threshold: config.macd_histogram_threshold,
+      bb_enabled: config.bb_enabled,
+      bb_period: config.bb_period,
+      bb_std_dev: config.bb_std_dev,
+      atr_enabled: config.atr_enabled,
+      atr_period: config.atr_period,
+      atr_stop_loss_multiplier: config.atr_stop_loss_multiplier,
+      atr_take_profit_multiplier: config.atr_take_profit_multiplier,
+      atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier,
+      break_even_atr: config.break_even_atr,
+      adx_enabled: config.adx_enabled,
+      adx_period: config.adx_period,
+      adx_threshold: config.adx_threshold,
+      volume_enabled: config.volume_enabled,
+      volume_avg_period: config.volume_avg_period,
+      volume_multiplier: config.volume_multiplier,
+      signal_conditions_required: config.signal_conditions_required,
+      position_size_percent: config.position_size_percent,
+      risk_per_trade_percent: config.risk_per_trade_percent,
+      max_open_positions: config.max_open_positions,
+      max_exposure_percent: config.max_exposure_percent,
+      daily_loss_limit_percent: config.daily_loss_limit_percent,
+      max_position_duration_minutes: config.max_position_duration_minutes,
+      leverage: config.leverage,
+      scan_interval: config.scan_interval,
+      trend_timeframe: config.trend_timeframe,
+      higher_trend_timeframe: config.higher_trend_timeframe,
+      klines_limit: config.klines_limit,
+    };
+    
+    const sortedJson = JSON.stringify(strategyParams, Object.keys(strategyParams).sort());
+    const encoder = new TextEncoder();
+    const data = encoder.encode(sortedJson);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    return hashHex;
+  }
+
   useEffect(() => {
     fetchStrategyStats();
 
-    // Subscribe to trade_history and positions changes
     const channel = supabase
       .channel("strategy-analysis")
       .on(
@@ -258,6 +292,22 @@ export const StrategyAnalysis = () => {
     );
   }
 
+  // Sort strategies based on current sort field and direction
+  const sortedStrategies = [...strategies].sort((a, b) => {
+    const aValue = a[sortField];
+    const bValue = b[sortField];
+    
+    // Always put active strategy first
+    if (a.strategy_hash === activeStrategyHash) return -1;
+    if (b.strategy_hash === activeStrategyHash) return 1;
+    
+    if (sortDirection === 'asc') {
+      return aValue > bValue ? 1 : -1;
+    } else {
+      return aValue < bValue ? 1 : -1;
+    }
+  });
+
   return (
     <div className="space-y-6">
       <Card>
@@ -267,14 +317,6 @@ export const StrategyAnalysis = () => {
               <Activity className="h-5 w-5" />
               Strategi Performance Oversigt
             </CardTitle>
-            {activeStrategyHash && (
-              <Badge variant="default" className="gap-2 px-3 py-1">
-                <CheckCircle2 className="h-4 w-4" />
-                <span className="font-mono text-sm">
-                  Aktiv: {activeConfigName || (activeStrategyHash ? activeStrategyHash.slice(0, 8) : "-")}
-                </span>
-              </Badge>
-            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -307,104 +349,158 @@ export const StrategyAnalysis = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[200px]">Strategi</TableHead>
-                  <TableHead className="text-right">Trades</TableHead>
-                  <TableHead className="text-right">Win Rate</TableHead>
-                  <TableHead className="text-right">Total PnL</TableHead>
-                  <TableHead className="text-right">Avg PnL</TableHead>
-                  <TableHead className="text-right">Største Win</TableHead>
-                  <TableHead className="text-right">Største Tab</TableHead>
+                  <TableHead className="w-[120px]">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 px-2"
+                      onClick={() => handleSort('strategy_number')}
+                    >
+                      Strategi
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 px-2"
+                      onClick={() => handleSort('total_trades')}
+                    >
+                      Trades
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 px-2"
+                      onClick={() => handleSort('win_rate')}
+                    >
+                      Win Rate
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 px-2"
+                      onClick={() => handleSort('total_pnl')}
+                    >
+                      Total PnL
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 px-2"
+                      onClick={() => handleSort('avg_pnl')}
+                    >
+                      Avg PnL
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 px-2"
+                      onClick={() => handleSort('largest_win')}
+                    >
+                      Største Win
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 px-2"
+                      onClick={() => handleSort('largest_loss')}
+                    >
+                      Største Tab
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {strategies
-                   .sort((a, b) => {
-                     // Sorter så aktiv strategi er øverst
-                     if (a.strategy_hash === activeStrategyHash) return -1;
-                     if (b.strategy_hash === activeStrategyHash) return 1;
-                     return b.total_pnl - a.total_pnl;
-                   })
-                  .map((strategy) => (
-                  <TableRow 
-                    key={strategy.strategy_hash}
-                    className={`cursor-pointer hover:bg-muted/50 transition-colors ${
-                      strategy.strategy_hash === activeStrategyHash 
-                        ? "bg-primary/10 border-l-4 border-l-primary font-semibold" 
-                        : ""
-                    }`}
-                    onClick={() => setSelectedStrategy({ 
-                      stats: strategy, 
-                      trades: allTrades.filter((t: any) => {
-                        const snapshot = (t.indicators_snapshot || null) as any;
-                        const key = snapshot && snapshot.id
-                          ? String(snapshot.id)
-                          : t.strategy_hash
-                            ? String(t.strategy_hash)
-                            : null;
-                        return key === strategy.strategy_hash;
-                      }) 
-                    })}
-                  >
-                    <TableCell className="w-[200px]">
-                      <div className="flex flex-col gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-bold">
-                            {strategy.config_name}
-                          </span>
-                           {strategy.strategy_hash === activeStrategyHash && (
-                             <Badge variant="default" className="gap-1">
-                               <CheckCircle2 className="h-3 w-3" />
-                               Aktiv
-                             </Badge>
-                           )}
+                {sortedStrategies.map((strategy) => {
+                  const isWinning = strategy.total_pnl > 0;
+                  const rowClass = isWinning ? "bg-success/10" : "bg-destructive/10";
+                  
+                  return (
+                    <TableRow 
+                      key={strategy.strategy_hash}
+                      className={`cursor-pointer hover:opacity-80 transition-opacity ${rowClass} ${
+                        strategy.strategy_hash === activeStrategyHash 
+                          ? "border-l-4 border-l-primary font-semibold" 
+                          : ""
+                      }`}
+                      onClick={() => setSelectedStrategy({ 
+                        stats: strategy, 
+                        trades: allTrades.filter((t: any) => String(t.strategy_hash) === strategy.strategy_hash) 
+                      })}
+                    >
+                      <TableCell className="w-[120px]">
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold">
+                              Strategi {strategy.strategy_number}
+                            </span>
+                            {strategy.strategy_hash === activeStrategyHash && (
+                              <Badge variant="default" className="gap-1">
+                                Aktiv
+                              </Badge>
+                            )}
+                          </div>
+                          <ExportTradesDialog 
+                            strategyHash={strategy.strategy_hash}
+                            buttonVariant="ghost"
+                            buttonSize="sm"
+                          />
                         </div>
-                        <ExportTradesDialog 
-                          strategyHash={strategy.strategy_hash}
-                          buttonVariant="ghost"
-                          buttonSize="sm"
-                        />
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="text-sm">
-                        {strategy.total_trades}
-                        <div className="text-xs text-muted-foreground">
-                          {strategy.winning_trades}W / {strategy.losing_trades}L
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="text-sm">
+                          {strategy.total_trades}
+                          <div className="text-xs text-muted-foreground">
+                            {strategy.winning_trades}W / {strategy.losing_trades}L
+                          </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className={`text-sm font-medium ${strategy.win_rate >= 50 ? "text-success" : "text-destructive"}`}>
-                        {strategy.win_rate.toFixed(1)}%
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className={`text-sm font-bold flex items-center justify-end gap-1 ${strategy.total_pnl >= 0 ? "text-success" : "text-destructive"}`}>
-                        {strategy.total_pnl >= 0 ? (
-                          <TrendingUp className="h-4 w-4" />
-                        ) : (
-                          <TrendingDown className="h-4 w-4" />
-                        )}
-                        ${strategy.total_pnl.toFixed(2)}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className={`text-sm ${strategy.avg_pnl >= 0 ? "text-success" : "text-destructive"}`}>
-                        ${strategy.avg_pnl.toFixed(2)}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="text-sm text-success">
-                        ${strategy.largest_win.toFixed(2)}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="text-sm text-destructive">
-                        ${strategy.largest_loss.toFixed(2)}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className={`text-sm font-medium ${strategy.win_rate >= 50 ? "text-success" : "text-destructive"}`}>
+                          {strategy.win_rate.toFixed(1)}%
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className={`text-sm font-bold ${isWinning ? "text-success" : "text-destructive"}`}>
+                          ${strategy.total_pnl.toFixed(2)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className={`text-sm ${strategy.avg_pnl >= 0 ? "text-success" : "text-destructive"}`}>
+                          ${strategy.avg_pnl.toFixed(2)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="text-sm text-success">
+                          ${strategy.largest_win.toFixed(2)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="text-sm text-destructive">
+                          ${strategy.largest_loss.toFixed(2)}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
