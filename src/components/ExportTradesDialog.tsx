@@ -33,125 +33,95 @@ export const ExportTradesDialog = ({
 
   const compressTradeData = (trades: any[]) => {
     const summary = {
-      total_trades: trades.length,
-      win_rate: ((trades.filter(t => t.pnl > 0).length / trades.length) * 100).toFixed(1) + "%",
-      total_pnl: trades.reduce((sum, t) => sum + t.pnl, 0).toFixed(2) + " USDC",
-      avg_pnl: (trades.reduce((sum, t) => sum + t.pnl, 0) / trades.length).toFixed(2) + " USDC",
-      period: `${new Date(trades[trades.length - 1].closed_at).toLocaleDateString('da-DK')} - ${new Date(trades[0].closed_at).toLocaleDateString('da-DK')}`,
+      cnt: trades.length,
+      wr: ((trades.filter(t => t.pnl > 0).length / trades.length) * 100).toFixed(1) + "%",
+      pnl: trades.reduce((sum, t) => sum + t.pnl, 0).toFixed(2),
+      avg: (trades.reduce((sum, t) => sum + t.pnl, 0) / trades.length).toFixed(2),
+      from: new Date(trades[trades.length - 1].closed_at).toISOString().split('T')[0],
+      to: new Date(trades[0].closed_at).toISOString().split('T')[0]
     };
 
-    const entryExitRules = trades[0]?.entry_conditions && trades[0]?.exit_conditions ? {
-      entry: JSON.parse(trades[0].entry_conditions),
-      exit: JSON.parse(trades[0].exit_conditions)
-    } : { entry: "N/A", exit: "N/A" };
-
-    // Formater indicators_snapshot til læsbare værdier
     const formatIndicators = (snapshot: any) => {
       if (!snapshot) return null;
       
-      return {
-        // EMA værdier
-        "EMA Fast (9)": snapshot.emaFast?.toFixed(2),
-        "EMA Medium (21)": snapshot.emaMedium?.toFixed(2),
-        "EMA Slow (50)": snapshot.emaSlow?.toFixed(2),
-        "EMA Trend (50)": snapshot.ema_medium_trend?.toFixed(2),
-        
-        // RSI værdier
-        "RSI Period": snapshot.rsi_period || 14,
-        "RSI Værdi": snapshot.rsi?.toFixed(2),
-        "RSI Min Long": snapshot.rsi_min_long || 30,
-        "RSI Max Short": snapshot.rsi_max_short || 70,
-        "RSI Overbought": snapshot.rsi_overbought || 80,
-        "RSI Oversold": snapshot.rsi_oversold || 30,
-        
-        // MACD værdier
-        "MACD Fast": snapshot.macd_fast || 12,
-        "MACD Slow": snapshot.macd_slow || 26,
-        "MACD Signal": snapshot.macd_signal || 9,
-        "MACD Histogram": snapshot.macd?.toFixed(6),
-        "MACD Threshold": snapshot.macd_histogram_threshold || 0,
-        
-        // ATR værdier
-        "ATR Period": snapshot.atr_period || 14,
-        "ATR Værdi": snapshot.atr?.toFixed(2),
-        "ATR Stop Loss Multiplier": snapshot.atr_stop_loss_multiplier || 2.8,
-        "ATR Trailing Stop Multiplier": snapshot.atr_trailing_stop_multiplier || 2.0,
-        "ATR Break Even": snapshot.break_even_atr || 0.8,
-        "ATR Take Profit Multiplier": snapshot.atr_take_profit_multiplier || 0,
-        
-        // ADX værdier
-        "ADX Period": snapshot.adx_period || 14,
-        "ADX Værdi": snapshot.adx?.toFixed(2),
-        "ADX Threshold": snapshot.adx_threshold || 40,
-        
-        // Volume
-        "Volume": snapshot.volume?.toFixed(2),
-        "Volume Average": snapshot.avgVolume?.toFixed(2),
-        "Volume Avg Period": snapshot.volume_avg_period || 20,
-        
-        // Pivot Points
-        "Pivot Points PP": snapshot.pivotPoints?.pp?.toFixed(2),
-        "Pivot Points R1": snapshot.pivotPoints?.r1?.toFixed(2),
-        "Pivot Points R2": snapshot.pivotPoints?.r2?.toFixed(2),
-        "Pivot Points R3": snapshot.pivotPoints?.r3?.toFixed(2),
-        "Pivot Points S1": snapshot.pivotPoints?.s1?.toFixed(2),
-        "Pivot Points S2": snapshot.pivotPoints?.s2?.toFixed(2),
-        "Pivot Points S3": snapshot.pivotPoints?.s3?.toFixed(2),
-        "Pivot Points Timeframe": snapshot.pivot_points_timeframe,
-        "Pivot Points Lookback": snapshot.pivot_points_lookback,
-        "Pivot Points Near Threshold": snapshot.pivot_points_near_threshold,
-        
-        // Config værdier
-        "Scan Interval": snapshot.scan_interval,
-        "Trend Timeframe": snapshot.trend_timeframe,
-        "Higher Trend Timeframe": snapshot.higher_trend_timeframe,
-        "Klines Limit": snapshot.klines_limit,
-        "Leverage": snapshot.leverage,
-        "Position Size Percent": snapshot.position_size_percent,
-        "Risk Per Trade Percent": snapshot.risk_per_trade_percent,
-        "Max Open Positions": snapshot.max_open_positions,
-        "Max Position Duration Minutes": snapshot.max_position_duration_minutes,
-        "Max Exposure Percent": snapshot.max_exposure_percent,
-        "Daily Loss Limit Percent": snapshot.daily_loss_limit_percent,
-        "Signal Conditions Required": snapshot.signal_conditions_required,
-        
-        // Enabled flags
-        "EMA Enabled": snapshot.ema_enabled,
-        "RSI Enabled": snapshot.rsi_enabled,
-        "StochRSI Enabled": snapshot.stochrsi_enabled,
-        "MACD Enabled": snapshot.macd_enabled,
-        "BB Enabled": snapshot.bb_enabled,
-        "ATR Enabled": snapshot.atr_enabled,
-        "ADX Enabled": snapshot.adx_enabled,
-        "Volume Enabled": snapshot.volume_enabled,
-        "Pivot Points Enabled": snapshot.pivot_points_enabled,
-        
-        // Price at time of trade
-        "Price": snapshot.price?.toFixed(2),
-        "Strategy Name": snapshot.name,
-      };
+      const compact: any = {};
+      
+      // EMA
+      if (snapshot.emaFast) compact.ema9 = +snapshot.emaFast.toFixed(2);
+      if (snapshot.emaMedium) compact.ema21 = +snapshot.emaMedium.toFixed(2);
+      if (snapshot.emaSlow) compact.ema50 = +snapshot.emaSlow.toFixed(2);
+      
+      // RSI
+      if (snapshot.rsi) compact.rsi = +snapshot.rsi.toFixed(2);
+      if (snapshot.rsi_min_long) compact.rsi_l = snapshot.rsi_min_long;
+      if (snapshot.rsi_max_short) compact.rsi_s = snapshot.rsi_max_short;
+      
+      // MACD
+      if (snapshot.macd) compact.macd = +snapshot.macd.toFixed(6);
+      if (snapshot.macd_histogram_threshold) compact.macd_th = snapshot.macd_histogram_threshold;
+      
+      // ATR
+      if (snapshot.atr) compact.atr = +snapshot.atr.toFixed(2);
+      if (snapshot.atr_stop_loss_multiplier) compact.atr_sl = snapshot.atr_stop_loss_multiplier;
+      if (snapshot.atr_take_profit_multiplier) compact.atr_tp = snapshot.atr_take_profit_multiplier;
+      if (snapshot.atr_trailing_stop_multiplier) compact.atr_ts = snapshot.atr_trailing_stop_multiplier;
+      if (snapshot.break_even_atr) compact.atr_be = snapshot.break_even_atr;
+      
+      // ADX
+      if (snapshot.adx) compact.adx = +snapshot.adx.toFixed(2);
+      if (snapshot.adx_threshold) compact.adx_th = snapshot.adx_threshold;
+      
+      // Volume
+      if (snapshot.volume) compact.vol = +snapshot.volume.toFixed(2);
+      if (snapshot.avgVolume) compact.vol_avg = +snapshot.avgVolume.toFixed(2);
+      
+      // Pivot
+      if (snapshot.pivotPoints) {
+        compact.pp = {
+          pp: snapshot.pivotPoints.pp?.toFixed(2),
+          r1: snapshot.pivotPoints.r1?.toFixed(2),
+          s1: snapshot.pivotPoints.s1?.toFixed(2)
+        };
+      }
+      
+      // Config
+      if (snapshot.leverage) compact.lev = snapshot.leverage;
+      if (snapshot.position_size_percent) compact.size = snapshot.position_size_percent;
+      if (snapshot.signal_conditions_required) compact.sig_req = snapshot.signal_conditions_required;
+      if (snapshot.price) compact.px = +snapshot.price.toFixed(2);
+      
+      // Enabled indicators (only true ones)
+      const en: string[] = [];
+      if (snapshot.ema_enabled) en.push("ema");
+      if (snapshot.rsi_enabled) en.push("rsi");
+      if (snapshot.macd_enabled) en.push("macd");
+      if (snapshot.atr_enabled) en.push("atr");
+      if (snapshot.adx_enabled) en.push("adx");
+      if (snapshot.volume_enabled) en.push("vol");
+      if (snapshot.pivot_points_enabled) en.push("pp");
+      if (en.length > 0) compact.en = en;
+      
+      return compact;
     };
 
     const compressedTrades = trades.map(t => ({
       sym: t.symbol,
-      side: t.side,
-      entry: t.entry_price,
-      exit: t.exit_price,
-      pnl: t.pnl.toFixed(2),
-      pnl_pct: t.pnl_percent.toFixed(2) + "%",
-      dur: Math.round((new Date(t.closed_at).getTime() - new Date(t.opened_at).getTime()) / 60000) + "m",
-      open_reason: t.open_reason,
-      close_reason: t.close_reason,
-      opened_at: new Date(t.opened_at).toISOString(),
-      closed_at: new Date(t.closed_at).toISOString(),
-      // Inkluder ALLE indikator værdier med læsbare navne
-      indicators: formatIndicators(t.indicators_snapshot)
+      sd: t.side,
+      en: +t.entry_price,
+      ex: +t.exit_price,
+      pnl: +t.pnl.toFixed(2),
+      pnl_p: +t.pnl_percent.toFixed(2),
+      dur: Math.round((new Date(t.closed_at).getTime() - new Date(t.opened_at).getTime()) / 60000),
+      op_r: t.open_reason,
+      cl_r: t.close_reason,
+      op_t: new Date(t.opened_at).toISOString(),
+      cl_t: new Date(t.closed_at).toISOString(),
+      ind: formatIndicators(t.indicators_snapshot)
     }));
 
     return {
-      summary,
-      entry_exit_rules: entryExitRules,
-      trades: compressedTrades
+      sum: summary,
+      trd: compressedTrades
     };
   };
 
@@ -191,7 +161,7 @@ export const ExportTradesDialog = ({
       }
 
       const compressed = compressTradeData(trades);
-      const jsonStr = JSON.stringify(compressed, null, 2);
+      const jsonStr = JSON.stringify(compressed);
       
       await navigator.clipboard.writeText(jsonStr);
       
