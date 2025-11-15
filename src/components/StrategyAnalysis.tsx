@@ -124,6 +124,12 @@ export const StrategyAnalysis = () => {
 
       setAllTrades(trades);
 
+      // If we still don't have an active hash, use the most recent trade's strategy
+      if (!activeHash && trades.length > 0) {
+        activeHash = String(trades[0].strategy_hash);
+        setActiveStrategyHash(activeHash);
+      }
+
       // Group trades by strategy_hash
       const strategyMap = new Map<string, any[]>();
       trades.forEach((trade: any) => {
