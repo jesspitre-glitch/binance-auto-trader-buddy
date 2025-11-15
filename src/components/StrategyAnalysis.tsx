@@ -128,15 +128,6 @@ export const StrategyAnalysis = () => {
 
       setAllTrades(trades);
 
-      // If we still don't have an active hash, use the most recent trade's strategy
-      if (!activeHash && trades.length > 0) {
-        activeHash = String(trades[0].strategy_hash);
-        setActiveStrategyHash(activeHash);
-        setActiveSource('latest_trade');
-      }
-
-      console.debug('[StrategyAnalysis] active detection', { activeStrategyHash: activeHash, source, strategiesCount: strategies.length });
-
       // Group trades by strategy_hash
       const strategyMap = new Map<string, any[]>();
       trades.forEach((trade: any) => {
@@ -180,7 +171,23 @@ export const StrategyAnalysis = () => {
           last_trade_date: strategyTrades[0].closed_at,
         });
       }
-      
+
+      // Ensure active hash corresponds to a strategy with trades; if not, pick the most frequent from recent trades
+      if ((!activeHash || !stats.some((s) => s.strategy_hash === activeHash)) && trades.length > 0) {
+        // Pick the strategy hash with the most closed trades
+        const topEntry = Array.from(strategyMap.entries()).sort((a, b) => b[1].length - a[1].length)[0];
+        if (topEntry) {
+          activeHash = topEntry[0];
+          setActiveStrategyHash(activeHash);
+          setActiveSource('recent_trades');
+        }
+      } else {
+        setActiveStrategyHash(activeHash);
+        setActiveSource(source);
+      }
+
+      console.debug('[StrategyAnalysis] active detection', { activeStrategyHash: activeHash, source: activeHash && stats.some((s) => s.strategy_hash === activeHash) ? source : 'recent_trades', strategiesCount: stats.length });
+
       setStrategies(stats);
     } catch (error: any) {
       toast({
@@ -354,10 +361,10 @@ export const StrategyAnalysis = () => {
             {activeStrategyHash && activeStat && (
               <div className="flex items-center gap-2">
                 <Badge variant="default" className="gap-2 px-3 py-1 bg-primary text-primary-foreground">
-                  Aktiv: Strategi {activeStat.strategy_number}
+                  Aktiv: Strategi {/^\d+$/.test(activeStat.strategy_hash) ? activeStat.strategy_hash : activeStat.strategy_number}
                 </Badge>
                 {activeSource && (
-                  <span className="text-xs text-muted-foreground">via {activeSource === 'open_positions' ? 'åbne positioner' : activeSource === 'latest_trade' ? 'seneste trade' : 'aktiv konfiguration'}</span>
+                  <span className="text-xs text-muted-foreground">via {activeSource === 'open_positions' ? 'åbne positioner' : activeSource === 'latest_trade' ? 'seneste trade' : activeSource === 'recent_trades' ? 'seneste handler' : 'aktiv konfiguration'}</span>
                 )}
               </div>
             )}
