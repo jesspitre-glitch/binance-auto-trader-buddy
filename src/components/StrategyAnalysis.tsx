@@ -339,7 +339,7 @@ export const StrategyAnalysis = () => {
               Strategi Performance Oversigt
             </CardTitle>
             {activeStrategyHash && (
-              <Badge variant="default" className="gap-2 px-3 py-1">
+              <Badge variant="default" className="gap-2 px-3 py-1 bg-primary text-primary-foreground">
                 Aktiv: {activeStat ? `Strategi ${activeStat.strategy_number}` : `${String(activeStrategyHash).slice(0, 8)}`}
               </Badge>
             )}
@@ -464,7 +464,7 @@ export const StrategyAnalysis = () => {
                       key={strategy.strategy_hash}
                       className={`cursor-pointer hover:opacity-80 transition-opacity ${rowClass} ${
                         strategy.strategy_hash === activeStrategyHash 
-                          ? "border-l-4 border-l-primary ring-2 ring-primary/60 font-semibold" 
+                          ? "border-l-4 border-l-primary ring-2 ring-primary/60 bg-primary/10 font-semibold" 
                           : ""
                       }`}
                       onClick={() => setSelectedStrategy({ 
@@ -479,7 +479,7 @@ export const StrategyAnalysis = () => {
                               Strategi {strategy.strategy_number}
                             </span>
                             {strategy.strategy_hash === activeStrategyHash && (
-                              <Badge variant="default" className="gap-1">
+                              <Badge variant="default" className="gap-1 bg-primary text-primary-foreground">
                                 Aktiv
                               </Badge>
                             )}
