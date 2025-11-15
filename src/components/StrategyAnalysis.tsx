@@ -42,6 +42,24 @@ export const StrategyAnalysis = () => {
     try {
       setLoading(true);
       
+      // Hent alle configs og beregn deres hashes for at få navne
+      const { data: configs } = await supabase
+        .from("indicator_config")
+        .select("*");
+      
+      const configHashMap = new Map<string, string>();
+      if (configs) {
+        for (const config of configs) {
+          const configString = JSON.stringify(config, Object.keys(config).sort());
+          const encoder = new TextEncoder();
+          const data = encoder.encode(configString);
+          const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+          configHashMap.set(hash, config.name || 'Ukendt');
+        }
+      }
+      
       // 1) Find aktiv strategi via åbne positioner (mest tydeligt for brugeren)
       const { data: openPositions } = await supabase
         .from("positions")
@@ -126,7 +144,7 @@ export const StrategyAnalysis = () => {
         
         stats.push({
           strategy_hash: hash,
-          config_name: hash.substring(0, 8), // Use hash prefix as name
+          config_name: configHashMap.get(hash) || `#${hash.substring(0, 6)}`,
           total_trades: strategyTrades.length,
           winning_trades: winningTrades.length,
           losing_trades: losingTrades.length,
@@ -269,8 +287,8 @@ export const StrategyAnalysis = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Strategi ID</TableHead>
-                  <TableHead className="text-right">Total Trades</TableHead>
+                  <TableHead className="w-[200px]">Strategi</TableHead>
+                  <TableHead className="text-right">Trades</TableHead>
                   <TableHead className="text-right">Win Rate</TableHead>
                   <TableHead className="text-right">Total PnL</TableHead>
                   <TableHead className="text-right">Avg PnL</TableHead>
@@ -299,22 +317,23 @@ export const StrategyAnalysis = () => {
                       trades: allTrades.filter(t => t.strategy_hash === strategy.strategy_hash) 
                     })}
                   >
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Hash className="h-4 w-4 text-muted-foreground" />
-                        <code className="text-xs font-mono bg-muted px-2 py-1 rounded">
-                          {strategy.config_name}
-                        </code>
-                        {strategy.strategy_hash === activeStrategyHash && (
-                          <Badge variant="default" className="gap-1 animate-pulse">
-                            <CheckCircle2 className="h-3 w-3" />
-                            Aktiv Nu
-                          </Badge>
-                        )}
+                    <TableCell className="w-[200px]">
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold">
+                            {strategy.config_name}
+                          </span>
+                          {strategy.strategy_hash === activeStrategyHash && (
+                            <Badge variant="default" className="gap-1">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Aktiv
+                            </Badge>
+                          )}
+                        </div>
                         <ExportTradesDialog 
                           strategyHash={strategy.strategy_hash}
                           buttonVariant="ghost"
-                          buttonSize="icon"
+                          buttonSize="sm"
                         />
                       </div>
                     </TableCell>
