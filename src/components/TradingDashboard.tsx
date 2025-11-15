@@ -200,11 +200,33 @@ export const TradingDashboard = () => {
                 <SelectContent>
                   {configs.map((config) => (
                     <SelectItem key={config.id} value={config.id}>
-                      {config.name} {config.enabled ? "" : "(Deaktiveret)"}
+                      <div className="flex items-center justify-between w-full pr-2">
+                        <span>{config.name} {config.enabled ? "" : "(Deaktiveret)"}</span>
+                        {config.id === activeConfigId && isActive && (
+                          <div className="flex items-center gap-1 px-2 py-0.5 bg-primary/20 text-primary rounded text-xs">
+                            <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+                            Kører
+                          </div>
+                        )}
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {activeConfigId && (
+                <div className="mt-2 flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">Valgt:</span>
+                  <span className="font-medium">
+                    {configs.find(c => c.id === activeConfigId)?.name || "Ukendt"}
+                  </span>
+                  {isActive && (
+                    <div className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded">
+                      <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+                      <span className="text-xs font-medium">Aktiv</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
