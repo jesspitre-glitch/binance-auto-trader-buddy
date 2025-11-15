@@ -172,21 +172,22 @@ export const StrategyAnalysis = () => {
         });
       }
 
-      // Ensure active hash corresponds to a strategy with trades; if not, pick the most frequent from recent trades
-      if ((!activeHash || !stats.some((s) => s.strategy_hash === activeHash)) && trades.length > 0) {
-        // Pick the strategy hash with the most closed trades
-        const topEntry = Array.from(strategyMap.entries()).sort((a, b) => b[1].length - a[1].length)[0];
-        if (topEntry) {
-          activeHash = topEntry[0];
-          setActiveStrategyHash(activeHash);
-          setActiveSource('recent_trades');
+      // If no active hash from session/positions, OR active hash has no trades, pick the most active strategy
+      if (!activeHash || !stats.some((s) => s.strategy_hash === activeHash)) {
+        if (trades.length > 0) {
+          // Pick the strategy hash with the MOST closed trades (most active)
+          const topEntry = Array.from(strategyMap.entries()).sort((a, b) => b[1].length - a[1].length)[0];
+          if (topEntry) {
+            activeHash = topEntry[0];
+            source = 'most_active';
+          }
         }
-      } else {
-        setActiveStrategyHash(activeHash);
-        setActiveSource(source);
       }
+      
+      setActiveStrategyHash(activeHash);
+      setActiveSource(source);
 
-      console.debug('[StrategyAnalysis] active detection', { activeStrategyHash: activeHash, source: activeHash && stats.some((s) => s.strategy_hash === activeHash) ? source : 'recent_trades', strategiesCount: stats.length });
+      console.debug('[StrategyAnalysis] active detection', { activeStrategyHash: activeHash, source, totalStrategies: stats.length, totalTrades: trades.length });
 
       setStrategies(stats);
     } catch (error: any) {
@@ -364,7 +365,13 @@ export const StrategyAnalysis = () => {
                   Aktiv: Strategi {/^\d+$/.test(activeStat.strategy_hash) ? activeStat.strategy_hash : activeStat.strategy_number}
                 </Badge>
                 {activeSource && (
-                  <span className="text-xs text-muted-foreground">via {activeSource === 'open_positions' ? 'åbne positioner' : activeSource === 'latest_trade' ? 'seneste trade' : activeSource === 'recent_trades' ? 'seneste handler' : 'aktiv konfiguration'}</span>
+                  <span className="text-xs text-muted-foreground">
+                    via {activeSource === 'open_positions' ? 'åbne positioner' : 
+                         activeSource === 'latest_trade' ? 'seneste trade' : 
+                         activeSource === 'most_active' ? 'mest aktive strategi' : 
+                         activeSource === 'recent_trades' ? 'seneste handler' : 
+                         'aktiv konfiguration'}
+                  </span>
                 )}
               </div>
             )}
