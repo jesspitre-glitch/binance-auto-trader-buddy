@@ -140,7 +140,7 @@ export const StrategyAnalysis = () => {
 
       // Calculate stats for each strategy
       const stats: StrategyStats[] = [];
-      let strategyNumber = 1;
+      let nextStrategyNumber = 1;
       
       // Sort by first trade date to assign numbers chronologically
       const sortedHashes = Array.from(strategyMap.entries())
@@ -156,9 +156,13 @@ export const StrategyAnalysis = () => {
         const totalPnl = strategyTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
         const avgPnl = totalPnl / strategyTrades.length;
         
+        // If hash is a pure number, use it as strategy_number; otherwise assign sequential number
+        const isNumericHash = /^\d+$/.test(hash);
+        const strategyNumber = isNumericHash ? parseInt(hash, 10) : nextStrategyNumber++;
+        
         stats.push({
           strategy_hash: hash,
-          strategy_number: strategyNumber++,
+          strategy_number: strategyNumber,
           total_trades: strategyTrades.length,
           winning_trades: winningTrades.length,
           losing_trades: losingTrades.length,
@@ -362,7 +366,7 @@ export const StrategyAnalysis = () => {
             {activeStrategyHash && activeStat && (
               <div className="flex items-center gap-2">
                 <Badge variant="default" className="gap-2 px-3 py-1 bg-primary text-primary-foreground">
-                  Aktiv: Strategi {/^\d+$/.test(activeStat.strategy_hash) ? activeStat.strategy_hash : activeStat.strategy_number}
+                  Aktiv: Strategi {activeStat.strategy_number}
                 </Badge>
                 {activeSource && (
                   <span className="text-xs text-muted-foreground">
