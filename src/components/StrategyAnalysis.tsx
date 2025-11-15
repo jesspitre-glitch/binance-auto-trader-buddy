@@ -319,6 +319,11 @@ export const StrategyAnalysis = () => {
               <Activity className="h-5 w-5" />
               Strategi Performance Oversigt
             </CardTitle>
+            {activeStrategyHash && (
+              <Badge variant="default" className="gap-2 px-3 py-1">
+                Aktiv: {activeStat ? `Strategi ${activeStat.strategy_number}` : 'Aktiv'}
+              </Badge>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -433,7 +438,7 @@ export const StrategyAnalysis = () => {
               <TableBody>
                 {sortedStrategies.map((strategy) => {
                   const isWinning = strategy.total_pnl > 0;
-                  const rowClass = isWinning ? "bg-success/10" : "bg-destructive/10";
+                  const rowClass = isWinning ? "bg-success/10" : "bg-loss/10";
                   
                   return (
                     <TableRow 
@@ -476,17 +481,17 @@ export const StrategyAnalysis = () => {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className={`text-sm font-medium ${strategy.win_rate >= 50 ? "text-success" : "text-destructive"}`}>
+                        <div className={`text-sm font-medium ${strategy.win_rate >= 50 ? "text-success" : "text-loss"}`}>
                           {strategy.win_rate.toFixed(1)}%
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className={`text-sm font-bold ${isWinning ? "text-success" : "text-destructive"}`}>
+                        <div className={`text-sm font-bold ${isWinning ? "text-success" : "text-loss"}`}>
                           ${strategy.total_pnl.toFixed(2)}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className={`text-sm ${strategy.avg_pnl >= 0 ? "text-success" : "text-destructive"}`}>
+                        <div className={`text-sm ${strategy.avg_pnl >= 0 ? "text-success" : "text-loss"}`}>
                           ${strategy.avg_pnl.toFixed(2)}
                         </div>
                       </TableCell>
@@ -496,7 +501,7 @@ export const StrategyAnalysis = () => {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="text-sm text-destructive">
+                        <div className="text-sm text-loss">
                           ${strategy.largest_loss.toFixed(2)}
                         </div>
                       </TableCell>
