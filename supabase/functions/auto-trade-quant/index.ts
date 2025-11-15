@@ -773,12 +773,17 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   }
   
   const requiredConditions = config.signal_conditions_required;
-  const longSignal = longConditions.filter(c => c).length >= requiredConditions;
-  const shortSignal = shortConditions.filter(c => c).length >= requiredConditions;
-  
-  // Calculate conditions met for signal strength
   const longConditionsMet = longConditions.filter(c => c).length;
   const shortConditionsMet = shortConditions.filter(c => c).length;
+
+  // RSI er en FAST, obligatorisk regel: ingen trades uden crossover
+  const rsiLongRequiredOK = conditionDetails.rsi.long === true;
+  const rsiShortRequiredOK = conditionDetails.rsi.short === true;
+
+  const longSignal = rsiLongRequiredOK && longConditionsMet >= requiredConditions;
+  const shortSignal = rsiShortRequiredOK && shortConditionsMet >= requiredConditions;
+  
+  // Calculate conditions met for signal strength
   const conditionsMet = Math.max(longConditionsMet, shortConditionsMet);
   
   // 🔍 ULTRA-DETALJERET SIGNAL LOGGING MED VÆRDIER & THRESHOLDS
