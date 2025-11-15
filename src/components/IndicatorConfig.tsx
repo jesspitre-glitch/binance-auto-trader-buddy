@@ -198,12 +198,9 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           }
         });
 
-        // Næste nummer i rækken
+        // Næste nummer i rækken - ALTID brug dette for nye configs
         const nextNumber = maxNumber + 1;
-        finalPayload = {
-          ...finalPayload,
-          name: nextNumber.toString(),
-        };
+        finalPayload.name = nextNumber.toString();
       }
 
       let result;
@@ -222,7 +219,9 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       toast({
         title: "Gemt",
-        description: "Indikator konfiguration er gemt",
+        description: config?.id 
+          ? "Strategi er opdateret" 
+          : `Ny strategi "${finalPayload.name}" er oprettet`,
       });
       onSave?.();
     } catch (error: any) {
@@ -250,7 +249,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              disabled={!config?.id}
+              placeholder={!config?.id ? "Auto-genereres ved gem" : ""}
             />
+            {!config?.id && (
+              <p className="text-xs text-muted-foreground">
+                Navn genereres automatisk som næste nummer i rækken
+              </p>
+            )}
           </div>
           <div className="flex items-center justify-between">
             <Label htmlFor="enabled">Aktiver Strategi</Label>
