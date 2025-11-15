@@ -176,15 +176,27 @@ export const StrategyAnalysis = () => {
         });
       }
 
-      // If no active hash from session/positions, OR active hash has no trades, pick the most active strategy
-      if (!activeHash || !stats.some((s) => s.strategy_hash === activeHash)) {
-        if (trades.length > 0) {
-          // Pick the strategy hash with the MOST closed trades (most active)
-          const topEntry = Array.from(strategyMap.entries()).sort((a, b) => b[1].length - a[1].length)[0];
-          if (topEntry) {
-            activeHash = topEntry[0];
-            source = 'most_active';
-          }
+      // Pick the most active strategy in the last 24 hours (override session/positions if present)
+      const recentWindowMs = 24 * 60 * 60 * 1000;
+      const nowMs = Date.now();
+      const recentTrades = trades.filter((t: any) => t.closed_at && (nowMs - new Date(t.closed_at).getTime()) <= recentWindowMs);
+      if (recentTrades.length > 0) {
+        const recentCounts: Record<string, number> = {};
+        for (const t of recentTrades) {
+          const h = String(t.strategy_hash);
+          recentCounts[h] = (recentCounts[h] || 0) + 1;
+        }
+        const recentTop = Object.entries(recentCounts).sort((a, b) => b[1] - a[1])[0];
+        if (recentTop) {
+          activeHash = recentTop[0];
+          source = 'most_active_24h';
+        }
+      } else if (!activeHash || !stats.some((s) => s.strategy_hash === activeHash)) {
+        // Fallback to most active overall if no recent trades
+        const topEntry = Array.from(strategyMap.entries()).sort((a, b) => b[1].length - a[1].length)[0];
+        if (topEntry) {
+          activeHash = topEntry[0];
+          source = 'most_active';
         }
       }
       
@@ -372,7 +384,8 @@ export const StrategyAnalysis = () => {
                   <span className="text-xs text-muted-foreground">
                     via {activeSource === 'open_positions' ? 'åbne positioner' : 
                          activeSource === 'latest_trade' ? 'seneste trade' : 
-                         activeSource === 'most_active' ? 'mest aktive strategi' : 
+                         activeSource === 'most_active_24h' ? 'mest aktive (24t)' : 
+                         activeSource === 'most_active' ? 'mest aktive (all-time)' : 
                          activeSource === 'recent_trades' ? 'seneste handler' : 
                          'aktiv konfiguration'}
                   </span>
