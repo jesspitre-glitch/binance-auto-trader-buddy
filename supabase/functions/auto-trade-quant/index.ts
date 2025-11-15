@@ -61,70 +61,13 @@ interface IndicatorConfig {
   klines_limit: number;
 }
 
-// Calculate strategy hash from config
-async function calculateStrategyHash(config: IndicatorConfig): Promise<string> {
-  // Create a stable string representation of ALL config values (excluding id, user_id, name, created_at, updated_at, enabled)
-  const configStr = JSON.stringify({
-    ema_enabled: config.ema_enabled,
-    ema_fast: config.ema_fast,
-    ema_medium: config.ema_medium,
-    ema_slow: config.ema_slow,
-    ema_medium_trend: config.ema_medium_trend,
-    min_ema_spread_percent: config.min_ema_spread_percent,
-    rsi_enabled: config.rsi_enabled,
-    rsi_period: config.rsi_period,
-    rsi_min_long: config.rsi_min_long,
-    rsi_max_short: config.rsi_max_short,
-    stochrsi_enabled: config.stochrsi_enabled,
-    stochrsi_period: config.stochrsi_period,
-    stochrsi_k_period: config.stochrsi_k_period,
-    stochrsi_d_period: config.stochrsi_d_period,
-    stochrsi_overbought: config.stochrsi_overbought,
-    stochrsi_oversold: config.stochrsi_oversold,
-    pivot_points_enabled: config.pivot_points_enabled,
-    pivot_points_timeframe: config.pivot_points_timeframe,
-    pivot_points_lookback: config.pivot_points_lookback,
-    pivot_points_near_threshold: config.pivot_points_near_threshold,
-    macd_enabled: config.macd_enabled,
-    macd_fast: config.macd_fast,
-    macd_slow: config.macd_slow,
-    macd_signal: config.macd_signal,
-    macd_histogram_threshold: config.macd_histogram_threshold,
-    bb_enabled: config.bb_enabled,
-    bb_period: config.bb_period,
-    bb_std_dev: config.bb_std_dev,
-    atr_enabled: config.atr_enabled,
-    atr_period: config.atr_period,
-    atr_stop_loss_multiplier: config.atr_stop_loss_multiplier,
-    atr_take_profit_multiplier: config.atr_take_profit_multiplier,
-    atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier,
-    break_even_atr: config.break_even_atr,
-    adx_enabled: config.adx_enabled,
-    adx_period: config.adx_period,
-    adx_threshold: config.adx_threshold,
-    volume_enabled: config.volume_enabled,
-    volume_avg_period: config.volume_avg_period,
-    volume_multiplier: config.volume_multiplier,
-    signal_conditions_required: config.signal_conditions_required,
-    position_size_percent: config.position_size_percent,
-    risk_per_trade_percent: config.risk_per_trade_percent,
-    max_open_positions: config.max_open_positions,
-    max_exposure_percent: config.max_exposure_percent,
-    daily_loss_limit_percent: config.daily_loss_limit_percent,
-    max_position_duration_minutes: config.max_position_duration_minutes,
-    leverage: config.leverage,
-    scan_interval: config.scan_interval,
-    trend_timeframe: config.trend_timeframe,
-    higher_trend_timeframe: config.higher_trend_timeframe,
-    klines_limit: config.klines_limit,
-  });
-  
-  const msgUint8 = new TextEncoder().encode(configStr);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
+// Calculate strategy identifier from config name
+// Calculate strategy identifier from config name
+async function getStrategyIdentifier(config: any): Promise<string> {
+  // Simply use the config name as the strategy identifier
+  return config.name || 'unknown';
 }
+
 
 // Determine trend direction from medium timeframe using EMA
 function analyzeMediumTrend(klines: any[], config: IndicatorConfig): 'BULLISH' | 'BEARISH' | 'NEUTRAL' {
@@ -1178,8 +1121,8 @@ serve(async (req) => {
       const config = session.indicator_config;
       if (!config || !config.enabled) continue;
 
-      // Calculate strategy hash for this config
-      const strategyHash = await calculateStrategyHash(config);
+      // Calculate strategy identifier for this config
+      const strategyHash = await getStrategyIdentifier(config);
 
       // Check current open positions
       const { data: positions } = await supabaseClient

@@ -42,25 +42,7 @@ export const StrategyAnalysis = () => {
     try {
       setLoading(true);
       
-      // Hent alle configs og beregn deres hashes for at få navne
-      const { data: configs } = await supabase
-        .from("indicator_config")
-        .select("*");
-      
-      const configHashMap = new Map<string, string>();
-      if (configs) {
-        for (const config of configs) {
-          const configString = JSON.stringify(config, Object.keys(config).sort());
-          const encoder = new TextEncoder();
-          const data = encoder.encode(configString);
-          const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-          const hashArray = Array.from(new Uint8Array(hashBuffer));
-          const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-          configHashMap.set(hash, config.name || 'Ukendt');
-        }
-      }
-      
-      // 1) Find aktiv strategi via åbne positioner (mest tydeligt for brugeren)
+      // Find aktiv strategi via åbne positioner
       const { data: openPositions } = await supabase
         .from("positions")
         .select("strategy_hash")
@@ -78,7 +60,7 @@ export const StrategyAnalysis = () => {
         openHashes.forEach((h) => (counts[h] = (counts[h] || 0) + 1));
         activeHash = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
       } else {
-        // 2) Fallback: beregn ud fra aktiv konfiguration i sessionen
+        // Fallback: Hent aktiv config navn fra sessionen
         const { data: sessionData } = await supabase
           .from("trading_session")
           .select("active_config_id")
@@ -87,17 +69,13 @@ export const StrategyAnalysis = () => {
         if (sessionData?.active_config_id) {
           const { data: configData } = await supabase
             .from("indicator_config")
-            .select("*")
+            .select("name")
             .eq("id", sessionData.active_config_id)
             .maybeSingle();
           
           if (configData) {
-            const configString = JSON.stringify(configData, Object.keys(configData).sort());
-            const encoder = new TextEncoder();
-            const data = encoder.encode(configString);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            activeHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            // Brug config navnet direkte som strategy identifier
+            activeHash = configData.name;
           }
         }
       }
@@ -142,9 +120,21 @@ export const StrategyAnalysis = () => {
         const totalPnl = strategyTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
         const avgPnl = totalPnl / strategyTrades.length;
         
+        // Intelligent navn-mapping:
+        let displayName: string;
+        
+        // 1. Hvis hash er et simpelt tal eller navn (1-99 eller bogstaver), brug det direkte
+        if (/^[a-zA-Z0-9]{1,3}$/.test(hash)) {
+          displayName = hash;
+        } 
+        // 2. Fallback: vis kort version af hex
+        else {
+          displayName = `#${hash.substring(0, 6)}`;
+        }
+        
         stats.push({
           strategy_hash: hash,
-          config_name: configHashMap.get(hash) || `#${hash.substring(0, 6)}`,
+          config_name: displayName,
           total_trades: strategyTrades.length,
           winning_trades: winningTrades.length,
           losing_trades: losingTrades.length,
