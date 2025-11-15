@@ -61,11 +61,10 @@ interface IndicatorConfig {
   klines_limit: number;
 }
 
-// Calculate strategy identifier from config name
-// Calculate strategy identifier from config name
+// Calculate strategy identifier from config id (stable)
 async function getStrategyIdentifier(config: any): Promise<string> {
-  // Simply use the config name as the strategy identifier
-  return config.name || 'unknown';
+  // Use the config UUID to avoid name collisions across time
+  return String(config.id || config.name || 'unknown');
 }
 
 

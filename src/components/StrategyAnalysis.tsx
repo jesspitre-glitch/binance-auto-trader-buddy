@@ -36,6 +36,7 @@ export const StrategyAnalysis = () => {
   const [selectedStrategy, setSelectedStrategy] = useState<{ stats: StrategyStats; trades: any[] } | null>(null);
   const [allTrades, setAllTrades] = useState<any[]>([]);
   const [activeStrategyHash, setActiveStrategyHash] = useState<string | null>(null);
+  const [activeConfigName, setActiveConfigName] = useState<string | null>(null);
   const { toast } = useToast();
 
   const fetchStrategyStats = async () => {
@@ -61,9 +62,8 @@ export const StrategyAnalysis = () => {
             .select("name")
             .eq("id", sessionRow.active_config_id)
             .maybeSingle();
-          if (configData?.name) {
-            activeHash = String(configData.name);
-          }
+          activeHash = String(sessionRow.active_config_id);
+          setActiveConfigName(configData?.name ?? null);
         }
       }
 
@@ -83,6 +83,7 @@ export const StrategyAnalysis = () => {
           const counts: Record<string, number> = {};
           openHashes.forEach((h) => (counts[h] = (counts[h] || 0) + 1));
           activeHash = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+          setActiveConfigName(null);
         }
       }
       
@@ -108,6 +109,14 @@ export const StrategyAnalysis = () => {
       // Store all trades for dialog
       setAllTrades(trades);
 
+      // Hent konfig-navne map for at vise navn for UUID-baserede strategier
+      const { data: configList } = await supabase
+        .from("indicator_config")
+        .select("id, name");
+      const nameById: Record<string, string> = Object.fromEntries(
+        (configList || []).map((c: any) => [String(c.id), String(c.name)])
+      );
+
       // Group trades by strategy_hash
       const strategyMap = new Map<string, any[]>();
       trades.forEach(trade => {
@@ -129,14 +138,16 @@ export const StrategyAnalysis = () => {
         
         // Intelligent navn-mapping:
         let displayName: string;
-        
-        // 1. Hvis hash er et simpelt tal eller navn (1-99 eller bogstaver), brug det direkte
-        if (/^[a-zA-Z0-9]{1,3}$/.test(hash)) {
+
+        if (nameById[hash]) {
+          // UUID matcher en konfiguration – brug det menneskelige navn
+          displayName = nameById[hash];
+        } else if (/^[a-zA-Z0-9]{1,3}$/.test(hash)) {
+          // Simpelt tal/navn (ældre strategier)
           displayName = hash;
-        } 
-        // 2. Fallback: vis kort version af hex
-        else {
-          displayName = `#${hash.substring(0, 6)}`;
+        } else {
+          // Fallback: kort UUID/hash
+          displayName = `#${String(hash).substring(0, 6)}`;
         }
         
         stats.push({
@@ -248,7 +259,7 @@ export const StrategyAnalysis = () => {
               <Badge variant="default" className="gap-2 px-3 py-1">
                 <CheckCircle2 className="h-4 w-4" />
                 <span className="font-mono text-sm">
-                  Aktiv: {strategies.find(s => s.strategy_hash === activeStrategyHash)?.config_name || activeStrategyHash.slice(0, 8)}
+                  Aktiv: {activeConfigName || (activeStrategyHash ? activeStrategyHash.slice(0, 8) : "-")}
                 </span>
               </Badge>
             )}
