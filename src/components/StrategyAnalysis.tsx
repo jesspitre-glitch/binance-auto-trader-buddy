@@ -438,7 +438,7 @@ export const StrategyAnalysis = () => {
               <TableBody>
                 {sortedStrategies.map((strategy) => {
                   const isWinning = strategy.total_pnl > 0;
-                  const rowClass = isWinning ? "bg-success/10" : "bg-loss/10";
+                  const rowClass = isWinning ? "bg-success/20" : "bg-loss/20";
                   
                   return (
                     <TableRow 
