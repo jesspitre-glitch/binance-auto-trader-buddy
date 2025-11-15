@@ -85,6 +85,25 @@ export const StrategyAnalysis = () => {
         }
       }
       
+      // Fallback: find active hash from open positions if no session-based hash
+      if (!activeHash) {
+        const { data: openPositions } = await supabase
+          .from("positions")
+          .select("strategy_hash, opened_at, status")
+          .eq("status", "OPEN")
+          .order("opened_at", { ascending: false });
+
+        const openHashes = (openPositions || [])
+          .map((p: any) => p.strategy_hash)
+          .filter(Boolean) as string[];
+
+        if (openHashes.length) {
+          const counts: Record<string, number> = {};
+          openHashes.forEach((h) => { counts[h] = (counts[h] || 0) + 1; });
+          activeHash = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+        }
+      }
+      
       setActiveStrategyHash(activeHash);
       
       // Fetch all trades with strategy_hash
@@ -321,7 +340,7 @@ export const StrategyAnalysis = () => {
             </CardTitle>
             {activeStrategyHash && (
               <Badge variant="default" className="gap-2 px-3 py-1">
-                Aktiv: {activeStat ? `Strategi ${activeStat.strategy_number}` : 'Aktiv'}
+                Aktiv: {activeStat ? `Strategi ${activeStat.strategy_number}` : `${String(activeStrategyHash).slice(0, 8)}`}
               </Badge>
             )}
           </div>
@@ -445,7 +464,7 @@ export const StrategyAnalysis = () => {
                       key={strategy.strategy_hash}
                       className={`cursor-pointer hover:opacity-80 transition-opacity ${rowClass} ${
                         strategy.strategy_hash === activeStrategyHash 
-                          ? "border-l-4 border-l-primary font-semibold" 
+                          ? "border-l-4 border-l-primary ring-2 ring-primary/60 font-semibold" 
                           : ""
                       }`}
                       onClick={() => setSelectedStrategy({ 
