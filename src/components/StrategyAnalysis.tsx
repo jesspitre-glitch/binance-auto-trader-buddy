@@ -118,9 +118,6 @@ export const StrategyAnalysis = () => {
       const nameById: Record<string, string> = Object.fromEntries(
         (configList || []).map((c: any) => [String(c.id), String(c.name)])
       );
-      const idByName: Record<string, string> = Object.fromEntries(
-        (configList || []).map((c: any) => [String(c.name), String(c.id)])
-      );
 
       // Group trades by strategy_hash
       const strategyMap = new Map<string, any[]>();
@@ -132,8 +129,6 @@ export const StrategyAnalysis = () => {
           key = String(snapshot.id);
         } else if (trade.strategy_hash && /^[0-9a-fA-F-]{36}$/.test(String(trade.strategy_hash))) {
           key = String(trade.strategy_hash);
-        } else if (trade.strategy_hash && idByName[String(trade.strategy_hash)]) {
-          key = idByName[String(trade.strategy_hash)];
         } else {
           key = String(trade.strategy_hash);
         }
@@ -323,12 +318,12 @@ export const StrategyAnalysis = () => {
               </TableHeader>
               <TableBody>
                 {strategies
-                  .sort((a, b) => {
-                    // Sorter så aktiv strategi er øverst
-                    if (a.strategy_hash === activeStrategyHash) return -1;
-                    if (b.strategy_hash === activeStrategyHash) return 1;
-                    return b.total_pnl - a.total_pnl;
-                  })
+                   .sort((a, b) => {
+                     // Sorter så aktiv strategi er øverst
+                     if (a.strategy_hash === activeStrategyHash) return -1;
+                     if (b.strategy_hash === activeStrategyHash) return 1;
+                     return b.total_pnl - a.total_pnl;
+                   })
                   .map((strategy) => (
                   <TableRow 
                     key={strategy.strategy_hash}
@@ -339,7 +334,15 @@ export const StrategyAnalysis = () => {
                     }`}
                     onClick={() => setSelectedStrategy({ 
                       stats: strategy, 
-                      trades: allTrades.filter(t => t.strategy_hash === strategy.strategy_hash) 
+                      trades: allTrades.filter((t: any) => {
+                        const snapshot = (t.indicators_snapshot || null) as any;
+                        const key = snapshot && snapshot.id
+                          ? String(snapshot.id)
+                          : t.strategy_hash
+                            ? String(t.strategy_hash)
+                            : null;
+                        return key === strategy.strategy_hash;
+                      }) 
                     })}
                   >
                     <TableCell className="w-[200px]">
@@ -348,12 +351,12 @@ export const StrategyAnalysis = () => {
                           <span className="text-lg font-bold">
                             {strategy.config_name}
                           </span>
-                          {strategy.strategy_hash === activeStrategyHash && (
-                            <Badge variant="default" className="gap-1">
-                              <CheckCircle2 className="h-3 w-3" />
-                              Aktiv
-                            </Badge>
-                          )}
+                           {strategy.strategy_hash === activeStrategyHash && (
+                             <Badge variant="default" className="gap-1">
+                               <CheckCircle2 className="h-3 w-3" />
+                               Aktiv
+                             </Badge>
+                           )}
                         </div>
                         <ExportTradesDialog 
                           strategyHash={strategy.strategy_hash}
