@@ -17,6 +17,7 @@ interface IndicatorConfig {
   rsi_period: number;
   rsi_min_long: number;
   rsi_max_short: number;
+  rsi_zone_width: number;
   stochrsi_enabled: boolean;
   stochrsi_period: number;
   stochrsi_k_period: number;
@@ -75,6 +76,7 @@ async function getStrategyIdentifier(config: IndicatorConfig): Promise<string> {
     rsi_period: config.rsi_period,
     rsi_min_long: config.rsi_min_long,
     rsi_max_short: config.rsi_max_short,
+    rsi_zone_width: config.rsi_zone_width,
     stochrsi_enabled: config.stochrsi_enabled,
     stochrsi_period: config.stochrsi_period,
     stochrsi_k_period: config.stochrsi_k_period,
@@ -649,6 +651,61 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     console.log(`   ⚪ Volume: DISABLED`);
   }
   
+  // HÅRDT RSI ZONE FILTER (obligatorisk regel)
+  if (config.rsi_enabled && rsiCurrent !== null && rsiPrevious !== null) {
+    const rsiZoneWidth = config.rsi_zone_width || 10;
+    const rsiLongZoneMax = config.rsi_min_long + rsiZoneWidth;
+    const rsiShortZoneMin = config.rsi_max_short - rsiZoneWidth;
+    
+    console.log(`   📊 RSI: ${rsiCurrent.toFixed(2)} (prev: ${rsiPrevious.toFixed(2)})`);
+    console.log(`   📏 RSI LONG Zone: [0 - ${rsiLongZoneMax}]`);
+    console.log(`   📏 RSI SHORT Zone: [${rsiShortZoneMin} - 100]`);
+    
+    // LONG: Både tidligere og nuværende RSI skal være i zone
+    const rsiLongZoneOK = rsiPrevious < config.rsi_min_long && rsiCurrent < rsiLongZoneMax;
+    
+    // SHORT: Både tidligere og nuværende RSI skal være i zone
+    const rsiShortZoneOK = rsiPrevious > config.rsi_max_short && rsiCurrent > rsiShortZoneMin;
+    
+    if (!rsiLongZoneOK && !rsiShortZoneOK) {
+      console.log(`   ❌ BLOKERET - RSI IKKE I ZONE`);
+      console.log(`   ⛔ RSI zone krav ikke opfyldt - INGEN TRADE EVALUERING\n`);
+      return {
+        signal: 'NONE',
+        indicators: {
+          price: closes[closes.length - 1],
+          volume: currentVolume,
+          avgVolume,
+          volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
+          emaFast: emaFastCurrent,
+          emaMedium: emaMediumCurrent,
+          emaSlow: emaSlowCurrent,
+          rsi: rsiCurrent,
+          stochRSI_k: stochRSI?.k || null,
+          stochRSI_d: stochRSI?.d || null,
+          macd: macd?.histogram || null,
+          macdLine: macd?.macd || null,
+          macdSignal: macd?.signal || null,
+          atr: atr,
+          bb,
+          adx,
+          pivotPoints: null,
+        },
+        stopLoss: 0,
+        takeProfit: null,
+      };
+    }
+    
+    if (rsiLongZoneOK) {
+      console.log(`   ✅ RSI LONG Zone OK`);
+    }
+    if (rsiShortZoneOK) {
+      console.log(`   ✅ RSI SHORT Zone OK`);
+    }
+  } else {
+    console.log(`   ⚪ RSI Zone: DISABLED`);
+  }
+  
   console.log(`✅ ALLE HÅRDE FILTRE PASSERET - Fortsætter til signal evaluering\n`);
   
   // Calculate Pivot Points only if enabled
@@ -685,18 +742,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     conditionDetails.ema.short = emaShortTrend;
   }
   
-  // RSI Momentum (hvis enabled)
-  if (config.rsi_enabled && rsiCurrent !== null) {
-    // LONG: RSI under oversold niveau
-    const rsiLong = rsiCurrent < config.rsi_min_long;
-    longConditions.push(rsiLong);
-    conditionDetails.rsi.long = rsiLong;
-    
-    // SHORT: RSI over overbought niveau
-    const rsiShort = rsiCurrent > config.rsi_max_short;
-    shortConditions.push(rsiShort);
-    conditionDetails.rsi.short = rsiShort;
-  }
+  // RSI er nu en hård regel som filtrerer før evaluering
+  // Ingen flexible conditions her længere
   
   // StochRSI (hvis enabled)
   if (config.stochrsi_enabled && stochRSI) {

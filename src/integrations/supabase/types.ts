@@ -62,6 +62,7 @@ export type Database = {
           rsi_overbought: number | null
           rsi_oversold: number | null
           rsi_period: number | null
+          rsi_zone_width: number | null
           scan_interval: string | null
           signal_conditions_required: number | null
           stochrsi_d_period: number | null
@@ -124,6 +125,7 @@ export type Database = {
           rsi_overbought?: number | null
           rsi_oversold?: number | null
           rsi_period?: number | null
+          rsi_zone_width?: number | null
           scan_interval?: string | null
           signal_conditions_required?: number | null
           stochrsi_d_period?: number | null
@@ -186,6 +188,7 @@ export type Database = {
           rsi_overbought?: number | null
           rsi_oversold?: number | null
           rsi_period?: number | null
+          rsi_zone_width?: number | null
           scan_interval?: string | null
           signal_conditions_required?: number | null
           stochrsi_d_period?: number | null
