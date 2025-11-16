@@ -34,6 +34,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     rsi_period: config?.rsi_period || 14,
     rsi_min_long: config?.rsi_min_long || 30,
     rsi_max_short: config?.rsi_max_short || 70,
+    rsi_zone_width: config?.rsi_zone_width || 10,
     
     // StochRSI
     stochrsi_enabled: config?.stochrsi_enabled ?? true,
@@ -115,6 +116,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       rsi_period: config.rsi_period ?? 14,
       rsi_min_long: config.rsi_min_long ?? 30,
       rsi_max_short: config.rsi_max_short ?? 70,
+      rsi_zone_width: config.rsi_zone_width ?? 10,
       // StochRSI
       stochrsi_enabled: config.stochrsi_enabled ?? true,
       stochrsi_period: config.stochrsi_period ?? 14,
@@ -382,6 +384,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               onChange={(e) => setFormData({ ...formData, rsi_max_short: parseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">SHORT når RSI krydser NED under denne værdi</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="rsi_zone_width">RSI Zone Bredde</Label>
+            <Input
+              id="rsi_zone_width"
+              type="number"
+              step="1"
+              value={formData.rsi_zone_width}
+              onChange={(e) => setFormData({ ...formData, rsi_zone_width: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Zone bredde for RSI filter (LONG: 0-{formData.rsi_min_long + formData.rsi_zone_width}, SHORT: {formData.rsi_max_short - formData.rsi_zone_width}-100)</p>
           </div>
         </CardContent>
       </Card>
