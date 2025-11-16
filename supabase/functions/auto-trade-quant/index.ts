@@ -658,19 +658,26 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     console.log(`\n🎯 RSI ZONE CONFIG:`);
     console.log(`   📊 config.rsi_zone_width fra DB = ${config.rsi_zone_width}`);
     console.log(`   🔧 rsiZoneWidth (efter ?? 10) = ${rsiZoneWidth}`);
-    console.log(`   📊 RSI: ${rsiCurrent.toFixed(2)} (prev: ${rsiPrevious.toFixed(2)})`);
+    console.log(`   📊 RSI nu: ${rsiCurrent.toFixed(2)} (prev: ${rsiPrevious.toFixed(2)})`);
     
+    // LONG: RSI skal være omkring rsi_min_long ± zone_width
+    // Med rsi_min_long=30 og zone_width=5: [25, 35]
+    const rsiLongZoneMin = config.rsi_min_long - rsiZoneWidth;
     const rsiLongZoneMax = config.rsi_min_long + rsiZoneWidth;
+    
+    // SHORT: RSI skal være omkring rsi_max_short ± zone_width
+    // Med rsi_max_short=70 og zone_width=5: [65, 75]
     const rsiShortZoneMin = config.rsi_max_short - rsiZoneWidth;
+    const rsiShortZoneMax = config.rsi_max_short + rsiZoneWidth;
     
-    console.log(`   📏 LONG Zone: RSI skal være < ${config.rsi_min_long} (prev) OG < ${rsiLongZoneMax} (now) = [0-${rsiLongZoneMax}]`);
-    console.log(`   📏 SHORT Zone: RSI skal være > ${config.rsi_max_short} (prev) OG > ${rsiShortZoneMin} (now) = [${rsiShortZoneMin}-100]`);
+    console.log(`   📏 LONG Zone: RSI skal være mellem ${rsiLongZoneMin} og ${rsiLongZoneMax}`);
+    console.log(`   📏 SHORT Zone: RSI skal være mellem ${rsiShortZoneMin} og ${rsiShortZoneMax}`);
     
-    // LONG: Både tidligere og nuværende RSI skal være i zone
-    const rsiLongZoneOK = rsiPrevious < config.rsi_min_long && rsiCurrent < rsiLongZoneMax;
+    // LONG: RSI skal være i zonen [rsi_min_long - zone_width, rsi_min_long + zone_width]
+    const rsiLongZoneOK = rsiCurrent >= rsiLongZoneMin && rsiCurrent <= rsiLongZoneMax;
     
-    // SHORT: Både tidligere og nuværende RSI skal være i zone
-    const rsiShortZoneOK = rsiPrevious > config.rsi_max_short && rsiCurrent > rsiShortZoneMin;
+    // SHORT: RSI skal være i zonen [rsi_max_short - zone_width, rsi_max_short + zone_width]
+    const rsiShortZoneOK = rsiCurrent >= rsiShortZoneMin && rsiCurrent <= rsiShortZoneMax;
     
     if (!rsiLongZoneOK && !rsiShortZoneOK) {
       console.log(`   ❌ BLOKERET - RSI IKKE I ZONE`);
