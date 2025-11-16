@@ -31,10 +31,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     
     // RSI
     rsi_enabled: config?.rsi_enabled ?? true,
-    rsi_period: config?.rsi_period || 14,
-    rsi_min_long: config?.rsi_min_long || 30,
-    rsi_max_short: config?.rsi_max_short || 70,
-    rsi_zone_width: config?.rsi_zone_width || 10,
+    rsi_period: config?.rsi_period ?? 14,
+    rsi_min_long: config?.rsi_min_long ?? 30,
+    rsi_max_short: config?.rsi_max_short ?? 70,
+    rsi_zone_width: config?.rsi_zone_width ?? 5,
     
     // StochRSI
     stochrsi_enabled: config?.stochrsi_enabled ?? true,
@@ -116,7 +116,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       rsi_period: config.rsi_period ?? 14,
       rsi_min_long: config.rsi_min_long ?? 30,
       rsi_max_short: config.rsi_max_short ?? 70,
-      rsi_zone_width: config.rsi_zone_width ?? 10,
+      rsi_zone_width: config.rsi_zone_width ?? 5,
       // StochRSI
       stochrsi_enabled: config.stochrsi_enabled ?? true,
       stochrsi_period: config.stochrsi_period ?? 14,

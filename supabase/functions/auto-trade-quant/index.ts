@@ -655,13 +655,16 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // HÅRDT RSI ZONE FILTER (obligatorisk regel)
   if (config.rsi_enabled && rsiCurrent !== null && rsiPrevious !== null) {
     const rsiZoneWidth = config.rsi_zone_width ?? 10;
-    console.log(`   🔧 RSI Zone Width brugt: ${rsiZoneWidth} (fra DB: ${config.rsi_zone_width})`);
+    console.log(`\n🎯 RSI ZONE CONFIG:`);
+    console.log(`   📊 config.rsi_zone_width fra DB = ${config.rsi_zone_width}`);
+    console.log(`   🔧 rsiZoneWidth (efter ?? 10) = ${rsiZoneWidth}`);
+    console.log(`   📊 RSI: ${rsiCurrent.toFixed(2)} (prev: ${rsiPrevious.toFixed(2)})`);
+    
     const rsiLongZoneMax = config.rsi_min_long + rsiZoneWidth;
     const rsiShortZoneMin = config.rsi_max_short - rsiZoneWidth;
     
-    console.log(`   📊 RSI: ${rsiCurrent.toFixed(2)} (prev: ${rsiPrevious.toFixed(2)})`);
-    console.log(`   📏 RSI LONG Zone: [0 - ${rsiLongZoneMax}]`);
-    console.log(`   📏 RSI SHORT Zone: [${rsiShortZoneMin} - 100]`);
+    console.log(`   📏 LONG Zone: RSI skal være < ${config.rsi_min_long} (prev) OG < ${rsiLongZoneMax} (now) = [0-${rsiLongZoneMax}]`);
+    console.log(`   📏 SHORT Zone: RSI skal være > ${config.rsi_max_short} (prev) OG > ${rsiShortZoneMin} (now) = [${rsiShortZoneMin}-100]`);
     
     // LONG: Både tidligere og nuværende RSI skal være i zone
     const rsiLongZoneOK = rsiPrevious < config.rsi_min_long && rsiCurrent < rsiLongZoneMax;
