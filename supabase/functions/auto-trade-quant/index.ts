@@ -451,6 +451,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   
   // Calculate indicators only if enabled
   console.log(`Indicator config: EMA=${config.ema_enabled}, RSI=${config.rsi_enabled}, StochRSI=${config.stochrsi_enabled}, MACD=${config.macd_enabled}, BB=${config.bb_enabled}, ATR=${config.atr_enabled}, ADX=${config.adx_enabled}`);
+  console.log(`📊 RSI Config fra DB: min_long=${config.rsi_min_long}, max_short=${config.rsi_max_short}, zone_width=${config.rsi_zone_width}`);
   
   // BEREGN ALLE INDICATORS FØRST (så de kan vises i UI selv når filtre fejler)
   const emaFast = config.ema_enabled ? calculateEMA(closes, config.ema_fast) : null;
@@ -653,7 +654,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   
   // HÅRDT RSI ZONE FILTER (obligatorisk regel)
   if (config.rsi_enabled && rsiCurrent !== null && rsiPrevious !== null) {
-    const rsiZoneWidth = config.rsi_zone_width || 10;
+    const rsiZoneWidth = config.rsi_zone_width ?? 10;
+    console.log(`   🔧 RSI Zone Width brugt: ${rsiZoneWidth} (fra DB: ${config.rsi_zone_width})`);
     const rsiLongZoneMax = config.rsi_min_long + rsiZoneWidth;
     const rsiShortZoneMin = config.rsi_max_short - rsiZoneWidth;
     
