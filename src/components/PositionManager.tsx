@@ -62,9 +62,15 @@ export const PositionManager = () => {
       setCurrentTime(Date.now());
     }, 1000);
 
+    // Fetch positions every 15 seconds to get latest trailing stop updates
+    const positionsInterval = setInterval(() => {
+      fetchPositions();
+    }, 15000);
+
     return () => {
       supabase.removeChannel(channel);
       clearInterval(timeInterval);
+      clearInterval(positionsInterval);
     };
   }, []);
 
