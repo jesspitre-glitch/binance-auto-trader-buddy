@@ -463,6 +463,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   
   const rsiCurrent = config.rsi_enabled ? calculateRSI(closes, config.rsi_period) : null;
   const rsiPrevious = config.rsi_enabled ? calculateRSI(closes.slice(0, -1), config.rsi_period) : null;
+  const rsiPrevious2 = config.rsi_enabled ? calculateRSI(closes.slice(0, -2), config.rsi_period) : null;
   
   const stochRSI = config.stochrsi_enabled 
     ? calculateStochRSI(closes, config.stochrsi_period, config.stochrsi_k_period, config.stochrsi_d_period)
@@ -653,58 +654,74 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   }
   
   // HÅRDT RSI ZONE FILTER (obligatorisk regel)
-  if (config.rsi_enabled && rsiCurrent !== null && rsiPrevious !== null) {
+  if (config.rsi_enabled && rsiCurrent !== null && rsiPrevious !== null && rsiPrevious2 !== null) {
     const rsiZoneWidth = config.rsi_zone_width ?? 10;
     console.log(`\n🎯 RSI LOGIK CONFIG:`);
     console.log(`   📊 config.rsi_zone_width fra DB = ${config.rsi_zone_width}`);
     console.log(`   🔧 rsiZoneWidth (efter ?? 10) = ${rsiZoneWidth}`);
-    console.log(`   📊 RSI nu: ${rsiCurrent.toFixed(2)} (prev: ${rsiPrevious.toFixed(2)})`);
+    console.log(`   📊 RSI nu: ${rsiCurrent.toFixed(2)} (RSI₁: ${rsiPrevious.toFixed(2)}, RSI₂: ${rsiPrevious2.toFixed(2)})`);
     
     let rsiLongOK = false;
     let rsiShortOK = false;
     
+    // MOMENTUM CHECK: RSI skal være stigende (LONG) eller faldende (SHORT)
+    const rsiRising = rsiCurrent > rsiPrevious && rsiPrevious > rsiPrevious2;
+    const rsiFalling = rsiCurrent < rsiPrevious && rsiPrevious < rsiPrevious2;
+    
+    console.log(`   📈 RSI Momentum: Stigende=${rsiRising}, Faldende=${rsiFalling}`);
+    
     // Hvis rsi_zone_width > 0: Brug zone check
     if (rsiZoneWidth > 0) {
-      // LONG: RSI skal være omkring rsi_min_long ± zone_width
+      // LONG: RSI skal være omkring rsi_min_long ± zone_width OG stigende
       const rsiLongZoneMin = config.rsi_min_long - rsiZoneWidth;
       const rsiLongZoneMax = config.rsi_min_long + rsiZoneWidth;
       
-      // SHORT: RSI skal være omkring rsi_max_short ± zone_width
+      // SHORT: RSI skal være omkring rsi_max_short ± zone_width OG faldende
       const rsiShortZoneMin = config.rsi_max_short - rsiZoneWidth;
       const rsiShortZoneMax = config.rsi_max_short + rsiZoneWidth;
       
       console.log(`   📍 ZONE MODE (zone_width=${rsiZoneWidth})`);
-      console.log(`   📏 LONG Zone: RSI skal være mellem ${rsiLongZoneMin} og ${rsiLongZoneMax}`);
-      console.log(`   📏 SHORT Zone: RSI skal være mellem ${rsiShortZoneMin} og ${rsiShortZoneMax}`);
+      console.log(`   📏 LONG Zone: RSI skal være mellem ${rsiLongZoneMin} og ${rsiLongZoneMax} OG stigende`);
+      console.log(`   📏 SHORT Zone: RSI skal være mellem ${rsiShortZoneMin} og ${rsiShortZoneMax} OG faldende`);
       
-      rsiLongOK = rsiCurrent >= rsiLongZoneMin && rsiCurrent <= rsiLongZoneMax;
-      rsiShortOK = rsiCurrent >= rsiShortZoneMin && rsiCurrent <= rsiShortZoneMax;
+      const inLongZone = rsiCurrent >= rsiLongZoneMin && rsiCurrent <= rsiLongZoneMax;
+      const inShortZone = rsiCurrent >= rsiShortZoneMin && rsiCurrent <= rsiShortZoneMax;
+      
+      rsiLongOK = inLongZone && rsiRising;
+      rsiShortOK = inShortZone && rsiFalling;
+      
+      if (inLongZone && !rsiRising) {
+        console.log(`   ⚠ RSI i LONG zone men IKKE stigende`);
+      }
+      if (inShortZone && !rsiFalling) {
+        console.log(`   ⚠ RSI i SHORT zone men IKKE faldende`);
+      }
       
     } else {
-      // Hvis rsi_zone_width = 0: Brug crossover logik
-      // LONG: RSI krydser OP over RSI_long (previous < threshold OG current >= threshold)
-      // SHORT: RSI krydser NED under RSI_short (previous > threshold OG current <= threshold)
+      // Hvis rsi_zone_width = 0: Brug crossover logik OG momentum
+      // LONG: RSI krydser OP over RSI_long OG er stigende
+      // SHORT: RSI krydser NED under RSI_short OG er faldende
       
       console.log(`   🔄 CROSSOVER MODE (zone_width=0)`);
-      console.log(`   📏 LONG Crossover: RSI krydser OP over ${config.rsi_min_long}`);
-      console.log(`   📏 SHORT Crossover: RSI krydser NED under ${config.rsi_max_short}`);
+      console.log(`   📏 LONG Crossover: RSI krydser OP over ${config.rsi_min_long} OG stigende`);
+      console.log(`   📏 SHORT Crossover: RSI krydser NED under ${config.rsi_max_short} OG faldende`);
       
       const rsiLongCrossover = rsiPrevious < config.rsi_min_long && rsiCurrent >= config.rsi_min_long;
       const rsiShortCrossover = rsiPrevious > config.rsi_max_short && rsiCurrent <= config.rsi_max_short;
       
-      rsiLongOK = rsiLongCrossover;
-      rsiShortOK = rsiShortCrossover;
+      rsiLongOK = rsiLongCrossover && rsiRising;
+      rsiShortOK = rsiShortCrossover && rsiFalling;
       
       if (rsiLongCrossover) {
-        console.log(`   ✅ LONG CROSSOVER DETEKTERET: ${rsiPrevious.toFixed(2)} → ${rsiCurrent.toFixed(2)}`);
+        console.log(`   ${rsiRising ? '✅' : '❌'} LONG CROSSOVER: ${rsiPrevious.toFixed(2)} → ${rsiCurrent.toFixed(2)} (momentum: ${rsiRising ? 'OK' : 'FAIL'})`);
       }
       if (rsiShortCrossover) {
-        console.log(`   ✅ SHORT CROSSOVER DETEKTERET: ${rsiPrevious.toFixed(2)} → ${rsiCurrent.toFixed(2)}`);
+        console.log(`   ${rsiFalling ? '✅' : '❌'} SHORT CROSSOVER: ${rsiPrevious.toFixed(2)} → ${rsiCurrent.toFixed(2)} (momentum: ${rsiFalling ? 'OK' : 'FAIL'})`);
       }
     }
     
     if (!rsiLongOK && !rsiShortOK) {
-      console.log(`   ❌ BLOKERET - RSI BETINGELSE IKKE OPFYLDT`);
+      console.log(`   ❌ BLOKERET - RSI BETINGELSE IKKE OPFYLDT (zone eller momentum fejlede)`);
       console.log(`   ⛔ RSI krav ikke opfyldt - INGEN TRADE EVALUERING\n`);
       return {
         signal: 'NONE',
@@ -733,10 +750,10 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     }
     
     if (rsiLongOK) {
-      console.log(`   ✅ RSI LONG Zone OK`);
+      console.log(`   ✅ RSI LONG Zone OK (stigende momentum)`);
     }
     if (rsiShortOK) {
-      console.log(`   ✅ RSI SHORT Zone OK`);
+      console.log(`   ✅ RSI SHORT Zone OK (faldende momentum)`);
     }
   } else {
     console.log(`   ⚪ RSI Zone: DISABLED`);
