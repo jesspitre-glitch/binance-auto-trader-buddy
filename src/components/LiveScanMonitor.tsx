@@ -322,10 +322,23 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                     )}
                   </div>
                   
-                  {/* Hard Filters Status */}
+                  {/* Hard Filters Progress Bar */}
+                  <div className="space-y-1 mt-2">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="opacity-70">Hårde filtre:</span>
+                      <span className="font-bold">
+                        {Object.values(coin.hardFilters).filter(v => v).length}/4
+                      </span>
+                    </div>
+                    <Progress 
+                      value={(Object.values(coin.hardFilters).filter(v => v).length / 4) * 100} 
+                      className="h-2"
+                    />
+                  </div>
+                  
+                  {/* Hard Filters Details - only when >= 80% signal strength */}
                   {coin.strength >= 80 && (
                     <div className="text-[9px] space-y-0.5 mt-1">
-                      <div className="font-semibold opacity-70 mb-0.5">Hårde filtre:</div>
                       <div className={`flex items-center gap-1 ${coin.hardFilters.emaSpread ? 'text-green-500' : 'text-red-500'}`}>
                         {coin.hardFilters.emaSpread ? '✓' : '✗'} EMA Spread
                       </div>
