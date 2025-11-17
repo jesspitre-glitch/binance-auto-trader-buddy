@@ -21,6 +21,13 @@ interface CoinSignalStrength {
   conditionsRequired: number;
   lastUpdate: string;
   trend: string;
+  hardFilters: {
+    emaSpread: boolean;
+    atr: boolean;
+    adx: boolean;
+    volume: boolean;
+  };
+  allHardFiltersPassed: boolean;
 }
 
 export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) => {
@@ -132,7 +139,39 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     const conditionsRequired = config?.signal_conditions_required || 5;
     const strength = (conditionsMet / conditionsRequired) * 100;
 
-    console.log(`Updating ${result.symbol}: strength=${strength.toFixed(1)}%, conditions=${conditionsMet}/${conditionsRequired}`);
+    // Check HÅRDE FILTRE
+    const hardFilters = {
+      emaSpread: true,
+      atr: true,
+      adx: true,
+      volume: true,
+    };
+
+    if (config) {
+      // EMA Spread Check
+      if (config.ema_enabled && indicators.emaSpreadPercent !== undefined) {
+        hardFilters.emaSpread = indicators.emaSpreadPercent >= config.min_ema_spread_percent;
+      }
+      
+      // ATR Check
+      if (config.atr_enabled && indicators.atr !== null && indicators.atr !== undefined) {
+        hardFilters.atr = indicators.atr > 0;
+      }
+      
+      // ADX Check
+      if (config.adx_enabled && indicators.adx !== null && indicators.adx !== undefined) {
+        hardFilters.adx = indicators.adx >= config.adx_threshold;
+      }
+      
+      // Volume Check
+      if (config.volume_enabled && indicators.volumeRatio !== null && indicators.volumeRatio !== undefined) {
+        hardFilters.volume = indicators.volumeRatio >= config.volume_multiplier;
+      }
+    }
+
+    const allHardFiltersPassed = Object.values(hardFilters).every(v => v);
+
+    console.log(`Updating ${result.symbol}: strength=${strength.toFixed(1)}%, conditions=${conditionsMet}/${conditionsRequired}, hardFilters=${JSON.stringify(hardFilters)}`);
 
     setCoins((prev) => {
       const newMap = new Map(prev);
@@ -145,6 +184,8 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
         conditionsRequired,
         lastUpdate: result.created_at,
         trend: indicators.trend || "UNKNOWN",
+        hardFilters,
+        allHardFiltersPassed,
       });
       return newMap;
     });
@@ -266,15 +307,39 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                   <div className="flex items-center justify-between text-[10px]">
                     <div className="flex items-center gap-1">
                       <div className="w-2 h-2 rounded-full bg-primary" />
-                      <span className="opacity-70">Hårde regler:</span>
+                      <span className="opacity-70">Bløde regler:</span>
                       <span className="font-bold">{coin.conditionsMet}/{coin.conditionsRequired}</span>
                     </div>
-                    {coin.strength >= 100 && (
+                    {coin.strength >= 100 && coin.allHardFiltersPassed && (
                       <Badge variant="default" className="h-4 px-1.5 text-[9px] animate-fade-in">
-                        KLAR
+                        ✓ KLAR
+                      </Badge>
+                    )}
+                    {coin.strength >= 100 && !coin.allHardFiltersPassed && (
+                      <Badge variant="destructive" className="h-4 px-1.5 text-[9px]">
+                        ✗ BLOKERET
                       </Badge>
                     )}
                   </div>
+                  
+                  {/* Hard Filters Status */}
+                  {coin.strength >= 80 && (
+                    <div className="text-[9px] space-y-0.5 mt-1">
+                      <div className="font-semibold opacity-70 mb-0.5">Hårde filtre:</div>
+                      <div className={`flex items-center gap-1 ${coin.hardFilters.emaSpread ? 'text-green-500' : 'text-red-500'}`}>
+                        {coin.hardFilters.emaSpread ? '✓' : '✗'} EMA Spread
+                      </div>
+                      <div className={`flex items-center gap-1 ${coin.hardFilters.volume ? 'text-green-500' : 'text-red-500'}`}>
+                        {coin.hardFilters.volume ? '✓' : '✗'} Volume
+                      </div>
+                      <div className={`flex items-center gap-1 ${coin.hardFilters.adx ? 'text-green-500' : 'text-red-500'}`}>
+                        {coin.hardFilters.adx ? '✓' : '✗'} ADX
+                      </div>
+                      <div className={`flex items-center gap-1 ${coin.hardFilters.atr ? 'text-green-500' : 'text-red-500'}`}>
+                        {coin.hardFilters.atr ? '✓' : '✗'} ATR
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Live Indicators - vises altid */}
