@@ -394,7 +394,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.rsi_zone_width}
               onChange={(e) => setFormData({ ...formData, rsi_zone_width: parseFloat(e.target.value) })}
             />
-            <p className="text-xs text-muted-foreground">Zone bredde for RSI filter (LONG: 0-{formData.rsi_min_long + formData.rsi_zone_width}, SHORT: {formData.rsi_max_short - formData.rsi_zone_width}-100)</p>
+            <p className="text-xs text-muted-foreground">
+              {formData.rsi_zone_width === 0 
+                ? "CROSSOVER MODE: Signal kun når RSI krydser grænsen (meget få signaler)" 
+                : `ZONE MODE: LONG zone [${formData.rsi_min_long - formData.rsi_zone_width}-${formData.rsi_min_long + formData.rsi_zone_width}], SHORT zone [${formData.rsi_max_short - formData.rsi_zone_width}-${formData.rsi_max_short + formData.rsi_zone_width}]`}
+            </p>
           </div>
         </CardContent>
       </Card>
