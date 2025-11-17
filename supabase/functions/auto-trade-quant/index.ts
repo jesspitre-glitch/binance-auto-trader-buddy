@@ -41,6 +41,7 @@ interface IndicatorConfig {
   bb_std_dev: number;
   atr_enabled: boolean;
   atr_period: number;
+  min_atr: number;
   atr_stop_loss_multiplier: number;
   atr_take_profit_multiplier: number;
   atr_trailing_stop_multiplier: number;
@@ -552,6 +553,9 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     if (atr === 0) {
       filterStatus.hard.atr.passed = false;
       filterStatus.hard.atr.reason = 'ATR = 0 (kan ikke beregne stop-loss)';
+    } else if (config.min_atr > 0 && atr < config.min_atr) {
+      filterStatus.hard.atr.passed = false;
+      filterStatus.hard.atr.reason = `ATR ${atr.toFixed(6)} < ${config.min_atr.toFixed(6)} (lav volatilitet)`;
     }
   }
   

@@ -50,6 +50,7 @@ export type Database = {
           max_exposure_percent: number | null
           max_open_positions: number | null
           max_position_duration_minutes: number | null
+          min_atr: number | null
           min_ema_spread_percent: number | null
           name: string
           pivot_points_enabled: boolean | null
@@ -116,6 +117,7 @@ export type Database = {
           max_exposure_percent?: number | null
           max_open_positions?: number | null
           max_position_duration_minutes?: number | null
+          min_atr?: number | null
           min_ema_spread_percent?: number | null
           name: string
           pivot_points_enabled?: boolean | null
@@ -182,6 +184,7 @@ export type Database = {
           max_exposure_percent?: number | null
           max_open_positions?: number | null
           max_position_duration_minutes?: number | null
+          min_atr?: number | null
           min_ema_spread_percent?: number | null
           name?: string
           pivot_points_enabled?: boolean | null

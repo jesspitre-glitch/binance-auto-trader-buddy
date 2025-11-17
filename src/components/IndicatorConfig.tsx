@@ -68,6 +68,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     // ATR
     atr_enabled: config?.atr_enabled ?? true,
     atr_period: config?.atr_period || 14,
+    min_atr: config?.min_atr ?? 0,
     atr_stop_loss_multiplier: config?.atr_stop_loss_multiplier || 2,
     atr_trailing_stop_multiplier: config?.atr_trailing_stop_multiplier || 1.5,
     break_even_atr: config?.break_even_atr || 1.0,
@@ -148,6 +149,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       // ATR
       atr_enabled: config.atr_enabled ?? true,
       atr_period: config.atr_period ?? 14,
+      min_atr: config.min_atr ?? 0,
       atr_stop_loss_multiplier: config.atr_stop_loss_multiplier ?? 2,
       atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier ?? 1.5,
       break_even_atr: config.break_even_atr ?? 1.0,
@@ -703,6 +705,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               onChange={(e) => setFormData({ ...formData, atr_period: parseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Antal bars til volatilitet (standard 14)</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="min_atr">Minimum ATR (HARD FILTER)</Label>
+            <Input
+              id="min_atr"
+              type="number"
+              step="0.000001"
+              value={formData.min_atr}
+              onChange={(e) => setFormData({ ...formData, min_atr: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Bloker trades hvis ATR &lt; Minimum ATR. Bruges til at filtrere lav-volatilitets-coins.</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="atr_stop_loss_multiplier">Stop-Loss Multiplikator</Label>
