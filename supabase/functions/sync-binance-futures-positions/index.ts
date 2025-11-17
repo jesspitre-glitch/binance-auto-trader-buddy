@@ -255,15 +255,46 @@ serve(async (req) => {
           
           console.log(`Updating ${binancePos.symbol}: Price ${currentPrice}, P&L ${unrealizedPnl.toFixed(2)} USDT`);
           
+          let updateData: any = {
+            current_price: currentPrice,
+            unrealized_pnl: unrealizedPnl,
+            quantity: absQuantity,
+            side: side,
+            updated_at: new Date().toISOString(),
+          };
+          
+          // If missing indicators_snapshot, try to find a recent bot signal
+          if (!mainPos.indicators_snapshot) {
+            const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+            const { data: recentSignals } = await supabaseClient
+              .from('scan_results')
+              .select('*')
+              .eq('user_id', userId)
+              .eq('symbol', binancePos.symbol)
+              .eq('signal', side)
+              .gte('created_at', tenMinutesAgo)
+              .order('created_at', { ascending: false })
+              .limit(1);
+            
+            if (recentSignals && recentSignals.length > 0) {
+              const signal = recentSignals[0];
+              const indicators = signal.indicators as any;
+              
+              updateData.indicators_snapshot = signal.indicators;
+              updateData.open_reason = `${side} signal på ${binancePos.symbol} - ` +
+                `Trend: ${indicators.trend || 'UNKNOWN'}. ` +
+                `RSI: ${indicators.rsi?.toFixed(2) || 'N/A'}, ` +
+                `MACD: ${indicators.macd?.toFixed(4) || 'N/A'}, ` +
+                `EMA: Fast ${indicators.emaFast?.toFixed(2) || 'N/A'} vs Slow ${indicators.emaSlow?.toFixed(2) || 'N/A'}, ` +
+                `ADX: ${indicators.adx?.toFixed(2) || 'N/A'}`;
+              
+              console.log(`✅ Updated ${binancePos.symbol} with bot signal data`);
+            }
+          }
+          
           const { error } = await supabaseClient
             .from('positions')
-            .update({
-              current_price: currentPrice,
-              unrealized_pnl: unrealizedPnl,
-              quantity: absQuantity,
-              side: side,
-              updated_at: new Date().toISOString(),
-            })
+            .update(updateData)
             .eq('id', mainPos.id);
           
           if (error) console.error('Update error:', error);
