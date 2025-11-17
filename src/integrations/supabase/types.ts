@@ -59,6 +59,7 @@ export type Database = {
           rsi_enabled: boolean | null
           rsi_max_short: number | null
           rsi_min_long: number | null
+          rsi_momentum_periods: number | null
           rsi_overbought: number | null
           rsi_oversold: number | null
           rsi_period: number | null
@@ -122,6 +123,7 @@ export type Database = {
           rsi_enabled?: boolean | null
           rsi_max_short?: number | null
           rsi_min_long?: number | null
+          rsi_momentum_periods?: number | null
           rsi_overbought?: number | null
           rsi_oversold?: number | null
           rsi_period?: number | null
@@ -185,6 +187,7 @@ export type Database = {
           rsi_enabled?: boolean | null
           rsi_max_short?: number | null
           rsi_min_long?: number | null
+          rsi_momentum_periods?: number | null
           rsi_overbought?: number | null
           rsi_oversold?: number | null
           rsi_period?: number | null

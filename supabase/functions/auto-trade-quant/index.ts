@@ -18,6 +18,7 @@ interface IndicatorConfig {
   rsi_min_long: number;
   rsi_max_short: number;
   rsi_zone_width: number;
+  rsi_momentum_periods: number;
   stochrsi_enabled: boolean;
   stochrsi_period: number;
   stochrsi_k_period: number;
@@ -77,6 +78,7 @@ async function getStrategyIdentifier(config: IndicatorConfig): Promise<string> {
     rsi_min_long: config.rsi_min_long,
     rsi_max_short: config.rsi_max_short,
     rsi_zone_width: config.rsi_zone_width,
+    rsi_momentum_periods: config.rsi_momentum_periods,
     stochrsi_enabled: config.stochrsi_enabled,
     stochrsi_period: config.stochrsi_period,
     stochrsi_k_period: config.stochrsi_k_period,
@@ -462,8 +464,17 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   const emaSlowCurrent = emaSlow ? emaSlow[emaSlow.length - 1] : null;
   
   const rsiCurrent = config.rsi_enabled ? calculateRSI(closes, config.rsi_period) : null;
-  const rsiPrevious = config.rsi_enabled ? calculateRSI(closes.slice(0, -1), config.rsi_period) : null;
-  const rsiPrevious2 = config.rsi_enabled ? calculateRSI(closes.slice(0, -2), config.rsi_period) : null;
+  
+  // Dynamisk antal RSI-værdier baseret på rsi_momentum_periods
+  const rsiMomentumPeriods = config.rsi_momentum_periods ?? 3;
+  const rsiHistory: number[] = [];
+  
+  if (config.rsi_enabled && rsiMomentumPeriods > 1) {
+    for (let i = 0; i < rsiMomentumPeriods; i++) {
+      const slice = closes.slice(0, closes.length - i);
+      rsiHistory.push(calculateRSI(slice, config.rsi_period));
+    }
+  }
   
   const stochRSI = config.stochrsi_enabled 
     ? calculateStochRSI(closes, config.stochrsi_period, config.stochrsi_k_period, config.stochrsi_d_period)
@@ -654,21 +665,31 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   }
   
   // HÅRDT RSI ZONE FILTER (obligatorisk regel)
-  if (config.rsi_enabled && rsiCurrent !== null && rsiPrevious !== null && rsiPrevious2 !== null) {
+  if (config.rsi_enabled && rsiCurrent !== null && rsiHistory.length >= rsiMomentumPeriods) {
     const rsiZoneWidth = config.rsi_zone_width ?? 10;
     console.log(`\n🎯 RSI LOGIK CONFIG:`);
     console.log(`   📊 config.rsi_zone_width fra DB = ${config.rsi_zone_width}`);
     console.log(`   🔧 rsiZoneWidth (efter ?? 10) = ${rsiZoneWidth}`);
-    console.log(`   📊 RSI nu: ${rsiCurrent.toFixed(2)} (RSI₁: ${rsiPrevious.toFixed(2)}, RSI₂: ${rsiPrevious2.toFixed(2)})`);
+    console.log(`   📊 rsi_momentum_periods = ${rsiMomentumPeriods}`);
+    console.log(`   📊 RSI Historie: ${rsiHistory.map((v, i) => `RSI${i === 0 ? '₀' : i === 1 ? '₁' : i === 2 ? '₂' : i === 3 ? '₃' : '₄'}=${v.toFixed(2)}`).join(', ')}`);
     
     let rsiLongOK = false;
     let rsiShortOK = false;
     
     // MOMENTUM CHECK: RSI skal være stigende (LONG) eller faldende (SHORT)
-    const rsiRising = rsiCurrent > rsiPrevious && rsiPrevious > rsiPrevious2;
-    const rsiFalling = rsiCurrent < rsiPrevious && rsiPrevious < rsiPrevious2;
+    let rsiRising = true;
+    let rsiFalling = true;
     
-    console.log(`   📈 RSI Momentum: Stigende=${rsiRising}, Faldende=${rsiFalling}`);
+    for (let i = 0; i < rsiMomentumPeriods - 1; i++) {
+      if (rsiHistory[i] <= rsiHistory[i + 1]) {
+        rsiRising = false;
+      }
+      if (rsiHistory[i] >= rsiHistory[i + 1]) {
+        rsiFalling = false;
+      }
+    }
+    
+    console.log(`   📈 RSI Momentum (${rsiMomentumPeriods} perioder): Stigende=${rsiRising}, Faldende=${rsiFalling}`);
     
     // Hvis rsi_zone_width > 0: Brug zone check
     if (rsiZoneWidth > 0) {
@@ -706,17 +727,17 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       console.log(`   📏 LONG Crossover: RSI krydser OP over ${config.rsi_min_long} OG stigende`);
       console.log(`   📏 SHORT Crossover: RSI krydser NED under ${config.rsi_max_short} OG faldende`);
       
-      const rsiLongCrossover = rsiPrevious < config.rsi_min_long && rsiCurrent >= config.rsi_min_long;
-      const rsiShortCrossover = rsiPrevious > config.rsi_max_short && rsiCurrent <= config.rsi_max_short;
+      const rsiLongCrossover = rsiHistory[1] < config.rsi_min_long && rsiCurrent >= config.rsi_min_long;
+      const rsiShortCrossover = rsiHistory[1] > config.rsi_max_short && rsiCurrent <= config.rsi_max_short;
       
       rsiLongOK = rsiLongCrossover && rsiRising;
       rsiShortOK = rsiShortCrossover && rsiFalling;
       
       if (rsiLongCrossover) {
-        console.log(`   ${rsiRising ? '✅' : '❌'} LONG CROSSOVER: ${rsiPrevious.toFixed(2)} → ${rsiCurrent.toFixed(2)} (momentum: ${rsiRising ? 'OK' : 'FAIL'})`);
+        console.log(`   ${rsiRising ? '✅' : '❌'} LONG CROSSOVER: ${rsiHistory[1].toFixed(2)} → ${rsiCurrent.toFixed(2)} (momentum: ${rsiRising ? 'OK' : 'FAIL'})`);
       }
       if (rsiShortCrossover) {
-        console.log(`   ${rsiFalling ? '✅' : '❌'} SHORT CROSSOVER: ${rsiPrevious.toFixed(2)} → ${rsiCurrent.toFixed(2)} (momentum: ${rsiFalling ? 'OK' : 'FAIL'})`);
+        console.log(`   ${rsiFalling ? '✅' : '❌'} SHORT CROSSOVER: ${rsiHistory[1].toFixed(2)} → ${rsiCurrent.toFixed(2)} (momentum: ${rsiFalling ? 'OK' : 'FAIL'})`);
       }
     }
     
@@ -902,14 +923,13 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     console.log(`📈 EMA: ⚪ DISABLED\n`);
   }
   
-  // RSI MOMENTUM CROSSOVER DETALJERET
-  if (config.rsi_enabled && rsiCurrent !== null && rsiPrevious !== null) {
-    console.log(`📊 RSI Momentum Crossover:`);
-    console.log(`   Previous: ${rsiPrevious.toFixed(2)}, Current: ${rsiCurrent.toFixed(2)}`);
-    console.log(`   LONG threshold (krydser OP over): ${config.rsi_min_long}`);
-    console.log(`   SHORT threshold (krydser NED under): ${config.rsi_max_short}`);
-    console.log(`   LONG (${rsiPrevious.toFixed(2)} ≤ ${config.rsi_min_long} && ${rsiCurrent.toFixed(2)} > ${config.rsi_min_long}): ${conditionDetails.rsi.long ? '✅ TRUE' : '❌ FALSE'}`);
-    console.log(`   SHORT (${rsiPrevious.toFixed(2)} ≥ ${config.rsi_max_short} && ${rsiCurrent.toFixed(2)} < ${config.rsi_max_short}): ${conditionDetails.rsi.short ? '✅ TRUE' : '❌ FALSE'}\n`);
+  // RSI MOMENTUM DETALJERET
+  if (config.rsi_enabled && rsiCurrent !== null && rsiHistory.length >= rsiMomentumPeriods) {
+    console.log(`📊 RSI Momentum (${rsiMomentumPeriods} perioder):`);
+    console.log(`   Historie: ${rsiHistory.map((v, i) => `RSI${i}=${v.toFixed(2)}`).join(', ')}`);
+    console.log(`   LONG threshold: ${config.rsi_min_long}, SHORT threshold: ${config.rsi_max_short}`);
+    console.log(`   LONG check: I zone OG stigende momentum = ${conditionDetails.rsi.long ? '✅ TRUE' : '❌ FALSE'}`);
+    console.log(`   SHORT check: I zone OG faldende momentum = ${conditionDetails.rsi.short ? '✅ TRUE' : '❌ FALSE'}\n`);
   } else {
     console.log(`📊 RSI: ⚪ DISABLED\n`);
   }
