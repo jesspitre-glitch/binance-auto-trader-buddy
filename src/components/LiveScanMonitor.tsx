@@ -272,13 +272,18 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                   ) : null}
                 </div>
 
-                {/* Tidsstempel */}
-                <div className="text-[10px] opacity-60">
-                  {new Date(coin.lastUpdate).toLocaleTimeString("da-DK", { 
+                {/* Tidsstempel + Trend */}
+                <div className="text-[10px] opacity-60 flex items-center justify-between">
+                  <span>{new Date(coin.lastUpdate).toLocaleTimeString("da-DK", { 
                     hour: '2-digit', 
                     minute: '2-digit',
                     second: '2-digit'
-                  })}
+                  })}</span>
+                  {coin.signal === 'NONE' && coin.strength >= 80 && (
+                    <Badge variant="outline" className="h-3 px-1 text-[8px] border-muted">
+                      {coin.trend}
+                    </Badge>
+                  )}
                 </div>
 
                 {/* Signal Strength Progress */}
@@ -310,14 +315,19 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                       <span className="opacity-70">Bløde regler:</span>
                       <span className="font-bold">{coin.conditionsMet}/{coin.conditionsRequired}</span>
                     </div>
-                    {coin.strength >= 100 && coin.allHardFiltersPassed && (
+                  {coin.strength >= 100 && coin.allHardFiltersPassed && coin.signal !== 'NONE' && (
                       <Badge variant="default" className="h-4 px-1.5 text-[9px] animate-fade-in">
                         ✓ KLAR
                       </Badge>
                     )}
                     {coin.strength >= 100 && !coin.allHardFiltersPassed && (
                       <Badge variant="destructive" className="h-4 px-1.5 text-[9px]">
-                        ✗ BLOKERET
+                        ✗ HÅRDE FILTRE
+                      </Badge>
+                    )}
+                    {coin.strength >= 100 && coin.allHardFiltersPassed && coin.signal === 'NONE' && (
+                      <Badge variant="outline" className="h-4 px-1.5 text-[9px] border-orange-500 text-orange-500">
+                        ⚠ TREND
                       </Badge>
                     )}
                   </div>
