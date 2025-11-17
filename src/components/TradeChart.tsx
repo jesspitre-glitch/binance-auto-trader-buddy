@@ -44,8 +44,8 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         const side = trade.side as 'LONG' | 'SHORT';
         const stopLoss = Number(trade.stop_loss);
         
-        // Trailing stop er ALTID aktiv fra start (ny logik uden TP)
-        let peakPrice = trade.peak_price ? Number(trade.peak_price) : entryPrice;
+        // Start altid fra entry price for at vise trailing stop evolution korrekt
+        let peakPrice = entryPrice;
         
         const data = klines.map((k: any, index: number) => {
           const timestamp = k[0];
