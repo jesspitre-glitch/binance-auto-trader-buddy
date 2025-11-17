@@ -35,6 +35,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     rsi_min_long: config?.rsi_min_long ?? 30,
     rsi_max_short: config?.rsi_max_short ?? 70,
     rsi_zone_width: config?.rsi_zone_width ?? 5,
+    rsi_momentum_periods: config?.rsi_momentum_periods ?? 3,
     
     // StochRSI
     stochrsi_enabled: config?.stochrsi_enabled ?? true,
@@ -117,6 +118,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       rsi_min_long: config.rsi_min_long ?? 30,
       rsi_max_short: config.rsi_max_short ?? 70,
       rsi_zone_width: config.rsi_zone_width ?? 5,
+      rsi_momentum_periods: config.rsi_momentum_periods ?? 3,
       // StochRSI
       stochrsi_enabled: config.stochrsi_enabled ?? true,
       stochrsi_period: config.stochrsi_period ?? 14,
@@ -406,6 +408,21 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               {formData.rsi_zone_width === 0 
                 ? "CROSSOVER MODE: Signal kun når RSI krydser grænsen (meget få signaler)" 
                 : `ZONE MODE: LONG zone [${formData.rsi_min_long - formData.rsi_zone_width}-${formData.rsi_min_long + formData.rsi_zone_width}], SHORT zone [${formData.rsi_max_short - formData.rsi_zone_width}-${formData.rsi_max_short + formData.rsi_zone_width}]`}
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="rsi_momentum_periods">RSI Momentum Perioder</Label>
+            <Input
+              id="rsi_momentum_periods"
+              type="number"
+              min="2"
+              max="5"
+              step="1"
+              value={formData.rsi_momentum_periods}
+              onChange={(e) => setFormData({ ...formData, rsi_momentum_periods: parseInt(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">
+              Antal perioder der checkes for momentum. {formData.rsi_momentum_periods === 2 ? 'RSI₀ > RSI₁' : formData.rsi_momentum_periods === 3 ? 'RSI₀ > RSI₁ > RSI₂' : formData.rsi_momentum_periods === 4 ? 'RSI₀ > RSI₁ > RSI₂ > RSI₃' : 'RSI₀ > RSI₁ > ... > RSIₙ'}
             </p>
           </div>
         </CardContent>
