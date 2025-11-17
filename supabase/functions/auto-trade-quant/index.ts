@@ -506,10 +506,24 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   const currentVolume = config.volume_enabled ? volumes[volumes.length - 1] : null;
   
   // ════════════════════════════════════════════════════════════════
-  // 🚫 HÅRDE FILTRE - BLOKERER TRADE FØR SIGNAL EVALUERING
+  // 📋 EVALUERING AF ALLE FILTRE (HÅRDE + BLØDE)
   // ════════════════════════════════════════════════════════════════
   
-  console.log(`\n🚫 HÅRDE FILTRE CHECK (blokerer trade før signal evaluering):`);
+  const filterStatus = {
+    hard: {
+      emaSpread: { passed: true, value: '', msg: '' },
+      atr: { passed: true, value: '', msg: '' },
+      adx: { passed: true, value: '', msg: '' },
+      volume: { passed: true, value: '', msg: '' },
+    },
+    soft: {
+      rsiMomentum: { long: false, short: false, msg: '' },
+      emaAlignment: { long: false, short: false, msg: '' },
+      macd: { long: false, short: false, msg: '' },
+    }
+  };
+  
+  console.log(`\n📊 EVALUERER ALLE FILTRE:`);
   
   // HÅRDT EMA SPREAD FILTER
   if (config.ema_enabled && emaFastCurrent !== null && emaSlowCurrent !== null) {
