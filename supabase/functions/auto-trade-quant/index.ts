@@ -511,290 +511,177 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   
   const filterStatus = {
     hard: {
-      emaSpread: { passed: true, value: '', msg: '' },
-      atr: { passed: true, value: '', msg: '' },
-      adx: { passed: true, value: '', msg: '' },
-      volume: { passed: true, value: '', msg: '' },
+      emaSpread: { passed: true, value: '', reason: '' },
+      atr: { passed: true, value: '', reason: '' },
+      adx: { passed: true, value: '', reason: '' },
+      volume: { passed: true, value: '', reason: '' },
+      rsiMomentum: { passed: true, long: false, short: false, reason: '' },
     },
     soft: {
-      rsiMomentum: { long: false, short: false, msg: '' },
-      emaAlignment: { long: false, short: false, msg: '' },
-      macd: { long: false, short: false, msg: '' },
+      emaAlignment: { long: false, short: false },
+      macd: { long: false, short: false },
     }
   };
   
   console.log(`\n📊 EVALUERER ALLE FILTRE:`);
   
-  // HÅRDT EMA SPREAD FILTER
+  // ═══════════════════════════════════════════════
+  // 🔴 HÅRDE FILTRE (Blokerer trade)
+  // ═══════════════════════════════════════════════
+  
+  // 1️⃣ EMA SPREAD
   if (config.ema_enabled && emaFastCurrent !== null && emaSlowCurrent !== null) {
     const emaSpread = Math.abs(emaFastCurrent - emaSlowCurrent);
     const emaSpreadPercent = (emaSpread / currentPrice) * 100;
-    console.log(`   📏 EMA Spread: ${emaSpreadPercent.toFixed(3)}% (min ${config.min_ema_spread_percent}%)`);
+    filterStatus.hard.emaSpread.value = `${emaSpreadPercent.toFixed(3)}%`;
     
     if (emaSpreadPercent < config.min_ema_spread_percent) {
-      console.log(`   ❌ BLOKERET - EMA SPREAD FOR LAV`);
-      console.log(`   ⛔ Sidelæns marked - INGEN TRADE EVALUERING\n`);
-      return {
-        signal: 'NONE',
-        indicators: {
-          price: currentPrice,
-          emaFast: emaFastCurrent,
-          emaMedium: emaMediumCurrent,
-          emaSlow: emaSlowCurrent,
-          emaSpreadPercent,
-          rsi: rsiCurrent,
-          stochRSI_k: stochRSI?.k || null,
-          stochRSI_d: stochRSI?.d || null,
-          macd: macd?.histogram || null,
-          macdLine: macd?.macd || null,
-          macdSignal: macd?.signal || null,
-          atr: atr,
-          bb,
-          adx,
-          volume: currentVolume,
-          avgVolume,
-          volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
-          pivotPoints: null,
-        },
-        stopLoss: 0,
-        takeProfit: null,
-      };
+      filterStatus.hard.emaSpread.passed = false;
+      filterStatus.hard.emaSpread.reason = `${emaSpreadPercent.toFixed(3)}% < ${config.min_ema_spread_percent}% (sidelæns marked)`;
     }
-    console.log(`   ✅ EMA Spread OK`);
-  } else {
-    console.log(`   ⚪ EMA Spread: DISABLED`);
   }
   
-  
-  // HÅRDT ATR FILTER
+  // 2️⃣ ATR
   if (config.atr_enabled && atr !== null) {
-    console.log(`   📊 ATR: ${atr.toFixed(6)}`);
+    filterStatus.hard.atr.value = atr.toFixed(6);
+    
     if (atr === 0) {
-      console.log(`   ❌ BLOKERET - ATR = 0`);
-      console.log(`   ⛔ Stop-loss kan ikke beregnes - INGEN TRADE EVALUERING\n`);
-      return {
-        signal: 'NONE',
-        indicators: {
-          price: closes[closes.length - 1],
-          atr: 0,
-          emaFast: emaFastCurrent,
-          emaMedium: emaMediumCurrent,
-          emaSlow: emaSlowCurrent,
-          rsi: rsiCurrent,
-          stochRSI_k: stochRSI?.k || null,
-          stochRSI_d: stochRSI?.d || null,
-          macd: macd?.histogram || null,
-          macdLine: macd?.macd || null,
-          macdSignal: macd?.signal || null,
-          bb,
-          adx,
-          volume: currentVolume,
-          avgVolume,
-          volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
-          pivotPoints: null,
-        },
-        stopLoss: 0,
-        takeProfit: null,
-      };
+      filterStatus.hard.atr.passed = false;
+      filterStatus.hard.atr.reason = 'ATR = 0 (kan ikke beregne stop-loss)';
     }
-    console.log(`   ✅ ATR OK`);
-  } else {
-    console.log(`   ⚪ ATR: DISABLED`);
   }
   
-  
-  // HÅRDT ADX FILTER
+  // 3️⃣ ADX
   if (config.adx_enabled && adx !== null) {
-    console.log(`   📈 ADX: ${adx.toFixed(2)} (min ${config.adx_threshold})`);
+    filterStatus.hard.adx.value = adx.toFixed(2);
+    
     if (adx < config.adx_threshold) {
-      console.log(`   ❌ BLOKERET - ADX UNDER THRESHOLD`);
-      console.log(`   ⛔ Trend ikke stærk nok - INGEN TRADE EVALUERING\n`);
-      return {
-        signal: 'NONE',
-        indicators: {
-          price: closes[closes.length - 1],
-          adx,
-          emaFast: emaFastCurrent,
-          emaMedium: emaMediumCurrent,
-          emaSlow: emaSlowCurrent,
-          rsi: rsiCurrent,
-          stochRSI_k: stochRSI?.k || null,
-          stochRSI_d: stochRSI?.d || null,
-          macd: macd?.histogram || null,
-          macdLine: macd?.macd || null,
-          macdSignal: macd?.signal || null,
-          atr: atr,
-          bb,
-          volume: currentVolume,
-          avgVolume,
-          volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
-          pivotPoints: null,
-        },
-        stopLoss: 0,
-        takeProfit: null,
-      };
+      filterStatus.hard.adx.passed = false;
+      filterStatus.hard.adx.reason = `${adx.toFixed(2)} < ${config.adx_threshold} (trend ikke stærk nok)`;
     }
-    console.log(`   ✅ ADX OK`);
-  } else {
-    console.log(`   ⚪ ADX: DISABLED`);
   }
   
-  
-  // HÅRDT VOLUMEN FILTER
-  if (config.volume_enabled && currentVolume !== null && avgVolume !== null) {
-    const requiredVolume = avgVolume * config.volume_multiplier;
+  // 4️⃣ VOLUME
+  if (config.volume_enabled && currentVolume !== null && avgVolume !== null && avgVolume > 0) {
     const volumeRatio = currentVolume / avgVolume;
-    console.log(`   🔊 Volume: ${currentVolume.toFixed(2)} / Required: ${requiredVolume.toFixed(2)} (${volumeRatio.toFixed(2)}x)`);
+    const requiredVolume = avgVolume * config.volume_multiplier;
+    filterStatus.hard.volume.value = `${volumeRatio.toFixed(2)}x`;
+    
     if (currentVolume < requiredVolume) {
-      console.log(`   ❌ BLOKERET - VOLUME FOR LAV`);
-      console.log(`   ⛔ Ikke nok aktivitet - INGEN TRADE EVALUERING\n`);
-      return {
-        signal: 'NONE',
-        indicators: {
-          price: closes[closes.length - 1],
-          volume: currentVolume,
-          avgVolume,
-          volumeRatio: currentVolume / avgVolume,
-          emaFast: emaFastCurrent,
-          emaMedium: emaMediumCurrent,
-          emaSlow: emaSlowCurrent,
-          rsi: rsiCurrent,
-          stochRSI_k: stochRSI?.k || null,
-          stochRSI_d: stochRSI?.d || null,
-          macd: macd?.histogram || null,
-          macdLine: macd?.macd || null,
-          macdSignal: macd?.signal || null,
-          atr: atr,
-          bb,
-          adx,
-          pivotPoints: null,
-        },
-        stopLoss: 0,
-        takeProfit: null,
-      };
+      filterStatus.hard.volume.passed = false;
+      filterStatus.hard.volume.reason = `${currentVolume.toFixed(2)} < ${requiredVolume.toFixed(2)} (ikke nok aktivitet)`;
     }
-    console.log(`   ✅ Volume OK`);
-  } else {
-    console.log(`   ⚪ Volume: DISABLED`);
   }
   
-  // HÅRDT RSI ZONE FILTER (obligatorisk regel)
-  if (config.rsi_enabled && rsiCurrent !== null && rsiHistory.length >= rsiMomentumPeriods) {
-    const rsiZoneWidth = config.rsi_zone_width ?? 10;
-    console.log(`\n🎯 RSI LOGIK CONFIG:`);
-    console.log(`   📊 config.rsi_zone_width fra DB = ${config.rsi_zone_width}`);
-    console.log(`   🔧 rsiZoneWidth (efter ?? 10) = ${rsiZoneWidth}`);
-    console.log(`   📊 rsi_momentum_periods = ${rsiMomentumPeriods}`);
-    console.log(`   📊 RSI Historie: ${rsiHistory.map((v, i) => `RSI${i === 0 ? '₀' : i === 1 ? '₁' : i === 2 ? '₂' : i === 3 ? '₃' : '₄'}=${v.toFixed(2)}`).join(', ')}`);
+  // 5️⃣ RSI MOMENTUM (Hård regel)
+  let rsiLongOK = true;
+  let rsiShortOK = true;
+  
+  if (config.rsi_enabled && rsiCurrent !== null && rsiHistory.length >= config.rsi_momentum_periods) {
+    // Zones
+    const rsiInLongZone = rsiCurrent >= config.rsi_min_long && rsiCurrent < (config.rsi_min_long + config.rsi_zone_width);
+    const rsiInShortZone = rsiCurrent <= config.rsi_max_short && rsiCurrent > (config.rsi_max_short - config.rsi_zone_width);
     
-    let rsiLongOK = false;
-    let rsiShortOK = false;
+    // Momentum
+    const rsiRising = rsiHistory.slice(-config.rsi_momentum_periods).every((val, i, arr) => i === 0 || val > arr[i - 1]);
+    const rsiFalling = rsiHistory.slice(-config.rsi_momentum_periods).every((val, i, arr) => i === 0 || val < arr[i - 1]);
     
-    // MOMENTUM CHECK: RSI skal være stigende (LONG) eller faldende (SHORT)
-    let rsiRising = true;
-    let rsiFalling = true;
+    // Crossover detection
+    const rsiLongCrossover = rsiHistory[1] < config.rsi_min_long && rsiCurrent >= config.rsi_min_long;
+    const rsiShortCrossover = rsiHistory[1] > config.rsi_max_short && rsiCurrent <= config.rsi_max_short;
     
-    for (let i = 0; i < rsiMomentumPeriods - 1; i++) {
-      if (rsiHistory[i] <= rsiHistory[i + 1]) {
-        rsiRising = false;
-      }
-      if (rsiHistory[i] >= rsiHistory[i + 1]) {
-        rsiFalling = false;
-      }
-    }
+    // Long OK: in zone OR (just crossed AND has momentum)
+    rsiLongOK = rsiInLongZone || (rsiLongCrossover && rsiRising);
     
-    console.log(`   📈 RSI Momentum (${rsiMomentumPeriods} perioder): Stigende=${rsiRising}, Faldende=${rsiFalling}`);
+    // Short OK: in zone OR (just crossed AND has momentum)
+    rsiShortOK = rsiInShortZone || (rsiShortCrossover && rsiFalling);
     
-    // Hvis rsi_zone_width > 0: Brug zone check
-    if (rsiZoneWidth > 0) {
-      // LONG: RSI skal være omkring rsi_min_long ± zone_width OG stigende
-      const rsiLongZoneMin = config.rsi_min_long - rsiZoneWidth;
-      const rsiLongZoneMax = config.rsi_min_long + rsiZoneWidth;
-      
-      // SHORT: RSI skal være omkring rsi_max_short ± zone_width OG faldende
-      const rsiShortZoneMin = config.rsi_max_short - rsiZoneWidth;
-      const rsiShortZoneMax = config.rsi_max_short + rsiZoneWidth;
-      
-      console.log(`   📍 ZONE MODE (zone_width=${rsiZoneWidth})`);
-      console.log(`   📏 LONG Zone: RSI skal være mellem ${rsiLongZoneMin} og ${rsiLongZoneMax} OG stigende`);
-      console.log(`   📏 SHORT Zone: RSI skal være mellem ${rsiShortZoneMin} og ${rsiShortZoneMax} OG faldende`);
-      
-      const inLongZone = rsiCurrent >= rsiLongZoneMin && rsiCurrent <= rsiLongZoneMax;
-      const inShortZone = rsiCurrent >= rsiShortZoneMin && rsiCurrent <= rsiShortZoneMax;
-      
-      rsiLongOK = inLongZone && rsiRising;
-      rsiShortOK = inShortZone && rsiFalling;
-      
-      if (inLongZone && !rsiRising) {
-        console.log(`   ⚠ RSI i LONG zone men IKKE stigende`);
-      }
-      if (inShortZone && !rsiFalling) {
-        console.log(`   ⚠ RSI i SHORT zone men IKKE faldende`);
-      }
-      
-    } else {
-      // Hvis rsi_zone_width = 0: Brug crossover logik OG momentum
-      // LONG: RSI krydser OP over RSI_long OG er stigende
-      // SHORT: RSI krydser NED under RSI_short OG er faldende
-      
-      console.log(`   🔄 CROSSOVER MODE (zone_width=0)`);
-      console.log(`   📏 LONG Crossover: RSI krydser OP over ${config.rsi_min_long} OG stigende`);
-      console.log(`   📏 SHORT Crossover: RSI krydser NED under ${config.rsi_max_short} OG faldende`);
-      
-      const rsiLongCrossover = rsiHistory[1] < config.rsi_min_long && rsiCurrent >= config.rsi_min_long;
-      const rsiShortCrossover = rsiHistory[1] > config.rsi_max_short && rsiCurrent <= config.rsi_max_short;
-      
-      rsiLongOK = rsiLongCrossover && rsiRising;
-      rsiShortOK = rsiShortCrossover && rsiFalling;
-      
-      if (rsiLongCrossover) {
-        console.log(`   ${rsiRising ? '✅' : '❌'} LONG CROSSOVER: ${rsiHistory[1].toFixed(2)} → ${rsiCurrent.toFixed(2)} (momentum: ${rsiRising ? 'OK' : 'FAIL'})`);
-      }
-      if (rsiShortCrossover) {
-        console.log(`   ${rsiFalling ? '✅' : '❌'} SHORT CROSSOVER: ${rsiHistory[1].toFixed(2)} → ${rsiCurrent.toFixed(2)} (momentum: ${rsiFalling ? 'OK' : 'FAIL'})`);
-      }
-    }
+    filterStatus.hard.rsiMomentum.long = rsiLongOK;
+    filterStatus.hard.rsiMomentum.short = rsiShortOK;
     
     if (!rsiLongOK && !rsiShortOK) {
-      console.log(`   ❌ BLOKERET - RSI BETINGELSE IKKE OPFYLDT (zone eller momentum fejlede)`);
-      console.log(`   ⛔ RSI krav ikke opfyldt - INGEN TRADE EVALUERING\n`);
-      return {
-        signal: 'NONE',
-        indicators: {
-          price: closes[closes.length - 1],
-          volume: currentVolume,
-          avgVolume,
-          volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
-          emaFast: emaFastCurrent,
-          emaMedium: emaMediumCurrent,
-          emaSlow: emaSlowCurrent,
-          rsi: rsiCurrent,
-          stochRSI_k: stochRSI?.k || null,
-          stochRSI_d: stochRSI?.d || null,
-          macd: macd?.histogram || null,
-          macdLine: macd?.macd || null,
-          macdSignal: macd?.signal || null,
-          atr: atr,
-          bb,
-          adx,
-          pivotPoints: null,
-        },
-        stopLoss: 0,
-        takeProfit: null,
-      };
+      filterStatus.hard.rsiMomentum.passed = false;
+      filterStatus.hard.rsiMomentum.reason = `RSI ${rsiCurrent.toFixed(2)} - ingen gyldig retning (zone eller momentum fejlede)`;
     }
-    
-    if (rsiLongOK) {
-      console.log(`   ✅ RSI LONG Zone OK (stigende momentum)`);
-    }
-    if (rsiShortOK) {
-      console.log(`   ✅ RSI SHORT Zone OK (faldende momentum)`);
-    }
-  } else {
-    console.log(`   ⚪ RSI Zone: DISABLED`);
   }
   
-  console.log(`✅ ALLE HÅRDE FILTRE PASSERET - Fortsætter til signal evaluering\n`);
+  // ═══════════════════════════════════════════════
+  // 🟡 BLØDE FILTRE (Signal betingelser)
+  // ═══════════════════════════════════════════════
+  
+  // 6️⃣ EMA ALIGNMENT
+  if (config.ema_enabled && emaFast && emaMedium && emaSlow && emaFastCurrent !== null && emaMediumCurrent !== null && emaSlowCurrent !== null) {
+    // LONG: Hurtig > Medium > Slow
+    filterStatus.soft.emaAlignment.long = emaFastCurrent > emaMediumCurrent && emaMediumCurrent > emaSlowCurrent && currentPrice > closes[closes.length - 2];
+    
+    // SHORT: Hurtig < Medium < Slow
+    filterStatus.soft.emaAlignment.short = emaFastCurrent < emaMediumCurrent && emaMediumCurrent < emaSlowCurrent && currentPrice < closes[closes.length - 2];
+  }
+  
+  // 7️⃣ MACD
+  if (config.macd_enabled && macd && macd.histogram !== null) {
+    // LONG: MACD histogram over threshold
+    filterStatus.soft.macd.long = macd.histogram > config.macd_histogram_threshold;
+    
+    // SHORT: MACD histogram under negative threshold
+    filterStatus.soft.macd.short = macd.histogram < -config.macd_histogram_threshold;
+  }
+  
+  // ═══════════════════════════════════════════════
+  // 📋 LOG ALLE RESULTATER
+  // ═══════════════════════════════════════════════
+  
+  console.log(`\n🔴 HÅRDE FILTRE (blokerer trade):`);
+  console.log(`   📏 EMA Spread: ${filterStatus.hard.emaSpread.passed ? '✅' : '❌'} ${filterStatus.hard.emaSpread.value} ${filterStatus.hard.emaSpread.reason ? `- ${filterStatus.hard.emaSpread.reason}` : ''}`);
+  console.log(`   📊 ATR: ${filterStatus.hard.atr.passed ? '✅' : '❌'} ${filterStatus.hard.atr.value} ${filterStatus.hard.atr.reason ? `- ${filterStatus.hard.atr.reason}` : ''}`);
+  console.log(`   📈 ADX: ${filterStatus.hard.adx.passed ? '✅' : '❌'} ${filterStatus.hard.adx.value} ${filterStatus.hard.adx.reason ? `- ${filterStatus.hard.adx.reason}` : ''}`);
+  console.log(`   🔊 Volume: ${filterStatus.hard.volume.passed ? '✅' : '❌'} ${filterStatus.hard.volume.value} ${filterStatus.hard.volume.reason ? `- ${filterStatus.hard.volume.reason}` : ''}`);
+  console.log(`   🎯 RSI Momentum: ${filterStatus.hard.rsiMomentum.passed ? '✅' : '❌'} Long: ${filterStatus.hard.rsiMomentum.long ? '✅' : '❌'} Short: ${filterStatus.hard.rsiMomentum.short ? '✅' : '❌'} ${filterStatus.hard.rsiMomentum.reason ? `- ${filterStatus.hard.rsiMomentum.reason}` : ''}`);
+  
+  console.log(`\n🟡 BLØDE FILTRE (signal betingelser):`);
+  console.log(`   📐 EMA Alignment: Long: ${filterStatus.soft.emaAlignment.long ? '✅' : '❌'} Short: ${filterStatus.soft.emaAlignment.short ? '✅' : '❌'}`);
+  console.log(`   📉 MACD: Long: ${filterStatus.soft.macd.long ? '✅' : '❌'} Short: ${filterStatus.soft.macd.short ? '✅' : '❌'}`);
+  
+  // ═══════════════════════════════════════════════
+  // 🚫 CHECK: BLOKERER HÅRDE FILTRE?
+  // ═══════════════════════════════════════════════
+  
+  const hardFiltersPass = filterStatus.hard.emaSpread.passed && 
+                          filterStatus.hard.atr.passed && 
+                          filterStatus.hard.adx.passed && 
+                          filterStatus.hard.volume.passed && 
+                          filterStatus.hard.rsiMomentum.passed;
+  
+  if (!hardFiltersPass) {
+    console.log(`\n❌ TRADE BLOKERET - Hårde filtre fejlede`);
+    console.log(`⛔ Ingen trade evaluering\n`);
+    return {
+      signal: 'NONE',
+      indicators: {
+        price: currentPrice,
+        emaFast: emaFastCurrent,
+        emaMedium: emaMediumCurrent,
+        emaSlow: emaSlowCurrent,
+        rsi: rsiCurrent,
+        stochRSI_k: stochRSI?.k || null,
+        stochRSI_d: stochRSI?.d || null,
+        macd: macd?.histogram || null,
+        macdLine: macd?.macd || null,
+        macdSignal: macd?.signal || null,
+        atr: atr,
+        bb,
+        adx,
+        volume: currentVolume,
+        avgVolume,
+        volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
+        pivotPoints: null,
+      },
+      stopLoss: 0,
+      takeProfit: null,
+    };
+  }
+  
+  console.log(`\n✅ ALLE HÅRDE FILTRE PASSERET - Fortsætter til signal evaluering\n`);
   
   // Calculate Pivot Points only if enabled
   const pivotPoints = config.pivot_points_enabled ? (() => {
