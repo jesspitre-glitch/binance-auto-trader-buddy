@@ -300,10 +300,20 @@ serve(async (req) => {
 
         // Break-even logic: Move SL to entry hvis profit er nået
         let newStopLoss = position.stop_loss;
-        if (!position.break_even_activated && position.indicators_snapshot?.atr && position.indicators_snapshot?.break_even_atr) {
-          const atr = position.indicators_snapshot.atr;
-          const breakEvenAtr = position.indicators_snapshot.break_even_atr;
-          const breakEvenDistance = breakEvenAtr * atr;
+        if (!position.break_even_activated) {
+          let breakEvenDistance = 0;
+          
+          // Try to use ATR-based calculation if available
+          if (position.indicators_snapshot?.atr && position.indicators_snapshot?.break_even_atr) {
+            const atr = position.indicators_snapshot.atr;
+            const breakEvenAtr = position.indicators_snapshot.break_even_atr;
+            breakEvenDistance = breakEvenAtr * atr;
+            console.log(`Break-even distance (ATR-based): ${breakEvenDistance} for ${position.symbol}`);
+          } else {
+            // Fallback for external positions without indicators: 1.5% profit
+            breakEvenDistance = position.entry_price * 0.015;
+            console.log(`Break-even distance (fallback 1.5%): ${breakEvenDistance} for ${position.symbol}`);
+          }
           
           let breakEvenReached = false;
           if (position.side === 'LONG') {
@@ -321,7 +331,7 @@ serve(async (req) => {
                 break_even_activated: true 
               })
               .eq('id', position.id);
-            console.log(`BREAK-EVEN ACTIVATED: SL moved to entry ${newStopLoss} for ${position.symbol}`);
+            console.log(`✅ BREAK-EVEN ACTIVATED: SL moved to entry ${newStopLoss} for ${position.symbol}`);
           }
         }
 
