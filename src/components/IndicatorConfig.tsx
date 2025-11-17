@@ -57,6 +57,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     macd_slow: config?.macd_slow || 26,
     macd_signal: config?.macd_signal || 9,
     macd_histogram_threshold: config?.macd_histogram_threshold || 0,
+    histogram_momentum_enabled: config?.histogram_momentum_enabled ?? true,
+    histogram_momentum_periods: config?.histogram_momentum_periods || 3,
     
     // Bollinger Bands
     bb_enabled: config?.bb_enabled ?? true,
@@ -137,6 +139,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       macd_slow: config.macd_slow ?? 26,
       macd_signal: config.macd_signal ?? 9,
       macd_histogram_threshold: config.macd_histogram_threshold ?? 0,
+      histogram_momentum_enabled: config.histogram_momentum_enabled ?? true,
+      histogram_momentum_periods: config.histogram_momentum_periods ?? 3,
       // Bollinger Bands
       bb_enabled: config.bb_enabled ?? true,
       bb_period: config.bb_period ?? 20,
@@ -607,6 +611,30 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               onChange={(e) => setFormData({ ...formData, macd_histogram_threshold: parseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Min histogram for signal (0 = alle)</p>
+          </div>
+
+          <div className="flex items-center justify-between sm:col-span-4">
+            <Label htmlFor="histogram_momentum_enabled">Histogram Momentum Shift (blød)</Label>
+            <Switch
+              id="histogram_momentum_enabled"
+              checked={formData.histogram_momentum_enabled}
+              onCheckedChange={(checked) => setFormData({...formData, histogram_momentum_enabled: checked})}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="histogram_momentum_periods">Momentum Perioder</Label>
+            <Input
+              id="histogram_momentum_periods"
+              type="number"
+              min="2"
+              max="10"
+              value={formData.histogram_momentum_periods}
+              onChange={(e) => setFormData({...formData, histogram_momentum_periods: parseInt(e.target.value)})}
+            />
+            <p className="text-xs text-muted-foreground">
+              Antal perioder til momentum-beregning (2-10)
+            </p>
           </div>
         </CardContent>
       </Card>
