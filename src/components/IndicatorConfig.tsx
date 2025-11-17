@@ -274,7 +274,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       <Card>
         <CardHeader>
           <CardTitle>EMA (Exponential Moving Average)</CardTitle>
-          <CardDescription>Trendretning og dynamisk støtte/modstand</CardDescription>
+          <CardDescription>
+            <strong>EMA Trend:</strong> Soft Condition (1 point) - bruger Fast/Medium/Slow alignment<br/>
+            <strong>⚠️ EMA Spread:</strong> Hard Filter - blokerer hvis spread &lt; minimum
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
           <div className="flex items-center space-x-2 sm:col-span-3">
@@ -326,7 +329,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <p className="text-xs text-muted-foreground">EMA for medium trend analyse (f.eks. 50)</p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="min_ema_spread_percent">Minimum EMA Spread (%)</Label>
+            <Label htmlFor="min_ema_spread_percent">⚠️ Minimum EMA Spread (%) - HARD FILTER</Label>
             <Input
               id="min_ema_spread_percent"
               type="number"
@@ -334,15 +337,20 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.min_ema_spread_percent}
               onChange={(e) => setFormData({ ...formData, min_ema_spread_percent: parseFloat(e.target.value) })}
             />
-            <p className="text-xs text-muted-foreground">Minimum afstand mellem Fast og Slow EMA i % af pris (f.eks. 0.15-0.20)</p>
+            <p className="text-xs text-muted-foreground">
+              <strong className="text-warning">HARD FILTER:</strong> Blokerer trades hvis (Fast-Slow)/Price &lt; dette % (sidelæns marked filter)
+            </p>
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>RSI (Relative Strength Index)</CardTitle>
-          <CardDescription>Overkøbt/Oversolgt niveau</CardDescription>
+          <CardTitle>RSI (Relative Strength Index) - ⚠️ HARD FILTER</CardTitle>
+          <CardDescription>
+            Blokerer trades UDEN for de tilladte zoner (evalueres FØR soft conditions)<br/>
+            <strong className="text-warning">Dette er IKKE en Soft Condition - det er en Hard Filter!</strong>
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
           <div className="flex items-center space-x-2 sm:col-span-3">
@@ -626,8 +634,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       <Card>
         <CardHeader>
-          <CardTitle>ATR (Average True Range)</CardTitle>
-          <CardDescription>Stop-loss og trailing stop multiplikatorer</CardDescription>
+          <CardTitle>ATR (Average True Range) - ⚠️ HARD FILTER</CardTitle>
+          <CardDescription>
+            <strong className="text-warning">HARD FILTER:</strong> Blokerer trades hvis ATR = 0 (ingen volatilitet)<br/>
+            Bruges også til stop-loss og trailing stop beregning
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
           <div className="flex items-center space-x-2 sm:col-span-3">
@@ -686,8 +697,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       <Card>
         <CardHeader>
-          <CardTitle>ADX (Average Directional Index)</CardTitle>
-          <CardDescription>Kun trades ved ADX over tærskel</CardDescription>
+          <CardTitle>ADX (Average Directional Index) - ⚠️ HARD FILTER</CardTitle>
+          <CardDescription>
+            Blokerer trades hvis trend-styrken er for lav (evalueres FØR soft conditions)<br/>
+            <strong className="text-warning">Dette er IKKE en Soft Condition - det er en Hard Filter!</strong>
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="flex items-center space-x-2 sm:col-span-2">
@@ -724,8 +738,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Signal Settings</CardTitle>
-          <CardDescription>Volumen analyse og signal krav</CardDescription>
+          <CardTitle>Signal Settings (Soft Rules)</CardTitle>
+          <CardDescription>
+            Soft conditions evalueres KUN efter Hard Filters er godkendt<br/>
+            <strong className="text-warning">⚠️ Hard Filters (blokerer alle trades):</strong> EMA Spread, ATR &gt; 0, ADX ≥ threshold, Volume ≥ multiplier
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="flex items-center space-x-2 sm:col-span-2">
@@ -747,7 +764,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <p className="text-xs text-muted-foreground">Antal bars for gennemsnit</p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="volume_multiplier">Volumen Multiplier</Label>
+            <Label htmlFor="volume_multiplier">⚠️ Volumen Multiplier (HARD + SOFT)</Label>
             <Input
               id="volume_multiplier"
               type="number"
@@ -755,24 +772,32 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.volume_multiplier}
               onChange={(e) => setFormData({ ...formData, volume_multiplier: parseFloat(e.target.value) })}
             />
-            <p className="text-xs text-muted-foreground">Min volumen = gennemsnit × multiplier (f.eks. 1.2 = 120%)</p>
+            <p className="text-xs text-muted-foreground">
+              <strong className="text-warning">HARD FILTER:</strong> Blokerer hvis vol &lt; avg×multiplier<br/>
+              <strong>SOFT CONDITION:</strong> +1 point hvis vol &gt; avg (bruges kun hvis ikke blokeret)
+            </p>
           </div>
           <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="signal_conditions_required">Signal Betingelser Påkrævet</Label>
+            <Label htmlFor="signal_conditions_required">Signal Betingelser Påkrævet (Soft Rules)</Label>
             <Input
               id="signal_conditions_required"
               type="number"
               min="1"
-              max={7 + (formData.pivot_points_enabled ? 1 : 0)}
+              max="6"
               value={formData.signal_conditions_required}
               onChange={(e) => {
-                const maxConditions = 7 + (formData.pivot_points_enabled ? 1 : 0);
-                setFormData({ ...formData, signal_conditions_required: Math.min(maxConditions, Math.max(1, parseInt(e.target.value) || 1)) });
+                setFormData({ ...formData, signal_conditions_required: Math.min(6, Math.max(1, parseInt(e.target.value) || 1)) });
               }}
             />
             <p className="text-xs text-muted-foreground">
-              Hvor mange ud af {7 + (formData.pivot_points_enabled ? 1 : 0)} betingelser skal være opfyldt 
-              (EMA×3 + RSI + StochRSI + MACD + ADX{formData.pivot_points_enabled ? ' + Pivot Points' : ''})
+              Kræver minimum X af følgende betingelser (1 point hver):<br/>
+              • EMA Trend ({formData.ema_enabled ? '✅' : '❌'})<br/>
+              • StochRSI Zone ({formData.stochrsi_enabled ? '✅' : '❌'})<br/>
+              • MACD Color Change ({formData.macd_enabled ? '✅' : '❌'})<br/>
+              • Bollinger Bands ({formData.bb_enabled ? '✅' : '❌'})<br/>
+              • Volume Surge ({formData.volume_enabled ? '✅' : '❌'})<br/>
+              • Pivot Points ({formData.pivot_points_enabled ? '✅' : '❌'})<br/>
+              <strong>Aktive: {[formData.ema_enabled, formData.stochrsi_enabled, formData.macd_enabled, formData.bb_enabled, formData.volume_enabled, formData.pivot_points_enabled].filter(Boolean).length}/6</strong>
             </p>
           </div>
         </CardContent>
