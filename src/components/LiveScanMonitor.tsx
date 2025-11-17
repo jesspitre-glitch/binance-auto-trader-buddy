@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { TrendingUp, TrendingDown, Activity } from "lucide-react";
 import { useBinanceFuturesPrices } from "@/hooks/useBinanceFuturesPrices";
@@ -239,22 +240,40 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                   })}
                 </div>
 
-                {/* Signal Strength */}
-                <div className="space-y-1">
+                {/* Signal Strength Progress */}
+                <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="opacity-70">Styrke</span>
+                    <span className="opacity-70">Signal Styrke</span>
                     <span className={`font-bold ${getTextColor(coin.strength)}`}>
-                      {coin.conditionsMet}/{coin.conditionsRequired}
+                      {coin.strength.toFixed(0)}%
                     </span>
                   </div>
-                  <div className="h-2 rounded-full overflow-hidden bg-muted/50">
-                    <div 
-                      className={`h-full transition-all duration-500 ${getStrengthBarColor(coin.strength)}`}
-                      style={{ width: `${Math.min(coin.strength, 100)}%` }}
+                  
+                  {/* Main Progress Bar */}
+                  <div className="relative">
+                    <Progress 
+                      value={coin.strength} 
+                      className={`h-3 transition-all duration-700 ease-out ${
+                        coin.strength >= 100 ? 'animate-pulse' : ''
+                      }`}
                     />
+                    {coin.strength >= 100 && (
+                      <div className="absolute inset-0 bg-primary/20 animate-pulse rounded-full" />
+                    )}
                   </div>
-                  <div className={`text-center text-xs font-bold ${getTextColor(coin.strength)}`}>
-                    {coin.strength.toFixed(0)}%
+                  
+                  {/* Conditions Met Display */}
+                  <div className="flex items-center justify-between text-[10px]">
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 rounded-full bg-primary" />
+                      <span className="opacity-70">Hårde regler:</span>
+                      <span className="font-bold">{coin.conditionsMet}/{coin.conditionsRequired}</span>
+                    </div>
+                    {coin.strength >= 100 && (
+                      <Badge variant="default" className="h-4 px-1.5 text-[9px] animate-fade-in">
+                        KLAR
+                      </Badge>
+                    )}
                   </div>
                 </div>
 
