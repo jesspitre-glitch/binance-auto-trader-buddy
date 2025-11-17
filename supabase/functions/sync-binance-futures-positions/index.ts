@@ -326,23 +326,54 @@ serve(async (req) => {
           // Create new position if none exists
           console.log(`Creating new position for ${binancePos.symbol}`);
           
-            // For positions found on Binance (not created by our system), use a default trailing stop
-            // We don't have ATR or config here, so use a reasonable default of 2%
-            const { error } = await supabaseClient
-              .from('positions')
-              .insert({
-                user_id: userId,
-                symbol: binancePos.symbol,
-                side,
-                entry_price: parseFloat(binancePos.entryPrice),
-                quantity: absQuantity,
-                current_price: currentPrice,
-                peak_price: currentPrice,
-                trailing_stop_percent: 2.0, // Default for external positions
-                unrealized_pnl: unrealizedPnl,
-                status: 'OPEN',
-                open_reason: `Position fundet på Binance (${side} @ ${parseFloat(binancePos.entryPrice).toFixed(4)})`,
-              });
+          // Check if bot detected a signal for this symbol recently (within last 10 minutes)
+          const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+          const { data: recentSignals } = await supabaseClient
+            .from('scan_results')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('symbol', binancePos.symbol)
+            .eq('signal', side)
+            .gte('created_at', tenMinutesAgo)
+            .order('created_at', { ascending: false })
+            .limit(1);
+          
+          let openReason = `Position fundet på Binance (${side} @ ${parseFloat(binancePos.entryPrice).toFixed(4)})`;
+          let indicatorsSnapshot = null;
+          
+          // If we found a recent signal from the bot, use that data
+          if (recentSignals && recentSignals.length > 0) {
+            const signal = recentSignals[0];
+            indicatorsSnapshot = signal.indicators;
+            
+            // Create detailed open reason like the bot would
+            const indicators = signal.indicators as any;
+            openReason = `${side} signal på ${binancePos.symbol} - ` +
+              `Trend: ${indicators.trend || 'UNKNOWN'}. ` +
+              `RSI: ${indicators.rsi?.toFixed(2) || 'N/A'}, ` +
+              `MACD: ${indicators.macd?.toFixed(4) || 'N/A'}, ` +
+              `EMA: Fast ${indicators.emaFast?.toFixed(2) || 'N/A'} vs Slow ${indicators.emaSlow?.toFixed(2) || 'N/A'}, ` +
+              `ADX: ${indicators.adx?.toFixed(2) || 'N/A'}`;
+            
+            console.log(`✅ Found bot signal for ${binancePos.symbol}, using detailed open_reason`);
+          }
+          
+          const { error } = await supabaseClient
+            .from('positions')
+            .insert({
+              user_id: userId,
+              symbol: binancePos.symbol,
+              side,
+              entry_price: parseFloat(binancePos.entryPrice),
+              quantity: absQuantity,
+              current_price: currentPrice,
+              peak_price: currentPrice,
+              trailing_stop_percent: 2.0,
+              unrealized_pnl: unrealizedPnl,
+              status: 'OPEN',
+              open_reason: openReason,
+              indicators_snapshot: indicatorsSnapshot,
+            });
           
           if (error) console.error('Insert error:', error);
           updates.push({ symbol: binancePos.symbol, action: 'created' });
