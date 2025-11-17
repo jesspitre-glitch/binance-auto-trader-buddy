@@ -1412,31 +1412,31 @@ serve(async (req) => {
             try {
               // Get account balance
               const balance = await getAccountBalance();
-              console.log(`Balance for ${symbol}: ${balance} USDC`);
+              console.log(`✅ Balance check OK: ${balance} USDC`);
               
               // Log config values
-              console.log(`Config - risk_per_trade: ${config.risk_per_trade_percent}%, position_size: ${config.position_size_percent}%, leverage: ${config.leverage}x`);
+              console.log(`📊 Config - risk_per_trade: ${config.risk_per_trade_percent}%, position_size: ${config.position_size_percent}%, leverage: ${config.leverage}x`);
               
               // Calculate position size using BOTH methods, take the smaller
               // Method 1: Risk-based (current logic)
               const riskAmount = balance * (config.risk_per_trade_percent / 100);
               const stopLossDistance = Math.abs(analysis.indicators.price - analysis.stopLoss);
               const riskBasedQuantity = (riskAmount / stopLossDistance) * config.leverage;
-              console.log(`Risk-based: riskAmount=${riskAmount}, stopLossDistance=${stopLossDistance}, quantity=${riskBasedQuantity}`);
+              console.log(`📐 Risk-based: riskAmount=${riskAmount.toFixed(2)}, stopLossDistance=${stopLossDistance.toFixed(4)}, quantity=${riskBasedQuantity.toFixed(4)}`);
               
               // Method 2: Direct percentage of balance
               const directPositionValue = balance * (config.position_size_percent / 100);
               const directQuantity = (directPositionValue / analysis.indicators.price) * config.leverage;
-              console.log(`Direct: positionValue=${directPositionValue}, price=${analysis.indicators.price}, quantity=${directQuantity}`);
+              console.log(`📐 Direct: positionValue=${directPositionValue.toFixed(2)}, price=${analysis.indicators.price.toFixed(4)}, quantity=${directQuantity.toFixed(4)}`);
               
               // Use the SMALLER of the two (more conservative)
               const rawQuantity = Math.min(riskBasedQuantity, directQuantity);
-              console.log(`Raw quantity (min of both methods): ${rawQuantity}`);
+              console.log(`🎯 Selected quantity (min of both): ${rawQuantity.toFixed(4)}`);
 
               // Apply Binance filters (minQty/stepSize and pricing tick)
               const filters = symbolFilters[symbol];
               if (!filters) {
-                console.log(`Missing filters for ${symbol}, skipping.`);
+                console.log(`❌ Missing filters for ${symbol}, skipping.`);
                 continue;
               }
               const qtyPrecision = getPrecisionFromStep(filters.stepSize);
@@ -1444,39 +1444,60 @@ serve(async (req) => {
 
               const step = filters.stepSize;
               const quantityRounded = Math.floor(rawQuantity / step) * step;
+              console.log(`✂️ Rounded quantity: ${quantityRounded.toFixed(qtyPrecision)} (step=${step}, minQty=${filters.minQty})`);
 
               if (!isFinite(quantityRounded) || quantityRounded <= 0 || quantityRounded < filters.minQty) {
-                console.log(`Skip ${symbol}: qty ${quantityRounded} below min ${filters.minQty}`);
+                console.log(`❌ Skip ${symbol}: qty ${quantityRounded} below min ${filters.minQty}`);
                 continue;
               }
               
               // Place order
               const side = analysis.signal === 'LONG' ? 'BUY' : 'SELL';
-              const orderData = await placeOrder(
-                symbol,
-                side,
-                quantityRounded,
-                analysis.stopLoss,
-                analysis.takeProfit,
-                qtyPrecision,
-                pricePrecision,
-                config.leverage
-              );
+              console.log(`\n🚀 PLACING ORDER on ${symbol}:`);
+              console.log(`   Side: ${side}`);
+              console.log(`   Quantity: ${quantityRounded}`);
+              console.log(`   Price: ${analysis.indicators.price}`);
+              console.log(`   Stop Loss: ${analysis.stopLoss}`);
               
-              console.log(`Order placed: ${symbol} ${side} ${quantityRounded} @ ${analysis.indicators.price}`);
-              
-              // Wait a moment for Binance to process the order
-              await new Promise(resolve => setTimeout(resolve, 1000));
-              
-              // Verify position is actually open on Binance
-              const binancePosition = await verifyPositionOnBinance(symbol);
-              
-              if (!binancePosition) {
-                console.error(`Failed to verify position ${symbol} on Binance - skipping database insert`);
+              let orderData;
+              try {
+                orderData = await placeOrder(
+                  symbol,
+                  side,
+                  quantityRounded,
+                  analysis.stopLoss,
+                  analysis.takeProfit,
+                  qtyPrecision,
+                  pricePrecision,
+                  config.leverage
+                );
+                console.log(`✅ ORDER PLACED SUCCESSFULLY: ${symbol} ${side} ${quantityRounded}`);
+                console.log(`   Order ID: ${orderData.orderId}`);
+                console.log(`   Status: ${orderData.status}`);
+              } catch (orderError: any) {
+                console.error(`❌ ORDER PLACEMENT FAILED for ${symbol}:`, orderError.message);
+                console.error(`   Full error:`, orderError);
                 continue;
               }
               
-              console.log(`Position verified on Binance: ${symbol} - Qty: ${binancePosition.positionAmt}, Entry: ${binancePosition.entryPrice}`);
+              // Wait a moment for Binance to process the order
+              console.log(`⏳ Waiting 1s for Binance to process...`);
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              
+              // Verify position is actually open on Binance
+              console.log(`🔍 Verifying position on Binance for ${symbol}...`);
+              const binancePosition = await verifyPositionOnBinance(symbol);
+              
+              if (!binancePosition) {
+                console.error(`❌ VERIFICATION FAILED: Position ${symbol} not found on Binance after order placement`);
+                console.error(`   Order ID: ${orderData.orderId}`);
+                console.error(`   This order may need manual intervention`);
+                continue;
+              }
+              
+              console.log(`✅ POSITION VERIFIED on Binance: ${symbol}`);
+              console.log(`   Binance Qty: ${binancePosition.positionAmt}`);
+              console.log(`   Binance Entry: ${binancePosition.entryPrice}`);
               
               // Build open reason description
               const openReasonParts = [];
@@ -1488,10 +1509,14 @@ serve(async (req) => {
               if (analysis.indicators.adx) openReasonParts.push(`ADX: ${analysis.indicators.adx.toFixed(2)}`);
               const openReason = `${analysis.signal} signal på ${symbol} - Trend: ${trend}. ${openReasonParts.join(', ')}`;
               
+              console.log(`📝 Open reason: ${openReason}`);
+              
               // Calculate trailing stop from ATR and config
               const atrValue = analysis.indicators.atr || (analysis.indicators.price * 0.01); // Fallback til 1% hvis ATR disabled
               const trailingStopDistance = atrValue * config.atr_trailing_stop_multiplier;
               const trailingStopPercent = (trailingStopDistance / analysis.indicators.price) * 100;
+              
+              console.log(`🎯 Trailing stop calculation: ATR=${atrValue.toFixed(6)}, Distance=${trailingStopDistance.toFixed(6)}, Percent=${trailingStopPercent.toFixed(2)}%`);
               
               // Use actual values from Binance for database insert
               const actualEntryPrice = parseFloat(binancePosition.entryPrice);
@@ -1502,39 +1527,73 @@ serve(async (req) => {
                 ? actualEntryPrice * (1 - trailingStopPercent / 100)
                 : actualEntryPrice * (1 + trailingStopPercent / 100);
               
+              console.log(`\n💾 SAVING TO DATABASE:`);
+              console.log(`   Symbol: ${symbol}`);
+              console.log(`   Side: ${analysis.signal}`);
+              console.log(`   Entry: ${actualEntryPrice}`);
+              console.log(`   Quantity: ${actualQuantity}`);
+              console.log(`   Stop Loss: ${analysis.stopLoss}`);
+              console.log(`   Trailing Stop: ${initialTrailingStop.toFixed(8)}`);
+              console.log(`   Order ID: ${orderData.orderId}`);
+              
               // Save position to database with verified Binance data and indicators
-              await supabaseClient.from('positions').insert({
-                user_id: session.user_id,
-                symbol,
-                side: analysis.signal,
-                entry_price: actualEntryPrice,
-                quantity: actualQuantity,
-                stop_loss: analysis.stopLoss,
-                take_profit: null, // TP er fjernet, vi bruger kun trailing stop
-                trailing_stop: parseFloat(initialTrailingStop.toFixed(8)),
-                current_price: actualEntryPrice,
-                peak_price: actualEntryPrice,
-                trailing_stop_percent: parseFloat(trailingStopPercent.toFixed(2)),
-                binance_order_id: orderData.orderId,
-                status: 'OPEN',
-                strategy_hash: strategyHash,
-                open_reason: openReason,
-                indicators_snapshot: {
-                  ...config,
-                  ...analysis.indicators,
-                },
-              });
+              const { data: insertedPosition, error: insertError } = await supabaseClient
+                .from('positions')
+                .insert({
+                  user_id: session.user_id,
+                  symbol,
+                  side: analysis.signal,
+                  entry_price: actualEntryPrice,
+                  quantity: actualQuantity,
+                  stop_loss: analysis.stopLoss,
+                  take_profit: null, // TP er fjernet, vi bruger kun trailing stop
+                  trailing_stop: parseFloat(initialTrailingStop.toFixed(8)),
+                  current_price: actualEntryPrice,
+                  peak_price: actualEntryPrice,
+                  trailing_stop_percent: parseFloat(trailingStopPercent.toFixed(2)),
+                  binance_order_id: orderData.orderId,
+                  status: 'OPEN',
+                  strategy_hash: strategyHash,
+                  open_reason: openReason,
+                  indicators_snapshot: {
+                    ...config,
+                    ...analysis.indicators,
+                  },
+                })
+                .select()
+                .single();
 
-              console.log(`Position saved to DB: ${symbol} with verified Binance data`);
+              if (insertError) {
+                console.error(`❌ DATABASE INSERT FAILED for ${symbol}:`, insertError);
+                console.error(`   Position exists on Binance but not in DB!`);
+                console.error(`   Order ID: ${orderData.orderId}`);
+                console.error(`   Manual sync required`);
+                continue;
+              }
+
+              console.log(`✅✅✅ POSITION FULLY CREATED: ${symbol}`);
+              console.log(`   DB ID: ${insertedPosition.id}`);
+              console.log(`   Binance Order ID: ${orderData.orderId}`);
+              console.log(`   Entry: ${actualEntryPrice}`);
+              console.log(`   Quantity: ${actualQuantity}`);
+              console.log(`   Open Reason: ${openReason}\n`);
 
               // Immediately sync with Binance so DB matches source of truth
               await supabaseClient.functions.invoke('sync-binance-futures-positions');
-            } catch (error) {
-              console.error(`Failed to place order for ${symbol}:`, error);
+              
+            } catch (error: any) {
+              console.error(`\n❌❌❌ CRITICAL ERROR in order placement for ${symbol}:`);
+              console.error(`   Error type: ${error.constructor.name}`);
+              console.error(`   Error message: ${error.message}`);
+              console.error(`   Stack trace:`, error.stack);
+              console.error(`   Signal: ${analysis.signal}`);
+              console.error(`   Price: ${analysis.indicators.price}`);
+              console.error(`   This position may need manual intervention\n`);
             }
           }
-        } catch (error) {
-          console.error(`Error scanning ${symbol}:`, error);
+        } catch (error: any) {
+          console.error(`\n❌ Error scanning ${symbol}:`);
+          console.error(`   ${error.constructor.name}: ${error.message}`);
         }
       }
     }
