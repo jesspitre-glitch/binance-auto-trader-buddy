@@ -37,6 +37,8 @@ export type Database = {
           ema_slow: number | null
           enabled: boolean | null
           higher_trend_timeframe: string | null
+          histogram_momentum_enabled: boolean | null
+          histogram_momentum_periods: number | null
           id: string
           klines_limit: number | null
           leverage: number | null
@@ -101,6 +103,8 @@ export type Database = {
           ema_slow?: number | null
           enabled?: boolean | null
           higher_trend_timeframe?: string | null
+          histogram_momentum_enabled?: boolean | null
+          histogram_momentum_periods?: number | null
           id?: string
           klines_limit?: number | null
           leverage?: number | null
@@ -165,6 +169,8 @@ export type Database = {
           ema_slow?: number | null
           enabled?: boolean | null
           higher_trend_timeframe?: string | null
+          histogram_momentum_enabled?: boolean | null
+          histogram_momentum_periods?: number | null
           id?: string
           klines_limit?: number | null
           leverage?: number | null

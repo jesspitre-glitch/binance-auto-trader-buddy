@@ -34,6 +34,8 @@ interface IndicatorConfig {
   macd_slow: number;
   macd_signal: number;
   macd_histogram_threshold: number;
+  histogram_momentum_enabled: boolean;
+  histogram_momentum_periods: number;
   bb_enabled: boolean;
   bb_period: number;
   bb_std_dev: number;
@@ -94,6 +96,8 @@ async function getStrategyIdentifier(config: IndicatorConfig): Promise<string> {
     macd_slow: config.macd_slow,
     macd_signal: config.macd_signal,
     macd_histogram_threshold: config.macd_histogram_threshold,
+    histogram_momentum_enabled: config.histogram_momentum_enabled,
+    histogram_momentum_periods: config.histogram_momentum_periods,
     bb_enabled: config.bb_enabled,
     bb_period: config.bb_period,
     bb_std_dev: config.bb_std_dev,
@@ -744,6 +748,34 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     const macdColorChangeToRed = macd.histogram < -config.macd_histogram_threshold && macdPrevious.histogram >= -config.macd_histogram_threshold;
     shortConditions.push(macdColorChangeToRed);
     conditionDetails.macd.short = macdColorChangeToRed;
+  }
+
+  // Histogram Momentum Shift (hvis enabled) - BLØD INDIKATOR
+  if (config.histogram_momentum_enabled && closes.length >= config.histogram_momentum_periods + 2) {
+    const histograms: number[] = [];
+    for (let i = 0; i < config.histogram_momentum_periods + 1; i++) {
+      const idx = closes.length - 1 - i;
+      if (idx >= 0) {
+        const m = calculateMACD(closes.slice(0, idx + 1), config.macd_fast, config.macd_slow, config.macd_signal);
+        histograms.unshift(m.histogram);
+      }
+    }
+    
+    if (histograms.length >= 3) {
+      // Beregn momentum (ændringshastighed) i histogrammet
+      const currentMomentum = histograms[histograms.length - 1] - histograms[histograms.length - 2];
+      const previousMomentum = histograms[histograms.length - 2] - histograms[histograms.length - 3];
+      
+      // LONG: Momentum skifter til opad (accelererende grøn eller decelererende rød)
+      const momentumShiftUp = currentMomentum > previousMomentum && currentMomentum > 0;
+      longConditions.push(momentumShiftUp);
+      
+      // SHORT: Momentum skifter til nedad (accelererende rød eller decelererende grøn)
+      const momentumShiftDown = currentMomentum < previousMomentum && currentMomentum < 0;
+      shortConditions.push(momentumShiftDown);
+      
+      console.log(`   📊 Histogram Momentum: Long: ${momentumShiftUp ? '✅' : '❌'} Short: ${momentumShiftDown ? '✅' : '❌'} - Current: ${currentMomentum.toFixed(6)}, Previous: ${previousMomentum.toFixed(6)}`);
+    }
   }
   
   // Bollinger Bands (hvis enabled)
