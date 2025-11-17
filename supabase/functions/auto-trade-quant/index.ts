@@ -655,33 +655,57 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // HÅRDT RSI ZONE FILTER (obligatorisk regel)
   if (config.rsi_enabled && rsiCurrent !== null && rsiPrevious !== null) {
     const rsiZoneWidth = config.rsi_zone_width ?? 10;
-    console.log(`\n🎯 RSI ZONE CONFIG:`);
+    console.log(`\n🎯 RSI LOGIK CONFIG:`);
     console.log(`   📊 config.rsi_zone_width fra DB = ${config.rsi_zone_width}`);
     console.log(`   🔧 rsiZoneWidth (efter ?? 10) = ${rsiZoneWidth}`);
     console.log(`   📊 RSI nu: ${rsiCurrent.toFixed(2)} (prev: ${rsiPrevious.toFixed(2)})`);
     
-    // LONG: RSI skal være omkring rsi_min_long ± zone_width
-    // Med rsi_min_long=30 og zone_width=5: [25, 35]
-    const rsiLongZoneMin = config.rsi_min_long - rsiZoneWidth;
-    const rsiLongZoneMax = config.rsi_min_long + rsiZoneWidth;
+    let rsiLongOK = false;
+    let rsiShortOK = false;
     
-    // SHORT: RSI skal være omkring rsi_max_short ± zone_width
-    // Med rsi_max_short=70 og zone_width=5: [65, 75]
-    const rsiShortZoneMin = config.rsi_max_short - rsiZoneWidth;
-    const rsiShortZoneMax = config.rsi_max_short + rsiZoneWidth;
+    // Hvis rsi_zone_width > 0: Brug zone check
+    if (rsiZoneWidth > 0) {
+      // LONG: RSI skal være omkring rsi_min_long ± zone_width
+      const rsiLongZoneMin = config.rsi_min_long - rsiZoneWidth;
+      const rsiLongZoneMax = config.rsi_min_long + rsiZoneWidth;
+      
+      // SHORT: RSI skal være omkring rsi_max_short ± zone_width
+      const rsiShortZoneMin = config.rsi_max_short - rsiZoneWidth;
+      const rsiShortZoneMax = config.rsi_max_short + rsiZoneWidth;
+      
+      console.log(`   📍 ZONE MODE (zone_width=${rsiZoneWidth})`);
+      console.log(`   📏 LONG Zone: RSI skal være mellem ${rsiLongZoneMin} og ${rsiLongZoneMax}`);
+      console.log(`   📏 SHORT Zone: RSI skal være mellem ${rsiShortZoneMin} og ${rsiShortZoneMax}`);
+      
+      rsiLongOK = rsiCurrent >= rsiLongZoneMin && rsiCurrent <= rsiLongZoneMax;
+      rsiShortOK = rsiCurrent >= rsiShortZoneMin && rsiCurrent <= rsiShortZoneMax;
+      
+    } else {
+      // Hvis rsi_zone_width = 0: Brug crossover logik
+      // LONG: RSI krydser OP over RSI_long (previous < threshold OG current >= threshold)
+      // SHORT: RSI krydser NED under RSI_short (previous > threshold OG current <= threshold)
+      
+      console.log(`   🔄 CROSSOVER MODE (zone_width=0)`);
+      console.log(`   📏 LONG Crossover: RSI krydser OP over ${config.rsi_min_long}`);
+      console.log(`   📏 SHORT Crossover: RSI krydser NED under ${config.rsi_max_short}`);
+      
+      const rsiLongCrossover = rsiPrevious < config.rsi_min_long && rsiCurrent >= config.rsi_min_long;
+      const rsiShortCrossover = rsiPrevious > config.rsi_max_short && rsiCurrent <= config.rsi_max_short;
+      
+      rsiLongOK = rsiLongCrossover;
+      rsiShortOK = rsiShortCrossover;
+      
+      if (rsiLongCrossover) {
+        console.log(`   ✅ LONG CROSSOVER DETEKTERET: ${rsiPrevious.toFixed(2)} → ${rsiCurrent.toFixed(2)}`);
+      }
+      if (rsiShortCrossover) {
+        console.log(`   ✅ SHORT CROSSOVER DETEKTERET: ${rsiPrevious.toFixed(2)} → ${rsiCurrent.toFixed(2)}`);
+      }
+    }
     
-    console.log(`   📏 LONG Zone: RSI skal være mellem ${rsiLongZoneMin} og ${rsiLongZoneMax}`);
-    console.log(`   📏 SHORT Zone: RSI skal være mellem ${rsiShortZoneMin} og ${rsiShortZoneMax}`);
-    
-    // LONG: RSI skal være i zonen [rsi_min_long - zone_width, rsi_min_long + zone_width]
-    const rsiLongZoneOK = rsiCurrent >= rsiLongZoneMin && rsiCurrent <= rsiLongZoneMax;
-    
-    // SHORT: RSI skal være i zonen [rsi_max_short - zone_width, rsi_max_short + zone_width]
-    const rsiShortZoneOK = rsiCurrent >= rsiShortZoneMin && rsiCurrent <= rsiShortZoneMax;
-    
-    if (!rsiLongZoneOK && !rsiShortZoneOK) {
-      console.log(`   ❌ BLOKERET - RSI IKKE I ZONE`);
-      console.log(`   ⛔ RSI zone krav ikke opfyldt - INGEN TRADE EVALUERING\n`);
+    if (!rsiLongOK && !rsiShortOK) {
+      console.log(`   ❌ BLOKERET - RSI BETINGELSE IKKE OPFYLDT`);
+      console.log(`   ⛔ RSI krav ikke opfyldt - INGEN TRADE EVALUERING\n`);
       return {
         signal: 'NONE',
         indicators: {
@@ -708,10 +732,10 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       };
     }
     
-    if (rsiLongZoneOK) {
+    if (rsiLongOK) {
       console.log(`   ✅ RSI LONG Zone OK`);
     }
-    if (rsiShortZoneOK) {
+    if (rsiShortOK) {
       console.log(`   ✅ RSI SHORT Zone OK`);
     }
   } else {
