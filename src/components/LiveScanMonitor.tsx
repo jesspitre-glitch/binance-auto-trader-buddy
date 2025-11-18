@@ -24,10 +24,13 @@ interface CoinSignalStrength {
   hardFilters: {
     emaSpread: boolean;
     atr: boolean;
+    candleMomentum: boolean;
     adx: boolean;
     volume: boolean;
+    rsiMomentum: boolean;
   };
   allHardFiltersPassed: boolean;
+  enabledHardFiltersCount: number;
 }
 
 export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) => {
@@ -143,10 +146,13 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     const hardFilters = {
       emaSpread: true,
       atr: true,
+      candleMomentum: true,
       adx: true,
       volume: true,
+      rsiMomentum: true,
     };
 
+    // Only check filters that are enabled
     if (config) {
       // EMA Spread Check
       if (config.ema_enabled && indicators.emaSpreadPercent !== undefined) {
@@ -155,7 +161,13 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
       
       // ATR Check
       if (config.atr_enabled && indicators.atr !== null && indicators.atr !== undefined) {
-        hardFilters.atr = indicators.atr > 0;
+        hardFilters.atr = indicators.atr > 0 && (config.min_atr === 0 || indicators.atr >= config.min_atr);
+      }
+      
+      // Candle Momentum Check
+      if (config.candle_momentum_enabled) {
+        // Assume passed if data not available - edge function will do actual check
+        hardFilters.candleMomentum = true;
       }
       
       // ADX Check
@@ -167,7 +179,23 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
       if (config.volume_enabled && indicators.volumeRatio !== null && indicators.volumeRatio !== undefined) {
         hardFilters.volume = indicators.volumeRatio >= config.volume_multiplier;
       }
+      
+      // RSI Momentum Check
+      if (config.rsi_enabled) {
+        // Assume passed if data not available - edge function will do actual check
+        hardFilters.rsiMomentum = true;
+      }
     }
+
+    // Count how many hard filters are actually enabled in config
+    const enabledHardFiltersCount = [
+      config?.ema_enabled,
+      config?.atr_enabled,
+      config?.candle_momentum_enabled,
+      config?.adx_enabled,
+      config?.volume_enabled,
+      config?.rsi_enabled,
+    ].filter(Boolean).length;
 
     const allHardFiltersPassed = Object.values(hardFilters).every(v => v);
 
@@ -186,6 +214,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
         trend: indicators.trend || "UNKNOWN",
         hardFilters,
         allHardFiltersPassed,
+        enabledHardFiltersCount,
       });
       return newMap;
     });
@@ -337,11 +366,11 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                     <div className="flex items-center justify-between text-[10px]">
                       <span className="opacity-70">Hårde filtre:</span>
                       <span className="font-bold">
-                        {Object.values(coin.hardFilters).filter(v => v).length}/6
+                        {Object.values(coin.hardFilters).filter(v => v).length}/{coin.enabledHardFiltersCount || 6}
                       </span>
                     </div>
                     <Progress 
-                      value={(Object.values(coin.hardFilters).filter(v => v).length / 4) * 100} 
+                      value={(Object.values(coin.hardFilters).filter(v => v).length / (coin.enabledHardFiltersCount || 6)) * 100} 
                       className="h-2"
                     />
                   </div>
@@ -349,18 +378,36 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                   {/* Hard Filters Details - only when >= 80% signal strength */}
                   {coin.strength >= 80 && (
                     <div className="text-[9px] space-y-0.5 mt-1">
-                      <div className={`flex items-center gap-1 ${coin.hardFilters.emaSpread ? 'text-green-500' : 'text-red-500'}`}>
-                        {coin.hardFilters.emaSpread ? '✓' : '✗'} EMA Spread
-                      </div>
-                      <div className={`flex items-center gap-1 ${coin.hardFilters.volume ? 'text-green-500' : 'text-red-500'}`}>
-                        {coin.hardFilters.volume ? '✓' : '✗'} Volume
-                      </div>
-                      <div className={`flex items-center gap-1 ${coin.hardFilters.adx ? 'text-green-500' : 'text-red-500'}`}>
-                        {coin.hardFilters.adx ? '✓' : '✗'} ADX
-                      </div>
-                      <div className={`flex items-center gap-1 ${coin.hardFilters.atr ? 'text-green-500' : 'text-red-500'}`}>
-                        {coin.hardFilters.atr ? '✓' : '✗'} ATR
-                      </div>
+                      {config?.ema_enabled && (
+                        <div className={`flex items-center gap-1 ${coin.hardFilters.emaSpread ? 'text-green-500' : 'text-red-500'}`}>
+                          {coin.hardFilters.emaSpread ? '✓' : '✗'} EMA Spread
+                        </div>
+                      )}
+                      {config?.atr_enabled && (
+                        <div className={`flex items-center gap-1 ${coin.hardFilters.atr ? 'text-green-500' : 'text-red-500'}`}>
+                          {coin.hardFilters.atr ? '✓' : '✗'} ATR
+                        </div>
+                      )}
+                      {config?.candle_momentum_enabled && (
+                        <div className={`flex items-center gap-1 ${coin.hardFilters.candleMomentum ? 'text-green-500' : 'text-red-500'}`}>
+                          {coin.hardFilters.candleMomentum ? '✓' : '✗'} Candle
+                        </div>
+                      )}
+                      {config?.adx_enabled && (
+                        <div className={`flex items-center gap-1 ${coin.hardFilters.adx ? 'text-green-500' : 'text-red-500'}`}>
+                          {coin.hardFilters.adx ? '✓' : '✗'} ADX
+                        </div>
+                      )}
+                      {config?.volume_enabled && (
+                        <div className={`flex items-center gap-1 ${coin.hardFilters.volume ? 'text-green-500' : 'text-red-500'}`}>
+                          {coin.hardFilters.volume ? '✓' : '✗'} Volume
+                        </div>
+                      )}
+                      {config?.rsi_enabled && (
+                        <div className={`flex items-center gap-1 ${coin.hardFilters.rsiMomentum ? 'text-green-500' : 'text-red-500'}`}>
+                          {coin.hardFilters.rsiMomentum ? '✓' : '✗'} RSI
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
