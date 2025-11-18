@@ -337,7 +337,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                     <div className="flex items-center justify-between text-[10px]">
                       <span className="opacity-70">Hårde filtre:</span>
                       <span className="font-bold">
-                        {Object.values(coin.hardFilters).filter(v => v).length}/4
+                        {Object.values(coin.hardFilters).filter(v => v).length}/6
                       </span>
                     </div>
                     <Progress 

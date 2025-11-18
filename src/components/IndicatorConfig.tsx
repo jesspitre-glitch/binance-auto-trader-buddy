@@ -837,7 +837,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           <CardTitle>Signal Settings (Soft Rules)</CardTitle>
           <CardDescription>
             Soft conditions evalueres KUN efter Hard Filters er godkendt<br/>
-            <strong className="text-warning">⚠️ Hard Filters (blokerer alle trades):</strong> EMA Spread, ATR &gt; 0, ADX ≥ threshold, Volume ≥ multiplier
+            <strong className="text-warning">⚠️ Hard Filters (blokerer alle trades):</strong> EMA Spread, ATR (min + &gt;0), Candle Momentum, ADX ≥ threshold, Volume ≥ multiplier, RSI Momentum
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
