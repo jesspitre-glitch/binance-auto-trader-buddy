@@ -69,6 +69,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     atr_enabled: config?.atr_enabled ?? true,
     atr_period: config?.atr_period || 14,
     min_atr: config?.min_atr ?? 0,
+    
+    // Candle Momentum
+    candle_momentum_enabled: config?.candle_momentum_enabled ?? true,
+    min_candle_body_percent: config?.min_candle_body_percent ?? 0.10,
     atr_stop_loss_multiplier: config?.atr_stop_loss_multiplier || 2,
     atr_trailing_stop_multiplier: config?.atr_trailing_stop_multiplier || 1.5,
     break_even_atr: config?.break_even_atr || 1.0,
@@ -150,6 +154,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       atr_enabled: config.atr_enabled ?? true,
       atr_period: config.atr_period ?? 14,
       min_atr: config.min_atr ?? 0,
+      
+      // Candle Momentum
+      candle_momentum_enabled: config.candle_momentum_enabled ?? true,
+      min_candle_body_percent: config.min_candle_body_percent ?? 0.10,
       atr_stop_loss_multiplier: config.atr_stop_loss_multiplier ?? 2,
       atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier ?? 1.5,
       break_even_atr: config.break_even_atr ?? 1.0,
@@ -749,6 +757,36 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               onChange={(e) => setFormData({ ...formData, break_even_atr: parseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Flyt SL til entry når profit = (× ATR)</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Candle Momentum Filter */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Candle Momentum Filter - ⚠️ HARD FILTER</CardTitle>
+            <Switch
+              checked={formData.candle_momentum_enabled}
+              onCheckedChange={(checked) => setFormData({ ...formData, candle_momentum_enabled: checked })}
+            />
+          </div>
+          <CardDescription>
+            Bloker trade hvis det seneste candle er modsat retning af signalet<br/>
+            <strong className="text-warning">LONG kræver: Close &gt; Open | SHORT kræver: Close &lt; Open</strong>
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <Label htmlFor="min_candle_body_percent">Minimum Candle Body (%)</Label>
+            <Input
+              id="min_candle_body_percent"
+              type="number"
+              step="0.01"
+              value={formData.min_candle_body_percent}
+              onChange={(e) => setFormData({ ...formData, min_candle_body_percent: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Bloker hvis candle-kroppen er for lille (ingen kraft). Anbefalet 0.05-0.15%</p>
           </div>
         </CardContent>
       </Card>
