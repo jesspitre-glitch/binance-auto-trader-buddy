@@ -52,6 +52,7 @@ export type Database = {
           max_open_positions: number | null
           max_position_duration_minutes: number | null
           min_atr: number | null
+          min_atr_percent: number | null
           min_candle_body_percent: number | null
           min_ema_spread_percent: number | null
           name: string
@@ -121,6 +122,7 @@ export type Database = {
           max_open_positions?: number | null
           max_position_duration_minutes?: number | null
           min_atr?: number | null
+          min_atr_percent?: number | null
           min_candle_body_percent?: number | null
           min_ema_spread_percent?: number | null
           name: string
@@ -190,6 +192,7 @@ export type Database = {
           max_open_positions?: number | null
           max_position_duration_minutes?: number | null
           min_atr?: number | null
+          min_atr_percent?: number | null
           min_candle_body_percent?: number | null
           min_ema_spread_percent?: number | null
           name?: string
