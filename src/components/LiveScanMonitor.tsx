@@ -26,6 +26,8 @@ interface CoinSignalStrength {
   hardFiltersProgress: Record<string, number>; // 0-100 percentage for each filter
   allHardFiltersPassed: boolean;
   totalEnabledFilters: number;
+  softConditions: Record<string, boolean>; // Hvilke bløde conditions er opfyldt
+  totalEnabledSoftConditions: number;
 }
 
 export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) => {
@@ -141,6 +143,11 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     const hardFilters: Record<string, boolean> = {};
     const hardFiltersProgress: Record<string, number> = {};
     const enabledFilters: string[] = [];
+    
+    // Check BLØDE CONDITIONS fra conditionDetails
+    const softConditions: Record<string, boolean> = {};
+    const conditionDetails = indicators.conditionDetails || {};
+    const trend = result.signal === 'LONG' ? 'long' : result.signal === 'SHORT' ? 'short' : null;
 
     if (config) {
       // EMA Spread Check
@@ -224,6 +231,34 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
 
     const totalEnabledFilters = enabledFilters.length;
     const allHardFiltersPassed = Object.values(hardFilters).every(v => v);
+    
+    // Parse soft conditions fra conditionDetails
+    let totalEnabledSoftConditions = 0;
+    
+    if (conditionDetails.ema?.enabled) {
+      totalEnabledSoftConditions++;
+      softConditions.ema = trend ? conditionDetails.ema[trend] === true : false;
+    }
+    if (conditionDetails.rsi?.enabled) {
+      totalEnabledSoftConditions++;
+      softConditions.rsi = trend ? conditionDetails.rsi[trend] === true : false;
+    }
+    if (conditionDetails.stochRSI?.enabled) {
+      totalEnabledSoftConditions++;
+      softConditions.stochRSI = trend ? conditionDetails.stochRSI[trend] === true : false;
+    }
+    if (conditionDetails.macd?.enabled) {
+      totalEnabledSoftConditions++;
+      softConditions.macd = trend ? conditionDetails.macd[trend] === true : false;
+    }
+    if (conditionDetails.bb?.enabled) {
+      totalEnabledSoftConditions++;
+      softConditions.bb = trend ? conditionDetails.bb[trend] === true : false;
+    }
+    if (conditionDetails.pivotPoints?.enabled) {
+      totalEnabledSoftConditions++;
+      softConditions.pivotPoints = trend ? conditionDetails.pivotPoints[trend] === true : false;
+    }
 
     console.log(`Updating ${result.symbol}: strength=${strength.toFixed(1)}%, conditions=${conditionsMet}/${conditionsRequired}, hardFilters=${JSON.stringify(hardFilters)}`);
 
@@ -242,6 +277,8 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
         hardFiltersProgress,
         allHardFiltersPassed,
         totalEnabledFilters,
+        softConditions,
+        totalEnabledSoftConditions,
       });
       return newMap;
     });
@@ -387,6 +424,61 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                       </Badge>
                     )}
                   </div>
+                  
+                  {/* Soft Conditions Details */}
+                  {coin.totalEnabledSoftConditions > 0 && (
+                    <div className="text-[9px] space-y-1 mt-1.5 border-t border-border/30 pt-1.5">
+                      <div className="opacity-70 font-semibold mb-1">Bløde conditions:</div>
+                      {coin.softConditions.ema !== undefined && (
+                        <div className="flex items-center gap-1.5">
+                          <div className={`w-1.5 h-1.5 rounded-full ${coin.softConditions.ema ? 'bg-green-500' : 'bg-muted'}`} />
+                          <span className={coin.softConditions.ema ? 'text-green-500' : 'opacity-50'}>
+                            EMA Alignment
+                          </span>
+                        </div>
+                      )}
+                      {coin.softConditions.rsi !== undefined && (
+                        <div className="flex items-center gap-1.5">
+                          <div className={`w-1.5 h-1.5 rounded-full ${coin.softConditions.rsi ? 'bg-green-500' : 'bg-muted'}`} />
+                          <span className={coin.softConditions.rsi ? 'text-green-500' : 'opacity-50'}>
+                            RSI Zone
+                          </span>
+                        </div>
+                      )}
+                      {coin.softConditions.stochRSI !== undefined && (
+                        <div className="flex items-center gap-1.5">
+                          <div className={`w-1.5 h-1.5 rounded-full ${coin.softConditions.stochRSI ? 'bg-green-500' : 'bg-muted'}`} />
+                          <span className={coin.softConditions.stochRSI ? 'text-green-500' : 'opacity-50'}>
+                            StochRSI Zone
+                          </span>
+                        </div>
+                      )}
+                      {coin.softConditions.macd !== undefined && (
+                        <div className="flex items-center gap-1.5">
+                          <div className={`w-1.5 h-1.5 rounded-full ${coin.softConditions.macd ? 'bg-green-500' : 'bg-muted'}`} />
+                          <span className={coin.softConditions.macd ? 'text-green-500' : 'opacity-50'}>
+                            MACD Histogram
+                          </span>
+                        </div>
+                      )}
+                      {coin.softConditions.bb !== undefined && (
+                        <div className="flex items-center gap-1.5">
+                          <div className={`w-1.5 h-1.5 rounded-full ${coin.softConditions.bb ? 'bg-green-500' : 'bg-muted'}`} />
+                          <span className={coin.softConditions.bb ? 'text-green-500' : 'opacity-50'}>
+                            Bollinger Bands
+                          </span>
+                        </div>
+                      )}
+                      {coin.softConditions.pivotPoints !== undefined && (
+                        <div className="flex items-center gap-1.5">
+                          <div className={`w-1.5 h-1.5 rounded-full ${coin.softConditions.pivotPoints ? 'bg-green-500' : 'bg-muted'}`} />
+                          <span className={coin.softConditions.pivotPoints ? 'text-green-500' : 'opacity-50'}>
+                            Pivot Points
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   
                   {/* Hard Filters Progress Bar */}
                   {coin.totalEnabledFilters > 0 && (
