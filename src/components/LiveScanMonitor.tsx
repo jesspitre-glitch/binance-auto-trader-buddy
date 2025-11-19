@@ -168,9 +168,10 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     }
     
     // Candle Momentum Check
-    if (config.candle_momentum_enabled) {
-      // Assume passed if data not available - edge function will do actual check
-      hardFilters.candleMomentum = true;
+    if (config.candle_momentum_enabled && indicators.candleMomentumPercent !== null && indicators.candleMomentumPercent !== undefined) {
+      const minBody = config.min_candle_body_percent || 0.3;
+      // Check if candle momentum is strong enough for either direction
+      hardFilters.candleMomentum = Math.abs(indicators.candleMomentumPercent) >= minBody;
     }
     
     // ADX Check
@@ -184,9 +185,11 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     }
     
     // RSI Momentum Check
-    if (config.rsi_enabled) {
-      // Assume passed if data not available - edge function will do actual check
-      hardFilters.rsiMomentum = true;
+    if (config.rsi_enabled && indicators.rsi !== null && indicators.rsi !== undefined) {
+      // Check if RSI is in valid range for either LONG or SHORT
+      const isValidForLong = indicators.rsi >= config.rsi_min_long && indicators.rsi <= (config.rsi_min_long + config.rsi_zone_width);
+      const isValidForShort = indicators.rsi <= config.rsi_max_short && indicators.rsi >= (config.rsi_max_short - config.rsi_zone_width);
+      hardFilters.rsiMomentum = isValidForLong || isValidForShort;
     }
 
     // Count how many hard filters are actually enabled in config
