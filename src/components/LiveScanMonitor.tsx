@@ -137,54 +137,58 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
       return;
     }
 
+    // CRITICAL: Don't update if config not loaded yet - prevents false positives
+    if (!config) {
+      console.log(`Config not loaded yet for ${result.symbol}, skipping update`);
+      return;
+    }
+
     const indicators = result.indicators;
     const conditionsMet = indicators.conditionsMet || 0;
-    const conditionsRequired = config?.signal_conditions_required || 5;
+    const conditionsRequired = config.signal_conditions_required || 5;
     const strength = (conditionsMet / conditionsRequired) * 100;
 
-    // Check HÅRDE FILTRE
+    // Initialize HÅRDE FILTRE to false by default - must prove they pass
     const hardFilters = {
-      emaSpread: true,
-      atr: true,
-      candleMomentum: true,
-      adx: true,
-      volume: true,
-      rsiMomentum: true,
+      emaSpread: !config.ema_enabled, // If disabled, it passes by default
+      atr: !config.atr_enabled,
+      candleMomentum: !config.candle_momentum_enabled,
+      adx: !config.adx_enabled,
+      volume: !config.volume_enabled,
+      rsiMomentum: !config.rsi_enabled,
     };
 
-    // Only check filters that are enabled
-    if (config) {
-      // EMA Spread Check
-      if (config.ema_enabled && indicators.emaSpreadPercent !== undefined) {
-        hardFilters.emaSpread = indicators.emaSpreadPercent >= config.min_ema_spread_percent;
-      }
-      
-      // ATR Check
-      if (config.atr_enabled && indicators.atr !== null && indicators.atr !== undefined) {
-        hardFilters.atr = indicators.atr > 0 && (config.min_atr === 0 || indicators.atr >= config.min_atr);
-      }
-      
-      // Candle Momentum Check
-      if (config.candle_momentum_enabled) {
-        // Assume passed if data not available - edge function will do actual check
-        hardFilters.candleMomentum = true;
-      }
-      
-      // ADX Check
-      if (config.adx_enabled && indicators.adx !== null && indicators.adx !== undefined) {
-        hardFilters.adx = indicators.adx >= config.adx_threshold;
-      }
-      
-      // Volume Check
-      if (config.volume_enabled && indicators.volumeRatio !== null && indicators.volumeRatio !== undefined) {
-        hardFilters.volume = indicators.volumeRatio >= config.volume_multiplier;
-      }
-      
-      // RSI Momentum Check
-      if (config.rsi_enabled) {
-        // Assume passed if data not available - edge function will do actual check
-        hardFilters.rsiMomentum = true;
-      }
+    // Check each enabled filter
+    // EMA Spread Check
+    if (config.ema_enabled && indicators.emaSpreadPercent !== undefined) {
+      hardFilters.emaSpread = indicators.emaSpreadPercent >= config.min_ema_spread_percent;
+    }
+    
+    // ATR Check
+    if (config.atr_enabled && indicators.atr !== null && indicators.atr !== undefined) {
+      hardFilters.atr = indicators.atr > 0 && (config.min_atr === 0 || indicators.atr >= config.min_atr);
+    }
+    
+    // Candle Momentum Check
+    if (config.candle_momentum_enabled) {
+      // Assume passed if data not available - edge function will do actual check
+      hardFilters.candleMomentum = true;
+    }
+    
+    // ADX Check
+    if (config.adx_enabled && indicators.adx !== null && indicators.adx !== undefined) {
+      hardFilters.adx = indicators.adx >= config.adx_threshold;
+    }
+    
+    // Volume Check
+    if (config.volume_enabled && indicators.volumeRatio !== null && indicators.volumeRatio !== undefined) {
+      hardFilters.volume = indicators.volumeRatio >= config.volume_multiplier;
+    }
+    
+    // RSI Momentum Check
+    if (config.rsi_enabled) {
+      // Assume passed if data not available - edge function will do actual check
+      hardFilters.rsiMomentum = true;
     }
 
     // Count how many hard filters are actually enabled in config
