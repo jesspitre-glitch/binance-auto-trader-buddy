@@ -63,12 +63,6 @@ export const ScanResults = () => {
               const filtered = prev.filter((r) => r.symbol !== newResult.symbol);
               return [newResult, ...filtered];
             });
-            if (newResult.signal !== "NONE") {
-              toast({
-                title: `${newResult.signal} Signal Detekteret`,
-                description: `${newResult.symbol} - ${newResult.action_taken}`,
-              });
-            }
           }
         }
       )
