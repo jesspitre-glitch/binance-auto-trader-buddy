@@ -145,6 +145,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
       atr: true,
       adx: true,
       volume: true,
+      rsiMomentum: true,
     };
 
     if (config) {
@@ -166,6 +167,16 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
       // Volume Check
       if (config.volume_enabled && indicators.volumeRatio !== null && indicators.volumeRatio !== undefined) {
         hardFilters.volume = indicators.volumeRatio >= config.volume_multiplier;
+      }
+      
+      // RSI Momentum Check (zone + momentum)
+      if (config.rsi_enabled && indicators.rsi !== null && indicators.rsi !== undefined) {
+        const rsiZoneWidth = config.rsi_zone_width || 10;
+        const rsiInLongZone = indicators.rsi >= config.rsi_min_long && indicators.rsi <= (config.rsi_min_long + rsiZoneWidth);
+        const rsiInShortZone = indicators.rsi <= config.rsi_max_short && indicators.rsi >= (config.rsi_max_short - rsiZoneWidth);
+        
+        // RSI momentum passerer hvis i en af zonerne (eller hvis begge er opfyldt via momentum)
+        hardFilters.rsiMomentum = rsiInLongZone || rsiInShortZone;
       }
     }
 
