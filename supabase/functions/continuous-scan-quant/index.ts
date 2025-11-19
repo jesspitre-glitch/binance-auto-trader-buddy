@@ -8,7 +8,6 @@ const corsHeaders = {
 
 let isScanning = false;
 let loopPromise: Promise<void> | null = null;
-let loopController: AbortController | null = null;
 
 async function scanLoop(intervalMs: number) {
   const supabaseClient = createClient(
@@ -16,36 +15,24 @@ async function scanLoop(intervalMs: number) {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
 
-  console.log('[continuous-scan] Loop started with interval:', intervalMs);
-  
   while (isScanning) {
     try {
       const start = Date.now();
-      console.log(`[continuous-scan] Invoking auto-trade-quant... isScanning=${isScanning}`);
+      console.log(`[continuous-scan] Invoking auto-trade-quant...`);
       const { data, error } = await supabaseClient.functions.invoke('auto-trade-quant');
       if (error) {
         console.error('[continuous-scan] auto-trade-quant error:', error);
       } else {
         console.log('[continuous-scan] Scan completed');
       }
-      
-      // Check again before waiting
-      if (!isScanning) {
-        console.log('[continuous-scan] Stop flag detected, breaking loop');
-        break;
-      }
-      
       const elapsed = Date.now() - start;
       const wait = Math.max(250, intervalMs - elapsed);
       await new Promise((r) => setTimeout(r, wait));
     } catch (err) {
       console.error('[continuous-scan] Unexpected error:', err);
-      if (!isScanning) break;
       await new Promise((r) => setTimeout(r, 1000));
     }
   }
-  
-  console.log('[continuous-scan] Loop stopped');
 }
 
 serve(async (req) => {
@@ -70,38 +57,21 @@ serve(async (req) => {
 
     if (action === 'start') {
       if (isScanning) {
-        console.log('[continuous-scan] Already running, ignoring start request');
         return new Response(JSON.stringify({ status: 'active', message: 'Already running' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      
-      console.log('[continuous-scan] Starting scanner with interval:', intervalMs);
       isScanning = true;
-      loopController = new AbortController();
       loopPromise = scanLoop(intervalMs);
-      
       return new Response(JSON.stringify({ status: 'active', interval_ms: intervalMs }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     if (action === 'stop') {
-      console.log('[continuous-scan] Stop requested, isScanning before:', isScanning);
       isScanning = false;
-      
-      // Give loop time to detect stop flag
-      if (loopPromise) {
-        await Promise.race([
-          loopPromise,
-          new Promise((r) => setTimeout(r, 2000)) // Max 2s wait
-        ]).catch(() => {});
-      }
-      
+      await loopPromise?.catch(() => {});
       loopPromise = null;
-      loopController = null;
-      console.log('[continuous-scan] Stop completed');
-      
       return new Response(JSON.stringify({ status: 'stopped' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

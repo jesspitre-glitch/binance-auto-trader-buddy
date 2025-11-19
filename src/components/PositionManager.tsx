@@ -177,24 +177,13 @@ export const PositionManager = () => {
                           const trailingPercent = position.trailing_stop_percent || 2.0;
                           const trailingStopPrice = Number(position.trailing_stop);
                           
-                          // Only show as "AKTIV" if peak_price has moved from entry (i.e., protecting profits)
-                          const isTrailingActive = position.peak_price && 
-                            ((position.side === 'LONG' && Number(position.peak_price) > position.entry_price) ||
-                             (position.side === 'SHORT' && Number(position.peak_price) < position.entry_price));
-                          
                           return (
                             <div className="border-t pt-2 mt-2 space-y-1">
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-semibold">Trailing Stop:</span>
-                                {isTrailingActive ? (
-                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-profit/10 text-profit border-profit/20">
-                                    AKTIV
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground">
-                                    STANDBY
-                                  </Badge>
-                                )}
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-profit/10 text-profit border-profit/20">
+                                  AKTIV
+                                </Badge>
                               </div>
                               <div className="text-sm font-mono font-bold text-foreground">
                                 ${trailingStopPrice.toFixed(4)}

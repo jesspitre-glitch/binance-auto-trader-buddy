@@ -20,12 +20,14 @@ interface CoinSignalStrength {
   conditionsMet: number;
   conditionsRequired: number;
   lastUpdate: string;
-  allHardFiltersPassed: boolean;
-  hardFiltersCount: {
-    passed: number;
-    total: number;
+  trend: string;
+  hardFilters: {
+    emaSpread: boolean;
+    atr: boolean;
+    adx: boolean;
+    volume: boolean;
   };
-  trendBlocking: boolean;
+  allHardFiltersPassed: boolean;
 }
 
 export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) => {
@@ -41,10 +43,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     }).catch(console.error);
 
     const initMonitor = async () => {
-      // CRITICAL: Load config FIRST before fetching scans
       await fetchConfig();
-      // Small delay to ensure config is set in state
-      await new Promise(resolve => setTimeout(resolve, 100));
       await fetchInitialScans();
     };
 
@@ -135,91 +134,44 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
       return;
     }
 
-    // CRITICAL: Don't update if config not loaded yet - prevents false positives
-    if (!config) {
-      console.log(`Config not loaded yet for ${result.symbol}, skipping update`);
-      return;
-    }
-
     const indicators = result.indicators;
     const conditionsMet = indicators.conditionsMet || 0;
-    const conditionsRequired = config.signal_conditions_required || 5;
+    const conditionsRequired = config?.signal_conditions_required || 5;
     const strength = (conditionsMet / conditionsRequired) * 100;
 
-    // Initialize HÅRDE FILTRE to false by default - must prove they pass
+    // Check HÅRDE FILTRE
     const hardFilters = {
-      emaSpread: !config.ema_enabled, // If disabled, it passes by default
-      atr: !config.atr_enabled,
-      candleMomentum: !config.candle_momentum_enabled,
-      adx: !config.adx_enabled,
-      volume: !config.volume_enabled,
-      rsiMomentum: !config.rsi_enabled,
+      emaSpread: true,
+      atr: true,
+      adx: true,
+      volume: true,
     };
 
-    // Check each enabled filter
-    // EMA Spread Check
-    if (config.ema_enabled && indicators.emaSpreadPercent !== undefined) {
-      hardFilters.emaSpread = indicators.emaSpreadPercent >= config.min_ema_spread_percent;
-    }
-    
-    // ATR Check
-    if (config.atr_enabled && indicators.atr !== null && indicators.atr !== undefined) {
-      hardFilters.atr = indicators.atr > 0 && (config.min_atr === 0 || indicators.atr >= config.min_atr);
-    }
-    
-    // Candle Momentum Check
-    if (config.candle_momentum_enabled && indicators.candleMomentumPercent !== null && indicators.candleMomentumPercent !== undefined) {
-      const minBody = config.min_candle_body_percent || 0.3;
-      // Check if candle momentum is strong enough for either direction
-      hardFilters.candleMomentum = Math.abs(indicators.candleMomentumPercent) >= minBody;
-    }
-    
-    // ADX Check
-    if (config.adx_enabled && indicators.adx !== null && indicators.adx !== undefined) {
-      hardFilters.adx = indicators.adx >= config.adx_threshold;
-    }
-    
-    // Volume Check
-    if (config.volume_enabled && indicators.volumeRatio !== null && indicators.volumeRatio !== undefined) {
-      hardFilters.volume = indicators.volumeRatio >= config.volume_multiplier;
-    }
-    
-    // RSI Momentum Check
-    if (config.rsi_enabled && indicators.rsi !== null && indicators.rsi !== undefined) {
-      // Check if RSI is in valid range for either LONG or SHORT
-      const isValidForLong = indicators.rsi >= config.rsi_min_long && indicators.rsi <= (config.rsi_min_long + config.rsi_zone_width);
-      const isValidForShort = indicators.rsi <= config.rsi_max_short && indicators.rsi >= (config.rsi_max_short - config.rsi_zone_width);
-      hardFilters.rsiMomentum = isValidForLong || isValidForShort;
+    if (config) {
+      // EMA Spread Check
+      if (config.ema_enabled && indicators.emaSpreadPercent !== undefined) {
+        hardFilters.emaSpread = indicators.emaSpreadPercent >= config.min_ema_spread_percent;
+      }
+      
+      // ATR Check
+      if (config.atr_enabled && indicators.atr !== null && indicators.atr !== undefined) {
+        hardFilters.atr = indicators.atr > 0;
+      }
+      
+      // ADX Check
+      if (config.adx_enabled && indicators.adx !== null && indicators.adx !== undefined) {
+        hardFilters.adx = indicators.adx >= config.adx_threshold;
+      }
+      
+      // Volume Check
+      if (config.volume_enabled && indicators.volumeRatio !== null && indicators.volumeRatio !== undefined) {
+        hardFilters.volume = indicators.volumeRatio >= config.volume_multiplier;
+      }
     }
 
-    // Count how many hard filters are actually enabled in config
-    const enabledHardFiltersCount = [
-      config?.ema_enabled,
-      config?.atr_enabled,
-      config?.candle_momentum_enabled,
-      config?.adx_enabled,
-      config?.volume_enabled,
-      config?.rsi_enabled,
-    ].filter(Boolean).length;
+    const allHardFiltersPassed = Object.values(hardFilters).every(v => v);
 
-    // Count how many of the ENABLED filters actually passed
-    const passedHardFiltersCount = [
-      config?.ema_enabled && hardFilters.emaSpread,
-      config?.atr_enabled && hardFilters.atr,
-      config?.candle_momentum_enabled && hardFilters.candleMomentum,
-      config?.adx_enabled && hardFilters.adx,
-      config?.volume_enabled && hardFilters.volume,
-      config?.rsi_enabled && hardFilters.rsiMomentum,
-    ].filter(Boolean).length;
-
-    const allHardFiltersPassed = passedHardFiltersCount === enabledHardFiltersCount;
-    
-    // Check trend filter (blocks trades if wrong direction)
-    const trend = indicators.trend || 'NEUTRAL';
-    const trendBlocking = (result.signal === 'LONG' && trend !== 'BULLISH') || 
-                          (result.signal === 'SHORT' && trend !== 'BEARISH');
-
-    console.log(`Updating ${result.symbol}: strength=${strength.toFixed(1)}%, conditions=${conditionsMet}/${conditionsRequired}, hardFilters=${passedHardFiltersCount}/${enabledHardFiltersCount}, trend=${trend}, trendBlocking=${trendBlocking}`);
+    console.log(`Updating ${result.symbol}: strength=${strength.toFixed(1)}%, conditions=${conditionsMet}/${conditionsRequired}, hardFilters=${JSON.stringify(hardFilters)}`);
 
     setCoins((prev) => {
       const newMap = new Map(prev);
@@ -231,12 +183,9 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
         conditionsMet,
         conditionsRequired,
         lastUpdate: result.created_at,
+        trend: indicators.trend || "UNKNOWN",
+        hardFilters,
         allHardFiltersPassed,
-        hardFiltersCount: {
-          passed: passedHardFiltersCount,
-          total: enabledHardFiltersCount,
-        },
-        trendBlocking,
       });
       return newMap;
     });
@@ -316,9 +265,9 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                   <div className="font-bold text-sm truncate flex-1 min-w-0">
                     {coin.symbol}
                   </div>
-                  {coin.indicators.trend === "BULLISH" ? (
+                  {coin.trend === "BULLISH" ? (
                     <TrendingUp className="h-4 w-4 flex-shrink-0" />
-                  ) : coin.indicators.trend === "BEARISH" ? (
+                  ) : coin.trend === "BEARISH" ? (
                     <TrendingDown className="h-4 w-4 flex-shrink-0" />
                   ) : null}
                 </div>
@@ -332,7 +281,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                   })}</span>
                   {coin.signal === 'NONE' && coin.strength >= 80 && (
                     <Badge variant="outline" className="h-3 px-1 text-[8px] border-muted">
-                      {coin.indicators.trend || 'NEUTRAL'}
+                      {coin.trend}
                     </Badge>
                   )}
                 </div>
@@ -388,24 +337,29 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                     <div className="flex items-center justify-between text-[10px]">
                       <span className="opacity-70">Hårde filtre:</span>
                       <span className="font-bold">
-                        {coin.hardFiltersCount.passed}/{coin.hardFiltersCount.total}
+                        {Object.values(coin.hardFilters).filter(v => v).length}/4
                       </span>
                     </div>
                     <Progress 
-                      value={coin.hardFiltersCount.total > 0 ? (coin.hardFiltersCount.passed / coin.hardFiltersCount.total) * 100 : 0} 
+                      value={(Object.values(coin.hardFilters).filter(v => v).length / 4) * 100} 
                       className="h-2"
                     />
                   </div>
                   
-                  {/* Trend Blocking Warning */}
-                  {coin.trendBlocking && coin.allHardFiltersPassed && (
-                    <div className="mt-2 p-1.5 bg-yellow-500/10 border border-yellow-500/30 rounded text-[9px]">
-                      <div className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
-                        <Activity className="h-3 w-3" />
-                        <span className="font-medium">Trend blokerer</span>
+                  {/* Hard Filters Details - only when >= 80% signal strength */}
+                  {coin.strength >= 80 && (
+                    <div className="text-[9px] space-y-0.5 mt-1">
+                      <div className={`flex items-center gap-1 ${coin.hardFilters.emaSpread ? 'text-green-500' : 'text-red-500'}`}>
+                        {coin.hardFilters.emaSpread ? '✓' : '✗'} EMA Spread
                       </div>
-                      <div className="opacity-70 mt-0.5">
-                        Markedet er {coin.indicators.trend}, men kun {coin.signal === 'LONG' ? 'LONG' : 'SHORT'} er aktiveret
+                      <div className={`flex items-center gap-1 ${coin.hardFilters.volume ? 'text-green-500' : 'text-red-500'}`}>
+                        {coin.hardFilters.volume ? '✓' : '✗'} Volume
+                      </div>
+                      <div className={`flex items-center gap-1 ${coin.hardFilters.adx ? 'text-green-500' : 'text-red-500'}`}>
+                        {coin.hardFilters.adx ? '✓' : '✗'} ADX
+                      </div>
+                      <div className={`flex items-center gap-1 ${coin.hardFilters.atr ? 'text-green-500' : 'text-red-500'}`}>
+                        {coin.hardFilters.atr ? '✓' : '✗'} ATR
                       </div>
                     </div>
                   )}

@@ -42,8 +42,6 @@ interface IndicatorConfig {
   atr_enabled: boolean;
   atr_period: number;
   min_atr: number;
-  candle_momentum_enabled: boolean;
-  min_candle_body_percent: number;
   atr_stop_loss_multiplier: number;
   atr_take_profit_multiplier: number;
   atr_trailing_stop_multiplier: number;
@@ -522,7 +520,6 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       atr: { passed: true, value: '', reason: '' },
       adx: { passed: true, value: '', reason: '' },
       volume: { passed: true, value: '', reason: '' },
-      candleMomentum: { passed: true, value: '', reason: '' },
       rsiMomentum: { passed: true, long: false, short: false, reason: '' },
     },
     soft: {
@@ -559,39 +556,6 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     } else if (config.min_atr > 0 && atr < config.min_atr) {
       filterStatus.hard.atr.passed = false;
       filterStatus.hard.atr.reason = `ATR ${atr.toFixed(6)} < ${config.min_atr.toFixed(6)} (lav volatilitet)`;
-    }
-  }
-  
-  // 2.5️⃣ CANDLE MOMENTUM - HARD
-  let candleLongOK = true;
-  let candleShortOK = true;
-  
-  if (config.candle_momentum_enabled) {
-    const latestCandle = klines[klines.length - 1];
-    const open = parseFloat(latestCandle[1]);
-    const close = parseFloat(latestCandle[4]);
-    const candleBodyPercent = Math.abs((close - open) / open) * 100;
-    
-    const isBullishCandle = close > open;
-    const isBearishCandle = close < open;
-    
-    filterStatus.hard.candleMomentum.value = `${candleBodyPercent.toFixed(3)}%`;
-    
-    // Check minimum candle body size
-    if (candleBodyPercent < config.min_candle_body_percent) {
-      filterStatus.hard.candleMomentum.passed = false;
-      filterStatus.hard.candleMomentum.reason = `Candle body ${candleBodyPercent.toFixed(3)}% < ${config.min_candle_body_percent}% (for svag)`;
-      candleLongOK = false;
-      candleShortOK = false;
-    } else {
-      // Check candle direction for each signal type
-      candleLongOK = isBullishCandle; // LONG requires bullish candle
-      candleShortOK = isBearishCandle; // SHORT requires bearish candle
-      
-      if (!candleLongOK && !candleShortOK) {
-        filterStatus.hard.candleMomentum.passed = false;
-        filterStatus.hard.candleMomentum.reason = `Doji candle (ingen klar retning)`;
-      }
     }
   }
   
@@ -678,7 +642,6 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   console.log(`\n🔴 HÅRDE FILTRE (blokerer trade):`);
   console.log(`   📏 EMA Spread: ${filterStatus.hard.emaSpread.passed ? '✅' : '❌'} ${filterStatus.hard.emaSpread.value} ${filterStatus.hard.emaSpread.reason ? `- ${filterStatus.hard.emaSpread.reason}` : ''}`);
   console.log(`   📊 ATR: ${filterStatus.hard.atr.passed ? '✅' : '❌'} ${filterStatus.hard.atr.value} ${filterStatus.hard.atr.reason ? `- ${filterStatus.hard.atr.reason}` : ''}`);
-  console.log(`   🕯️ Candle Momentum: ${filterStatus.hard.candleMomentum.passed ? '✅' : '❌'} ${filterStatus.hard.candleMomentum.value} ${filterStatus.hard.candleMomentum.reason ? `- ${filterStatus.hard.candleMomentum.reason}` : ''} Long:${candleLongOK ? '✅' : '❌'} Short:${candleShortOK ? '✅' : '❌'}`);
   console.log(`   📈 ADX: ${filterStatus.hard.adx.passed ? '✅' : '❌'} ${filterStatus.hard.adx.value} ${filterStatus.hard.adx.reason ? `- ${filterStatus.hard.adx.reason}` : ''}`);
   console.log(`   🔊 Volume: ${filterStatus.hard.volume.passed ? '✅' : '❌'} ${filterStatus.hard.volume.value} ${filterStatus.hard.volume.reason ? `- ${filterStatus.hard.volume.reason}` : ''}`);
   console.log(`   🎯 RSI Momentum: ${filterStatus.hard.rsiMomentum.passed ? '✅' : '❌'} Long: ${filterStatus.hard.rsiMomentum.long ? '✅' : '❌'} Short: ${filterStatus.hard.rsiMomentum.short ? '✅' : '❌'} ${filterStatus.hard.rsiMomentum.reason ? `- ${filterStatus.hard.rsiMomentum.reason}` : ''}`);
@@ -693,7 +656,6 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   
   const hardFiltersPass = filterStatus.hard.emaSpread.passed && 
                           filterStatus.hard.atr.passed && 
-                          filterStatus.hard.candleMomentum.passed &&
                           filterStatus.hard.adx.passed && 
                           filterStatus.hard.volume.passed && 
                           filterStatus.hard.rsiMomentum.passed;
@@ -872,8 +834,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   const longConditionsMet = longConditions.filter(c => c).length;
   const shortConditionsMet = shortConditions.filter(c => c).length;
 
-  const longSignal = longConditionsMet >= requiredConditions && candleLongOK;
-  const shortSignal = shortConditionsMet >= requiredConditions && candleShortOK;
+  const longSignal = longConditionsMet >= requiredConditions;
+  const shortSignal = shortConditionsMet >= requiredConditions;
   
   // Calculate conditions met for signal strength
   const conditionsMet = Math.max(longConditionsMet, shortConditionsMet);
