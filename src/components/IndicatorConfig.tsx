@@ -624,7 +624,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           </div>
 
           <div className="flex items-center justify-between sm:col-span-4">
-            <Label htmlFor="histogram_momentum_enabled">Histogram Momentum Shift (blød)</Label>
+            <Label htmlFor="histogram_momentum_enabled">Histogram Momentum Shift (HÅRD filter modifier)</Label>
             <Switch
               id="histogram_momentum_enabled"
               checked={formData.histogram_momentum_enabled}
