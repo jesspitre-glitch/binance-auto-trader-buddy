@@ -42,6 +42,7 @@ interface IndicatorConfig {
   atr_enabled: boolean;
   atr_period: number;
   min_atr: number;
+  min_atr_percent: number;
   atr_stop_loss_multiplier: number;
   atr_take_profit_multiplier: number;
   atr_trailing_stop_multiplier: number;
@@ -557,6 +558,13 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     } else if (config.min_atr > 0 && atr < config.min_atr) {
       filterStatus.hard.atr.passed = false;
       filterStatus.hard.atr.reason = `ATR ${atr.toFixed(6)} < ${config.min_atr.toFixed(6)} (lav volatilitet)`;
+    } else if (config.min_atr_percent > 0) {
+      // Beregn ATR som procent af pris
+      const atrPercent = (atr / currentPrice) * 100;
+      if (atrPercent < config.min_atr_percent) {
+        filterStatus.hard.atr.passed = false;
+        filterStatus.hard.atr.reason = `ATR% ${atrPercent.toFixed(3)}% < ${config.min_atr_percent}% (for lav volatilitet i forhold til pris)`;
+      }
     }
   }
   
