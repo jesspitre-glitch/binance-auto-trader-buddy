@@ -21,14 +21,9 @@ interface CoinSignalStrength {
   conditionsRequired: number;
   lastUpdate: string;
   trend: string;
-  hardFilters: {
-    emaSpread: boolean;
-    atr: boolean;
-    adx: boolean;
-    volume: boolean;
-    rsiMomentum: boolean;
-  };
+  hardFilters: Record<string, boolean>;
   allHardFiltersPassed: boolean;
+  totalEnabledFilters: number;
 }
 
 export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) => {
@@ -140,47 +135,68 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     const conditionsRequired = Math.max(config?.signal_conditions_required || 5, conditionsMet);
     const strength = Math.min((conditionsMet / conditionsRequired) * 100, 100);
 
-    // Check HÅRDE FILTRE
-    const hardFilters = {
-      emaSpread: true,
-      atr: true,
-      adx: true,
-      volume: true,
-      rsiMomentum: true,
-    };
+    // Check HÅRDE FILTRE - kun inkluder dem der er enabled
+    const hardFilters: Record<string, boolean> = {};
+    const enabledFilters: string[] = [];
 
     if (config) {
       // EMA Spread Check
-      if (config.ema_enabled && indicators.emaSpreadPercent !== undefined) {
-        hardFilters.emaSpread = indicators.emaSpreadPercent >= config.min_ema_spread_percent;
+      if (config.ema_enabled) {
+        enabledFilters.push('emaSpread');
+        if (indicators.emaSpreadPercent !== undefined) {
+          hardFilters.emaSpread = indicators.emaSpreadPercent >= config.min_ema_spread_percent;
+        } else {
+          hardFilters.emaSpread = false;
+        }
       }
       
       // ATR Check (inkl. Minimum ATR)
-      if (config.atr_enabled && indicators.atr !== null && indicators.atr !== undefined) {
-        hardFilters.atr = indicators.atr > 0 && indicators.atr >= (config.min_atr || 0);
+      if (config.atr_enabled) {
+        enabledFilters.push('atr');
+        if (indicators.atr !== null && indicators.atr !== undefined) {
+          hardFilters.atr = indicators.atr > 0 && indicators.atr >= (config.min_atr || 0);
+        } else {
+          hardFilters.atr = false;
+        }
       }
       
       // ADX Check
-      if (config.adx_enabled && indicators.adx !== null && indicators.adx !== undefined) {
-        hardFilters.adx = indicators.adx >= config.adx_threshold;
+      if (config.adx_enabled) {
+        enabledFilters.push('adx');
+        if (indicators.adx !== null && indicators.adx !== undefined) {
+          hardFilters.adx = indicators.adx >= config.adx_threshold;
+        } else {
+          hardFilters.adx = false;
+        }
       }
       
       // Volume Check
-      if (config.volume_enabled && indicators.volumeRatio !== null && indicators.volumeRatio !== undefined) {
-        hardFilters.volume = indicators.volumeRatio >= config.volume_multiplier;
+      if (config.volume_enabled) {
+        enabledFilters.push('volume');
+        if (indicators.volumeRatio !== null && indicators.volumeRatio !== undefined) {
+          hardFilters.volume = indicators.volumeRatio >= config.volume_multiplier;
+        } else {
+          hardFilters.volume = false;
+        }
       }
       
       // RSI Momentum Check (zone + momentum)
-      if (config.rsi_enabled && indicators.rsi !== null && indicators.rsi !== undefined) {
-        const rsiZoneWidth = config.rsi_zone_width || 10;
-        const rsiInLongZone = indicators.rsi >= config.rsi_min_long && indicators.rsi <= (config.rsi_min_long + rsiZoneWidth);
-        const rsiInShortZone = indicators.rsi <= config.rsi_max_short && indicators.rsi >= (config.rsi_max_short - rsiZoneWidth);
-        
-        // RSI momentum passerer hvis i en af zonerne (eller hvis begge er opfyldt via momentum)
-        hardFilters.rsiMomentum = rsiInLongZone || rsiInShortZone;
+      if (config.rsi_enabled) {
+        enabledFilters.push('rsiMomentum');
+        if (indicators.rsi !== null && indicators.rsi !== undefined) {
+          const rsiZoneWidth = config.rsi_zone_width || 10;
+          const rsiInLongZone = indicators.rsi >= config.rsi_min_long && indicators.rsi <= (config.rsi_min_long + rsiZoneWidth);
+          const rsiInShortZone = indicators.rsi <= config.rsi_max_short && indicators.rsi >= (config.rsi_max_short - rsiZoneWidth);
+          
+          // RSI momentum passerer hvis i en af zonerne (eller hvis begge er opfyldt via momentum)
+          hardFilters.rsiMomentum = rsiInLongZone || rsiInShortZone;
+        } else {
+          hardFilters.rsiMomentum = false;
+        }
       }
     }
 
+    const totalEnabledFilters = enabledFilters.length;
     const allHardFiltersPassed = Object.values(hardFilters).every(v => v);
 
     console.log(`Updating ${result.symbol}: strength=${strength.toFixed(1)}%, conditions=${conditionsMet}/${conditionsRequired}, hardFilters=${JSON.stringify(hardFilters)}`);
@@ -198,6 +214,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
         trend: indicators.trend || "UNKNOWN",
         hardFilters,
         allHardFiltersPassed,
+        totalEnabledFilters,
       });
       return newMap;
     });
@@ -345,37 +362,49 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                   </div>
                   
                   {/* Hard Filters Progress Bar */}
-                  <div className="space-y-1 mt-2">
-                  <div className="flex items-center justify-between text-[10px]">
-                    <span className="opacity-70">Hårde filtre:</span>
-                    <span className="font-bold">
-                      {Object.values(coin.hardFilters).filter(v => v).length}/5
-                    </span>
-                  </div>
-                  <Progress 
-                    value={(Object.values(coin.hardFilters).filter(v => v).length / 5) * 100} 
-                    className="h-2"
-                  />
-                  </div>
+                  {coin.totalEnabledFilters > 0 && (
+                    <div className="space-y-1 mt-2">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="opacity-70">Hårde filtre:</span>
+                        <span className="font-bold">
+                          {Object.values(coin.hardFilters).filter(v => v).length}/{coin.totalEnabledFilters}
+                        </span>
+                      </div>
+                      <Progress 
+                        value={(Object.values(coin.hardFilters).filter(v => v).length / coin.totalEnabledFilters) * 100} 
+                        className="h-2"
+                      />
+                    </div>
+                  )}
                   
                   {/* Hard Filters Details - only when >= 80% signal strength */}
-                  {coin.strength >= 80 && (
+                  {coin.strength >= 80 && coin.totalEnabledFilters > 0 && (
                     <div className="text-[9px] space-y-0.5 mt-1">
-                      <div className={`flex items-center gap-1 ${coin.hardFilters.emaSpread ? 'text-green-500' : 'text-red-500'}`}>
-                        {coin.hardFilters.emaSpread ? '✓' : '✗'} EMA Spread
-                      </div>
-                      <div className={`flex items-center gap-1 ${coin.hardFilters.volume ? 'text-green-500' : 'text-red-500'}`}>
-                        {coin.hardFilters.volume ? '✓' : '✗'} Volume
-                      </div>
-                      <div className={`flex items-center gap-1 ${coin.hardFilters.adx ? 'text-green-500' : 'text-red-500'}`}>
-                        {coin.hardFilters.adx ? '✓' : '✗'} ADX
-                      </div>
-                      <div className={`flex items-center gap-1 ${coin.hardFilters.atr ? 'text-green-500' : 'text-red-500'}`}>
-                        {coin.hardFilters.atr ? '✓' : '✗'} ATR
-                      </div>
-                      <div className={`flex items-center gap-1 ${coin.hardFilters.rsiMomentum ? 'text-green-500' : 'text-red-500'}`}>
-                        {coin.hardFilters.rsiMomentum ? '✓' : '✗'} RSI Momentum
-                      </div>
+                      {coin.hardFilters.emaSpread !== undefined && (
+                        <div className={`flex items-center gap-1 ${coin.hardFilters.emaSpread ? 'text-green-500' : 'text-red-500'}`}>
+                          {coin.hardFilters.emaSpread ? '✓' : '✗'} EMA Spread
+                        </div>
+                      )}
+                      {coin.hardFilters.volume !== undefined && (
+                        <div className={`flex items-center gap-1 ${coin.hardFilters.volume ? 'text-green-500' : 'text-red-500'}`}>
+                          {coin.hardFilters.volume ? '✓' : '✗'} Volume
+                        </div>
+                      )}
+                      {coin.hardFilters.adx !== undefined && (
+                        <div className={`flex items-center gap-1 ${coin.hardFilters.adx ? 'text-green-500' : 'text-red-500'}`}>
+                          {coin.hardFilters.adx ? '✓' : '✗'} ADX
+                        </div>
+                      )}
+                      {coin.hardFilters.atr !== undefined && (
+                        <div className={`flex items-center gap-1 ${coin.hardFilters.atr ? 'text-green-500' : 'text-red-500'}`}>
+                          {coin.hardFilters.atr ? '✓' : '✗'} ATR
+                        </div>
+                      )}
+                      {coin.hardFilters.rsiMomentum !== undefined && (
+                        <div className={`flex items-center gap-1 ${coin.hardFilters.rsiMomentum ? 'text-green-500' : 'text-red-500'}`}>
+                          {coin.hardFilters.rsiMomentum ? '✓' : '✗'} RSI Momentum
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
