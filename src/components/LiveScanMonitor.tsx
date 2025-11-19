@@ -136,8 +136,8 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
 
     const indicators = result.indicators;
     const conditionsMet = indicators.conditionsMet || 0;
-    const conditionsRequired = config?.signal_conditions_required || 5;
-    const strength = (conditionsMet / conditionsRequired) * 100;
+    const conditionsRequired = Math.max(config?.signal_conditions_required || 5, conditionsMet);
+    const strength = Math.min((conditionsMet / conditionsRequired) * 100, 100);
 
     // Check HÅRDE FILTRE
     const hardFilters = {
