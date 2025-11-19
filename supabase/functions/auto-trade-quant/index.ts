@@ -683,6 +683,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
         avgVolume,
         volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
         pivotPoints: null,
+        conditionsMet: 0, // Ingen bløde filtre evalueres når hårde filtre fejler
       },
       stopLoss: 0,
       takeProfit: null,
