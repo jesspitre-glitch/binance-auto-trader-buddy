@@ -6,6 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { TrendingUp, TrendingDown, Activity } from "lucide-react";
 import { useBinanceFuturesPrices } from "@/hooks/useBinanceFuturesPrices";
+import { CircularProgress } from "./CircularProgress";
 
 interface LiveScanMonitorProps {
   open: boolean;
@@ -22,6 +23,7 @@ interface CoinSignalStrength {
   lastUpdate: string;
   trend: string;
   hardFilters: Record<string, boolean>;
+  hardFiltersProgress: Record<string, number>; // 0-100 percentage for each filter
   allHardFiltersPassed: boolean;
   totalEnabledFilters: number;
 }
@@ -137,6 +139,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
 
     // Check HÅRDE FILTRE - kun inkluder dem der er enabled
     const hardFilters: Record<string, boolean> = {};
+    const hardFiltersProgress: Record<string, number> = {};
     const enabledFilters: string[] = [];
 
     if (config) {
@@ -144,8 +147,11 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
       if (config.ema_enabled) {
         enabledFilters.push('emaSpread');
         if (indicators.emaSpreadPercent !== undefined) {
-          hardFilters.emaSpread = indicators.emaSpreadPercent >= config.min_ema_spread_percent;
+          const minSpread = config.min_ema_spread_percent;
+          hardFiltersProgress.emaSpread = Math.min((indicators.emaSpreadPercent / minSpread) * 100, 100);
+          hardFilters.emaSpread = indicators.emaSpreadPercent >= minSpread;
         } else {
+          hardFiltersProgress.emaSpread = 0;
           hardFilters.emaSpread = false;
         }
       }
@@ -154,8 +160,11 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
       if (config.atr_enabled) {
         enabledFilters.push('atr');
         if (indicators.atr !== null && indicators.atr !== undefined) {
+          const minATR = config.min_atr || 0.0001;
+          hardFiltersProgress.atr = Math.min((indicators.atr / minATR) * 100, 100);
           hardFilters.atr = indicators.atr > 0 && indicators.atr >= (config.min_atr || 0);
         } else {
+          hardFiltersProgress.atr = 0;
           hardFilters.atr = false;
         }
       }
@@ -164,8 +173,10 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
       if (config.adx_enabled) {
         enabledFilters.push('adx');
         if (indicators.adx !== null && indicators.adx !== undefined) {
+          hardFiltersProgress.adx = Math.min((indicators.adx / config.adx_threshold) * 100, 100);
           hardFilters.adx = indicators.adx >= config.adx_threshold;
         } else {
+          hardFiltersProgress.adx = 0;
           hardFilters.adx = false;
         }
       }
@@ -174,8 +185,10 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
       if (config.volume_enabled) {
         enabledFilters.push('volume');
         if (indicators.volumeRatio !== null && indicators.volumeRatio !== undefined) {
+          hardFiltersProgress.volume = Math.min((indicators.volumeRatio / config.volume_multiplier) * 100, 100);
           hardFilters.volume = indicators.volumeRatio >= config.volume_multiplier;
         } else {
+          hardFiltersProgress.volume = 0;
           hardFilters.volume = false;
         }
       }
@@ -188,9 +201,22 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
           const rsiInLongZone = indicators.rsi >= config.rsi_min_long && indicators.rsi <= (config.rsi_min_long + rsiZoneWidth);
           const rsiInShortZone = indicators.rsi <= config.rsi_max_short && indicators.rsi >= (config.rsi_max_short - rsiZoneWidth);
           
-          // RSI momentum passerer hvis i en af zonerne (eller hvis begge er opfyldt via momentum)
+          // Calculate progress: how close is RSI to entering a zone?
+          const distanceToLongZone = Math.max(0, config.rsi_min_long - indicators.rsi);
+          const distanceToShortZone = Math.max(0, indicators.rsi - config.rsi_max_short);
+          const minDistance = Math.min(distanceToLongZone, distanceToShortZone);
+          
+          // If in zone, 100%. Otherwise, calculate based on distance
+          if (rsiInLongZone || rsiInShortZone) {
+            hardFiltersProgress.rsiMomentum = 100;
+          } else {
+            // Assume max distance of 50 points for scaling
+            hardFiltersProgress.rsiMomentum = Math.max(0, 100 - (minDistance * 2));
+          }
+          
           hardFilters.rsiMomentum = rsiInLongZone || rsiInShortZone;
         } else {
+          hardFiltersProgress.rsiMomentum = 0;
           hardFilters.rsiMomentum = false;
         }
       }
@@ -213,6 +239,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
         lastUpdate: result.created_at,
         trend: indicators.trend || "UNKNOWN",
         hardFilters,
+        hardFiltersProgress,
         allHardFiltersPassed,
         totalEnabledFilters,
       });
@@ -377,32 +404,47 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                     </div>
                   )}
                   
-                  {/* Hard Filters Details - only when >= 80% signal strength */}
-                  {coin.strength >= 80 && coin.totalEnabledFilters > 0 && (
-                    <div className="text-[9px] space-y-0.5 mt-1">
+                  {/* Hard Filters Details - always show if enabled */}
+                  {coin.totalEnabledFilters > 0 && (
+                    <div className="text-[9px] space-y-1 mt-1">
                       {coin.hardFilters.emaSpread !== undefined && (
-                        <div className={`flex items-center gap-1 ${coin.hardFilters.emaSpread ? 'text-green-500' : 'text-red-500'}`}>
-                          {coin.hardFilters.emaSpread ? '✓' : '✗'} EMA Spread
+                        <div className="flex items-center gap-1.5">
+                          <CircularProgress value={coin.hardFiltersProgress.emaSpread || 0} size={16} />
+                          <span className={coin.hardFilters.emaSpread ? 'text-green-500' : 'opacity-70'}>
+                            EMA Spread
+                          </span>
                         </div>
                       )}
                       {coin.hardFilters.volume !== undefined && (
-                        <div className={`flex items-center gap-1 ${coin.hardFilters.volume ? 'text-green-500' : 'text-red-500'}`}>
-                          {coin.hardFilters.volume ? '✓' : '✗'} Volume
+                        <div className="flex items-center gap-1.5">
+                          <CircularProgress value={coin.hardFiltersProgress.volume || 0} size={16} />
+                          <span className={coin.hardFilters.volume ? 'text-green-500' : 'opacity-70'}>
+                            Volume
+                          </span>
                         </div>
                       )}
                       {coin.hardFilters.adx !== undefined && (
-                        <div className={`flex items-center gap-1 ${coin.hardFilters.adx ? 'text-green-500' : 'text-red-500'}`}>
-                          {coin.hardFilters.adx ? '✓' : '✗'} ADX
+                        <div className="flex items-center gap-1.5">
+                          <CircularProgress value={coin.hardFiltersProgress.adx || 0} size={16} />
+                          <span className={coin.hardFilters.adx ? 'text-green-500' : 'opacity-70'}>
+                            ADX
+                          </span>
                         </div>
                       )}
                       {coin.hardFilters.atr !== undefined && (
-                        <div className={`flex items-center gap-1 ${coin.hardFilters.atr ? 'text-green-500' : 'text-red-500'}`}>
-                          {coin.hardFilters.atr ? '✓' : '✗'} ATR
+                        <div className="flex items-center gap-1.5">
+                          <CircularProgress value={coin.hardFiltersProgress.atr || 0} size={16} />
+                          <span className={coin.hardFilters.atr ? 'text-green-500' : 'opacity-70'}>
+                            ATR
+                          </span>
                         </div>
                       )}
                       {coin.hardFilters.rsiMomentum !== undefined && (
-                        <div className={`flex items-center gap-1 ${coin.hardFilters.rsiMomentum ? 'text-green-500' : 'text-red-500'}`}>
-                          {coin.hardFilters.rsiMomentum ? '✓' : '✗'} RSI Momentum
+                        <div className="flex items-center gap-1.5">
+                          <CircularProgress value={coin.hardFiltersProgress.rsiMomentum || 0} size={16} />
+                          <span className={coin.hardFilters.rsiMomentum ? 'text-green-500' : 'opacity-70'}>
+                            RSI Momentum
+                          </span>
                         </div>
                       )}
                     </div>
