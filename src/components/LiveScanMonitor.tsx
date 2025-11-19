@@ -26,6 +26,7 @@ interface CoinSignalStrength {
     atr: boolean;
     adx: boolean;
     volume: boolean;
+    rsiMomentum: boolean;
   };
   allHardFiltersPassed: boolean;
 }
@@ -371,6 +372,9 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                       </div>
                       <div className={`flex items-center gap-1 ${coin.hardFilters.atr ? 'text-green-500' : 'text-red-500'}`}>
                         {coin.hardFilters.atr ? '✓' : '✗'} ATR
+                      </div>
+                      <div className={`flex items-center gap-1 ${coin.hardFilters.rsiMomentum ? 'text-green-500' : 'text-red-500'}`}>
+                        {coin.hardFilters.rsiMomentum ? '✓' : '✗'} RSI Momentum
                       </div>
                     </div>
                   )}
