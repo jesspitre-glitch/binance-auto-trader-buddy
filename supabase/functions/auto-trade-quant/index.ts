@@ -535,9 +535,10 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // ═══════════════════════════════════════════════
   
   // 1️⃣ EMA SPREAD
+  let emaSpreadPercent = 0;
   if (config.ema_enabled && emaFastCurrent !== null && emaSlowCurrent !== null) {
     const emaSpread = Math.abs(emaFastCurrent - emaSlowCurrent);
-    const emaSpreadPercent = (emaSpread / currentPrice) * 100;
+    emaSpreadPercent = (emaSpread / currentPrice) * 100;
     filterStatus.hard.emaSpread.value = `${emaSpreadPercent.toFixed(3)}%`;
     
     if (emaSpreadPercent < config.min_ema_spread_percent) {
@@ -651,46 +652,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   console.log(`   📉 MACD: Long: ${filterStatus.soft.macd.long ? '✅' : '❌'} Short: ${filterStatus.soft.macd.short ? '✅' : '❌'}`);
   
   // ═══════════════════════════════════════════════
-  // 🚫 CHECK: BLOKERER HÅRDE FILTRE?
+  // 🟡 EVALUÉR BLØDE FILTRE (ALTID - uanset hårde filtre)
   // ═══════════════════════════════════════════════
-  
-  const hardFiltersPass = filterStatus.hard.emaSpread.passed && 
-                          filterStatus.hard.atr.passed && 
-                          filterStatus.hard.adx.passed && 
-                          filterStatus.hard.volume.passed && 
-                          filterStatus.hard.rsiMomentum.passed;
-  
-  if (!hardFiltersPass) {
-    console.log(`\n❌ TRADE BLOKERET - Hårde filtre fejlede`);
-    console.log(`⛔ Ingen trade evaluering\n`);
-    return {
-      signal: 'NONE',
-      indicators: {
-        price: currentPrice,
-        emaFast: emaFastCurrent,
-        emaMedium: emaMediumCurrent,
-        emaSlow: emaSlowCurrent,
-        rsi: rsiCurrent,
-        stochRSI_k: stochRSI?.k || null,
-        stochRSI_d: stochRSI?.d || null,
-        macd: macd?.histogram || null,
-        macdLine: macd?.macd || null,
-        macdSignal: macd?.signal || null,
-        atr: atr,
-        bb,
-        adx,
-        volume: currentVolume,
-        avgVolume,
-        volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
-        pivotPoints: null,
-        conditionsMet: 0, // Ingen bløde filtre evalueres når hårde filtre fejler
-      },
-      stopLoss: 0,
-      takeProfit: null,
-    };
-  }
-  
-  console.log(`\n✅ ALLE HÅRDE FILTRE PASSERET - Fortsætter til signal evaluering\n`);
   
   // Calculate Pivot Points only if enabled
   const pivotPoints = config.pivot_points_enabled ? (() => {
@@ -840,6 +803,50 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   
   // Calculate conditions met for signal strength
   const conditionsMet = Math.max(longConditionsMet, shortConditionsMet);
+  
+  // ═══════════════════════════════════════════════
+  // 🚫 CHECK: BLOKERER HÅRDE FILTRE?
+  // ═══════════════════════════════════════════════
+  
+  const hardFiltersPass = filterStatus.hard.emaSpread.passed && 
+                          filterStatus.hard.atr.passed && 
+                          filterStatus.hard.adx.passed && 
+                          filterStatus.hard.volume.passed && 
+                          filterStatus.hard.rsiMomentum.passed;
+  
+  if (!hardFiltersPass) {
+    console.log(`\n❌ TRADE BLOKERET - Hårde filtre fejlede`);
+    console.log(`⛔ Ingen trade evaluering (men bløde filtre er evalueret)\n`);
+    return {
+      signal: 'NONE',
+      indicators: {
+        price: currentPrice,
+        emaFast: emaFastCurrent,
+        emaMedium: emaMediumCurrent,
+        emaSlow: emaSlowCurrent,
+        rsi: rsiCurrent,
+        stochRSI_k: stochRSI?.k || null,
+        stochRSI_d: stochRSI?.d || null,
+        macd: macd?.histogram || null,
+        macdLine: macd?.macd || null,
+        macdSignal: macd?.signal || null,
+        atr: atr,
+        bb,
+        adx,
+        volume: currentVolume,
+        avgVolume,
+        volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
+        pivotPoints: null,
+        conditionsMet, // Bløde filtre er nu evalueret!
+        emaSpreadPercent: emaSpreadPercent,
+        trend: filterStatus.hard.rsiMomentum.long ? 'BULLISH' : filterStatus.hard.rsiMomentum.short ? 'BEARISH' : 'UNKNOWN',
+      },
+      stopLoss: 0,
+      takeProfit: null,
+    };
+  }
+  
+  console.log(`\n✅ ALLE HÅRDE FILTRE PASSERET - Fortsætter til signal evaluering\n`);
   
   // 🔍 ULTRA-DETALJERET SIGNAL LOGGING MED VÆRDIER & THRESHOLDS
   console.log(`\n═══════════════════════════════════════════`);
