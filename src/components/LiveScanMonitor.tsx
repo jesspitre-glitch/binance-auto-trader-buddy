@@ -153,9 +153,9 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
         hardFilters.emaSpread = indicators.emaSpreadPercent >= config.min_ema_spread_percent;
       }
       
-      // ATR Check
+      // ATR Check (inkl. Minimum ATR)
       if (config.atr_enabled && indicators.atr !== null && indicators.atr !== undefined) {
-        hardFilters.atr = indicators.atr > 0;
+        hardFilters.atr = indicators.atr > 0 && indicators.atr >= (config.min_atr || 0);
       }
       
       // ADX Check

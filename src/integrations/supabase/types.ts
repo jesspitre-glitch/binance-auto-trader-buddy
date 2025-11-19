@@ -28,6 +28,7 @@ export type Database = {
           bb_period: number | null
           bb_std_dev: number | null
           break_even_atr: number | null
+          candle_momentum_enabled: boolean | null
           created_at: string | null
           daily_loss_limit_percent: number | null
           ema_enabled: boolean | null
@@ -51,6 +52,7 @@ export type Database = {
           max_open_positions: number | null
           max_position_duration_minutes: number | null
           min_atr: number | null
+          min_candle_body_percent: number | null
           min_ema_spread_percent: number | null
           name: string
           pivot_points_enabled: boolean | null
@@ -95,6 +97,7 @@ export type Database = {
           bb_period?: number | null
           bb_std_dev?: number | null
           break_even_atr?: number | null
+          candle_momentum_enabled?: boolean | null
           created_at?: string | null
           daily_loss_limit_percent?: number | null
           ema_enabled?: boolean | null
@@ -118,6 +121,7 @@ export type Database = {
           max_open_positions?: number | null
           max_position_duration_minutes?: number | null
           min_atr?: number | null
+          min_candle_body_percent?: number | null
           min_ema_spread_percent?: number | null
           name: string
           pivot_points_enabled?: boolean | null
@@ -162,6 +166,7 @@ export type Database = {
           bb_period?: number | null
           bb_std_dev?: number | null
           break_even_atr?: number | null
+          candle_momentum_enabled?: boolean | null
           created_at?: string | null
           daily_loss_limit_percent?: number | null
           ema_enabled?: boolean | null
@@ -185,6 +190,7 @@ export type Database = {
           max_open_positions?: number | null
           max_position_duration_minutes?: number | null
           min_atr?: number | null
+          min_candle_body_percent?: number | null
           min_ema_spread_percent?: number | null
           name?: string
           pivot_points_enabled?: boolean | null
