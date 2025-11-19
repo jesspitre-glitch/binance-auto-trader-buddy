@@ -886,14 +886,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               }}
             />
             <p className="text-xs text-muted-foreground">
-              Kræver minimum X af følgende betingelser (1 point hver):<br/>
+              <strong className="text-foreground">BLØDE FILTRE</strong> - Kræver minimum X af følgende (1 point hver):<br/>
               • EMA Trend ({formData.ema_enabled ? '✅' : '❌'})<br/>
               • StochRSI Zone ({formData.stochrsi_enabled ? '✅' : '❌'})<br/>
               • MACD Color Change ({formData.macd_enabled ? '✅' : '❌'})<br/>
               • Bollinger Bands ({formData.bb_enabled ? '✅' : '❌'})<br/>
               • Volume Surge ({formData.volume_enabled ? '✅' : '❌'})<br/>
               • Pivot Points ({formData.pivot_points_enabled ? '✅' : '❌'})<br/>
-              <strong>Aktive: {[formData.ema_enabled, formData.stochrsi_enabled, formData.macd_enabled, formData.bb_enabled, formData.volume_enabled, formData.pivot_points_enabled].filter(Boolean).length}/6</strong>
+              <strong className="text-primary">Aktive bløde filtre: {[formData.ema_enabled, formData.stochrsi_enabled, formData.macd_enabled, formData.bb_enabled, formData.volume_enabled, formData.pivot_points_enabled].filter(Boolean).length}/6</strong>
             </p>
           </div>
         </CardContent>
