@@ -345,16 +345,16 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                   
                   {/* Hard Filters Progress Bar */}
                   <div className="space-y-1 mt-2">
-                    <div className="flex items-center justify-between text-[10px]">
-                      <span className="opacity-70">Hårde filtre:</span>
-                      <span className="font-bold">
-                        {Object.values(coin.hardFilters).filter(v => v).length}/4
-                      </span>
-                    </div>
-                    <Progress 
-                      value={(Object.values(coin.hardFilters).filter(v => v).length / 4) * 100} 
-                      className="h-2"
-                    />
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="opacity-70">Hårde filtre:</span>
+                    <span className="font-bold">
+                      {Object.values(coin.hardFilters).filter(v => v).length}/5
+                    </span>
+                  </div>
+                  <Progress 
+                    value={(Object.values(coin.hardFilters).filter(v => v).length / 5) * 100} 
+                    className="h-2"
+                  />
                   </div>
                   
                   {/* Hard Filters Details - only when >= 80% signal strength */}
