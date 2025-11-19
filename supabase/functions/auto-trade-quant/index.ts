@@ -555,15 +555,23 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     if (atr === 0) {
       filterStatus.hard.atr.passed = false;
       filterStatus.hard.atr.reason = 'ATR = 0 (kan ikke beregne stop-loss)';
-    } else if (config.min_atr > 0 && atr < config.min_atr) {
+    }
+    
+    // Check absolut ATR minimum
+    if (config.min_atr > 0 && atr < config.min_atr) {
       filterStatus.hard.atr.passed = false;
       filterStatus.hard.atr.reason = `ATR ${atr.toFixed(6)} < ${config.min_atr.toFixed(6)} (lav volatilitet)`;
-    } else if (config.min_atr_percent > 0) {
-      // Beregn ATR som procent af pris
+    }
+    
+    // Check ATR som procent af pris (kører altid hvis enabled)
+    if (config.min_atr_percent > 0) {
       const atrPercent = (atr / currentPrice) * 100;
+      console.log(`   📊 ATR%: ${atrPercent.toFixed(3)}% (min: ${config.min_atr_percent}%)`);
+      
       if (atrPercent < config.min_atr_percent) {
         filterStatus.hard.atr.passed = false;
         filterStatus.hard.atr.reason = `ATR% ${atrPercent.toFixed(3)}% < ${config.min_atr_percent}% (for lav volatilitet i forhold til pris)`;
+        console.log(`   ❌ ATR% blokerer: ${atrPercent.toFixed(3)}% < ${config.min_atr_percent}%`);
       }
     }
   }
