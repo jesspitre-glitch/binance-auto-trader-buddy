@@ -46,7 +46,10 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     }).catch(console.error);
 
     const initMonitor = async () => {
+      // CRITICAL: Load config FIRST before fetching scans
       await fetchConfig();
+      // Small delay to ensure config is set in state
+      await new Promise(resolve => setTimeout(resolve, 100));
       await fetchInitialScans();
     };
 
