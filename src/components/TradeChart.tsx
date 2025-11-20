@@ -56,13 +56,13 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           // Trailing stop beregnes løbende efter position åbnes
           let trailingStop = null;
           if (timestamp >= openTime) {
-            // Update peak price - brug high/low for mere præcis peak tracking
-            const candlePeak = side === 'LONG' ? high : low;
+            // VIGTIGT: Brug KUN close price (ikke high/low) for at matche backend monitor logik
+            // Backend monitor bruger currentPrice (close) til at opdatere peak, ikke high/low
             
-            if (side === 'LONG' && candlePeak > peakPrice) {
-              peakPrice = candlePeak;
-            } else if (side === 'SHORT' && candlePeak < peakPrice) {
-              peakPrice = candlePeak;
+            if (side === 'LONG' && price > peakPrice) {
+              peakPrice = price;
+            } else if (side === 'SHORT' && price < peakPrice) {
+              peakPrice = price;
             }
             
             // Beregn trailing stop fra peak
