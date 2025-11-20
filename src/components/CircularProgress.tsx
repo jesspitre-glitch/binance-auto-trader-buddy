@@ -1,15 +1,21 @@
 interface CircularProgressProps {
   value: number; // 0-100
   size?: number;
+  passed?: boolean; // Whether the condition is actually passed
 }
 
-export const CircularProgress = ({ value, size = 20 }: CircularProgressProps) => {
+export const CircularProgress = ({ value, size = 20, passed }: CircularProgressProps) => {
   const radius = (size - 4) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (value / 100) * circumference;
   
-  // Color based on value: red (0%) -> yellow (50%) -> green (100%)
-  const getColor = (val: number) => {
+  // Color based on passed status first, then value
+  const getColor = (val: number, isPassed?: boolean) => {
+    // If passed is explicitly set, use it to determine color
+    if (isPassed === false) return "hsl(0, 84%, 60%)"; // red - failed
+    if (isPassed === true) return "hsl(142, 76%, 36%)"; // green - passed
+    
+    // Fallback to value-based coloring if passed is not set
     if (val >= 80) return "hsl(142, 76%, 36%)"; // green
     if (val >= 60) return "hsl(84, 81%, 44%)"; // lime
     if (val >= 40) return "hsl(48, 96%, 53%)"; // yellow
@@ -35,7 +41,7 @@ export const CircularProgress = ({ value, size = 20 }: CircularProgressProps) =>
         cy={size / 2}
         r={radius}
         fill="none"
-        stroke={getColor(value)}
+        stroke={getColor(value, passed)}
         strokeWidth="3"
         strokeDasharray={circumference}
         strokeDashoffset={offset}

@@ -520,7 +520,11 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                     <div className="text-[9px] space-y-1 mt-1">
                       {coin.hardFilters.emaSpread !== undefined && (
                         <div className="flex items-center gap-1.5">
-                          <CircularProgress value={coin.hardFiltersProgress.emaSpread || 0} size={16} />
+                          <CircularProgress 
+                            value={coin.hardFiltersProgress.emaSpread || 0} 
+                            size={16}
+                            passed={coin.hardFilters.emaSpread}
+                          />
                           <span className={coin.hardFilters.emaSpread ? 'text-green-500' : 'opacity-70'}>
                             EMA Spread
                           </span>
@@ -528,7 +532,11 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                       )}
                       {coin.hardFilters.volume !== undefined && (
                         <div className="flex items-center gap-1.5">
-                          <CircularProgress value={coin.hardFiltersProgress.volume || 0} size={16} />
+                          <CircularProgress 
+                            value={coin.hardFiltersProgress.volume || 0} 
+                            size={16}
+                            passed={coin.hardFilters.volume}
+                          />
                           <span className={coin.hardFilters.volume ? 'text-green-500' : 'opacity-70'}>
                             Volume
                           </span>
@@ -536,7 +544,11 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                       )}
                       {coin.hardFilters.adx !== undefined && (
                         <div className="flex items-center gap-1.5">
-                          <CircularProgress value={coin.hardFiltersProgress.adx || 0} size={16} />
+                          <CircularProgress 
+                            value={coin.hardFiltersProgress.adx || 0} 
+                            size={16}
+                            passed={coin.hardFilters.adx}
+                          />
                           <span className={coin.hardFilters.adx ? 'text-green-500' : 'opacity-70'}>
                             ADX
                           </span>
@@ -544,7 +556,11 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                       )}
                       {coin.hardFilters.atr !== undefined && (
                         <div className="flex items-center gap-1.5">
-                          <CircularProgress value={coin.hardFiltersProgress.atr || 0} size={16} />
+                          <CircularProgress 
+                            value={coin.hardFiltersProgress.atr || 0} 
+                            size={16}
+                            passed={coin.hardFilters.atr}
+                          />
                           <span className={coin.hardFilters.atr ? 'text-green-500' : 'opacity-70'}>
                             ATR
                           </span>
@@ -552,7 +568,11 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                       )}
                       {coin.hardFilters.macdDirection !== undefined && (
                         <div className="flex items-center gap-1.5">
-                          <CircularProgress value={coin.hardFiltersProgress.macdDirection || 0} size={16} />
+                          <CircularProgress 
+                            value={coin.hardFiltersProgress.macdDirection || 0} 
+                            size={16}
+                            passed={coin.hardFilters.macdDirection}
+                          />
                           <span className={coin.hardFilters.macdDirection ? 'text-green-500' : 'opacity-70'}>
                             MACD Retning
                           </span>
@@ -560,7 +580,11 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                       )}
                       {coin.hardFilters.rsiMomentum !== undefined && (
                         <div className="flex items-center gap-1.5">
-                          <CircularProgress value={coin.hardFiltersProgress.rsiMomentum || 0} size={16} />
+                          <CircularProgress 
+                            value={coin.hardFiltersProgress.rsiMomentum || 0} 
+                            size={16}
+                            passed={coin.hardFilters.rsiMomentum}
+                          />
                           <span className={coin.hardFilters.rsiMomentum ? 'text-green-500' : 'opacity-70'}>
                             RSI Momentum
                           </span>
