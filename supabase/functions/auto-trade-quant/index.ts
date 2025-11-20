@@ -521,6 +521,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       atr: { passed: true, value: '', reason: '' },
       adx: { passed: true, value: '', reason: '' },
       volume: { passed: true, value: '', reason: '' },
+      macdDirection: { passed: true, long: false, short: false, reason: '' },
       rsiMomentum: { passed: true, long: false, short: false, reason: '' },
     },
     soft: {
@@ -598,7 +599,27 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     }
   }
   
-  // 5️⃣ RSI MOMENTUM (Hård regel)
+  // 5️⃣ MACD RETNINGS-FILTER (Hård regel)
+  let macdLongOK = true;
+  let macdShortOK = true;
+  
+  if (config.macd_enabled && macd && macd.macd !== null) {
+    // LONG kræver: MACD > 0
+    macdLongOK = macd.macd > 0;
+    
+    // SHORT kræver: MACD < 0
+    macdShortOK = macd.macd < 0;
+    
+    filterStatus.hard.macdDirection.long = macdLongOK;
+    filterStatus.hard.macdDirection.short = macdShortOK;
+    
+    if (!macdLongOK && !macdShortOK) {
+      filterStatus.hard.macdDirection.passed = false;
+      filterStatus.hard.macdDirection.reason = `MACD ${macd.macd.toFixed(6)} - ingen gyldig retning (både LONG og SHORT blokeret)`;
+    }
+  }
+  
+  // 6️⃣ RSI MOMENTUM (Hård regel)
   let rsiLongOK = true;
   let rsiShortOK = true;
   
@@ -634,7 +655,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // 🟡 BLØDE FILTRE (Signal betingelser)
   // ═══════════════════════════════════════════════
   
-  // 6️⃣ EMA ALIGNMENT
+  // 7️⃣ EMA ALIGNMENT
   if (config.ema_enabled && emaFast && emaMedium && emaSlow && emaFastCurrent !== null && emaMediumCurrent !== null && emaSlowCurrent !== null) {
     // LONG: Hurtig > Medium > Slow
     filterStatus.soft.emaAlignment.long = emaFastCurrent > emaMediumCurrent && emaMediumCurrent > emaSlowCurrent && currentPrice > closes[closes.length - 2];
@@ -643,7 +664,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     filterStatus.soft.emaAlignment.short = emaFastCurrent < emaMediumCurrent && emaMediumCurrent < emaSlowCurrent && currentPrice < closes[closes.length - 2];
   }
   
-  // 7️⃣ MACD
+  // 8️⃣ MACD
   if (config.macd_enabled && macd && macd.histogram !== null) {
     // LONG: MACD histogram over threshold
     filterStatus.soft.macd.long = macd.histogram > config.macd_histogram_threshold;
@@ -661,9 +682,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   console.log(`   📊 ATR: ${filterStatus.hard.atr.passed ? '✅' : '❌'} ${filterStatus.hard.atr.value} ${filterStatus.hard.atr.reason ? `- ${filterStatus.hard.atr.reason}` : ''}`);
   console.log(`   📈 ADX: ${filterStatus.hard.adx.passed ? '✅' : '❌'} ${filterStatus.hard.adx.value} ${filterStatus.hard.adx.reason ? `- ${filterStatus.hard.adx.reason}` : ''}`);
   console.log(`   🔊 Volume: ${filterStatus.hard.volume.passed ? '✅' : '❌'} ${filterStatus.hard.volume.value} ${filterStatus.hard.volume.reason ? `- ${filterStatus.hard.volume.reason}` : ''}`);
-  console.log(`   🎯 RSI Momentum: ${filterStatus.hard.rsiMomentum.passed ? '✅' : '❌'} Long: ${filterStatus.hard.rsiMomentum.long ? '✅' : '❌'} Short: ${filterStatus.hard.rsiMomentum.short ? '✅' : '❌'} ${filterStatus.hard.rsiMomentum.reason ? `- ${filterStatus.hard.rsiMomentum.reason}` : ''}`);
-  
-  console.log(`\n🟡 BLØDE FILTRE (signal betingelser):`);
+  console.log(`   📐 MACD Retning: ${filterStatus.hard.macdDirection.passed ? '✅' : '❌'} Long: ${filterStatus.hard.macdDirection.long ? '✅' : '❌'} Short: ${filterStatus.hard.macdDirection.short ? '✅' : '❌'} ${filterStatus.hard.macdDirection.reason ? `- ${filterStatus.hard.macdDirection.reason}` : ''}`);
+  console.log(`   🎯 RSI Momentum: ${filterStatus.hard.rsiMomentum.passed ? '✅' : '❌'} Long: ${filterStatus.hard.rsiMomentum.long ? '✅' : '❌'} Short: ${filterStatus.hard.rsiMomentum.short ? '✅' : '❌'} ${filterStatus.hard.rsiMomentum.reason ? `- ${filterStatus.hard.rsiMomentum.reason}` : ''}\n`);
   console.log(`   📐 EMA Alignment: Long: ${filterStatus.soft.emaAlignment.long ? '✅' : '❌'} Short: ${filterStatus.soft.emaAlignment.short ? '✅' : '❌'}`);
   console.log(`   📉 MACD: Long: ${filterStatus.soft.macd.long ? '✅' : '❌'} Short: ${filterStatus.soft.macd.short ? '✅' : '❌'}`);
   
@@ -814,8 +834,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   const longConditionsMet = longConditions.filter(c => c).length;
   const shortConditionsMet = shortConditions.filter(c => c).length;
 
-  const longSignal = longConditionsMet >= requiredConditions;
-  const shortSignal = shortConditionsMet >= requiredConditions;
+  const longSignal = longConditionsMet >= requiredConditions && macdLongOK;
+  const shortSignal = shortConditionsMet >= requiredConditions && macdShortOK;
   
   // Calculate conditions met for signal strength
   const conditionsMet = Math.max(longConditionsMet, shortConditionsMet);
@@ -828,6 +848,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
                           filterStatus.hard.atr.passed && 
                           filterStatus.hard.adx.passed && 
                           filterStatus.hard.volume.passed && 
+                          filterStatus.hard.macdDirection.passed &&
                           filterStatus.hard.rsiMomentum.passed;
   
   if (!hardFiltersPass) {
