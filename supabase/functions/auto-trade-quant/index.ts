@@ -615,7 +615,10 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     filterStatus.hard.macdDirection.long = macdLongOK;
     filterStatus.hard.macdDirection.short = macdShortOK;
     
-    if (!macdLongOK && !macdShortOK) {
+    // Filteret passerer hvis ENTEN long ELLER short er OK (ikke begge nødvendigvis)
+    if (macdLongOK || macdShortOK) {
+      filterStatus.hard.macdDirection.passed = true;
+    } else {
       filterStatus.hard.macdDirection.passed = false;
       filterStatus.hard.macdDirection.reason = `MACD ${macd.macd.toFixed(6)} - ingen gyldig retning (både LONG og SHORT blokeret)`;
     }
