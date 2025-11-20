@@ -163,13 +163,37 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
         }
       }
       
-      // ATR Check (inkl. Minimum ATR)
+      // ATR Check (matcher edge function logik PRÆCIS)
       if (config.atr_enabled) {
         enabledFilters.push('atr');
-        if (indicators.atr !== null && indicators.atr !== undefined) {
-          const minATR = config.min_atr || 0.0001;
-          hardFiltersProgress.atr = Math.min((indicators.atr / minATR) * 100, 100);
-          hardFilters.atr = indicators.atr > 0 && indicators.atr >= (config.min_atr || 0);
+        if (indicators.atr !== null && indicators.atr !== undefined && indicators.price) {
+          let atrPassed = true;
+          
+          // Check 1: ATR ikke 0
+          if (indicators.atr === 0) {
+            atrPassed = false;
+          }
+          
+          // Check 2: Absolut minimum ATR
+          if (config.min_atr > 0 && indicators.atr < config.min_atr) {
+            atrPassed = false;
+          }
+          
+          // Check 3: ATR som procent af pris (KRITISK - dette blokerer mest)
+          if (config.min_atr_percent > 0) {
+            const atrPercent = (indicators.atr / indicators.price) * 100;
+            hardFiltersProgress.atr = Math.min((atrPercent / config.min_atr_percent) * 100, 100);
+            
+            if (atrPercent < config.min_atr_percent) {
+              atrPassed = false;
+            }
+          } else {
+            // Fallback til absolut hvis percent ikke sat
+            const minATR = config.min_atr || 0.0001;
+            hardFiltersProgress.atr = Math.min((indicators.atr / minATR) * 100, 100);
+          }
+          
+          hardFilters.atr = atrPassed;
         } else {
           hardFiltersProgress.atr = 0;
           hardFilters.atr = false;
