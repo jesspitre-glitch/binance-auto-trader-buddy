@@ -370,8 +370,9 @@ serve(async (req) => {
           }
         }
 
-        // Check stop loss (kun hvis trailing stop ikke ramt)
-        if (!shouldClose && newStopLoss) {
+        // Check stop loss (KUN hvis trailing stop IKKE er aktiv)
+        // Trailing stop har prioritet når den er aktiveret
+        if (!shouldClose && newStopLoss && !trailingStopActive) {
           if (position.side === 'LONG' && currentPrice <= newStopLoss) {
             shouldClose = true;
             closeReason = position.break_even_activated ? 'BREAK_EVEN_HIT' : 'STOP_LOSS_HIT';
