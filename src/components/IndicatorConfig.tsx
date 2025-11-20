@@ -187,6 +187,79 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     });
   }, [config]);
 
+  const getDefaultValues = () => ({
+    name: "1",
+    enabled: true,
+    ema_enabled: true,
+    ema_fast: 9,
+    ema_medium: 21,
+    ema_slow: 50,
+    ema_medium_trend: 50,
+    min_ema_spread_percent: 0.2,
+    rsi_enabled: true,
+    rsi_period: 14,
+    rsi_min_long: 30,
+    rsi_max_short: 70,
+    rsi_zone_width: 5,
+    rsi_momentum_periods: 3,
+    stochrsi_enabled: true,
+    stochrsi_period: 14,
+    stochrsi_k_period: 3,
+    stochrsi_d_period: 3,
+    stochrsi_overbought: 80,
+    stochrsi_oversold: 20,
+    pivot_points_enabled: true,
+    pivot_points_timeframe: "1d",
+    pivot_points_lookback: 24,
+    pivot_points_near_threshold: 0.002,
+    macd_enabled: true,
+    macd_fast: 12,
+    macd_slow: 26,
+    macd_signal: 9,
+    macd_histogram_threshold: 0,
+    macd_direction_enabled: true,
+    histogram_momentum_enabled: true,
+    histogram_momentum_periods: 3,
+    bb_enabled: true,
+    bb_period: 20,
+    bb_std_dev: 2,
+    atr_enabled: true,
+    atr_period: 14,
+    min_atr: 0,
+    min_atr_percent: 0.5,
+    atr_stop_loss_multiplier: 2,
+    atr_trailing_stop_multiplier: 1.5,
+    break_even_atr: 1.0,
+    trailing_stop_activation_enabled: true,
+    trailing_stop_activation_atr: 1.0,
+    adx_enabled: true,
+    adx_period: 14,
+    adx_threshold: 25,
+    volume_enabled: true,
+    volume_avg_period: 20,
+    volume_multiplier: 1.2,
+    signal_conditions_required: 5,
+    scan_interval: "5m",
+    trend_timeframe: "15m",
+    higher_trend_timeframe: "1h",
+    klines_limit: 100,
+    position_size_percent: 5,
+    risk_per_trade_percent: 1,
+    max_open_positions: 3,
+    max_exposure_percent: 5,
+    daily_loss_limit_percent: 5,
+    max_position_duration_minutes: 240,
+    leverage: 10,
+  });
+
+  const handleReset = () => {
+    setFormData(getDefaultValues());
+    toast({
+      title: "Nulstillet",
+      description: "Alle indikatorer er sat tilbage til standard værdier",
+    });
+  };
+
   const handleSave = async () => {
     setLoading(true);
     try {
@@ -1105,10 +1178,23 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
         </CardContent>
       </Card>
 
-      <Button onClick={handleSave} disabled={loading} className="w-full">
-        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Gem Konfiguration
-      </Button>
+      <div className="flex gap-4">
+        <Button 
+          onClick={handleReset} 
+          variant="outline" 
+          className="flex-1"
+        >
+          Nulstil til Standard
+        </Button>
+        <Button 
+          onClick={handleSave} 
+          disabled={loading} 
+          className="flex-1"
+        >
+          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Gem Konfiguration
+        </Button>
+      </div>
     </div>
   );
 };
