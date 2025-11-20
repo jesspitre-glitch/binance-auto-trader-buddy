@@ -1597,6 +1597,50 @@ serve(async (req) => {
                 continue;
               }
 
+              // 🛡️ RACE CONDITION GUARD: Check if we exceeded max positions after insert
+              const { data: finalPositionCheck } = await supabaseClient
+                .from('positions')
+                .select('id')
+                .eq('user_id', session.user_id)
+                .eq('status', 'OPEN');
+              
+              if (finalPositionCheck && finalPositionCheck.length > config.max_open_positions) {
+                console.log(`⚠️ RACE CONDITION DETECTED: ${finalPositionCheck.length} open positions exceed limit of ${config.max_open_positions}`);
+                console.log(`   Closing newest position: ${symbol} (id: ${insertedPosition.id})`);
+                
+                // Mark position as closed in DB
+                await supabaseClient
+                  .from('positions')
+                  .update({ 
+                    status: 'CLOSED', 
+                    close_reason: 'MAX_POSITIONS_EXCEEDED_RACE_CONDITION',
+                    closed_at: new Date().toISOString()
+                  })
+                  .eq('id', insertedPosition.id);
+                
+                // Close on Binance
+                try {
+                  const closeResponse = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/close-position-binance`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                    },
+                    body: JSON.stringify({ positionId: insertedPosition.id }),
+                  });
+                  
+                  if (closeResponse.ok) {
+                    console.log(`✅ Excess position ${symbol} closed on Binance successfully`);
+                  } else {
+                    console.error(`❌ Failed to close excess position on Binance:`, await closeResponse.text());
+                  }
+                } catch (closeErr) {
+                  console.error(`❌ Error closing excess position on Binance:`, closeErr);
+                }
+                
+                continue;
+              }
+
               console.log(`✅✅✅ POSITION FULLY CREATED: ${symbol}`);
               console.log(`   DB ID: ${insertedPosition.id}`);
               console.log(`   Binance Order ID: ${orderData.orderId}`);
