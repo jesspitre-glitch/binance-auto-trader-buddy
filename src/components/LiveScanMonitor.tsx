@@ -135,9 +135,8 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     }
 
     const indicators = result.indicators;
-    const conditionsMet = indicators.conditionsMet || 0;
-    const conditionsRequired = Math.max(config?.signal_conditions_required || 5, conditionsMet);
-    const strength = Math.min((conditionsMet / conditionsRequired) * 100, 100);
+    const conditionsRequired = config?.signal_conditions_required || 2;
+    // conditionsMet will be calculated based on trend-specific conditions below
 
     // Check HÅRDE FILTRE - kun inkluder dem der er enabled
     const hardFilters: Record<string, boolean> = {};
@@ -275,35 +274,58 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     const totalEnabledFilters = enabledFilters.length;
     const allHardFiltersPassed = Object.values(hardFilters).every(v => v);
     
-    // Parse soft conditions fra conditionDetails
+    // Parse soft conditions fra conditionDetails OG tæl trend-specifikke
     let totalEnabledSoftConditions = 0;
+    let trendSpecificConditionsMet = 0;
     
     if (conditionDetails.ema?.enabled) {
       totalEnabledSoftConditions++;
-      softConditions.ema = trend ? conditionDetails.ema[trend] === true : false;
+      const isMetForTrend = trend ? conditionDetails.ema[trend] === true : false;
+      softConditions.ema = isMetForTrend;
+      if (isMetForTrend) trendSpecificConditionsMet++;
     }
     if (conditionDetails.rsi?.enabled) {
       totalEnabledSoftConditions++;
-      softConditions.rsi = trend ? conditionDetails.rsi[trend] === true : false;
+      const isMetForTrend = trend ? conditionDetails.rsi[trend] === true : false;
+      softConditions.rsi = isMetForTrend;
+      if (isMetForTrend) trendSpecificConditionsMet++;
     }
     if (conditionDetails.stochRSI?.enabled) {
       totalEnabledSoftConditions++;
-      softConditions.stochRSI = trend ? conditionDetails.stochRSI[trend] === true : false;
+      const isMetForTrend = trend ? conditionDetails.stochRSI[trend] === true : false;
+      softConditions.stochRSI = isMetForTrend;
+      if (isMetForTrend) trendSpecificConditionsMet++;
     }
     if (conditionDetails.macd?.enabled) {
       totalEnabledSoftConditions++;
-      softConditions.macd = trend ? conditionDetails.macd[trend] === true : false;
+      const isMetForTrend = trend ? conditionDetails.macd[trend] === true : false;
+      softConditions.macd = isMetForTrend;
+      if (isMetForTrend) trendSpecificConditionsMet++;
     }
     if (conditionDetails.bb?.enabled) {
       totalEnabledSoftConditions++;
-      softConditions.bb = trend ? conditionDetails.bb[trend] === true : false;
+      const isMetForTrend = trend ? conditionDetails.bb[trend] === true : false;
+      softConditions.bb = isMetForTrend;
+      if (isMetForTrend) trendSpecificConditionsMet++;
     }
     if (conditionDetails.pivotPoints?.enabled) {
       totalEnabledSoftConditions++;
-      softConditions.pivotPoints = trend ? conditionDetails.pivotPoints[trend] === true : false;
+      const isMetForTrend = trend ? conditionDetails.pivotPoints[trend] === true : false;
+      softConditions.pivotPoints = isMetForTrend;
+      if (isMetForTrend) trendSpecificConditionsMet++;
+    }
+    if (conditionDetails.volume?.enabled) {
+      totalEnabledSoftConditions++;
+      const isMetForTrend = trend ? conditionDetails.volume[trend] === true : false;
+      softConditions.volume = isMetForTrend;
+      if (isMetForTrend) trendSpecificConditionsMet++;
     }
 
-    console.log(`Updating ${result.symbol}: strength=${strength.toFixed(1)}%, conditions=${conditionsMet}/${conditionsRequired}, hardFilters=${JSON.stringify(hardFilters)}`);
+    // Brug trend-specifikke conditions i stedet for total
+    const actualConditionsMet = trendSpecificConditionsMet;
+    const strength = Math.min((actualConditionsMet / conditionsRequired) * 100, 100);
+
+    console.log(`Updating ${result.symbol}: strength=${strength.toFixed(1)}%, trend=${trend}, conditions=${actualConditionsMet}/${conditionsRequired} (total enabled: ${totalEnabledSoftConditions}), hardFilters=${JSON.stringify(hardFilters)}`);
 
     setCoins((prev) => {
       const newMap = new Map(prev);
@@ -312,7 +334,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
         signal: result.signal,
         strength,
         indicators,
-        conditionsMet,
+        conditionsMet: actualConditionsMet,
         conditionsRequired,
         lastUpdate: result.created_at,
         trend: indicators.trend || "UNKNOWN",
