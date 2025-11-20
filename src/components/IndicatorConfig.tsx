@@ -187,76 +187,78 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     });
   }, [config]);
 
-  const getDefaultValues = () => ({
-    name: "1",
-    enabled: true,
-    ema_enabled: true,
-    ema_fast: 9,
-    ema_medium: 21,
-    ema_slow: 50,
-    ema_medium_trend: 50,
-    min_ema_spread_percent: 0.2,
-    rsi_enabled: true,
-    rsi_period: 14,
-    rsi_min_long: 30,
-    rsi_max_short: 70,
-    rsi_zone_width: 5,
-    rsi_momentum_periods: 3,
-    stochrsi_enabled: true,
-    stochrsi_period: 14,
-    stochrsi_k_period: 3,
-    stochrsi_d_period: 3,
-    stochrsi_overbought: 80,
-    stochrsi_oversold: 20,
-    pivot_points_enabled: true,
-    pivot_points_timeframe: "1d",
-    pivot_points_lookback: 24,
-    pivot_points_near_threshold: 0.002,
-    macd_enabled: true,
-    macd_fast: 12,
-    macd_slow: 26,
-    macd_signal: 9,
-    macd_histogram_threshold: 0,
-    macd_direction_enabled: true,
-    histogram_momentum_enabled: true,
-    histogram_momentum_periods: 3,
-    bb_enabled: true,
-    bb_period: 20,
-    bb_std_dev: 2,
-    atr_enabled: true,
-    atr_period: 14,
-    min_atr: 0,
-    min_atr_percent: 0.5,
-    atr_stop_loss_multiplier: 2,
-    atr_trailing_stop_multiplier: 1.5,
-    break_even_atr: 1.0,
-    trailing_stop_activation_enabled: true,
-    trailing_stop_activation_atr: 1.0,
-    adx_enabled: true,
-    adx_period: 14,
-    adx_threshold: 25,
-    volume_enabled: true,
-    volume_avg_period: 20,
-    volume_multiplier: 1.2,
-    signal_conditions_required: 5,
-    scan_interval: "5m",
-    trend_timeframe: "15m",
-    higher_trend_timeframe: "1h",
-    klines_limit: 100,
-    position_size_percent: 5,
-    risk_per_trade_percent: 1,
-    max_open_positions: 3,
-    max_exposure_percent: 5,
-    daily_loss_limit_percent: 5,
-    max_position_duration_minutes: 240,
-    leverage: 10,
-  });
-
-  const handleReset = () => {
-    setFormData(getDefaultValues());
+  const handleCancel = () => {
+    if (!config) return;
+    
+    // Gendan alle værdier til det gemte config
+    setFormData({
+      name: config.name ?? "Default Strategy",
+      enabled: config.enabled ?? true,
+      ema_enabled: config.ema_enabled ?? true,
+      ema_fast: config.ema_fast ?? 9,
+      ema_medium: config.ema_medium ?? 21,
+      ema_slow: config.ema_slow ?? 50,
+      ema_medium_trend: config.ema_medium_trend ?? 50,
+      min_ema_spread_percent: config.min_ema_spread_percent ?? 0.2,
+      rsi_enabled: config.rsi_enabled ?? true,
+      rsi_period: config.rsi_period ?? 14,
+      rsi_min_long: config.rsi_min_long ?? 30,
+      rsi_max_short: config.rsi_max_short ?? 70,
+      rsi_zone_width: config.rsi_zone_width ?? 5,
+      rsi_momentum_periods: config.rsi_momentum_periods ?? 3,
+      stochrsi_enabled: config.stochrsi_enabled ?? true,
+      stochrsi_period: config.stochrsi_period ?? 14,
+      stochrsi_k_period: config.stochrsi_k_period ?? 3,
+      stochrsi_d_period: config.stochrsi_d_period ?? 3,
+      stochrsi_overbought: config.stochrsi_overbought ?? 80,
+      stochrsi_oversold: config.stochrsi_oversold ?? 20,
+      pivot_points_enabled: config.pivot_points_enabled ?? true,
+      pivot_points_timeframe: config.pivot_points_timeframe ?? "1d",
+      pivot_points_lookback: config.pivot_points_lookback ?? 24,
+      pivot_points_near_threshold: config.pivot_points_near_threshold ?? 0.002,
+      macd_enabled: config.macd_enabled ?? true,
+      macd_fast: config.macd_fast ?? 12,
+      macd_slow: config.macd_slow ?? 26,
+      macd_signal: config.macd_signal ?? 9,
+      macd_histogram_threshold: config.macd_histogram_threshold ?? 0,
+      macd_direction_enabled: config.macd_direction_enabled ?? true,
+      histogram_momentum_enabled: config.histogram_momentum_enabled ?? true,
+      histogram_momentum_periods: config.histogram_momentum_periods ?? 3,
+      bb_enabled: config.bb_enabled ?? true,
+      bb_period: config.bb_period ?? 20,
+      bb_std_dev: config.bb_std_dev ?? 2,
+      atr_enabled: config.atr_enabled ?? true,
+      atr_period: config.atr_period ?? 14,
+      min_atr: config.min_atr ?? 0,
+      min_atr_percent: config.min_atr_percent ?? 0.5,
+      atr_stop_loss_multiplier: config.atr_stop_loss_multiplier ?? 2,
+      atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier ?? 1.5,
+      break_even_atr: config.break_even_atr ?? 1.0,
+      trailing_stop_activation_enabled: config.trailing_stop_activation_enabled ?? true,
+      trailing_stop_activation_atr: config.trailing_stop_activation_atr ?? 1.0,
+      adx_enabled: config.adx_enabled ?? true,
+      adx_period: config.adx_period ?? 14,
+      adx_threshold: config.adx_threshold ?? 25,
+      volume_enabled: config.volume_enabled ?? true,
+      volume_avg_period: config.volume_avg_period ?? 20,
+      volume_multiplier: config.volume_multiplier ?? 1.2,
+      signal_conditions_required: config.signal_conditions_required ?? 5,
+      scan_interval: config.scan_interval ?? "5m",
+      trend_timeframe: config.trend_timeframe ?? config.mtf_timeframe ?? "15m",
+      higher_trend_timeframe: config.higher_trend_timeframe ?? "1h",
+      klines_limit: config.klines_limit ?? 100,
+      position_size_percent: config.position_size_percent ?? 5,
+      risk_per_trade_percent: config.risk_per_trade_percent ?? 1,
+      max_open_positions: config.max_open_positions ?? 3,
+      max_exposure_percent: config.max_exposure_percent ?? 5,
+      daily_loss_limit_percent: config.daily_loss_limit_percent ?? 5,
+      max_position_duration_minutes: config.max_position_duration_minutes ?? 240,
+      leverage: config.leverage ?? 10,
+    });
+    
     toast({
-      title: "Nulstillet",
-      description: "Alle indikatorer er sat tilbage til standard værdier",
+      title: "Fortryd",
+      description: "Alle ændringer er annulleret",
     });
   };
 
@@ -1180,11 +1182,12 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       <div className="flex gap-4">
         <Button 
-          onClick={handleReset} 
+          onClick={handleCancel} 
           variant="outline" 
           className="flex-1"
+          disabled={!config?.id}
         >
-          Nulstil til Standard
+          Fortryd Ændringer
         </Button>
         <Button 
           onClick={handleSave} 
