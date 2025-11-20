@@ -5,9 +5,12 @@ interface CircularProgressProps {
 }
 
 export const CircularProgress = ({ value, size = 20, passed }: CircularProgressProps) => {
+  // If passed is true, always show 100%
+  const displayValue = passed === true ? 100 : value;
+  
   const radius = (size - 4) / 2;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (value / 100) * circumference;
+  const offset = circumference - (displayValue / 100) * circumference;
   
   // Color based on passed status first, then value
   const getColor = (val: number, isPassed?: boolean) => {
@@ -41,7 +44,7 @@ export const CircularProgress = ({ value, size = 20, passed }: CircularProgressP
         cy={size / 2}
         r={radius}
         fill="none"
-        stroke={getColor(value, passed)}
+        stroke={getColor(displayValue, passed)}
         strokeWidth="3"
         strokeDasharray={circumference}
         strokeDashoffset={offset}
