@@ -34,6 +34,7 @@ interface IndicatorConfig {
   macd_slow: number;
   macd_signal: number;
   macd_histogram_threshold: number;
+  macd_direction_enabled: boolean;
   histogram_momentum_enabled: boolean;
   histogram_momentum_periods: number;
   bb_enabled: boolean;
@@ -98,6 +99,7 @@ async function getStrategyIdentifier(config: IndicatorConfig): Promise<string> {
     macd_slow: config.macd_slow,
     macd_signal: config.macd_signal,
     macd_histogram_threshold: config.macd_histogram_threshold,
+    macd_direction_enabled: config.macd_direction_enabled,
     histogram_momentum_enabled: config.histogram_momentum_enabled,
     histogram_momentum_periods: config.histogram_momentum_periods,
     bb_enabled: config.bb_enabled,
@@ -603,7 +605,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   let macdLongOK = true;
   let macdShortOK = true;
   
-  if (config.macd_enabled && macd && macd.macd !== null) {
+  if (config.macd_direction_enabled && config.macd_enabled && macd && macd.macd !== null) {
     // LONG kræver: MACD > 0
     macdLongOK = macd.macd > 0;
     
