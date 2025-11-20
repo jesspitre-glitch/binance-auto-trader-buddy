@@ -76,8 +76,12 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
               peakPrice = price;
             }
             
-            // Beregn profit i ATR units
-            const profitInAtr = Math.abs((price - entryPrice) / atrValue);
+            // Beregn profit i ATR units (VIGTIGT: IKKE abs(), så tab bliver negativt)
+            // For LONG: profit når price > entry
+            // For SHORT: profit når price < entry
+            const profitInAtr = side === 'LONG' 
+              ? (price - entryPrice) / atrValue 
+              : (entryPrice - price) / atrValue;
             
             // Tjek om trailing stop skal være aktiv baseret på profit
             const trailingStopActive = !trailingStopActivationEnabled || (profitInAtr >= trailingStopActivationAtr);
