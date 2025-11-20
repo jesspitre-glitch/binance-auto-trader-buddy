@@ -200,6 +200,24 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
         }
       }
       
+      // MACD Direction Check
+      if (config.macd_direction_enabled && config.macd_enabled) {
+        enabledFilters.push('macdDirection');
+        if (indicators.macdLine !== null && indicators.macdLine !== undefined) {
+          const macdLongOK = indicators.macdLine > 0;
+          const macdShortOK = indicators.macdLine < 0;
+          const macdOK = trend === 'long' ? macdLongOK : trend === 'short' ? macdShortOK : false;
+          
+          // Progress based on absolute MACD value
+          const macdAbs = Math.abs(indicators.macdLine);
+          hardFiltersProgress.macdDirection = Math.min(macdAbs * 1000, 100); // Scale appropriately
+          hardFilters.macdDirection = macdOK;
+        } else {
+          hardFiltersProgress.macdDirection = 0;
+          hardFilters.macdDirection = false;
+        }
+      }
+      
       // RSI Momentum Check (zone + momentum)
       if (config.rsi_enabled) {
         enabledFilters.push('rsiMomentum');
@@ -528,6 +546,14 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                           <CircularProgress value={coin.hardFiltersProgress.atr || 0} size={16} />
                           <span className={coin.hardFilters.atr ? 'text-green-500' : 'opacity-70'}>
                             ATR
+                          </span>
+                        </div>
+                      )}
+                      {coin.hardFilters.macdDirection !== undefined && (
+                        <div className="flex items-center gap-1.5">
+                          <CircularProgress value={coin.hardFiltersProgress.macdDirection || 0} size={16} />
+                          <span className={coin.hardFilters.macdDirection ? 'text-green-500' : 'opacity-70'}>
+                            MACD Retning
                           </span>
                         </div>
                       )}
