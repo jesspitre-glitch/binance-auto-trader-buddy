@@ -44,6 +44,17 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         const side = trade.side as 'LONG' | 'SHORT';
         const stopLoss = Number(trade.stop_loss);
         
+        // Hent trailing stop aktiverings-parametre fra indicators_snapshot
+        const trailingStopActivationEnabled = trade.indicators_snapshot?.trailing_stop_activation_enabled ?? true;
+        const trailingStopActivationAtr = Number(trade.indicators_snapshot?.trailing_stop_activation_atr) || 1.0;
+        const atrValue = Number(trade.indicators_snapshot?.atr) || (entryPrice * 0.01);
+        
+        console.log('Trailing Stop Activation Config:', {
+          enabled: trailingStopActivationEnabled,
+          activationAtr: trailingStopActivationAtr,
+          atr: atrValue,
+        });
+        
         // Start altid fra entry price for at vise trailing stop evolution korrekt
         let peakPrice = entryPrice;
         
@@ -65,11 +76,19 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
               peakPrice = price;
             }
             
-            // Beregn trailing stop fra peak
-            if (side === 'LONG') {
-              trailingStop = peakPrice * (1 - trailingPercent / 100);
-            } else {
-              trailingStop = peakPrice * (1 + trailingPercent / 100);
+            // Beregn profit i ATR units
+            const profitInAtr = Math.abs((price - entryPrice) / atrValue);
+            
+            // Tjek om trailing stop skal være aktiv baseret på profit
+            const trailingStopActive = !trailingStopActivationEnabled || (profitInAtr >= trailingStopActivationAtr);
+            
+            // Beregn trailing stop fra peak KUN hvis aktiveret
+            if (trailingStopActive) {
+              if (side === 'LONG') {
+                trailingStop = peakPrice * (1 - trailingPercent / 100);
+              } else {
+                trailingStop = peakPrice * (1 + trailingPercent / 100);
+              }
             }
           }
           
