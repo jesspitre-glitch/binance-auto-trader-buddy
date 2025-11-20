@@ -131,13 +131,28 @@ export const TradingDashboard = () => {
 
       if (error) throw error;
 
+      // Start/stop continuous scanner
+      const scannerAction = newState ? 'start' : 'stop';
+      const { error: scannerError } = await supabase.functions.invoke('continuous-scan-quant', {
+        body: { action: scannerAction, interval_ms: 3000 }
+      });
+
+      if (scannerError) {
+        console.error('Scanner toggle error:', scannerError);
+        toast({
+          title: "Scanner advarsel",
+          description: `Kunne ikke ${scannerAction === 'start' ? 'starte' : 'stoppe'} continuous scanner`,
+          variant: "destructive",
+        });
+      }
+
       setIsActive(newState);
       
       toast({
         title: newState ? "Trading startet" : "Trading stoppet",
         description: newState
-          ? "Auto-trading er nu aktivt"
-          : "Auto-trading er stoppet",
+          ? "Auto-trading og continuous scanner er nu aktivt"
+          : "Auto-trading og continuous scanner er stoppet",
       });
     } catch (error: any) {
       toast({
