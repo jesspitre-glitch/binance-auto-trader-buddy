@@ -206,7 +206,8 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
         if (indicators.macdLine !== null && indicators.macdLine !== undefined) {
           const macdLongOK = indicators.macdLine > 0;
           const macdShortOK = indicators.macdLine < 0;
-          const macdOK = trend === 'long' ? macdLongOK : trend === 'short' ? macdShortOK : false;
+          // Matcher logikken i edge function: passerer hvis ENTEN long ELLER short er OK
+          const macdOK = macdLongOK || macdShortOK;
           
           // Progress based on absolute MACD value
           const macdAbs = Math.abs(indicators.macdLine);
