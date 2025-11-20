@@ -264,38 +264,73 @@ serve(async (req) => {
         let shouldClose = false;
         let closeReason = '';
 
-        // Trailing stop er ALTID aktiv fra start (ingen TP tjek længere)
+        // Get indicator config for this position (hvis strategy_hash findes)
+        let trailingActivationEnabled = true; // default
+        let trailingActivationAtr = 1.0; // default
+        
+        if (position.strategy_hash) {
+          const { data: configData } = await supabaseClient
+            .from('indicator_config')
+            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr')
+            .eq('user_id', position.user_id)
+            .single();
+          
+          if (configData) {
+            trailingActivationEnabled = configData.trailing_stop_activation_enabled ?? true;
+            trailingActivationAtr = configData.trailing_stop_activation_atr ?? 1.0;
+          }
+        }
+
+        // Beregn profit i ATR-enheder
+        const profitDistance = position.side === 'LONG' 
+          ? currentPrice - position.entry_price
+          : position.entry_price - currentPrice;
+        
+        const atr = position.indicators_snapshot?.atr || 0;
+        const profitInAtr = atr > 0 ? profitDistance / atr : 0;
+        
+        // Check om trailing stop skal være aktiv
+        const trailingStopActive = !trailingActivationEnabled || profitInAtr >= trailingActivationAtr;
+        
+        if (trailingActivationEnabled) {
+          console.log(`Trailing activation check for ${position.symbol}: profit=${profitInAtr.toFixed(2)} ATR (need ${trailingActivationAtr} ATR) - Active: ${trailingStopActive}`);
+        }
+
         let newPeakPrice = position.peak_price || position.entry_price;
         let newTrailingStop = position.trailing_stop;
         
-        // Update peak price hvis prisen er bedre
-        if (position.side === 'LONG' && currentPrice > newPeakPrice) {
-          console.log(`Updating peak: ${newPeakPrice} → ${currentPrice} for ${position.symbol}`);
-          newPeakPrice = currentPrice;
-        } else if (position.side === 'SHORT' && currentPrice < newPeakPrice) {
-          console.log(`Updating peak: ${newPeakPrice} → ${currentPrice} for ${position.symbol}`);
-          newPeakPrice = currentPrice;
-        }
-        
-        // Beregn trailing stop fra peak med ATR-baseret procent
-        const trailingPercent = position.trailing_stop_percent || 2.0;
-        if (position.side === 'LONG') {
-          newTrailingStop = newPeakPrice * (1 - trailingPercent / 100);
-          console.log(`Trailing stop (LONG): peak=${newPeakPrice}, percent=${trailingPercent}%, stop=${newTrailingStop.toFixed(4)} for ${position.symbol}`);
+        // Update peak price hvis prisen er bedre OG trailing stop er aktiv
+        if (trailingStopActive) {
+          if (position.side === 'LONG' && currentPrice > newPeakPrice) {
+            console.log(`Updating peak: ${newPeakPrice} → ${currentPrice} for ${position.symbol}`);
+            newPeakPrice = currentPrice;
+          } else if (position.side === 'SHORT' && currentPrice < newPeakPrice) {
+            console.log(`Updating peak: ${newPeakPrice} → ${currentPrice} for ${position.symbol}`);
+            newPeakPrice = currentPrice;
+          }
+          
+          // Beregn trailing stop fra peak med ATR-baseret procent
+          const trailingPercent = position.trailing_stop_percent || 2.0;
+          if (position.side === 'LONG') {
+            newTrailingStop = newPeakPrice * (1 - trailingPercent / 100);
+            console.log(`Trailing stop (LONG): peak=${newPeakPrice}, percent=${trailingPercent}%, stop=${newTrailingStop.toFixed(4)} for ${position.symbol}`);
+          } else {
+            newTrailingStop = newPeakPrice * (1 + trailingPercent / 100);
+            console.log(`Trailing stop (SHORT): peak=${newPeakPrice}, percent=${trailingPercent}%, stop=${newTrailingStop.toFixed(4)} for ${position.symbol}`);
+          }
+          
+          // Tjek om trailing stop er ramt (kun hvis aktiveret)
+          if (position.side === 'LONG' && currentPrice <= newTrailingStop) {
+            shouldClose = true;
+            closeReason = 'TRAILING_STOP_HIT';
+            console.log(`TRAILING STOP HIT (LONG): price=${currentPrice} <= trailing=${newTrailingStop} for ${position.symbol}`);
+          } else if (position.side === 'SHORT' && currentPrice >= newTrailingStop) {
+            shouldClose = true;
+            closeReason = 'TRAILING_STOP_HIT';
+            console.log(`TRAILING STOP HIT (SHORT): price=${currentPrice} >= trailing=${newTrailingStop} for ${position.symbol}`);
+          }
         } else {
-          newTrailingStop = newPeakPrice * (1 + trailingPercent / 100);
-          console.log(`Trailing stop (SHORT): peak=${newPeakPrice}, percent=${trailingPercent}%, stop=${newTrailingStop.toFixed(4)} for ${position.symbol}`);
-        }
-        
-        // Tjek om trailing stop er ramt
-        if (position.side === 'LONG' && currentPrice <= newTrailingStop) {
-          shouldClose = true;
-          closeReason = 'TRAILING_STOP_HIT';
-          console.log(`TRAILING STOP HIT (LONG): price=${currentPrice} <= trailing=${newTrailingStop} for ${position.symbol}`);
-        } else if (position.side === 'SHORT' && currentPrice >= newTrailingStop) {
-          shouldClose = true;
-          closeReason = 'TRAILING_STOP_HIT';
-          console.log(`TRAILING STOP HIT (SHORT): price=${currentPrice} >= trailing=${newTrailingStop} for ${position.symbol}`);
+          console.log(`Trailing stop NOT active yet for ${position.symbol} (need ${trailingActivationAtr} ATR profit, have ${profitInAtr.toFixed(2)} ATR)`);
         }
 
         // Break-even logic: Move SL to entry hvis profit er nået
@@ -364,15 +399,20 @@ serve(async (req) => {
         
         const pnlPercent = ((currentPrice - position.entry_price) / position.entry_price) * 100 * (position.side === 'LONG' ? 1 : -1);
 
-        // Update position with new peak and trailing stop
+        // Update position with new values (kun opdater peak/trailing hvis aktiv)
+        const updateData: any = {
+          unrealized_pnl: pnl,
+          current_price: currentPrice,
+        };
+        
+        if (trailingStopActive) {
+          updateData.peak_price = newPeakPrice;
+          updateData.trailing_stop = newTrailingStop;
+        }
+        
         await supabaseClient
           .from('positions')
-          .update({ 
-            unrealized_pnl: pnl,
-            current_price: currentPrice,
-            peak_price: newPeakPrice,
-            trailing_stop: newTrailingStop,
-          })
+          .update(updateData)
           .eq('id', position.id);
 
         if (shouldClose) {

@@ -79,6 +79,8 @@ export type Database = {
           stochrsi_overbought: number | null
           stochrsi_oversold: number | null
           stochrsi_period: number | null
+          trailing_stop_activation_atr: number | null
+          trailing_stop_activation_enabled: boolean | null
           trend_timeframe: string | null
           updated_at: string | null
           user_id: string
@@ -150,6 +152,8 @@ export type Database = {
           stochrsi_overbought?: number | null
           stochrsi_oversold?: number | null
           stochrsi_period?: number | null
+          trailing_stop_activation_atr?: number | null
+          trailing_stop_activation_enabled?: boolean | null
           trend_timeframe?: string | null
           updated_at?: string | null
           user_id: string
@@ -221,6 +225,8 @@ export type Database = {
           stochrsi_overbought?: number | null
           stochrsi_oversold?: number | null
           stochrsi_period?: number | null
+          trailing_stop_activation_atr?: number | null
+          trailing_stop_activation_enabled?: boolean | null
           trend_timeframe?: string | null
           updated_at?: string | null
           user_id?: string

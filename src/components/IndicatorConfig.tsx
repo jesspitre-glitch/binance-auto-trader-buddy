@@ -74,6 +74,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     atr_stop_loss_multiplier: config?.atr_stop_loss_multiplier || 2,
     atr_trailing_stop_multiplier: config?.atr_trailing_stop_multiplier || 1.5,
     break_even_atr: config?.break_even_atr || 1.0,
+    trailing_stop_activation_enabled: config?.trailing_stop_activation_enabled ?? true,
+    trailing_stop_activation_atr: config?.trailing_stop_activation_atr ?? 1.0,
     
     // ADX
     adx_enabled: config?.adx_enabled ?? true,
@@ -157,6 +159,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       atr_stop_loss_multiplier: config.atr_stop_loss_multiplier ?? 2,
       atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier ?? 1.5,
       break_even_atr: config.break_even_atr ?? 1.0,
+      trailing_stop_activation_enabled: config.trailing_stop_activation_enabled ?? true,
+      trailing_stop_activation_atr: config.trailing_stop_activation_atr ?? 1.0,
       // ADX
       adx_enabled: config.adx_enabled ?? true,
       adx_period: config.adx_period ?? 14,
@@ -773,6 +777,30 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               onChange={(e) => setFormData({ ...formData, break_even_atr: parseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Flyt SL til entry når profit = (× ATR)</p>
+          </div>
+
+          <div className="flex items-center justify-between sm:col-span-3 border-t pt-4">
+            <div className="space-y-1">
+              <Label htmlFor="trailing_stop_activation_enabled">Trailing Stop Aktivering (HARD FILTER)</Label>
+              <p className="text-xs text-muted-foreground">Aktiver kun trailing stop når profit overstiger threshold</p>
+            </div>
+            <Switch
+              id="trailing_stop_activation_enabled"
+              checked={formData.trailing_stop_activation_enabled}
+              onCheckedChange={(checked) => setFormData({...formData, trailing_stop_activation_enabled: checked})}
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="trailing_stop_activation_atr">Trailing Stop Aktiverings-Threshold (× ATR)</Label>
+            <Input
+              id="trailing_stop_activation_atr"
+              type="number"
+              step="0.1"
+              value={formData.trailing_stop_activation_atr}
+              onChange={(e) => setFormData({ ...formData, trailing_stop_activation_atr: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Trailing stop aktiveres først når profit ≥ (× ATR). Standard: 1.0 ATR</p>
           </div>
         </CardContent>
       </Card>
