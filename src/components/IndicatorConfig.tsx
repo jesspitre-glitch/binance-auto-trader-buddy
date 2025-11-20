@@ -57,6 +57,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     macd_slow: config?.macd_slow || 26,
     macd_signal: config?.macd_signal || 9,
     macd_histogram_threshold: config?.macd_histogram_threshold || 0,
+    macd_direction_enabled: config?.macd_direction_enabled ?? true,
     histogram_momentum_enabled: config?.histogram_momentum_enabled ?? true,
     histogram_momentum_periods: config?.histogram_momentum_periods || 3,
     
@@ -141,6 +142,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       macd_slow: config.macd_slow ?? 26,
       macd_signal: config.macd_signal ?? 9,
       macd_histogram_threshold: config.macd_histogram_threshold ?? 0,
+      macd_direction_enabled: config.macd_direction_enabled ?? true,
       histogram_momentum_enabled: config.histogram_momentum_enabled ?? true,
       histogram_momentum_periods: config.histogram_momentum_periods ?? 3,
       // Bollinger Bands
@@ -615,6 +617,15 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               onChange={(e) => setFormData({ ...formData, macd_histogram_threshold: parseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Min histogram for signal (0 = alle)</p>
+          </div>
+
+          <div className="flex items-center justify-between sm:col-span-4">
+            <Label htmlFor="macd_direction_enabled">MACD Retnings-Filter (hård)</Label>
+            <Switch
+              id="macd_direction_enabled"
+              checked={formData.macd_direction_enabled}
+              onCheckedChange={(checked) => setFormData({...formData, macd_direction_enabled: checked})}
+            />
           </div>
 
           <div className="flex items-center justify-between sm:col-span-4">
