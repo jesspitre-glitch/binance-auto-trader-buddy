@@ -849,12 +849,14 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // 🚫 CHECK: BLOKERER HÅRDE FILTRE?
   // ═══════════════════════════════════════════════
   
-  const hardFiltersPass = filterStatus.hard.emaSpread.passed && 
-                          filterStatus.hard.atr.passed && 
-                          filterStatus.hard.adx.passed && 
-                          filterStatus.hard.volume.passed && 
-                          filterStatus.hard.macdDirection.passed &&
-                          filterStatus.hard.rsiMomentum.passed;
+  // Kun check enabled filters
+  const hardFiltersPass = 
+    (!config.ema_enabled || filterStatus.hard.emaSpread.passed) &&
+    (!config.atr_enabled || filterStatus.hard.atr.passed) &&
+    (!config.adx_enabled || filterStatus.hard.adx.passed) &&
+    (!config.volume_enabled || filterStatus.hard.volume.passed) &&
+    (!(config.macd_direction_enabled && config.macd_enabled) || filterStatus.hard.macdDirection.passed) &&
+    (!config.rsi_enabled || filterStatus.hard.rsiMomentum.passed);
   
   if (!hardFiltersPass) {
     console.log(`\n❌ TRADE BLOKERET - Hårde filtre fejlede`);
