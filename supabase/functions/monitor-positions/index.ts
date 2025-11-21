@@ -296,6 +296,7 @@ serve(async (req) => {
           console.log(`Trailing activation check for ${position.symbol}: profit=${profitInAtr.toFixed(2)} ATR (need ${trailingActivationAtr} ATR) - Active: ${trailingStopActive}`);
         }
 
+        let newStopLoss = position.stop_loss;
         let newPeakPrice = position.peak_price || position.entry_price;
         let newTrailingStop = position.trailing_stop;
         
@@ -312,11 +313,15 @@ serve(async (req) => {
           // Beregn trailing stop fra peak med ATR-baseret procent
           const trailingPercent = position.trailing_stop_percent || 2.0;
           if (position.side === 'LONG') {
-            newTrailingStop = newPeakPrice * (1 - trailingPercent / 100);
-            console.log(`Trailing stop (LONG): peak=${newPeakPrice}, percent=${trailingPercent}%, stop=${newTrailingStop.toFixed(4)} for ${position.symbol}`);
+            const calculatedTrailingStop = newPeakPrice * (1 - trailingPercent / 100);
+            // Trailing stop må aldrig være værre end original stop loss
+            newTrailingStop = newStopLoss ? Math.max(calculatedTrailingStop, newStopLoss) : calculatedTrailingStop;
+            console.log(`Trailing stop (LONG): peak=${newPeakPrice}, percent=${trailingPercent}%, calculated=${calculatedTrailingStop.toFixed(4)}, final=${newTrailingStop.toFixed(4)} (max with SL=${newStopLoss}) for ${position.symbol}`);
           } else {
-            newTrailingStop = newPeakPrice * (1 + trailingPercent / 100);
-            console.log(`Trailing stop (SHORT): peak=${newPeakPrice}, percent=${trailingPercent}%, stop=${newTrailingStop.toFixed(4)} for ${position.symbol}`);
+            const calculatedTrailingStop = newPeakPrice * (1 + trailingPercent / 100);
+            // Trailing stop må aldrig være værre end original stop loss
+            newTrailingStop = newStopLoss ? Math.min(calculatedTrailingStop, newStopLoss) : calculatedTrailingStop;
+            console.log(`Trailing stop (SHORT): peak=${newPeakPrice}, percent=${trailingPercent}%, calculated=${calculatedTrailingStop.toFixed(4)}, final=${newTrailingStop.toFixed(4)} (min with SL=${newStopLoss}) for ${position.symbol}`);
           }
           
           // Tjek om trailing stop er ramt (kun hvis aktiveret)
@@ -334,7 +339,6 @@ serve(async (req) => {
         }
 
         // Break-even logic: Move SL to entry hvis profit er nået
-        let newStopLoss = position.stop_loss;
         if (!position.break_even_activated) {
           let breakEvenDistance = 0;
           
@@ -370,15 +374,16 @@ serve(async (req) => {
           }
         }
 
-        // Check stop loss (KUN hvis trailing stop IKKE er aktiv)
-        // Trailing stop har prioritet når den er aktiveret
-        if (!shouldClose && newStopLoss && !trailingStopActive) {
+        // Check stop loss (ALTID - trailing stop er kun en bonus beskyttelse)
+        if (!shouldClose && newStopLoss) {
           if (position.side === 'LONG' && currentPrice <= newStopLoss) {
             shouldClose = true;
             closeReason = position.break_even_activated ? 'BREAK_EVEN_HIT' : 'STOP_LOSS_HIT';
+            console.log(`STOP LOSS HIT (LONG): price=${currentPrice} <= SL=${newStopLoss} for ${position.symbol}`);
           } else if (position.side === 'SHORT' && currentPrice >= newStopLoss) {
             shouldClose = true;
             closeReason = position.break_even_activated ? 'BREAK_EVEN_HIT' : 'STOP_LOSS_HIT';
+            console.log(`STOP LOSS HIT (SHORT): price=${currentPrice} >= SL=${newStopLoss} for ${position.symbol}`);
           }
         }
 
