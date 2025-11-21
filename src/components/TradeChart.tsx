@@ -247,11 +247,12 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         
         {/* Stop Loss line */}
         <ReferenceLine 
-          y={trade.stop_loss} 
+          y={trade.stop_loss || trade.indicators_snapshot?.stop_loss} 
           stroke="#ef4444" 
+          strokeWidth={2}
           strokeDasharray="3 3"
-          strokeOpacity={0.7}
-          label="SL"
+          strokeOpacity={0.9}
+          label={{ value: "SL", fill: "#ef4444", fontSize: 12, fontWeight: "bold" }}
         />
         
         {/* Exit price line */}
