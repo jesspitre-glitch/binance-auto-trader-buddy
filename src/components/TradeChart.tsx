@@ -135,24 +135,28 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         console.log('First 5 data points:', data.slice(0, 5));
         console.log('Last 5 data points:', data.slice(-5));
         
-        // Find closest data points to entry and exit times
+        // Find closest data point to entry time
         const entryPoint = data.reduce((closest, current) => {
           const closestDiff = Math.abs(closest.timestamp - openTime);
           const currentDiff = Math.abs(current.timestamp - openTime);
           return currentDiff < closestDiff ? current : closest;
         }, data[0]);
         
-        const exitPoint = data.reduce((closest, current) => {
-          const closestDiff = Math.abs(closest.timestamp - closeTime);
-          const currentDiff = Math.abs(current.timestamp - closeTime);
-          return currentDiff < closestDiff ? current : closest;
-        }, data[0]);
+        // Only find exit point if position is closed
+        let exitPoint = null;
+        if (trade.exit_price && trade.closed_at) {
+          exitPoint = data.reduce((closest, current) => {
+            const closestDiff = Math.abs(closest.timestamp - closeTime);
+            const currentDiff = Math.abs(current.timestamp - closeTime);
+            return currentDiff < closestDiff ? current : closest;
+          }, data[0]);
+        }
         
         // Add markers to data
         const dataWithMarkers = data.map(d => ({
           ...d,
           entryMarker: d.timestamp === entryPoint.timestamp ? trade.entry_price : null,
-          exitMarker: d.timestamp === exitPoint.timestamp ? trade.exit_price : null,
+          exitMarker: exitPoint && d.timestamp === exitPoint.timestamp ? trade.exit_price : null,
         }));
         
         setChartData(dataWithMarkers);
