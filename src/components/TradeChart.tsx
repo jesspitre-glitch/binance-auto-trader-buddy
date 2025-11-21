@@ -48,15 +48,19 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         const trailingStopActivationEnabled = trade.indicators_snapshot?.trailing_stop_activation_enabled ?? true;
         const trailingStopActivationAtr = Number(trade.indicators_snapshot?.trailing_stop_activation_atr) || 1.0;
         const atrValue = Number(trade.indicators_snapshot?.atr) || (entryPrice * 0.01);
+        const breakEvenAtr = Number(trade.indicators_snapshot?.break_even_atr) || 1.5;
         
         console.log('Trailing Stop Activation Config:', {
           enabled: trailingStopActivationEnabled,
           activationAtr: trailingStopActivationAtr,
+          breakEvenAtr: breakEvenAtr,
           atr: atrValue,
         });
         
         // Start altid fra entry price for at vise trailing stop evolution korrekt
         let peakPrice = entryPrice;
+        let currentStopLoss = stopLoss;
+        let breakEvenActivated = false;
         
         const data = klines.map((k: any, index: number) => {
           const timestamp = k[0];
@@ -64,37 +68,55 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           const high = parseFloat(k[2]);
           const low = parseFloat(k[3]);
           
-          // Trailing stop beregnes løbende efter position åbnes
+          // Trailing stop og effective stop beregnes løbende efter position åbnes
           let trailingStop = null;
+          let effectiveStop = currentStopLoss;
+          
           if (timestamp >= openTime) {
             // VIGTIGT: Brug KUN close price (ikke high/low) for at matche backend monitor logik
             // Backend monitor bruger currentPrice (close) til at opdatere peak, ikke high/low
             
+            // Beregn profit i ATR units korrekt for LONG vs SHORT
+            const profitInAtr = side === 'LONG' 
+              ? (price - entryPrice) / atrValue 
+              : (entryPrice - price) / atrValue;
+            
+            // Check break-even activation FØRST (matches backend logic)
+            if (!breakEvenActivated) {
+              const breakEvenDistance = breakEvenAtr * atrValue;
+              const breakEvenReached = side === 'LONG'
+                ? price >= (entryPrice + breakEvenDistance)
+                : price <= (entryPrice - breakEvenDistance);
+              
+              if (breakEvenReached) {
+                currentStopLoss = entryPrice;
+                breakEvenActivated = true;
+                effectiveStop = currentStopLoss;
+              }
+            }
+            
+            // Update peak price
             if (side === 'LONG' && price > peakPrice) {
               peakPrice = price;
             } else if (side === 'SHORT' && price < peakPrice) {
               peakPrice = price;
             }
             
-            // Beregn profit i ATR units korrekt for LONG vs SHORT
-            // For LONG: profit når price > entry (pris stiger)
-            // For SHORT: profit når price < entry (pris falder)
-            const profitInAtr = side === 'LONG' 
-              ? (price - entryPrice) / atrValue 
-              : (entryPrice - price) / atrValue;
-            
             // Tjek om trailing stop skal være aktiv baseret på profit
             const trailingStopActive = !trailingStopActivationEnabled || (profitInAtr >= trailingStopActivationAtr);
-            
-            console.log(`[${new Date(timestamp).toLocaleTimeString()}] price: ${price.toFixed(4)}, peak: ${peakPrice.toFixed(4)}, profit: ${profitInAtr.toFixed(2)} ATR, active: ${trailingStopActive}`);
             
             // Beregn trailing stop fra peak KUN hvis aktiveret
             if (trailingStopActive) {
               if (side === 'LONG') {
-                trailingStop = peakPrice * (1 - trailingPercent / 100);
+                const calculatedTrailing = peakPrice * (1 - trailingPercent / 100);
+                trailingStop = currentStopLoss ? Math.max(calculatedTrailing, currentStopLoss) : calculatedTrailing;
               } else {
-                trailingStop = peakPrice * (1 + trailingPercent / 100);
+                const calculatedTrailing = peakPrice * (1 + trailingPercent / 100);
+                trailingStop = currentStopLoss ? Math.min(calculatedTrailing, currentStopLoss) : calculatedTrailing;
               }
+              effectiveStop = trailingStop;
+            } else {
+              effectiveStop = currentStopLoss;
             }
           }
           
@@ -105,6 +127,8 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
             high,
             low,
             trailingStop,
+            effectiveStop,
+            breakEven: breakEvenActivated ? entryPrice : null,
           };
         });
         
@@ -198,15 +222,28 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           name="Price"
         />
         
-        {/* Trailing Stop line - shows dynamic trailing stop movement */}
+        {/* Effective Stop line - den rigtige stop der gælder (bedste af SL/break-even/trailing) */}
         <Line 
           type="stepAfter" 
-          dataKey="trailingStop" 
+          dataKey="effectiveStop" 
           stroke="#f59e0b" 
-          strokeWidth={2}
-          strokeDasharray="3 3"
+          strokeWidth={3}
+          strokeDasharray="5 3"
           dot={false}
-          name="Trailing Stop"
+          name="Effective Stop"
+          connectNulls={false}
+        />
+        
+        {/* Break-even line (shows when BE is activated) */}
+        <Line 
+          type="stepAfter" 
+          dataKey="breakEven" 
+          stroke="#8b5cf6" 
+          strokeWidth={2}
+          strokeDasharray="2 2"
+          strokeOpacity={0.6}
+          dot={false}
+          name="Break-Even"
           connectNulls={false}
         />
         
