@@ -142,9 +142,10 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           return currentDiff < closestDiff ? current : closest;
         }, data[0]);
         
-        // Only find exit point if position is closed
+        // Only find exit point if position is actually closed
+        const isPositionClosed = trade.closed_at != null && trade.exit_price != null;
         let exitPoint = null;
-        if (trade.exit_price && trade.closed_at) {
+        if (isPositionClosed) {
           exitPoint = data.reduce((closest, current) => {
             const closestDiff = Math.abs(closest.timestamp - closeTime);
             const currentDiff = Math.abs(current.timestamp - closeTime);
@@ -152,11 +153,11 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           }, data[0]);
         }
         
-        // Add markers to data
+        // Add markers to data - only add exit marker if position is closed
         const dataWithMarkers = data.map(d => ({
           ...d,
           entryMarker: d.timestamp === entryPoint.timestamp ? trade.entry_price : null,
-          exitMarker: exitPoint && d.timestamp === exitPoint.timestamp ? trade.exit_price : null,
+          exitMarker: isPositionClosed && exitPoint && d.timestamp === exitPoint.timestamp ? trade.exit_price : null,
         }));
         
         setChartData(dataWithMarkers);
@@ -260,7 +261,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         />
         
         {/* Exit marker (X) - only show if position is closed */}
-        {trade.exit_price && trade.closed_at && (
+        {trade.closed_at != null && trade.exit_price != null && (
           <Scatter 
             dataKey="exitMarker" 
             fill="#ef4444" 
@@ -299,7 +300,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         />
         
         {/* Exit price line - only show if position is closed */}
-        {trade.exit_price && trade.closed_at && (
+        {trade.closed_at != null && trade.exit_price != null && (
           <ReferenceLine 
             y={trade.exit_price} 
             stroke="#ef4444" 
