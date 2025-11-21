@@ -259,13 +259,15 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           name="Entry"
         />
         
-        {/* Exit marker (X) */}
-        <Scatter 
-          dataKey="exitMarker" 
-          fill="#ef4444" 
-          shape={<CustomShape />}
-          name="Exit"
-        />
+        {/* Exit marker (X) - only show if position is closed */}
+        {trade.exit_price && trade.closed_at && (
+          <Scatter 
+            dataKey="exitMarker" 
+            fill="#ef4444" 
+            shape={<CustomShape />}
+            name="Exit"
+          />
+        )}
         
         {/* Entry price line */}
         <ReferenceLine 
@@ -296,14 +298,16 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           label={{ value: "SL", fill: "#ef4444", fontSize: 12, fontWeight: "bold" }}
         />
         
-        {/* Exit price line */}
-        <ReferenceLine 
-          y={trade.exit_price} 
-          stroke="#ef4444" 
-          strokeDasharray="5 5"
-          strokeOpacity={0.5}
-          label="Exit"
-        />
+        {/* Exit price line - only show if position is closed */}
+        {trade.exit_price && trade.closed_at && (
+          <ReferenceLine 
+            y={trade.exit_price} 
+            stroke="#ef4444" 
+            strokeDasharray="5 5"
+            strokeOpacity={0.5}
+            label="Exit"
+          />
+        )}
       </ComposedChart>
     </ResponsiveContainer>
   );
