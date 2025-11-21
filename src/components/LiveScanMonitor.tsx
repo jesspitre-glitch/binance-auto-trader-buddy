@@ -146,7 +146,17 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     // Check BLØDE CONDITIONS fra conditionDetails
     const softConditions: Record<string, boolean> = {};
     const conditionDetails = indicators.conditionDetails || {};
-    const trend = result.signal === 'LONG' ? 'long' : result.signal === 'SHORT' ? 'short' : null;
+    
+    // Brug DIREKTE longConditionsMet/shortConditionsMet fra DB i stedet for at parse én efter én
+    const longConditionsMet = conditionDetails.longConditionsMet || 0;
+    const shortConditionsMet = conditionDetails.shortConditionsMet || 0;
+    
+    // Bestem trend baseret på hvilken retning har flest betingelser opfyldt
+    const trend = longConditionsMet > shortConditionsMet ? 'long' : 
+                  shortConditionsMet > longConditionsMet ? 'short' : 
+                  result.signal === 'LONG' ? 'long' :
+                  result.signal === 'SHORT' ? 'short' : 
+                  null;
 
     if (config) {
       // EMA Spread Check
@@ -274,58 +284,52 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     const totalEnabledFilters = enabledFilters.length;
     const allHardFiltersPassed = Object.values(hardFilters).every(v => v);
     
-    // Parse soft conditions fra conditionDetails OG tæl trend-specifikke
+    // Parse hvilke soft conditions der er enabled (til visning)
     let totalEnabledSoftConditions = 0;
-    let trendSpecificConditionsMet = 0;
     
     if (conditionDetails.ema?.enabled) {
       totalEnabledSoftConditions++;
       const isMetForTrend = trend ? conditionDetails.ema[trend] === true : false;
       softConditions.ema = isMetForTrend;
-      if (isMetForTrend) trendSpecificConditionsMet++;
     }
     if (conditionDetails.rsi?.enabled) {
       totalEnabledSoftConditions++;
       const isMetForTrend = trend ? conditionDetails.rsi[trend] === true : false;
       softConditions.rsi = isMetForTrend;
-      if (isMetForTrend) trendSpecificConditionsMet++;
     }
     if (conditionDetails.stochRSI?.enabled) {
       totalEnabledSoftConditions++;
       const isMetForTrend = trend ? conditionDetails.stochRSI[trend] === true : false;
       softConditions.stochRSI = isMetForTrend;
-      if (isMetForTrend) trendSpecificConditionsMet++;
     }
     if (conditionDetails.macd?.enabled) {
       totalEnabledSoftConditions++;
       const isMetForTrend = trend ? conditionDetails.macd[trend] === true : false;
       softConditions.macd = isMetForTrend;
-      if (isMetForTrend) trendSpecificConditionsMet++;
     }
     if (conditionDetails.bb?.enabled) {
       totalEnabledSoftConditions++;
       const isMetForTrend = trend ? conditionDetails.bb[trend] === true : false;
       softConditions.bb = isMetForTrend;
-      if (isMetForTrend) trendSpecificConditionsMet++;
     }
     if (conditionDetails.pivotPoints?.enabled) {
       totalEnabledSoftConditions++;
       const isMetForTrend = trend ? conditionDetails.pivotPoints[trend] === true : false;
       softConditions.pivotPoints = isMetForTrend;
-      if (isMetForTrend) trendSpecificConditionsMet++;
     }
     if (conditionDetails.volume?.enabled) {
       totalEnabledSoftConditions++;
       const isMetForTrend = trend ? conditionDetails.volume[trend] === true : false;
       softConditions.volume = isMetForTrend;
-      if (isMetForTrend) trendSpecificConditionsMet++;
     }
 
-    // Brug trend-specifikke conditions i stedet for total
-    const actualConditionsMet = trendSpecificConditionsMet;
+    // Brug trend-specifikke conditions direkte fra DB i stedet for at parse
+    const actualConditionsMet = trend === 'long' ? longConditionsMet : 
+                                trend === 'short' ? shortConditionsMet : 
+                                Math.max(longConditionsMet, shortConditionsMet);
     const strength = Math.min((actualConditionsMet / conditionsRequired) * 100, 100);
 
-    console.log(`Updating ${result.symbol}: strength=${strength.toFixed(1)}%, trend=${trend}, conditions=${actualConditionsMet}/${conditionsRequired} (total enabled: ${totalEnabledSoftConditions}), hardFilters=${JSON.stringify(hardFilters)}`);
+    console.log(`Updating ${result.symbol}: strength=${strength.toFixed(1)}%, trend=${trend}, conditions=${actualConditionsMet}/${conditionsRequired} (long:${longConditionsMet}, short:${shortConditionsMet}), hardFilters=${JSON.stringify(hardFilters)}`);
 
     setCoins((prev) => {
       const newMap = new Map(prev);
