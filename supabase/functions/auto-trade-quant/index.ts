@@ -44,6 +44,9 @@ interface IndicatorConfig {
   atr_period: number;
   min_atr: number;
   min_atr_percent: number;
+  atr_base_min?: number;
+  atr_floor?: number;
+  atr_ceiling?: number;
   atr_stop_loss_multiplier: number;
   atr_take_profit_multiplier: number;
   atr_trailing_stop_multiplier: number;
@@ -51,6 +54,9 @@ interface IndicatorConfig {
   adx_enabled: boolean;
   adx_period: number;
   adx_threshold: number;
+  adx_base_min?: number;
+  adx_floor?: number;
+  adx_ceiling?: number;
   volume_enabled: boolean;
   volume_avg_period: number;
   volume_multiplier: number;
@@ -551,7 +557,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     }
   }
   
-  // 2️⃣ ATR
+  // 2️⃣ ATR (med adaptive threshold)
   if (config.atr_enabled && atr !== null) {
     filterStatus.hard.atr.value = atr.toFixed(6);
     
@@ -566,26 +572,77 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       filterStatus.hard.atr.reason = `ATR ${atr.toFixed(6)} < ${config.min_atr.toFixed(6)} (lav volatilitet)`;
     }
     
-    // Check ATR som procent af pris (kører altid hvis enabled)
+    // Check ATR som procent af pris med ADAPTIVE threshold
     if (config.min_atr_percent > 0) {
       const atrPercent = (atr / currentPrice) * 100;
-      console.log(`   📊 ATR%: ${atrPercent.toFixed(3)}% (min: ${config.min_atr_percent}%)`);
       
-      if (atrPercent < config.min_atr_percent) {
+      // Beregn adaptive ATR threshold
+      let dynamicMinATR = config.min_atr_percent; // Fallback til standard
+      
+      if (config.atr_base_min && config.atr_floor && config.atr_ceiling && currentVolume !== null && avgVolume !== null && avgVolume > 0) {
+        const volumeRatio = currentVolume / avgVolume;
+        dynamicMinATR = config.atr_base_min * volumeRatio;
+        
+        // Anvend floor og ceiling
+        if (dynamicMinATR < config.atr_floor) dynamicMinATR = config.atr_floor;
+        if (dynamicMinATR > config.atr_ceiling) dynamicMinATR = config.atr_ceiling;
+        
+        console.log(`   🔄 Adaptive ATR%: Base=${config.atr_base_min}% × Volume(${volumeRatio.toFixed(2)}) = ${dynamicMinATR.toFixed(3)}% (floor=${config.atr_floor}%, ceiling=${config.atr_ceiling}%)`);
+      }
+      
+      console.log(`   📊 ATR%: ${atrPercent.toFixed(3)}% (dynamisk min: ${dynamicMinATR.toFixed(3)}%)`);
+      
+      if (atrPercent < dynamicMinATR) {
         filterStatus.hard.atr.passed = false;
-        filterStatus.hard.atr.reason = `ATR% ${atrPercent.toFixed(3)}% < ${config.min_atr_percent}% (for lav volatilitet i forhold til pris)`;
-        console.log(`   ❌ ATR% blokerer: ${atrPercent.toFixed(3)}% < ${config.min_atr_percent}%`);
+        filterStatus.hard.atr.reason = `ATR% ${atrPercent.toFixed(3)}% < ${dynamicMinATR.toFixed(3)}% (adaptive threshold)`;
+        console.log(`   ❌ ATR% blokerer: ${atrPercent.toFixed(3)}% < ${dynamicMinATR.toFixed(3)}%`);
       }
     }
   }
   
-  // 3️⃣ ADX
+  // 3️⃣ ADX (med adaptive threshold)
   if (config.adx_enabled && adx !== null) {
     filterStatus.hard.adx.value = adx.toFixed(2);
     
-    if (adx < config.adx_threshold) {
+    // Beregn adaptive ADX threshold
+    let dynamicMinADX = config.adx_threshold; // Fallback til standard
+    
+    if (config.adx_base_min && config.adx_floor && config.adx_ceiling && atr !== null) {
+      // Beregn nuværende og gennemsnitlig ATR%
+      const currentATRPercent = (atr / currentPrice) * 100;
+      
+      // For gennemsnitlig ATR%, brug de sidste N perioder
+      const atrPeriod = config.atr_period || 14;
+      let avgATRPercent = currentATRPercent; // Fallback
+      
+      if (closes.length >= atrPeriod) {
+        const atrValues = [];
+        for (let i = closes.length - atrPeriod; i < closes.length; i++) {
+          const tr = Math.max(
+            highs[i] - lows[i],
+            Math.abs(highs[i] - (i > 0 ? closes[i - 1] : closes[i])),
+            Math.abs(lows[i] - (i > 0 ? closes[i - 1] : closes[i]))
+          );
+          atrValues.push((tr / closes[i]) * 100);
+        }
+        avgATRPercent = atrValues.reduce((sum, val) => sum + val, 0) / atrValues.length;
+      }
+      
+      if (avgATRPercent > 0) {
+        const atrRatio = currentATRPercent / avgATRPercent;
+        dynamicMinADX = config.adx_base_min * atrRatio;
+        
+        // Anvend floor og ceiling
+        if (dynamicMinADX < config.adx_floor) dynamicMinADX = config.adx_floor;
+        if (dynamicMinADX > config.adx_ceiling) dynamicMinADX = config.adx_ceiling;
+        
+        console.log(`   🔄 Adaptive ADX: Base=${config.adx_base_min} × ATR%(${atrRatio.toFixed(2)}) = ${dynamicMinADX.toFixed(2)} (floor=${config.adx_floor}, ceiling=${config.adx_ceiling})`);
+      }
+    }
+    
+    if (adx < dynamicMinADX) {
       filterStatus.hard.adx.passed = false;
-      filterStatus.hard.adx.reason = `${adx.toFixed(2)} < ${config.adx_threshold} (trend ikke stærk nok)`;
+      filterStatus.hard.adx.reason = `${adx.toFixed(2)} < ${dynamicMinADX.toFixed(2)} (adaptive threshold)`;
     }
   }
   

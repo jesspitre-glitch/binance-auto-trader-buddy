@@ -16,10 +16,16 @@ export type Database = {
     Tables: {
       indicator_config: {
         Row: {
+          adx_base_min: number | null
+          adx_ceiling: number | null
           adx_enabled: boolean | null
+          adx_floor: number | null
           adx_period: number | null
           adx_threshold: number | null
+          atr_base_min: number | null
+          atr_ceiling: number | null
           atr_enabled: boolean | null
+          atr_floor: number | null
           atr_period: number | null
           atr_stop_loss_multiplier: number | null
           atr_take_profit_multiplier: number | null
@@ -89,10 +95,16 @@ export type Database = {
           volume_multiplier: number | null
         }
         Insert: {
+          adx_base_min?: number | null
+          adx_ceiling?: number | null
           adx_enabled?: boolean | null
+          adx_floor?: number | null
           adx_period?: number | null
           adx_threshold?: number | null
+          atr_base_min?: number | null
+          atr_ceiling?: number | null
           atr_enabled?: boolean | null
+          atr_floor?: number | null
           atr_period?: number | null
           atr_stop_loss_multiplier?: number | null
           atr_take_profit_multiplier?: number | null
@@ -162,10 +174,16 @@ export type Database = {
           volume_multiplier?: number | null
         }
         Update: {
+          adx_base_min?: number | null
+          adx_ceiling?: number | null
           adx_enabled?: boolean | null
+          adx_floor?: number | null
           adx_period?: number | null
           adx_threshold?: number | null
+          atr_base_min?: number | null
+          atr_ceiling?: number | null
           atr_enabled?: boolean | null
+          atr_floor?: number | null
           atr_period?: number | null
           atr_stop_loss_multiplier?: number | null
           atr_take_profit_multiplier?: number | null

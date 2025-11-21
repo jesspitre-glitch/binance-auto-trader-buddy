@@ -71,6 +71,9 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     atr_period: config?.atr_period || 14,
     min_atr: config?.min_atr ?? 0,
     min_atr_percent: config?.min_atr_percent ?? 0.5,
+    atr_base_min: config?.atr_base_min ?? 0.4,
+    atr_floor: config?.atr_floor ?? 0.2,
+    atr_ceiling: config?.atr_ceiling ?? 1.0,
     atr_stop_loss_multiplier: config?.atr_stop_loss_multiplier || 2,
     atr_trailing_stop_multiplier: config?.atr_trailing_stop_multiplier || 1.5,
     break_even_atr: config?.break_even_atr || 1.0,
@@ -81,6 +84,9 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     adx_enabled: config?.adx_enabled ?? true,
     adx_period: config?.adx_period || 14,
     adx_threshold: config?.adx_threshold || 25,
+    adx_base_min: config?.adx_base_min ?? 30,
+    adx_floor: config?.adx_floor ?? 20,
+    adx_ceiling: config?.adx_ceiling ?? 50,
     
     // Volume & Signal
     volume_enabled: config?.volume_enabled ?? true,
@@ -156,6 +162,9 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       atr_period: config.atr_period ?? 14,
       min_atr: config.min_atr ?? 0,
       min_atr_percent: config.min_atr_percent ?? 0.5,
+      atr_base_min: config.atr_base_min ?? 0.4,
+      atr_floor: config.atr_floor ?? 0.2,
+      atr_ceiling: config.atr_ceiling ?? 1.0,
       atr_stop_loss_multiplier: config.atr_stop_loss_multiplier ?? 2,
       atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier ?? 1.5,
       break_even_atr: config.break_even_atr ?? 1.0,
@@ -165,6 +174,9 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       adx_enabled: config.adx_enabled ?? true,
       adx_period: config.adx_period ?? 14,
       adx_threshold: config.adx_threshold ?? 25,
+      adx_base_min: config.adx_base_min ?? 30,
+      adx_floor: config.adx_floor ?? 20,
+      adx_ceiling: config.adx_ceiling ?? 50,
       // Volume & Signal
       volume_enabled: config.volume_enabled ?? true,
       volume_avg_period: config.volume_avg_period ?? 20,
@@ -231,6 +243,9 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       atr_period: config.atr_period ?? 14,
       min_atr: config.min_atr ?? 0,
       min_atr_percent: config.min_atr_percent ?? 0.5,
+      atr_base_min: config.atr_base_min ?? 0.4,
+      atr_floor: config.atr_floor ?? 0.2,
+      atr_ceiling: config.atr_ceiling ?? 1.0,
       atr_stop_loss_multiplier: config.atr_stop_loss_multiplier ?? 2,
       atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier ?? 1.5,
       break_even_atr: config.break_even_atr ?? 1.0,
@@ -239,6 +254,9 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       adx_enabled: config.adx_enabled ?? true,
       adx_period: config.adx_period ?? 14,
       adx_threshold: config.adx_threshold ?? 25,
+      adx_base_min: config.adx_base_min ?? 30,
+      adx_floor: config.adx_floor ?? 20,
+      adx_ceiling: config.adx_ceiling ?? 50,
       volume_enabled: config.volume_enabled ?? true,
       volume_avg_period: config.volume_avg_period ?? 20,
       volume_multiplier: config.volume_multiplier ?? 1.2,
@@ -820,6 +838,50 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             />
             <p className="text-xs text-muted-foreground">Bloker trade hvis (ATR/Price × 100) &lt; Minimum ATR (%)</p>
           </div>
+          
+          <div className="space-y-2 sm:col-span-3 border-t pt-4">
+            <h4 className="font-semibold">🔄 Adaptive ATR Threshold</h4>
+            <p className="text-xs text-muted-foreground">
+              Dynamisk ATR% = Base × (Nuværende Volume / Gennemsnits Volume)<br/>
+              Bruges hvis værdi ligger mellem Floor og Ceiling
+            </p>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="atr_base_min">ATR Base Minimum (%)</Label>
+            <Input
+              id="atr_base_min"
+              type="number"
+              step="0.01"
+              value={formData.atr_base_min}
+              onChange={(e) => setFormData({ ...formData, atr_base_min: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Base værdi for adaptive beregning</p>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="atr_floor">ATR Floor (%)</Label>
+            <Input
+              id="atr_floor"
+              type="number"
+              step="0.01"
+              value={formData.atr_floor}
+              onChange={(e) => setFormData({ ...formData, atr_floor: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Minimum værdi (floor)</p>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="atr_ceiling">ATR Ceiling (%)</Label>
+            <Input
+              id="atr_ceiling"
+              type="number"
+              step="0.01"
+              value={formData.atr_ceiling}
+              onChange={(e) => setFormData({ ...formData, atr_ceiling: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Maksimum værdi (ceiling)</p>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="atr_stop_loss_multiplier">Stop-Loss Multiplikator</Label>
             <Input
@@ -917,6 +979,50 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               onChange={(e) => setFormData({ ...formData, adx_threshold: parseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Min trend styrke - højere = stærkere trend krævet</p>
+          </div>
+          
+          <div className="space-y-2 sm:col-span-2 border-t pt-4">
+            <h4 className="font-semibold">🔄 Adaptive ADX Threshold</h4>
+            <p className="text-xs text-muted-foreground">
+              Dynamisk ADX = Base × (Nuværende ATR% / Gennemsnits ATR%)<br/>
+              Bruges hvis værdi ligger mellem Floor og Ceiling
+            </p>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="adx_base_min">ADX Base Minimum</Label>
+            <Input
+              id="adx_base_min"
+              type="number"
+              step="0.1"
+              value={formData.adx_base_min}
+              onChange={(e) => setFormData({ ...formData, adx_base_min: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Base værdi for adaptive beregning</p>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="adx_floor">ADX Floor</Label>
+            <Input
+              id="adx_floor"
+              type="number"
+              step="0.1"
+              value={formData.adx_floor}
+              onChange={(e) => setFormData({ ...formData, adx_floor: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Minimum værdi (floor)</p>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="adx_ceiling">ADX Ceiling</Label>
+            <Input
+              id="adx_ceiling"
+              type="number"
+              step="0.1"
+              value={formData.adx_ceiling}
+              onChange={(e) => setFormData({ ...formData, adx_ceiling: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Maksimum værdi (ceiling)</p>
           </div>
         </CardContent>
       </Card>
