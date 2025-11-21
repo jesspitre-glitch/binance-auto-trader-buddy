@@ -93,6 +93,36 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
                 ${(trade.entry_price * trade.quantity).toFixed(2)}
               </div>
             </div>
+
+            {(trade.stop_loss || trade.indicators_snapshot?.stop_loss) && (
+              <div className="border rounded-lg p-3">
+                <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  Stop Loss
+                </div>
+                <div className="font-mono font-semibold text-loss">
+                  ${(trade.stop_loss || trade.indicators_snapshot?.stop_loss)}
+                </div>
+              </div>
+            )}
+
+            {(trade.indicators_snapshot?.trailing_stop) && (
+              <div className="border rounded-lg p-3">
+                <div className="text-xs text-muted-foreground mb-1">Trailing Stop</div>
+                <div className="font-mono font-semibold text-warning">
+                  ${trade.indicators_snapshot.trailing_stop}
+                </div>
+              </div>
+            )}
+
+            {(trade.indicators_snapshot?.peak_price) && (
+              <div className="border rounded-lg p-3">
+                <div className="text-xs text-muted-foreground mb-1">Peak Price</div>
+                <div className="font-mono font-semibold">
+                  ${trade.indicators_snapshot.peak_price}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Open & Close Reasons */}

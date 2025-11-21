@@ -459,6 +459,16 @@ serve(async (req) => {
               .eq('id', position.id);
 
             // Add to trade history with actual values from Binance and indicators
+            // Gem stop_loss og trailing_stop værdier i indicators_snapshot
+            const enhancedSnapshot = {
+              ...(position.indicators_snapshot || {}),
+              stop_loss: newStopLoss,
+              trailing_stop: newTrailingStop,
+              trailing_stop_percent: position.trailing_stop_percent,
+              peak_price: newPeakPrice,
+              break_even_activated: position.break_even_activated,
+            };
+
             const { error: historyError } = await supabaseClient.from('trade_history').insert({
               user_id: position.user_id,
               symbol: position.symbol,
@@ -474,7 +484,7 @@ serve(async (req) => {
               strategy_hash: position.strategy_hash,
               open_reason: position.open_reason,
               close_reason: closeReason,
-              indicators_snapshot: position.indicators_snapshot || null,
+              indicators_snapshot: enhancedSnapshot,
             });
 
             if (historyError) {
