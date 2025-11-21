@@ -859,38 +859,10 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     (!config.rsi_enabled || filterStatus.hard.rsiMomentum.passed);
   
   if (!hardFiltersPass) {
-    console.log(`\n❌ TRADE BLOKERET - Hårde filtre fejlede`);
-    console.log(`⛔ Ingen trade evaluering (men bløde filtre er evalueret)\n`);
-    return {
-      signal: 'NONE',
-      indicators: {
-        price: currentPrice,
-        emaFast: emaFastCurrent,
-        emaMedium: emaMediumCurrent,
-        emaSlow: emaSlowCurrent,
-        rsi: rsiCurrent,
-        stochRSI_k: stochRSI?.k || null,
-        stochRSI_d: stochRSI?.d || null,
-        macd: macd?.histogram || null,
-        macdLine: macd?.macd || null,
-        macdSignal: macd?.signal || null,
-        atr: atr,
-        bb,
-        adx,
-        volume: currentVolume,
-        avgVolume,
-        volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
-        pivotPoints: null,
-        conditionsMet, // Bløde filtre er nu evalueret!
-        emaSpreadPercent: emaSpreadPercent,
-        trend: filterStatus.hard.rsiMomentum.long ? 'BULLISH' : filterStatus.hard.rsiMomentum.short ? 'BEARISH' : 'UNKNOWN',
-      },
-      stopLoss: 0,
-      takeProfit: null,
-    };
+    console.log(`\n⚠️ HÅRDE FILTRE FEJLEDE - Men fortsætter evaluering for prioritering\n`);
+  } else {
+    console.log(`\n✅ ALLE HÅRDE FILTRE PASSERET\n`);
   }
-  
-  console.log(`\n✅ ALLE HÅRDE FILTRE PASSERET - Fortsætter til signal evaluering\n`);
   
   // 🔍 ULTRA-DETALJERET SIGNAL LOGGING MED VÆRDIER & THRESHOLDS
   console.log(`\n═══════════════════════════════════════════`);
@@ -1040,7 +1012,9 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     stopLoss: longSignal 
       ? currentPrice - (atrValue * config.atr_stop_loss_multiplier)
       : currentPrice + (atrValue * config.atr_stop_loss_multiplier),
-    takeProfit: null, // Kun trailing stop bruges til profit
+    takeProfit: null,
+    hardFiltersPassed: hardFiltersPass,
+    filterStatus,
   };
 }
 
@@ -1319,10 +1293,12 @@ serve(async (req) => {
       interface SignalCandidate {
         symbol: string;
         signal: string;
+        originalSignal: string;
         analysis: any;
         strength: number;
         trend: string;
         higherTrend: string;
+        hardFiltersPassed: boolean;
       }
       
       const validSignals: SignalCandidate[] = [];
@@ -1395,74 +1371,85 @@ serve(async (req) => {
             trend,
           });
 
-          // 💪 Calculate signal strength if valid
-          if (filteredSignal !== 'NONE') {
-            let strength = 0;
-            
-            // StochRSI contribution (0-30 points)
-            if (analysis.indicators.stochRSI_k !== null) {
-              if (filteredSignal === 'LONG') {
-                // LONG: Jo lavere StochRSI (mere oversolgt), jo bedre
-                // 0-20 = 30 points, 20-40 = 15 points, 40+ = 0 points
-                if (analysis.indicators.stochRSI_k <= 20) {
-                  strength += 30 * (20 - analysis.indicators.stochRSI_k) / 20;
-                } else if (analysis.indicators.stochRSI_k <= 40) {
-                  strength += 15 * (40 - analysis.indicators.stochRSI_k) / 20;
-                }
-              } else { // SHORT
-                // SHORT: Jo højere StochRSI (mere overkøbt), jo bedre
-                // 80-100 = 30 points, 60-80 = 15 points, <60 = 0 points
-                if (analysis.indicators.stochRSI_k >= 80) {
-                  strength += 30 * (analysis.indicators.stochRSI_k - 80) / 20;
-                } else if (analysis.indicators.stochRSI_k >= 60) {
-                  strength += 15 * (analysis.indicators.stochRSI_k - 60) / 20;
-                }
+          // 💪 Calculate signal strength (ALTID - også for NONE signaler)
+          let strength = 0;
+          
+          // For NONE signaler: brug retning med flest opfyldte betingelser
+          const effectiveSignal = filteredSignal !== 'NONE' 
+            ? filteredSignal
+            : (analysis.indicators.conditionDetails?.longConditionsMet || 0) > (analysis.indicators.conditionDetails?.shortConditionsMet || 0)
+              ? 'LONG'
+              : 'SHORT';
+          
+          // StochRSI contribution (0-30 points)
+          if (analysis.indicators.stochRSI_k !== null) {
+            if (effectiveSignal === 'LONG') {
+              // LONG: Jo lavere StochRSI (mere oversolgt), jo bedre
+              // 0-20 = 30 points, 20-40 = 15 points, 40+ = 0 points
+              if (analysis.indicators.stochRSI_k <= 20) {
+                strength += 30 * (20 - analysis.indicators.stochRSI_k) / 20;
+              } else if (analysis.indicators.stochRSI_k <= 40) {
+                strength += 15 * (40 - analysis.indicators.stochRSI_k) / 20;
+              }
+            } else { // SHORT
+              // SHORT: Jo højere StochRSI (mere overkøbt), jo bedre
+              // 80-100 = 30 points, 60-80 = 15 points, <60 = 0 points
+              if (analysis.indicators.stochRSI_k >= 80) {
+                strength += 30 * (analysis.indicators.stochRSI_k - 80) / 20;
+              } else if (analysis.indicators.stochRSI_k >= 60) {
+                strength += 15 * (analysis.indicators.stochRSI_k - 60) / 20;
               }
             }
-            
-            // MACD histogram contribution (0-25 points)
-            if (analysis.indicators.macd !== null) {
-              const absHistogram = Math.abs(analysis.indicators.macd);
-              if (filteredSignal === 'LONG' && analysis.indicators.macd < 0) {
-                // LONG med negativ histogram (lav): Jo tættere på 0, jo bedre momentum for vending
-                strength += Math.min(25, absHistogram * 100);
-              } else if (filteredSignal === 'SHORT' && analysis.indicators.macd > 0) {
-                // SHORT med positiv histogram (høj): Jo tættere på 0, jo bedre momentum for vending
-                strength += Math.min(25, absHistogram * 100);
-              }
-            }
-            
-            // ADX contribution (0-25 points)
-            if (analysis.indicators.adx !== null) {
-              // Jo højere ADX, jo stærkere trend
-              // 30-40 = 10 points, 40-50 = 18 points, 50+ = 25 points
-              if (analysis.indicators.adx >= 50) {
-                strength += 25;
-              } else if (analysis.indicators.adx >= 40) {
-                strength += 10 + (15 * (analysis.indicators.adx - 40) / 10);
-              } else if (analysis.indicators.adx >= 30) {
-                strength += 10 * (analysis.indicators.adx - 30) / 10;
-              }
-            }
-            
-            // Conditions met bonus (0-20 points)
-            if (analysis.indicators.conditionsMet !== undefined) {
-              // conditionsMet / signal_conditions_required ratio
-              const ratio = analysis.indicators.conditionsMet / (config.signal_conditions_required || 2);
-              strength += Math.min(20, ratio * 20);
-            }
-            
-            console.log(`💪 ${symbol} ${filteredSignal} - Strength: ${strength.toFixed(1)} (StochRSI: ${analysis.indicators.stochRSI_k?.toFixed(1)}, MACD: ${analysis.indicators.macd?.toFixed(4)}, ADX: ${analysis.indicators.adx?.toFixed(1)})`);
-            
-            validSignals.push({
-              symbol,
-              signal: filteredSignal,
-              analysis,
-              strength,
-              trend,
-              higherTrend,
-            });
           }
+          
+          // MACD histogram contribution (0-25 points)
+          if (analysis.indicators.macd !== null) {
+            const absHistogram = Math.abs(analysis.indicators.macd);
+            if (effectiveSignal === 'LONG' && analysis.indicators.macd < 0) {
+              // LONG med negativ histogram (lav): Jo tættere på 0, jo bedre momentum for vending
+              strength += Math.min(25, absHistogram * 100);
+            } else if (effectiveSignal === 'SHORT' && analysis.indicators.macd > 0) {
+              // SHORT med positiv histogram (høj): Jo tættere på 0, jo bedre momentum for vending
+              strength += Math.min(25, absHistogram * 100);
+            }
+          }
+          
+          // ADX contribution (0-25 points) - selv hvis under threshold
+          if (analysis.indicators.adx !== null) {
+            // Jo højere ADX, jo stærkere trend (selv under 30)
+            // 0-20 = 0-5 points, 20-30 = 5-10 points, 30-40 = 10-18 points, 40-50 = 18-22 points, 50+ = 25 points
+            if (analysis.indicators.adx >= 50) {
+              strength += 25;
+            } else if (analysis.indicators.adx >= 40) {
+              strength += 18 + (4 * (analysis.indicators.adx - 40) / 10);
+            } else if (analysis.indicators.adx >= 30) {
+              strength += 10 + (8 * (analysis.indicators.adx - 30) / 10);
+            } else if (analysis.indicators.adx >= 20) {
+              strength += 5 + (5 * (analysis.indicators.adx - 20) / 10);
+            } else {
+              strength += (5 * analysis.indicators.adx / 20);
+            }
+          }
+          
+          // Conditions met bonus (0-20 points)
+          if (analysis.indicators.conditionsMet !== undefined) {
+            // conditionsMet / signal_conditions_required ratio
+            const ratio = analysis.indicators.conditionsMet / (config.signal_conditions_required || 2);
+            strength += Math.min(20, ratio * 20);
+          }
+          
+          console.log(`💪 ${symbol} ${effectiveSignal} - Strength: ${strength.toFixed(1)} [${filteredSignal === 'NONE' ? 'HÅRDE FILTRE FEJLET' : 'OK'}] (StochRSI: ${analysis.indicators.stochRSI_k?.toFixed(1)}, MACD: ${analysis.indicators.macd?.toFixed(4)}, ADX: ${analysis.indicators.adx?.toFixed(1)})`);
+          
+          validSignals.push({
+            symbol,
+            signal: effectiveSignal,
+            originalSignal: filteredSignal,
+            analysis,
+            strength,
+            trend,
+            higherTrend,
+            hardFiltersPassed: analysis.hardFiltersPassed,
+          });
         } catch (error: any) {
           console.error(`Error analyzing ${symbol}:`, error.message);
         }
@@ -1471,17 +1458,23 @@ serve(async (req) => {
       // 🏆 STEP 2: Sort signals by strength (highest first)
       validSignals.sort((a, b) => b.strength - a.strength);
       
-      console.log(`\n🏆 SIGNAL PRIORITERING - Fundet ${validSignals.length} gyldige signaler:`);
-      validSignals.forEach((sig, idx) => {
-        console.log(`   ${idx + 1}. ${sig.symbol} ${sig.signal} - Styrke: ${sig.strength.toFixed(1)}`);
+      console.log(`\n🏆 SIGNAL PRIORITERING - Analyseret ${validSignals.length} symboler (inkl. filtrerede):`);
+      validSignals.slice(0, 20).forEach((sig, idx) => {
+        const filterStatus = sig.hardFiltersPassed ? '✅' : '❌';
+        console.log(`   ${idx + 1}. ${sig.symbol} ${sig.signal} [${filterStatus}] - Styrke: ${sig.strength.toFixed(1)}`);
       });
       
       // 🎯 STEP 3: Calculate how many positions we can open
       const slotsAvailable = config.max_open_positions - (positions?.length || 0);
       console.log(`\n🎯 Ledige positioner: ${slotsAvailable}/${config.max_open_positions}`);
       
-      // 📈 STEP 4: Take the top signals up to available slots
-      const signalsToTrade = validSignals.slice(0, slotsAvailable);
+      // 📈 STEP 4: Tag top 3x slots, filtrer for hårde filtre, derefter vælg top slots
+      const topCandidates = validSignals.slice(0, Math.min(slotsAvailable * 3, validSignals.length));
+      const signalsToTrade = topCandidates
+        .filter(s => s.hardFiltersPassed) // Filtrer EFTER prioritering
+        .slice(0, slotsAvailable);
+      
+      console.log(`\n📊 Efter hård filtrering: ${signalsToTrade.length}/${topCandidates.length} top signaler passerede hårde filtre`);
       
       if (signalsToTrade.length === 0) {
         console.log(`⚠️ Ingen signaler at handle eller ingen ledige positioner`);
