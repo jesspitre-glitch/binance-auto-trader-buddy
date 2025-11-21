@@ -300,7 +300,43 @@ serve(async (req) => {
         let newPeakPrice = position.peak_price || position.entry_price;
         let newTrailingStop = position.trailing_stop;
         
-        // Update peak price hvis prisen er bedre OG trailing stop er aktiv
+        // Break-even logic: Move SL to entry hvis profit er nået (DO THIS FIRST!)
+        if (!position.break_even_activated) {
+          let breakEvenDistance = 0;
+          
+          // Try to use ATR-based calculation if available
+          if (position.indicators_snapshot?.atr && position.indicators_snapshot?.break_even_atr) {
+            const atr = position.indicators_snapshot.atr;
+            const breakEvenAtr = position.indicators_snapshot.break_even_atr;
+            breakEvenDistance = breakEvenAtr * atr;
+            console.log(`Break-even distance (ATR-based): ${breakEvenDistance} for ${position.symbol}`);
+          } else {
+            // Fallback for external positions without indicators: 1.5% profit
+            breakEvenDistance = position.entry_price * 0.015;
+            console.log(`Break-even distance (fallback 1.5%): ${breakEvenDistance} for ${position.symbol}`);
+          }
+          
+          let breakEvenReached = false;
+          if (position.side === 'LONG') {
+            breakEvenReached = currentPrice >= (position.entry_price + breakEvenDistance);
+          } else {
+            breakEvenReached = currentPrice <= (position.entry_price - breakEvenDistance);
+          }
+          
+          if (breakEvenReached) {
+            newStopLoss = position.entry_price;
+            await supabaseClient
+              .from('positions')
+              .update({ 
+                stop_loss: newStopLoss, 
+                break_even_activated: true 
+              })
+              .eq('id', position.id);
+            console.log(`✅ BREAK-EVEN ACTIVATED: SL moved to entry ${newStopLoss} for ${position.symbol}`);
+          }
+        }
+        
+        // NOW calculate trailing stop (using updated stop loss from break-even)
         if (trailingStopActive) {
           if (position.side === 'LONG' && currentPrice > newPeakPrice) {
             console.log(`Updating peak: ${newPeakPrice} → ${currentPrice} for ${position.symbol}`);
@@ -337,8 +373,6 @@ serve(async (req) => {
         } else {
           console.log(`Trailing stop NOT active yet for ${position.symbol} (need ${trailingActivationAtr} ATR profit, have ${profitInAtr.toFixed(2)} ATR)`);
         }
-
-        // Break-even logic: Move SL to entry hvis profit er nået
         if (!position.break_even_activated) {
           let breakEvenDistance = 0;
           
