@@ -174,18 +174,26 @@ function analyzeMediumTrend(klines: any[], config: IndicatorConfig): 'BULLISH' |
   return 'NEUTRAL';
 }
 
-// Determine trend direction from higher timeframe using MACD histogram
+// Determine trend direction from higher timeframe using EMA alignment
 function analyzeHigherTrend(klines: any[], config: IndicatorConfig): 'BULLISH' | 'BEARISH' | 'NEUTRAL' {
   const closes = klines.map(k => k.close);
+  const currentPrice = closes[closes.length - 1];
   
-  // Calculate MACD using config values
-  const macd = calculateMACD(closes, config.macd_fast, config.macd_slow, config.macd_signal);
+  // Calculate EMAs for trend analysis
+  const emaFast = calculateEMA(closes, config.ema_fast);
+  const emaMedium = calculateEMA(closes, config.ema_medium);
+  const emaSlow = calculateEMA(closes, config.ema_slow);
   
-  // Trend filter: MACD histogram
-  // LONG kun hvis histogram > 0 (grøn)
-  // SHORT kun hvis histogram < 0 (rød)
-  if (macd.histogram > 0) return 'BULLISH';
-  if (macd.histogram < 0) return 'BEARISH';
+  const emaFastCurrent = emaFast[emaFast.length - 1];
+  const emaMediumCurrent = emaMedium[emaMedium.length - 1];
+  const emaSlowCurrent = emaSlow[emaSlow.length - 1];
+  
+  // LONG kun hvis: Fast > Medium > Slow (bullish alignment)
+  if (emaFastCurrent > emaMediumCurrent && emaMediumCurrent > emaSlowCurrent) return 'BULLISH';
+  
+  // SHORT kun hvis: Fast < Medium < Slow (bearish alignment)
+  if (emaFastCurrent < emaMediumCurrent && emaMediumCurrent < emaSlowCurrent) return 'BEARISH';
+  
   return 'NEUTRAL';
 }
 
@@ -658,15 +666,15 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     }
   }
   
-  // 5️⃣ MACD RETNINGS-FILTER (Hård regel)
+  // 5️⃣ MACD RETNINGS-FILTER (ALTID AKTIVT - HÅRDT FILTER)
   let macdLongOK = true;
   let macdShortOK = true;
   
-  if (config.macd_direction_enabled && config.macd_enabled && macd && macd.macd !== null) {
-    // LONG kræver: MACD > 0
+  if (config.macd_enabled && macd && macd.macd !== null) {
+    // LONG må ALDRIG åbnes hvis MACD er 0 eller negativ
     macdLongOK = macd.macd > 0;
     
-    // SHORT kræver: MACD < 0
+    // SHORT må ALDRIG åbnes hvis MACD er 0 eller positiv
     macdShortOK = macd.macd < 0;
     
     filterStatus.hard.macdDirection.long = macdLongOK;
@@ -906,13 +914,13 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // 🚫 CHECK: BLOKERER HÅRDE FILTRE?
   // ═══════════════════════════════════════════════
   
-  // Kun check enabled filters
+  // Kun check enabled filters (MACD-retning er ALTID aktivt hvis MACD er enabled)
   const hardFiltersPass = 
     (!config.ema_enabled || filterStatus.hard.emaSpread.passed) &&
     (!config.atr_enabled || filterStatus.hard.atr.passed) &&
     (!config.adx_enabled || filterStatus.hard.adx.passed) &&
     (!config.volume_enabled || filterStatus.hard.volume.passed) &&
-    (!(config.macd_direction_enabled && config.macd_enabled) || filterStatus.hard.macdDirection.passed) &&
+    (!config.macd_enabled || filterStatus.hard.macdDirection.passed) &&
     (!config.rsi_enabled || filterStatus.hard.rsiMomentum.passed);
   
   if (!hardFiltersPass) {
