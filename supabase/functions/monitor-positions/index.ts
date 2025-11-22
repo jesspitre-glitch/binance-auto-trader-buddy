@@ -439,7 +439,7 @@ serve(async (req) => {
         
         const pnlPercent = ((currentPrice - position.entry_price) / position.entry_price) * 100 * (position.side === 'LONG' ? 1 : -1);
 
-        // Update position with new values (kun opdater peak/trailing hvis aktiv)
+        // Update position with new values (ALTID opdater trailing_stop hvis beregnet)
         const updateData: any = {
           unrealized_pnl: pnl,
           current_price: currentPrice,
@@ -448,6 +448,7 @@ serve(async (req) => {
         if (trailingStopActive) {
           updateData.peak_price = newPeakPrice;
           updateData.trailing_stop = newTrailingStop;
+          updateData.stop_loss = newStopLoss; // Opdater også SL hvis break-even aktiveret
         }
         
         await supabaseClient
