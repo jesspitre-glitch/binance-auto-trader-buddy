@@ -41,18 +41,49 @@ export const PositionManager = () => {
   useEffect(() => {
     fetchPositions();
     
-    // Realtime subscription for DB changes (open/close/status)
+    // Realtime subscription for DB changes - updates state directly without refetching
     const channel = supabase
       .channel("positions-changes")
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "INSERT",
           schema: "public",
           table: "positions",
         },
-        () => {
-          fetchPositions();
+        (payload) => {
+          if (payload.new.status === "OPEN") {
+            setPositions((prev) => [payload.new, ...prev]);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "positions",
+        },
+        (payload) => {
+          if (payload.new.status === "OPEN") {
+            setPositions((prev) =>
+              prev.map((p) => (p.id === payload.new.id ? payload.new : p))
+            );
+          } else {
+            // Position closed, remove from list
+            setPositions((prev) => prev.filter((p) => p.id !== payload.new.id));
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "positions",
+        },
+        (payload) => {
+          setPositions((prev) => prev.filter((p) => p.id !== payload.old.id));
         }
       )
       .subscribe();
@@ -62,15 +93,9 @@ export const PositionManager = () => {
       setCurrentTime(Date.now());
     }, 1000);
 
-    // Fetch positions every 15 seconds to get latest trailing stop updates
-    const positionsInterval = setInterval(() => {
-      fetchPositions();
-    }, 15000);
-
     return () => {
       supabase.removeChannel(channel);
       clearInterval(timeInterval);
-      clearInterval(positionsInterval);
     };
   }, []);
 
