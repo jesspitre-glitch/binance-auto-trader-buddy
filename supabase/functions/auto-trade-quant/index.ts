@@ -666,24 +666,16 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     }
   }
   
-  // 5️⃣ MACD MOMENTUM FILTER (HÅRDT FILTER - tjekker histogram momentum)
+  // 5️⃣ MACD RETNINGS-FILTER (HÅRDT FILTER - blokerer trades mod MACD retning)
   let macdLongOK = true;
   let macdShortOK = true;
   
-  if (config.macd_enabled && macd && macdPrevious && macd.histogram !== null && macdPrevious.histogram !== null) {
-    // LONG: Histogram skal være positiv OG stigende (eller tæt på at skifte til grøn)
-    const histogramPositive = macd.histogram > 0;
-    const histogramImproving = macd.histogram > macdPrevious.histogram;
-    const nearBreakout = macd.histogram > -config.macd_histogram_threshold && histogramImproving;
+  if (config.macd_direction_enabled && config.macd_enabled && macd && macd.macd !== null) {
+    // LONG: MACD skal være positiv (> 0)
+    macdLongOK = macd.macd > 0;
     
-    macdLongOK = histogramPositive || nearBreakout;
-    
-    // SHORT: Histogram skal være negativ OG faldende (eller tæt på at skifte til rød)
-    const histogramNegative = macd.histogram < 0;
-    const histogramDeclining = macd.histogram < macdPrevious.histogram;
-    const nearBreakdown = macd.histogram < config.macd_histogram_threshold && histogramDeclining;
-    
-    macdShortOK = histogramNegative || nearBreakdown;
+    // SHORT: MACD skal være negativ (< 0)
+    macdShortOK = macd.macd < 0;
     
     filterStatus.hard.macdDirection.long = macdLongOK;
     filterStatus.hard.macdDirection.short = macdShortOK;
@@ -693,8 +685,13 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       filterStatus.hard.macdDirection.passed = true;
     } else {
       filterStatus.hard.macdDirection.passed = false;
-      filterStatus.hard.macdDirection.reason = `MACD histogram ${macd.histogram.toFixed(6)} - forkert momentum retning`;
+      filterStatus.hard.macdDirection.reason = `MACD ${macd.macd.toFixed(6)} - nul-linje kryds ikke tilladt`;
     }
+  } else {
+    // Hvis filter er disabled, sæt passed til true
+    filterStatus.hard.macdDirection.passed = true;
+    filterStatus.hard.macdDirection.long = true;
+    filterStatus.hard.macdDirection.short = true;
   }
   
   // 6️⃣ RSI MOMENTUM (Hård regel)
@@ -922,13 +919,13 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // 🚫 CHECK: BLOKERER HÅRDE FILTRE?
   // ═══════════════════════════════════════════════
   
-  // Kun check enabled filters (MACD-retning er ALTID aktivt hvis MACD er enabled)
+  // Kun check enabled filters
   const hardFiltersPass = 
     (!config.ema_enabled || filterStatus.hard.emaSpread.passed) &&
     (!config.atr_enabled || filterStatus.hard.atr.passed) &&
     (!config.adx_enabled || filterStatus.hard.adx.passed) &&
     (!config.volume_enabled || filterStatus.hard.volume.passed) &&
-    (!config.macd_enabled || filterStatus.hard.macdDirection.passed) &&
+    (!config.macd_direction_enabled || !config.macd_enabled || filterStatus.hard.macdDirection.passed) &&
     (!config.rsi_enabled || filterStatus.hard.rsiMomentum.passed);
   
   if (!hardFiltersPass) {
@@ -983,9 +980,18 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // MACD DETALJERET
   if (config.macd_enabled && macd && macdPrevious) {
     console.log(`📈 MACD:`);
+    console.log(`   MACD Line: ${macd.macd.toFixed(6)} (${macd.macd > 0 ? 'BULLISH ✅' : 'BEARISH ❌'})`);
+    console.log(`   Signal Line: ${macd.signal.toFixed(6)}`);
     console.log(`   Current Histogram: ${macd.histogram.toFixed(6)}`);
     console.log(`   Previous Histogram: ${macdPrevious.histogram.toFixed(6)}`);
     console.log(`   Threshold: ${config.macd_histogram_threshold}`);
+    
+    if (config.macd_direction_enabled) {
+      console.log(`   🔴 RETNINGSFILTER (HÅRDT): LONG kun når MACD > 0, SHORT kun når MACD < 0`);
+      console.log(`      → LONG tilladt: ${macd.macd > 0 ? '✅' : '❌'} (MACD = ${macd.macd.toFixed(6)})`);
+      console.log(`      → SHORT tilladt: ${macd.macd < 0 ? '✅' : '❌'} (MACD = ${macd.macd.toFixed(6)})`);
+    }
+    
     console.log(`   LONG (Shift red→green): Current=${macd.histogram.toFixed(6)} > ${config.macd_histogram_threshold} && Prev=${macdPrevious.histogram.toFixed(6)} <= ${config.macd_histogram_threshold} = ${conditionDetails.macd.long ? '✅ TRUE' : '❌ FALSE'}`);
     console.log(`   SHORT (Shift green→red): Current=${macd.histogram.toFixed(6)} < -${config.macd_histogram_threshold} && Prev=${macdPrevious.histogram.toFixed(6)} >= -${config.macd_histogram_threshold} = ${conditionDetails.macd.short ? '✅ TRUE' : '❌ FALSE'}\n`);
   } else {
