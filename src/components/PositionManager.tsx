@@ -179,13 +179,30 @@ export const PositionManager = () => {
                           const trailingPercent = position.trailing_stop_percent || 2.0;
                           const trailingStopPrice = Number(position.trailing_stop);
                           
+                          // Calculate if trailing is actually active (same logic as backend)
+                          const currentPrice = livePrices[position.symbol] ?? position.current_price ?? position.entry_price;
+                          const profitDistance = position.side === 'LONG' 
+                            ? currentPrice - position.entry_price
+                            : position.entry_price - currentPrice;
+                          
+                          const atr = position.indicators_snapshot?.atr || 0;
+                          const profitInAtr = atr > 0 ? profitDistance / atr : 0;
+                          const trailingActivationAtr = 1.0; // Default from backend
+                          const isTrailingActive = profitInAtr >= trailingActivationAtr;
+                          
                           return (
                             <div className="border-t pt-2 mt-2 space-y-1">
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-semibold">Trailing Stop:</span>
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-profit/10 text-profit border-profit/20">
-                                  AKTIV
-                                </Badge>
+                                {isTrailingActive ? (
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-profit/10 text-profit border-profit/20">
+                                    AKTIV
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground">
+                                    STANDBY ({profitInAtr.toFixed(1)}/{trailingActivationAtr} ATR)
+                                  </Badge>
+                                )}
                               </div>
                               <div className="text-sm font-mono font-bold text-foreground">
                                 ${trailingStopPrice.toFixed(4)}
