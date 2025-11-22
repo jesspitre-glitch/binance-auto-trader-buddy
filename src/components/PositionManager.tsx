@@ -109,11 +109,11 @@ export const PositionManager = () => {
         <CardHeader>
           <CardTitle>Åbne Positioner ({positions.length})</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-h-[120px]">
           {positions.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">Ingen åbne positioner</p>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3 md:space-y-4">
               {positions.map((position) => {
                 const pnlLiveBase = (() => {
                   const live = livePrices[position.symbol];
@@ -130,40 +130,42 @@ export const PositionManager = () => {
                 return (
                   <div
                     key={position.id}
-                    className="flex items-center justify-between border rounded-lg p-4"
+                    className="flex flex-col md:flex-row md:items-center justify-between border rounded-lg p-3 md:p-4 gap-3 md:gap-0"
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
+                    <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 flex-1 min-w-0">
+                      <div className="flex items-center gap-3 flex-shrink-0">
                         {position.side === "LONG" ? (
-                          <TrendingUp className="h-5 w-5 text-profit" />
+                          <TrendingUp className="h-6 w-6 md:h-5 md:w-5 text-profit" />
                         ) : (
-                          <TrendingDown className="h-5 w-5 text-loss" />
+                          <TrendingDown className="h-6 w-6 md:h-5 md:w-5 text-loss" />
                         )}
                         <div>
-                          <div className="font-semibold">{position.symbol}</div>
-                          <Badge variant={position.side === "LONG" ? "default" : "secondary"}>
+                          <div className="font-semibold text-base md:text-sm">{position.symbol}</div>
+                          <Badge variant={position.side === "LONG" ? "default" : "secondary"} className="text-xs">
                             {position.side}
                           </Badge>
                         </div>
                       </div>
                       
-                      <div className="text-sm space-y-1">
-                        <div>Entry: <span className="font-mono">${position.entry_price}</span></div>
-                        <div>
-                          Current: <span className="font-mono">
-                            ${livePrices[position.symbol] ?? position.current_price ?? "..."}
-                          </span>
+                      <div className="text-sm space-y-1 flex-1 min-w-0">
+                        <div className="flex flex-wrap gap-x-4 gap-y-1">
+                          <div>Entry: <span className="font-mono">${position.entry_price}</span></div>
+                          <div>
+                            Current: <span className="font-mono">
+                              ${livePrices[position.symbol] ?? position.current_price ?? "..."}
+                            </span>
+                          </div>
+                          <div>Qty: <span className="font-mono">{position.quantity}</span></div>
                         </div>
-                        <div>Quantity: <span className="font-mono">{position.quantity}</span></div>
                         {position.open_reason && (
-                          <div className="text-xs text-muted-foreground mt-1 max-w-xs">
+                          <div className="text-xs text-muted-foreground mt-1 truncate">
                             <span className="font-semibold">Åbnet: </span>
                             {position.open_reason}
                           </div>
                         )}
                       </div>
                       
-                       <div className="text-sm space-y-1">
+                       <div className="text-sm space-y-1 flex-shrink-0">
                         <div className="flex items-center gap-2">
                           <span>SL:</span>
                           <span className="font-mono">${position.stop_loss}</span>
@@ -202,23 +204,25 @@ export const PositionManager = () => {
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <div className={`text-lg font-bold ${isProfitable ? "text-profit" : "text-loss"}`}>
+                    <div className="flex items-center justify-between md:justify-end gap-3 md:gap-4 w-full md:w-auto">
+                      <div className="text-left md:text-right flex-1 md:flex-none">
+                        <div className={`text-xl md:text-lg font-bold ${isProfitable ? "text-profit" : "text-loss"}`}>
                           {isProfitable ? "+" : ""}{pnl.toFixed(2)} USDT
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          Senest pris: {priceUpdatedAt[position.symbol] ? formatDistanceToNow(new Date(priceUpdatedAt[position.symbol]), { addSuffix: true, locale: da }) : 'venter...'}
+                          Pris: {priceUpdatedAt[position.symbol] ? formatDistanceToNow(new Date(priceUpdatedAt[position.symbol]), { addSuffix: true, locale: da }) : 'venter...'}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           Åbnet: {formatDistanceToNow(new Date(openedTime), { addSuffix: true, locale: da })}
                         </div>
                       </div>
                       
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => {
+                      <div className="flex gap-2 flex-shrink-0">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-10 w-10 md:h-9 md:w-9"
+                          onClick={() => {
                           // Convert position to trade-like format for dialog
                           const tradeView = {
                             ...position,
@@ -233,17 +237,19 @@ export const PositionManager = () => {
                           };
                           setSelectedPosition(tradeView);
                         }}
-                      >
-                        <BarChart2 className="h-4 w-4" />
-                      </Button>
-                      
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => closePosition(position)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+                        >
+                          <BarChart2 className="h-5 w-5 md:h-4 md:w-4" />
+                        </Button>
+                        
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-10 w-10 md:h-9 md:w-9"
+                          onClick={() => closePosition(position)}
+                        >
+                          <X className="h-5 w-5 md:h-4 md:w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 );
