@@ -1075,8 +1075,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     signal: longSignal ? 'LONG' : shortSignal ? 'SHORT' : 'NONE',
     indicators,
     stopLoss: longSignal 
-      ? currentPrice - (atrValue * config.atr_stop_loss_multiplier)
-      : currentPrice + (atrValue * config.atr_stop_loss_multiplier),
+      ? currentPrice + (atrValue * config.atr_stop_loss_multiplier)
+      : currentPrice - (atrValue * config.atr_stop_loss_multiplier),
     takeProfit: null,
     hardFiltersPassed: hardFiltersPass,
     filterStatus,
