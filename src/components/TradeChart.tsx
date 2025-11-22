@@ -114,6 +114,8 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
                 const calculatedTrailing = peakPrice * (1 + trailingPercent / 100);
                 trailingStop = currentStopLoss ? Math.min(calculatedTrailing, currentStopLoss) : calculatedTrailing;
               }
+              // Opdater currentStopLoss så trailing kun kan bevæge sig én vej
+              currentStopLoss = trailingStop;
               effectiveStop = trailingStop;
             } else {
               effectiveStop = currentStopLoss;
