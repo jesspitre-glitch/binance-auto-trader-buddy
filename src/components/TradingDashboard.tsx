@@ -164,15 +164,15 @@ export const TradingDashboard = () => {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Trading Dashboard</h1>
-        <div className="flex items-center gap-4">
+    <div className="container mx-auto p-3 md:p-6 space-y-4 md:space-y-6 pb-20 md:pb-6">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold">Trading Dashboard</h1>
+        <div className="flex items-center gap-3 md:gap-4 w-full md:w-auto">
           <Button
             onClick={toggleTrading}
             variant={isActive ? "destructive" : "default"}
             size="lg"
-            className="min-w-[160px]"
+            className="min-w-[120px] md:min-w-[160px] flex-1 md:flex-none h-12 md:h-auto"
           >
             {isActive ? (
               <>
@@ -254,26 +254,31 @@ export const TradingDashboard = () => {
       <PositionManager />
 
       <Tabs defaultValue="pnl">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="pnl">
-            <TrendingUp className="mr-2 h-4 w-4" />
-            P&L
+        <TabsList className="grid w-full grid-cols-5 h-auto md:h-10 gap-1 p-1 bg-muted">
+          <TabsTrigger value="pnl" className="flex-col md:flex-row gap-1 md:gap-2 h-16 md:h-auto text-xs md:text-sm">
+            <TrendingUp className="h-5 w-5 md:h-4 md:w-4" />
+            <span className="hidden md:inline">P&L</span>
+            <span className="md:hidden">P&L</span>
           </TabsTrigger>
-          <TabsTrigger value="strategy">
-            <BarChart3 className="mr-2 h-4 w-4" />
-            Strategi Analyse
+          <TabsTrigger value="strategy" className="flex-col md:flex-row gap-1 md:gap-2 h-16 md:h-auto text-xs md:text-sm">
+            <BarChart3 className="h-5 w-5 md:h-4 md:w-4" />
+            <span className="hidden md:inline">Strategi Analyse</span>
+            <span className="md:hidden">Strategi</span>
           </TabsTrigger>
-          <TabsTrigger value="scan">
-            <Search className="mr-2 h-4 w-4" />
-            Scan Resultater
+          <TabsTrigger value="scan" className="flex-col md:flex-row gap-1 md:gap-2 h-16 md:h-auto text-xs md:text-sm">
+            <Search className="h-5 w-5 md:h-4 md:w-4" />
+            <span className="hidden md:inline">Scan Resultater</span>
+            <span className="md:hidden">Scan</span>
           </TabsTrigger>
-          <TabsTrigger value="history">
-            <History className="mr-2 h-4 w-4" />
-            Historik
+          <TabsTrigger value="history" className="flex-col md:flex-row gap-1 md:gap-2 h-16 md:h-auto text-xs md:text-sm">
+            <History className="h-5 w-5 md:h-4 md:w-4" />
+            <span className="hidden md:inline">Historik</span>
+            <span className="md:hidden">Historik</span>
           </TabsTrigger>
-          <TabsTrigger value="config">
-            <Settings2 className="mr-2 h-4 w-4" />
-            Indikator Konfiguration
+          <TabsTrigger value="config" className="flex-col md:flex-row gap-1 md:gap-2 h-16 md:h-auto text-xs md:text-sm">
+            <Settings2 className="h-5 w-5 md:h-4 md:w-4" />
+            <span className="hidden md:inline">Indikator Konfiguration</span>
+            <span className="md:hidden">Config</span>
           </TabsTrigger>
         </TabsList>
         
