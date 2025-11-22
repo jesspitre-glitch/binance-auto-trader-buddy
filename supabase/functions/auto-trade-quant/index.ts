@@ -666,26 +666,34 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     }
   }
   
-  // 5️⃣ MACD RETNINGS-FILTER (ALTID AKTIVT - HÅRDT FILTER)
+  // 5️⃣ MACD MOMENTUM FILTER (HÅRDT FILTER - tjekker histogram momentum)
   let macdLongOK = true;
   let macdShortOK = true;
   
-  if (config.macd_enabled && macd && macd.macd !== null) {
-    // LONG må ALDRIG åbnes hvis MACD er 0 eller negativ
-    macdLongOK = macd.macd > 0;
+  if (config.macd_enabled && macd && macdPrevious && macd.histogram !== null && macdPrevious.histogram !== null) {
+    // LONG: Histogram skal være positiv OG stigende (eller tæt på at skifte til grøn)
+    const histogramPositive = macd.histogram > 0;
+    const histogramImproving = macd.histogram > macdPrevious.histogram;
+    const nearBreakout = macd.histogram > -config.macd_histogram_threshold && histogramImproving;
     
-    // SHORT må ALDRIG åbnes hvis MACD er 0 eller positiv
-    macdShortOK = macd.macd < 0;
+    macdLongOK = histogramPositive || nearBreakout;
+    
+    // SHORT: Histogram skal være negativ OG faldende (eller tæt på at skifte til rød)
+    const histogramNegative = macd.histogram < 0;
+    const histogramDeclining = macd.histogram < macdPrevious.histogram;
+    const nearBreakdown = macd.histogram < config.macd_histogram_threshold && histogramDeclining;
+    
+    macdShortOK = histogramNegative || nearBreakdown;
     
     filterStatus.hard.macdDirection.long = macdLongOK;
     filterStatus.hard.macdDirection.short = macdShortOK;
     
-    // Filteret passerer hvis ENTEN long ELLER short er OK (ikke begge nødvendigvis)
+    // Filteret passerer hvis ENTEN long ELLER short er OK
     if (macdLongOK || macdShortOK) {
       filterStatus.hard.macdDirection.passed = true;
     } else {
       filterStatus.hard.macdDirection.passed = false;
-      filterStatus.hard.macdDirection.reason = `MACD ${macd.macd.toFixed(6)} - ingen gyldig retning (både LONG og SHORT blokeret)`;
+      filterStatus.hard.macdDirection.reason = `MACD histogram ${macd.histogram.toFixed(6)} - forkert momentum retning`;
     }
   }
   
