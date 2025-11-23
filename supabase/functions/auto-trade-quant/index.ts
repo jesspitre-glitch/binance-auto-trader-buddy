@@ -667,28 +667,27 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   }
   
   // 5️⃣ MACD RETNINGS-FILTER (HÅRDT FILTER - blokerer trades mod MACD retning)
+  // Dette filter evalueres FØR de bløde betingelser og blokerer ALLE trades i forkert retning
   let macdLongOK = true;
   let macdShortOK = true;
   
   if (config.macd_direction_enabled && config.macd_enabled && macd && macd.macd !== null) {
-    // LONG: MACD skal være positiv (> 0)
-    macdLongOK = macd.macd > 0;
-    
-    // SHORT: MACD skal være negativ (< 0)
-    macdShortOK = macd.macd < 0;
+    // ⚠️ HÅRDT RETNINGSFILTER:
+    // LONG blokeres ALTID når MACD ≤ 0 (bearish)
+    // SHORT blokeres ALTID når MACD ≥ 0 (bullish)
+    macdLongOK = macd.macd > 0;  // LONG kun tilladt når MACD er positiv
+    macdShortOK = macd.macd < 0; // SHORT kun tilladt når MACD er negativ
     
     filterStatus.hard.macdDirection.long = macdLongOK;
     filterStatus.hard.macdDirection.short = macdShortOK;
+    filterStatus.hard.macdDirection.passed = true; // Filter er aktivt og evaluerer per retning
     
-    // Filteret passerer hvis ENTEN long ELLER short er OK
-    if (macdLongOK || macdShortOK) {
-      filterStatus.hard.macdDirection.passed = true;
-    } else {
-      filterStatus.hard.macdDirection.passed = false;
-      filterStatus.hard.macdDirection.reason = `MACD ${macd.macd.toFixed(6)} - nul-linje kryds ikke tilladt`;
+    if (!macdLongOK && !macdShortOK) {
+      // Dette sker kun ved MACD nøjagtigt = 0 (ekstremt sjældent)
+      filterStatus.hard.macdDirection.reason = `MACD præcis på nul-linjen ${macd.macd.toFixed(6)}`;
     }
   } else {
-    // Hvis filter er disabled, sæt passed til true
+    // Filter er deaktiveret - alle retninger tilladt
     filterStatus.hard.macdDirection.passed = true;
     filterStatus.hard.macdDirection.long = true;
     filterStatus.hard.macdDirection.short = true;
@@ -909,8 +908,10 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   const longConditionsMet = longConditions.filter(c => c).length;
   const shortConditionsMet = shortConditions.filter(c => c).length;
 
-  const longSignal = longConditionsMet >= requiredConditions && macdLongOK;
-  const shortSignal = shortConditionsMet >= requiredConditions && macdShortOK;
+  // 🚨 FINAL SIGNAL BESLUTNING - Bløde betingelser + MACD retningsfilter
+  // MACD retningsfilter blokerer ALLE trades i forkert retning (evalueret FØR bløde betingelser)
+  const longSignal = longConditionsMet >= requiredConditions && macdLongOK; // LONG blokeres hvis MACD ≤ 0
+  const shortSignal = shortConditionsMet >= requiredConditions && macdShortOK; // SHORT blokeres hvis MACD ≥ 0
   
   // Calculate conditions met for signal strength
   const conditionsMet = Math.max(longConditionsMet, shortConditionsMet);
@@ -987,9 +988,9 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     console.log(`   Threshold: ${config.macd_histogram_threshold}`);
     
     if (config.macd_direction_enabled) {
-      console.log(`   🔴 RETNINGSFILTER (HÅRDT): LONG kun når MACD > 0, SHORT kun når MACD < 0`);
-      console.log(`      → LONG tilladt: ${macd.macd > 0 ? '✅' : '❌'} (MACD = ${macd.macd.toFixed(6)})`);
-      console.log(`      → SHORT tilladt: ${macd.macd < 0 ? '✅' : '❌'} (MACD = ${macd.macd.toFixed(6)})`);
+      console.log(`   🔴 HÅRDT RETNINGSFILTER (evalueret FØR bløde betingelser):`);
+      console.log(`      ⛔ BLOKER LONG når MACD ≤ 0 → Status: ${macd.macd > 0 ? '✅ LONG TILLADT' : '❌ LONG BLOKERET'} (MACD = ${macd.macd.toFixed(6)})`);
+      console.log(`      ⛔ BLOKER SHORT når MACD ≥ 0 → Status: ${macd.macd < 0 ? '✅ SHORT TILLADT' : '❌ SHORT BLOKERET'} (MACD = ${macd.macd.toFixed(6)})`);
     }
     
     console.log(`   LONG (Shift red→green): Current=${macd.histogram.toFixed(6)} > ${config.macd_histogram_threshold} && Prev=${macdPrevious.histogram.toFixed(6)} <= ${config.macd_histogram_threshold} = ${conditionDetails.macd.long ? '✅ TRUE' : '❌ FALSE'}`);
