@@ -667,12 +667,13 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   }
   
   // 5️⃣ MACD RETNINGS-FILTER (HÅRDT FILTER - blokerer trades mod MACD retning)
-  // Dette filter evalueres FØR de bløde betingelser og blokerer ALLE trades i forkert retning
+  // ⚠️ VIGTIGT: Dette er et RETNINGS-SPECIFIKT filter og evalueres IKKE i hardFiltersPass
+  // Det blokerer kun i longSignal/shortSignal baseret på retning
   let macdLongOK = true;
   let macdShortOK = true;
   
   if (config.macd_direction_enabled && config.macd_enabled && macd && macd.macd !== null) {
-    // ⚠️ HÅRDT RETNINGSFILTER:
+    // 🚨 HÅRDT RETNINGSFILTER:
     // LONG blokeres ALTID når MACD ≤ 0 (bearish)
     // SHORT blokeres ALTID når MACD ≥ 0 (bullish)
     macdLongOK = macd.macd > 0;  // LONG kun tilladt når MACD er positiv
@@ -680,7 +681,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     
     filterStatus.hard.macdDirection.long = macdLongOK;
     filterStatus.hard.macdDirection.short = macdShortOK;
-    filterStatus.hard.macdDirection.passed = true; // Filter er aktivt og evaluerer per retning
+    // BEMÆRK: Vi sætter IKKE passed her, da det er retnings-specifikt
     
     if (!macdLongOK && !macdShortOK) {
       // Dette sker kun ved MACD nøjagtigt = 0 (ekstremt sjældent)
@@ -688,7 +689,6 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     }
   } else {
     // Filter er deaktiveret - alle retninger tilladt
-    filterStatus.hard.macdDirection.passed = true;
     filterStatus.hard.macdDirection.long = true;
     filterStatus.hard.macdDirection.short = true;
   }
@@ -920,13 +920,12 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // 🚫 CHECK: BLOKERER HÅRDE FILTRE?
   // ═══════════════════════════════════════════════
   
-  // Kun check enabled filters
+  // Kun check enabled filters (MACD retning evalueres IKKE her - den er retnings-specifik)
   const hardFiltersPass = 
     (!config.ema_enabled || filterStatus.hard.emaSpread.passed) &&
     (!config.atr_enabled || filterStatus.hard.atr.passed) &&
     (!config.adx_enabled || filterStatus.hard.adx.passed) &&
     (!config.volume_enabled || filterStatus.hard.volume.passed) &&
-    (!config.macd_direction_enabled || !config.macd_enabled || filterStatus.hard.macdDirection.passed) &&
     (!config.rsi_enabled || filterStatus.hard.rsiMomentum.passed);
   
   if (!hardFiltersPass) {
