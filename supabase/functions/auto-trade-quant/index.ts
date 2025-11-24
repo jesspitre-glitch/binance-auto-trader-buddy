@@ -1521,7 +1521,7 @@ serve(async (req) => {
           
           validSignals.push({
             symbol,
-            signal: effectiveSignal,
+            signal: filteredSignal, // Det rigtige signal (NONE hvis blokeret af MACD)
             originalSignal: filteredSignal,
             analysis,
             strength,
@@ -1547,10 +1547,10 @@ serve(async (req) => {
       const slotsAvailable = config.max_open_positions - (positions?.length || 0);
       console.log(`\n🎯 Ledige positioner: ${slotsAvailable}/${config.max_open_positions}`);
       
-      // 📈 STEP 4: Tag top 3x slots, filtrer for hårde filtre, derefter vælg top slots
+      // 📈 STEP 4: Tag top 3x slots, filtrer for hårde filtre + MACD retning, derefter vælg top slots
       const topCandidates = validSignals.slice(0, Math.min(slotsAvailable * 3, validSignals.length));
       const signalsToTrade = topCandidates
-        .filter(s => s.hardFiltersPassed) // Filtrer EFTER prioritering
+        .filter(s => s.hardFiltersPassed && s.signal !== 'NONE') // KRITISK: Bloker NONE signaler (MACD retningsfilter)
         .slice(0, slotsAvailable);
       
       console.log(`\n📊 Efter hård filtrering: ${signalsToTrade.length}/${topCandidates.length} top signaler passerede hårde filtre`);
@@ -1564,10 +1564,29 @@ serve(async (req) => {
       
       // 🚀 STEP 5: Place orders for selected signals
       for (const selectedSignal of signalsToTrade) {
-        const { symbol, signal: filteredSignal, analysis, trend } = selectedSignal;
+        const { symbol, signal, analysis, trend } = selectedSignal;
+        
+        // SIKKERHEDSCHECK: Bloker NONE signaler (skulle aldrig komme hertil, men dobbelt-tjek)
+        if (signal === 'NONE') {
+          console.log(`⚠️ SIKKERHED: Blokerer NONE signal for ${symbol}`);
+          continue;
+        }
         
         try {
           console.log(`\n🎯 Behandler signal ${selectedSignal.symbol} (styrke: ${selectedSignal.strength.toFixed(1)})`);
+          
+          // FINAL MACD RETNINGSCHECK FØR ORDER (ekstra sikkerhed)
+          const macdLine = analysis.indicators.macdLine;
+          if (macdLine !== null && macdLine !== undefined) {
+            if (signal === 'LONG' && macdLine <= 0) {
+              console.log(`🚨 BLOKERET: LONG for ${symbol} med MACD=${macdLine.toFixed(4)} ≤ 0`);
+              continue;
+            }
+            if (signal === 'SHORT' && macdLine >= 0) {
+              console.log(`🚨 BLOKERET: SHORT for ${symbol} med MACD=${macdLine.toFixed(4)} ≥ 0`);
+              continue;
+            }
+          }
           
           // Place order logic starts here
           // CRITICAL: Count open positions with FOR UPDATE lock to prevent race conditions
@@ -1662,7 +1681,7 @@ serve(async (req) => {
           }
           
           // Place order
-          const side = filteredSignal === 'LONG' ? 'BUY' : 'SELL';
+          const side = signal === 'LONG' ? 'BUY' : 'SELL';
           console.log(`\n🚀 PLACING ORDER on ${symbol}:`);
           console.log(`   Side: ${side}`);
           console.log(`   Quantity: ${quantityRounded}`);
@@ -1717,7 +1736,7 @@ serve(async (req) => {
             openReasonParts.push(`EMA: Fast ${analysis.indicators.emaFast.toFixed(2)} vs Slow ${analysis.indicators.emaSlow.toFixed(2)}`);
           }
           if (analysis.indicators.adx) openReasonParts.push(`ADX: ${analysis.indicators.adx.toFixed(2)}`);
-          const openReason = `${filteredSignal} signal på ${symbol} - Trend: ${trend}. ${openReasonParts.join(', ')}. Prioriteret med styrke: ${selectedSignal.strength.toFixed(1)}`;
+          const openReason = `${signal} signal på ${symbol} - Trend: ${trend}. ${openReasonParts.join(', ')}. Prioriteret med styrke: ${selectedSignal.strength.toFixed(1)}`;
           
           console.log(`📝 Open reason: ${openReason}`);
           
@@ -1733,13 +1752,13 @@ serve(async (req) => {
           const actualQuantity = Math.abs(parseFloat(binancePosition.positionAmt));
           
           // Calculate initial trailing stop level (aktiveres med det samme, ikke efter TP)
-          const initialTrailingStop = filteredSignal === 'LONG'
+          const initialTrailingStop = signal === 'LONG'
             ? actualEntryPrice * (1 - trailingStopPercent / 100)
             : actualEntryPrice * (1 + trailingStopPercent / 100);
           
           console.log(`\n💾 SAVING TO DATABASE:`);
           console.log(`   Symbol: ${symbol}`);
-          console.log(`   Side: ${filteredSignal}`);
+          console.log(`   Side: ${signal}`);
           console.log(`   Entry: ${actualEntryPrice}`);
           console.log(`   Quantity: ${actualQuantity}`);
           console.log(`   Stop Loss: ${analysis.stopLoss}`);
@@ -1752,7 +1771,7 @@ serve(async (req) => {
             .insert({
               user_id: session.user_id,
               symbol,
-              side: filteredSignal,
+              side: signal,
               entry_price: actualEntryPrice,
               quantity: actualQuantity,
               stop_loss: analysis.stopLoss,
@@ -1842,7 +1861,7 @@ serve(async (req) => {
           console.error(`   Error type: ${error.constructor.name}`);
           console.error(`   Error message: ${error.message}`);
           console.error(`   Stack trace:`, error.stack);
-          console.error(`   Signal: ${filteredSignal}`);
+          console.error(`   Signal: ${signal}`);
           console.error(`   Price: ${analysis.indicators.price}`);
           console.error(`   This position may need manual intervention\n`);
         }
