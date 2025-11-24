@@ -549,11 +549,11 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                     </div>
                   )}
                   
-                  {/* Hard Filters Progress Bar */}
+                  {/* Hard Filters Section - always show if enabled */}
                   {coin.totalEnabledFilters > 0 && (
-                    <div className="space-y-1 mt-2">
+                    <div className="space-y-1.5 mt-2 border-t border-border/30 pt-1.5">
                       <div className="flex items-center justify-between text-[10px]">
-                        <span className="opacity-70">Hårde filtre:</span>
+                        <span className="opacity-70 font-semibold">Hårde filtre:</span>
                         <span className="font-bold">
                           {Object.values(coin.hardFilters).filter(v => v).length}/{coin.totalEnabledFilters}
                         </span>
@@ -562,84 +562,82 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                         value={(Object.values(coin.hardFilters).filter(v => v).length / coin.totalEnabledFilters) * 100} 
                         className="h-2"
                       />
-                    </div>
-                  )}
-                  
-                  {/* Hard Filters Details - always show if enabled */}
-                  {coin.totalEnabledFilters > 0 && (
-                    <div className="text-[9px] space-y-1 mt-1">
-                      {coin.hardFilters.emaSpread !== undefined && (
-                        <div className="flex items-center gap-1.5">
-                          <CircularProgress 
-                            value={coin.hardFiltersProgress.emaSpread || 0} 
-                            size={16}
-                            passed={coin.hardFilters.emaSpread}
-                          />
-                          <span className={coin.hardFilters.emaSpread ? 'text-green-500' : 'opacity-70'}>
-                            EMA Spread
-                          </span>
-                        </div>
-                      )}
-                      {coin.hardFilters.volume !== undefined && (
-                        <div className="flex items-center gap-1.5">
-                          <CircularProgress 
-                            value={coin.hardFiltersProgress.volume || 0} 
-                            size={16}
-                            passed={coin.hardFilters.volume}
-                          />
-                          <span className={coin.hardFilters.volume ? 'text-green-500' : 'opacity-70'}>
-                            Volume
-                          </span>
-                        </div>
-                      )}
-                      {coin.hardFilters.adx !== undefined && (
-                        <div className="flex items-center gap-1.5">
-                          <CircularProgress 
-                            value={coin.hardFiltersProgress.adx || 0} 
-                            size={16}
-                            passed={coin.hardFilters.adx}
-                          />
-                          <span className={coin.hardFilters.adx ? 'text-green-500' : 'opacity-70'}>
-                            ADX
-                          </span>
-                        </div>
-                      )}
-                      {coin.hardFilters.atr !== undefined && (
-                        <div className="flex items-center gap-1.5">
-                          <CircularProgress 
-                            value={coin.hardFiltersProgress.atr || 0} 
-                            size={16}
-                            passed={coin.hardFilters.atr}
-                          />
-                          <span className={coin.hardFilters.atr ? 'text-green-500' : 'opacity-70'}>
-                            ATR
-                          </span>
-                        </div>
-                      )}
-                      {coin.hardFilters.macdDirection !== undefined && (
-                        <div className="flex items-center gap-1.5">
-                          <CircularProgress 
-                            value={coin.hardFiltersProgress.macdDirection || 0} 
-                            size={16}
-                            passed={coin.hardFilters.macdDirection}
-                          />
-                          <span className={coin.hardFilters.macdDirection ? 'text-green-500' : 'opacity-70'}>
-                            MACD Retning
-                          </span>
-                        </div>
-                      )}
-                      {coin.hardFilters.rsiMomentum !== undefined && (
-                        <div className="flex items-center gap-1.5">
-                          <CircularProgress 
-                            value={coin.hardFiltersProgress.rsiMomentum || 0} 
-                            size={16}
-                            passed={coin.hardFilters.rsiMomentum}
-                          />
-                          <span className={coin.hardFilters.rsiMomentum ? 'text-green-500' : 'opacity-70'}>
-                            RSI Momentum
-                          </span>
-                        </div>
-                      )}
+                      
+                      {/* Hard Filters Details - All active filters */}
+                      <div className="text-[9px] space-y-1 pt-1">
+                        {coin.hardFilters.emaSpread !== undefined && (
+                          <div className="flex items-center gap-1.5">
+                            <CircularProgress 
+                              value={coin.hardFiltersProgress.emaSpread || 0} 
+                              size={16}
+                              passed={coin.hardFilters.emaSpread}
+                            />
+                            <span className={coin.hardFilters.emaSpread ? 'text-green-500' : 'opacity-70'}>
+                              EMA Spread
+                            </span>
+                          </div>
+                        )}
+                        {coin.hardFilters.atr !== undefined && (
+                          <div className="flex items-center gap-1.5">
+                            <CircularProgress 
+                              value={coin.hardFiltersProgress.atr || 0} 
+                              size={16}
+                              passed={coin.hardFilters.atr}
+                            />
+                            <span className={coin.hardFilters.atr ? 'text-green-500' : 'opacity-70'}>
+                              ATR
+                            </span>
+                          </div>
+                        )}
+                        {coin.hardFilters.adx !== undefined && (
+                          <div className="flex items-center gap-1.5">
+                            <CircularProgress 
+                              value={coin.hardFiltersProgress.adx || 0} 
+                              size={16}
+                              passed={coin.hardFilters.adx}
+                            />
+                            <span className={coin.hardFilters.adx ? 'text-green-500' : 'opacity-70'}>
+                              ADX
+                            </span>
+                          </div>
+                        )}
+                        {coin.hardFilters.volume !== undefined && (
+                          <div className="flex items-center gap-1.5">
+                            <CircularProgress 
+                              value={coin.hardFiltersProgress.volume || 0} 
+                              size={16}
+                              passed={coin.hardFilters.volume}
+                            />
+                            <span className={coin.hardFilters.volume ? 'text-green-500' : 'opacity-70'}>
+                              Volume
+                            </span>
+                          </div>
+                        )}
+                        {coin.hardFilters.macdDirection !== undefined && (
+                          <div className="flex items-center gap-1.5">
+                            <CircularProgress 
+                              value={coin.hardFiltersProgress.macdDirection || 0} 
+                              size={16}
+                              passed={coin.hardFilters.macdDirection}
+                            />
+                            <span className={coin.hardFilters.macdDirection ? 'text-green-500' : 'opacity-70'}>
+                              MACD Retning
+                            </span>
+                          </div>
+                        )}
+                        {coin.hardFilters.rsiMomentum !== undefined && (
+                          <div className="flex items-center gap-1.5">
+                            <CircularProgress 
+                              value={coin.hardFiltersProgress.rsiMomentum || 0} 
+                              size={16}
+                              passed={coin.hardFilters.rsiMomentum}
+                            />
+                            <span className={coin.hardFilters.rsiMomentum ? 'text-green-500' : 'opacity-70'}>
+                              RSI Momentum
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
