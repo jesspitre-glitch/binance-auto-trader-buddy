@@ -1060,6 +1060,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     emaFast: emaFastCurrent,
     emaMedium: emaMediumCurrent,
     emaSlow: emaSlowCurrent,
+    emaSpreadPercent: emaSpreadPercent, // 🔴 TILFØJET: Nødvendig for hard filter display i LiveMonitor
     rsi: rsiCurrent,
     stochRSI_k: stochRSI?.k ?? null,
     stochRSI_d: stochRSI?.d ?? null,
