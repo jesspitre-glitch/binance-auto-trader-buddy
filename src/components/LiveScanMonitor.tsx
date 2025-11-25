@@ -498,50 +498,50 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                   {coin.totalEnabledSoftConditions > 0 && (
                     <div className="text-[9px] space-y-1 mt-1.5 border-t border-border/30 pt-1.5">
                       <div className="opacity-70 font-semibold mb-1">Bløde conditions:</div>
-                      {coin.softConditions.ema !== undefined && (
+                      {coin.softConditions.ema === true && (
                         <div className="flex items-center gap-1.5">
-                          <div className={`w-1.5 h-1.5 rounded-full ${coin.softConditions.ema ? 'bg-green-500' : 'bg-muted'}`} />
-                          <span className={coin.softConditions.ema ? 'text-green-500' : 'opacity-50'}>
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                          <span className="text-green-500">
                             EMA Alignment
                           </span>
                         </div>
                       )}
-                      {coin.softConditions.rsi !== undefined && (
+                      {coin.softConditions.rsi === true && (
                         <div className="flex items-center gap-1.5">
-                          <div className={`w-1.5 h-1.5 rounded-full ${coin.softConditions.rsi ? 'bg-green-500' : 'bg-muted'}`} />
-                          <span className={coin.softConditions.rsi ? 'text-green-500' : 'opacity-50'}>
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                          <span className="text-green-500">
                             RSI Zone
                           </span>
                         </div>
                       )}
-                      {coin.softConditions.stochRSI !== undefined && (
+                      {coin.softConditions.stochRSI === true && (
                         <div className="flex items-center gap-1.5">
-                          <div className={`w-1.5 h-1.5 rounded-full ${coin.softConditions.stochRSI ? 'bg-green-500' : 'bg-muted'}`} />
-                          <span className={coin.softConditions.stochRSI ? 'text-green-500' : 'opacity-50'}>
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                          <span className="text-green-500">
                             StochRSI Zone
                           </span>
                         </div>
                       )}
-                      {coin.softConditions.macd !== undefined && (
+                      {coin.softConditions.macd === true && (
                         <div className="flex items-center gap-1.5">
-                          <div className={`w-1.5 h-1.5 rounded-full ${coin.softConditions.macd ? 'bg-green-500' : 'bg-muted'}`} />
-                          <span className={coin.softConditions.macd ? 'text-green-500' : 'opacity-50'}>
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                          <span className="text-green-500">
                             MACD Histogram
                           </span>
                         </div>
                       )}
-                      {coin.softConditions.bb !== undefined && (
+                      {coin.softConditions.bb === true && (
                         <div className="flex items-center gap-1.5">
-                          <div className={`w-1.5 h-1.5 rounded-full ${coin.softConditions.bb ? 'bg-green-500' : 'bg-muted'}`} />
-                          <span className={coin.softConditions.bb ? 'text-green-500' : 'opacity-50'}>
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                          <span className="text-green-500">
                             Bollinger Bands
                           </span>
                         </div>
                       )}
-                      {coin.softConditions.pivotPoints !== undefined && (
+                      {coin.softConditions.pivotPoints === true && (
                         <div className="flex items-center gap-1.5">
-                          <div className={`w-1.5 h-1.5 rounded-full ${coin.softConditions.pivotPoints ? 'bg-green-500' : 'bg-muted'}`} />
-                          <span className={coin.softConditions.pivotPoints ? 'text-green-500' : 'opacity-50'}>
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                          <span className="text-green-500">
                             Pivot Points
                           </span>
                         </div>
