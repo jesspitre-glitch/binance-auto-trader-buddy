@@ -30,6 +30,7 @@ export type Database = {
           atr_stop_loss_multiplier: number | null
           atr_take_profit_multiplier: number | null
           atr_trailing_stop_multiplier: number | null
+          auto_exit_enabled: boolean | null
           bb_enabled: boolean | null
           bb_period: number | null
           bb_std_dev: number | null
@@ -109,6 +110,7 @@ export type Database = {
           atr_stop_loss_multiplier?: number | null
           atr_take_profit_multiplier?: number | null
           atr_trailing_stop_multiplier?: number | null
+          auto_exit_enabled?: boolean | null
           bb_enabled?: boolean | null
           bb_period?: number | null
           bb_std_dev?: number | null
@@ -188,6 +190,7 @@ export type Database = {
           atr_stop_loss_multiplier?: number | null
           atr_take_profit_multiplier?: number | null
           atr_trailing_stop_multiplier?: number | null
+          auto_exit_enabled?: boolean | null
           bb_enabled?: boolean | null
           bb_period?: number | null
           bb_std_dev?: number | null

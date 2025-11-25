@@ -267,22 +267,35 @@ serve(async (req) => {
         // Get indicator config for this position (hvis strategy_hash findes)
         let trailingActivationEnabled = true; // default
         let trailingActivationAtr = 1.0; // default
+        let autoExitEnabled = true; // default - hvis slukket lukkes positioner ikke automatisk
         
         if (position.strategy_hash) {
           const { data: configData } = await supabaseClient
             .from('indicator_config')
-            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr')
+            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, auto_exit_enabled')
             .eq('user_id', position.user_id)
             .single();
           
           if (configData) {
             trailingActivationEnabled = configData.trailing_stop_activation_enabled ?? true;
             trailingActivationAtr = configData.trailing_stop_activation_atr ?? 1.0;
+            autoExitEnabled = configData.auto_exit_enabled ?? true;
           }
         }
 
+        // If auto exit is disabled, skip this position
+        if (!autoExitEnabled) {
+          console.log(`⏭️ Position ${position.symbol} - auto exit disabled, skipping automatic monitoring`);
+          results.push({
+            symbol: position.symbol,
+            action: 'skipped',
+            reason: 'Auto exit disabled in strategy config'
+          });
+          continue;
+        }
+
         // Beregn profit i ATR-enheder
-        const profitDistance = position.side === 'LONG' 
+        const profitDistance = position.side === 'LONG'
           ? currentPrice - position.entry_price
           : position.entry_price - currentPrice;
         
