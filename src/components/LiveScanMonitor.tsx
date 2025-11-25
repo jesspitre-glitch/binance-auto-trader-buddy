@@ -213,8 +213,13 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
       if (config.adx_enabled) {
         enabledFilters.push('adx');
         if (indicators.adx !== null && indicators.adx !== undefined) {
-          hardFiltersProgress.adx = Math.min((indicators.adx / config.adx_threshold) * 100, 100);
-          hardFilters.adx = indicators.adx >= config.adx_threshold;
+          if (indicators.filterStatus?.hard?.adx) {
+            hardFilters.adx = indicators.filterStatus.hard.adx.passed;
+            hardFiltersProgress.adx = hardFilters.adx ? 100 : Math.min((indicators.adx / config.adx_threshold) * 100, 99);
+          } else {
+            hardFiltersProgress.adx = Math.min((indicators.adx / config.adx_threshold) * 100, 100);
+            hardFilters.adx = indicators.adx >= config.adx_threshold;
+          }
         } else {
           hardFiltersProgress.adx = 0;
           hardFilters.adx = false;
@@ -225,8 +230,16 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
       if (config.volume_enabled) {
         enabledFilters.push('volume');
         if (indicators.volumeRatio !== null && indicators.volumeRatio !== undefined) {
-          hardFiltersProgress.volume = Math.min((indicators.volumeRatio / config.volume_multiplier) * 100, 100);
-          hardFilters.volume = indicators.volumeRatio >= config.volume_multiplier;
+          // Check if filterStatus is available (from edge function)
+          if (indicators.filterStatus?.hard?.volume) {
+            // Use edge function's evaluation
+            hardFilters.volume = indicators.filterStatus.hard.volume.passed;
+            hardFiltersProgress.volume = hardFilters.volume ? 100 : Math.min((indicators.volumeRatio / config.volume_multiplier) * 100, 99);
+          } else {
+            // Fallback to local calculation
+            hardFiltersProgress.volume = Math.min((indicators.volumeRatio / config.volume_multiplier) * 100, 100);
+            hardFilters.volume = indicators.volumeRatio >= config.volume_multiplier;
+          }
         } else {
           hardFiltersProgress.volume = 0;
           hardFilters.volume = false;
@@ -237,15 +250,24 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
       if (config.macd_direction_enabled && config.macd_enabled) {
         enabledFilters.push('macdDirection');
         if (indicators.macdLine !== null && indicators.macdLine !== undefined) {
-          const macdLongOK = indicators.macdLine > 0;
-          const macdShortOK = indicators.macdLine < 0;
-          // Matcher logikken i edge function: passerer hvis ENTEN long ELLER short er OK
-          const macdOK = macdLongOK || macdShortOK;
-          
-          // Progress based on absolute MACD value
-          const macdAbs = Math.abs(indicators.macdLine);
-          hardFiltersProgress.macdDirection = Math.min(macdAbs * 1000, 100); // Scale appropriately
-          hardFilters.macdDirection = macdOK;
+          // Check if filterStatus is available
+          if (indicators.filterStatus?.hard?.macdDirection) {
+            const macdLongOK = indicators.filterStatus.hard.macdDirection.long;
+            const macdShortOK = indicators.filterStatus.hard.macdDirection.short;
+            const macdOK = macdLongOK || macdShortOK;
+            
+            hardFilters.macdDirection = macdOK;
+            const macdAbs = Math.abs(indicators.macdLine);
+            hardFiltersProgress.macdDirection = hardFilters.macdDirection ? Math.min(macdAbs * 1000, 100) : 0;
+          } else {
+            const macdLongOK = indicators.macdLine > 0;
+            const macdShortOK = indicators.macdLine < 0;
+            const macdOK = macdLongOK || macdShortOK;
+            
+            const macdAbs = Math.abs(indicators.macdLine);
+            hardFiltersProgress.macdDirection = Math.min(macdAbs * 1000, 100);
+            hardFilters.macdDirection = macdOK;
+          }
         } else {
           hardFiltersProgress.macdDirection = 0;
           hardFilters.macdDirection = false;
@@ -256,24 +278,36 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
       if (config.rsi_enabled) {
         enabledFilters.push('rsiMomentum');
         if (indicators.rsi !== null && indicators.rsi !== undefined) {
-          const rsiZoneWidth = config.rsi_zone_width || 10;
-          const rsiInLongZone = indicators.rsi >= config.rsi_min_long && indicators.rsi <= (config.rsi_min_long + rsiZoneWidth);
-          const rsiInShortZone = indicators.rsi <= config.rsi_max_short && indicators.rsi >= (config.rsi_max_short - rsiZoneWidth);
-          
-          // Calculate progress: how close is RSI to entering a zone?
-          const distanceToLongZone = Math.max(0, config.rsi_min_long - indicators.rsi);
-          const distanceToShortZone = Math.max(0, indicators.rsi - config.rsi_max_short);
-          const minDistance = Math.min(distanceToLongZone, distanceToShortZone);
-          
-          // If in zone, 100%. Otherwise, calculate based on distance
-          if (rsiInLongZone || rsiInShortZone) {
-            hardFiltersProgress.rsiMomentum = 100;
+          // Check if filterStatus is available
+          if (indicators.filterStatus?.hard?.rsiMomentum) {
+            hardFilters.rsiMomentum = indicators.filterStatus.hard.rsiMomentum.passed;
+            
+            if (hardFilters.rsiMomentum) {
+              hardFiltersProgress.rsiMomentum = 100;
+            } else {
+              const rsiZoneWidth = config.rsi_zone_width || 10;
+              const distanceToLongZone = Math.max(0, config.rsi_min_long - indicators.rsi);
+              const distanceToShortZone = Math.max(0, indicators.rsi - config.rsi_max_short);
+              const minDistance = Math.min(distanceToLongZone, distanceToShortZone);
+              hardFiltersProgress.rsiMomentum = Math.max(0, 100 - (minDistance * 2));
+            }
           } else {
-            // Assume max distance of 50 points for scaling
-            hardFiltersProgress.rsiMomentum = Math.max(0, 100 - (minDistance * 2));
+            const rsiZoneWidth = config.rsi_zone_width || 10;
+            const rsiInLongZone = indicators.rsi >= config.rsi_min_long && indicators.rsi <= (config.rsi_min_long + rsiZoneWidth);
+            const rsiInShortZone = indicators.rsi <= config.rsi_max_short && indicators.rsi >= (config.rsi_max_short - rsiZoneWidth);
+            
+            const distanceToLongZone = Math.max(0, config.rsi_min_long - indicators.rsi);
+            const distanceToShortZone = Math.max(0, indicators.rsi - config.rsi_max_short);
+            const minDistance = Math.min(distanceToLongZone, distanceToShortZone);
+            
+            if (rsiInLongZone || rsiInShortZone) {
+              hardFiltersProgress.rsiMomentum = 100;
+            } else {
+              hardFiltersProgress.rsiMomentum = Math.max(0, 100 - (minDistance * 2));
+            }
+            
+            hardFilters.rsiMomentum = rsiInLongZone || rsiInShortZone;
           }
-          
-          hardFilters.rsiMomentum = rsiInLongZone || rsiInShortZone;
         } else {
           hardFiltersProgress.rsiMomentum = 0;
           hardFilters.rsiMomentum = false;
