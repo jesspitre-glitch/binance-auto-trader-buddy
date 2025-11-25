@@ -108,7 +108,8 @@ export const StrategyDetailsDialog = ({
       };
       pushNum("ADX", s.adx, 2);
       pushNum("RSI", s.rsi, 2);
-      pushNum("MACD", s.macd, 6);
+      pushNum("MACD_LINE", s.macdLine, 6);
+      pushNum("MACD_HIST", s.macd, 6);
       pushNum("ATR", s.atr, 2);
       pushNum("EMA9", s.emaFast, 2);
       pushNum("EMA21", s.emaMedium, 2);
