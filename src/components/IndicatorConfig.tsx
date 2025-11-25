@@ -107,6 +107,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     max_exposure_percent: config?.max_exposure_percent || 5,
     daily_loss_limit_percent: config?.daily_loss_limit_percent || 5,
     max_position_duration_minutes: config?.max_position_duration_minutes || 240,
+    auto_exit_enabled: config?.auto_exit_enabled ?? true,
     
     // Leverage
     leverage: config?.leverage || 10,
@@ -194,6 +195,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       max_exposure_percent: config.max_exposure_percent ?? 5,
       daily_loss_limit_percent: config.daily_loss_limit_percent ?? 5,
       max_position_duration_minutes: config.max_position_duration_minutes ?? 240,
+      auto_exit_enabled: config.auto_exit_enabled ?? true,
       // Leverage
       leverage: config.leverage ?? 10,
     });
@@ -271,6 +273,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       max_exposure_percent: config.max_exposure_percent ?? 5,
       daily_loss_limit_percent: config.daily_loss_limit_percent ?? 5,
       max_position_duration_minutes: config.max_position_duration_minutes ?? 240,
+      auto_exit_enabled: config.auto_exit_enabled ?? true,
       leverage: config.leverage ?? 10,
     });
     
@@ -1270,9 +1273,22 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       <Card>
         <CardHeader>
           <CardTitle>Position Exit</CardTitle>
-          <CardDescription>Max position varighed før auto-luk</CardDescription>
+          <CardDescription>Automatisk positionslukning baseret på stop loss, trailing stop og timeout</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label htmlFor="auto_exit_enabled">Aktiver Automatisk Exit</Label>
+              <p className="text-xs text-muted-foreground">
+                Når slukket skal positioner lukkes manuelt - ingen automatisk stop loss/trailing stop
+              </p>
+            </div>
+            <Switch
+              id="auto_exit_enabled"
+              checked={formData.auto_exit_enabled}
+              onCheckedChange={(checked) => setFormData({ ...formData, auto_exit_enabled: checked })}
+            />
+          </div>
           <div className="space-y-2">
             <Label htmlFor="max_position_duration_minutes">Max Position Varighed (min)</Label>
             <Input
@@ -1280,6 +1296,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               value={formData.max_position_duration_minutes}
               onChange={(e) => setFormData({ ...formData, max_position_duration_minutes: parseInt(e.target.value) })}
+              disabled={!formData.auto_exit_enabled}
             />
             <p className="text-xs text-muted-foreground">Auto-luk position efter denne tid (240 = 4 timer)</p>
           </div>
