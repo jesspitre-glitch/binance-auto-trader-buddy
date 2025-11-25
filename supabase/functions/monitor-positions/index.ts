@@ -270,6 +270,9 @@ serve(async (req) => {
         let autoExitEnabled = true; // default - hvis slukket lukkes positioner ikke automatisk
         let maxPositionDurationMinutes = null; // default - hvis null/0 lukkes positioner ikke pga timeout
         
+        // Tjek om trailing stop ALLEREDE er aktiveret (fra database)
+        let trailingAlreadyActivated = position.trailing_stop != null && position.trailing_stop > 0;
+        
         if (position.strategy_hash) {
           const { data: configData } = await supabaseClient
             .from('indicator_config')
@@ -304,11 +307,16 @@ serve(async (req) => {
         const atr = position.indicators_snapshot?.atr || 0;
         const profitInAtr = atr > 0 ? profitDistance / atr : 0;
         
-        // Check om trailing stop skal være aktiv
-        const trailingStopActive = !trailingActivationEnabled || profitInAtr >= trailingActivationAtr;
+        // Trailing stop aktiveres når profit >= threshold, men forbliver aktiv efter første aktivering
+        const profitMeetsThreshold = profitInAtr >= trailingActivationAtr;
+        const trailingStopActive = trailingAlreadyActivated || !trailingActivationEnabled || profitMeetsThreshold;
         
         if (trailingActivationEnabled) {
-          console.log(`Trailing activation check for ${position.symbol}: profit=${profitInAtr.toFixed(2)} ATR (need ${trailingActivationAtr} ATR) - Active: ${trailingStopActive}`);
+          if (trailingAlreadyActivated) {
+            console.log(`✅ Trailing stop FORBLIVER aktiv for ${position.symbol} (profit=${profitInAtr.toFixed(2)} ATR, blev aktiveret tidligere)`);
+          } else {
+            console.log(`Trailing activation check for ${position.symbol}: profit=${profitInAtr.toFixed(2)} ATR (need ${trailingActivationAtr} ATR) - Active: ${trailingStopActive}`);
+          }
         }
 
         let newStopLoss = position.stop_loss;
