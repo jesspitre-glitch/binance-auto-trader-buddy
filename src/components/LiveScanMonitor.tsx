@@ -604,77 +604,111 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                         className="h-2"
                       />
                       
-                      {/* Hard Filters Details - All active filters */}
+                      {/* Hard Filters Details - All active filters with values */}
                       <div className="text-[9px] space-y-1 pt-1">
                         {coin.hardFilters.emaSpread !== undefined && (
-                          <div className="flex items-center gap-1.5">
-                            <CircularProgress 
-                              value={coin.hardFiltersProgress.emaSpread || 0} 
-                              size={16}
-                              passed={coin.hardFilters.emaSpread}
-                            />
-                            <span className={coin.hardFilters.emaSpread ? 'text-green-500' : 'opacity-70'}>
-                              EMA Spread
+                          <div className="flex items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <CircularProgress 
+                                value={coin.hardFiltersProgress.emaSpread || 0} 
+                                size={16}
+                                passed={coin.hardFilters.emaSpread}
+                              />
+                              <span className={coin.hardFilters.emaSpread ? 'text-green-500' : 'opacity-70'}>
+                                EMA Spread
+                              </span>
+                            </div>
+                            <span className="font-mono font-bold">
+                              {coin.indicators.emaSpreadPercent?.toFixed(2)}%
                             </span>
                           </div>
                         )}
                         {coin.hardFilters.atr !== undefined && (
-                          <div className="flex items-center gap-1.5">
-                            <CircularProgress 
-                              value={coin.hardFiltersProgress.atr || 0} 
-                              size={16}
-                              passed={coin.hardFilters.atr}
-                            />
-                            <span className={coin.hardFilters.atr ? 'text-green-500' : 'opacity-70'}>
-                              ATR
+                          <div className="flex items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <CircularProgress 
+                                value={coin.hardFiltersProgress.atr || 0} 
+                                size={16}
+                                passed={coin.hardFilters.atr}
+                              />
+                              <span className={coin.hardFilters.atr ? 'text-green-500' : 'opacity-70'}>
+                                ATR
+                              </span>
+                            </div>
+                            <span className="font-mono font-bold">
+                              {coin.indicators.price && coin.indicators.atr ? 
+                                ((coin.indicators.atr / coin.indicators.price) * 100).toFixed(2) + '%' : 
+                                'N/A'}
                             </span>
                           </div>
                         )}
                         {coin.hardFilters.adx !== undefined && (
-                          <div className="flex items-center gap-1.5">
-                            <CircularProgress 
-                              value={coin.hardFiltersProgress.adx || 0} 
-                              size={16}
-                              passed={coin.hardFilters.adx}
-                            />
-                            <span className={coin.hardFilters.adx ? 'text-green-500' : 'opacity-70'}>
-                              ADX
+                          <div className="flex items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <CircularProgress 
+                                value={coin.hardFiltersProgress.adx || 0} 
+                                size={16}
+                                passed={coin.hardFilters.adx}
+                              />
+                              <span className={coin.hardFilters.adx ? 'text-green-500' : 'opacity-70'}>
+                                ADX
+                              </span>
+                            </div>
+                            <span className="font-mono font-bold">
+                              {coin.indicators.adx?.toFixed(1) || 'N/A'}
                             </span>
                           </div>
                         )}
                         {coin.hardFilters.volume !== undefined && (
-                          <div className="flex items-center gap-1.5">
-                            <CircularProgress 
-                              value={coin.hardFiltersProgress.volume || 0} 
-                              size={16}
-                              passed={coin.hardFilters.volume}
-                            />
-                            <span className={coin.hardFilters.volume ? 'text-green-500' : 'opacity-70'}>
-                              Volume
+                          <div className="flex items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <CircularProgress 
+                                value={coin.hardFiltersProgress.volume || 0} 
+                                size={16}
+                                passed={coin.hardFilters.volume}
+                              />
+                              <span className={coin.hardFilters.volume ? 'text-green-500' : 'opacity-70'}>
+                                Volume
+                              </span>
+                            </div>
+                            <span className="font-mono font-bold">
+                              {coin.indicators.volumeRatio ? 
+                                (coin.indicators.volumeRatio / 100).toFixed(2) + 'x' : 
+                                'N/A'}
                             </span>
                           </div>
                         )}
                         {coin.hardFilters.macdDirection !== undefined && (
-                          <div className="flex items-center gap-1.5">
-                            <CircularProgress 
-                              value={coin.hardFiltersProgress.macdDirection || 0} 
-                              size={16}
-                              passed={coin.hardFilters.macdDirection}
-                            />
-                            <span className={coin.hardFilters.macdDirection ? 'text-green-500' : 'opacity-70'}>
-                              MACD Retning
+                          <div className="flex items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <CircularProgress 
+                                value={coin.hardFiltersProgress.macdDirection || 0} 
+                                size={16}
+                                passed={coin.hardFilters.macdDirection}
+                              />
+                              <span className={coin.hardFilters.macdDirection ? 'text-green-500' : 'opacity-70'}>
+                                MACD Retning
+                              </span>
+                            </div>
+                            <span className="font-mono font-bold">
+                              {coin.indicators.macdDirection || 'N/A'}
                             </span>
                           </div>
                         )}
                         {coin.hardFilters.rsiMomentum !== undefined && (
-                          <div className="flex items-center gap-1.5">
-                            <CircularProgress 
-                              value={coin.hardFiltersProgress.rsiMomentum || 0} 
-                              size={16}
-                              passed={coin.hardFilters.rsiMomentum}
-                            />
-                            <span className={coin.hardFilters.rsiMomentum ? 'text-green-500' : 'opacity-70'}>
-                              RSI Momentum
+                          <div className="flex items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <CircularProgress 
+                                value={coin.hardFiltersProgress.rsiMomentum || 0} 
+                                size={16}
+                                passed={coin.hardFilters.rsiMomentum}
+                              />
+                              <span className={coin.hardFilters.rsiMomentum ? 'text-green-500' : 'opacity-70'}>
+                                RSI Momentum
+                              </span>
+                            </div>
+                            <span className="font-mono font-bold">
+                              {coin.indicators.rsiMomentum || 'N/A'}
                             </span>
                           </div>
                         )}
