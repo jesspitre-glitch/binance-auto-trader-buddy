@@ -1684,10 +1684,25 @@ serve(async (req) => {
           const riskBasedQuantity = (riskAmount / stopLossDistance) * config.leverage;
           console.log(`📐 Risk-based: riskAmount=${riskAmount.toFixed(2)}, stopLossDistance=${stopLossDistance.toFixed(4)}, quantity=${riskBasedQuantity.toFixed(4)}`);
           
-          // Method 2: Direct percentage of balance
-          const directPositionValue = balance * (config.position_size_percent / 100);
-          const directQuantity = (directPositionValue / analysis.indicators.price) * config.leverage;
-          console.log(`📐 Direct: positionValue=${directPositionValue.toFixed(2)}, price=${analysis.indicators.price.toFixed(4)}, quantity=${directQuantity.toFixed(4)}`);
+          // Method 2: Direct percentage of balance WITH LEVERAGE
+          // Formula: (Balance × Position%) × Leverage / Price
+          // Example: ($100 × 20%) × 3 / $1 = $20 × 3 / $1 = 60 units
+          // Position notional = 60 × $1 = $60
+          // Required margin = $60 / 3 = $20 ✓
+          const marginToUse = balance * (config.position_size_percent / 100);
+          const positionNotional = marginToUse * config.leverage;
+          const directQuantity = positionNotional / analysis.indicators.price;
+          
+          console.log(`📐 Direct percentage calculation:`);
+          console.log(`   Balance: $${balance.toFixed(2)}`);
+          console.log(`   Position size %: ${config.position_size_percent}%`);
+          console.log(`   Margin to use: $${marginToUse.toFixed(2)} (${config.position_size_percent}% of balance)`);
+          console.log(`   Leverage: ${config.leverage}x`);
+          console.log(`   Position notional: $${positionNotional.toFixed(2)} (margin × leverage)`);
+          console.log(`   Price: $${analysis.indicators.price.toFixed(4)}`);
+          console.log(`   Quantity: ${directQuantity.toFixed(4)} units`);
+          console.log(`   ✅ Total position value: $${(directQuantity * analysis.indicators.price).toFixed(2)}`);
+          console.log(`   ✅ Required margin: $${((directQuantity * analysis.indicators.price) / config.leverage).toFixed(2)}`);
           
           // Use the SMALLER of the two (more conservative)
           const rawQuantity = Math.min(riskBasedQuantity, directQuantity);
