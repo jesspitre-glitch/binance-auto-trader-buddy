@@ -1294,11 +1294,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <Input
               id="max_position_duration_minutes"
               type="number"
-              value={formData.max_position_duration_minutes}
-              onChange={(e) => setFormData({ ...formData, max_position_duration_minutes: parseInt(e.target.value) })}
+              value={formData.max_position_duration_minutes || ''}
+              onChange={(e) => setFormData({ ...formData, max_position_duration_minutes: e.target.value ? parseInt(e.target.value) : null })}
+              placeholder="0 = deaktiveret"
               disabled={!formData.auto_exit_enabled}
             />
-            <p className="text-xs text-muted-foreground">Auto-luk position efter denne tid (240 = 4 timer)</p>
+            <p className="text-xs text-muted-foreground">
+              Sæt til 0 eller lad være tom for at deaktivere timeout. Positioner lukkes kun på stop loss/trailing stop. (240 = 4 timer)
+            </p>
           </div>
         </CardContent>
       </Card>
