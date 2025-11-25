@@ -658,11 +658,22 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   if (config.volume_enabled && currentVolume !== null && avgVolume !== null && avgVolume > 0) {
     const volumeRatio = currentVolume / avgVolume;
     const requiredVolume = avgVolume * config.volume_multiplier;
-    filterStatus.hard.volume.value = `${volumeRatio.toFixed(2)}x`;
+    filterStatus.hard.volume.value = `${volumeRatio.toFixed(2)}x (${(volumeRatio * 100).toFixed(0)}%)`;
     
-    if (currentVolume < requiredVolume) {
+    // Log volume check detaljeret
+    console.log(`   📊 Volume Check:`);
+    console.log(`      Current: ${currentVolume.toFixed(2)}`);
+    console.log(`      Average: ${avgVolume.toFixed(2)}`);
+    console.log(`      Ratio: ${volumeRatio.toFixed(2)} (${(volumeRatio * 100).toFixed(0)}%)`);
+    console.log(`      Required Multiplier: ${config.volume_multiplier}x (${(config.volume_multiplier * 100).toFixed(0)}%)`);
+    console.log(`      Required Volume: ${requiredVolume.toFixed(2)}`);
+    
+    if (volumeRatio < config.volume_multiplier) {
       filterStatus.hard.volume.passed = false;
-      filterStatus.hard.volume.reason = `${currentVolume.toFixed(2)} < ${requiredVolume.toFixed(2)} (ikke nok aktivitet)`;
+      filterStatus.hard.volume.reason = `Ratio ${volumeRatio.toFixed(2)}x (${(volumeRatio * 100).toFixed(0)}%) < ${config.volume_multiplier}x required (current: ${currentVolume.toFixed(2)}, avg: ${avgVolume.toFixed(2)})`;
+      console.log(`      ❌ BLOKERET: ${volumeRatio.toFixed(2)}x < ${config.volume_multiplier}x`);
+    } else {
+      console.log(`      ✅ OPFYLDT: ${volumeRatio.toFixed(2)}x >= ${config.volume_multiplier}x`);
     }
   }
   
@@ -1448,6 +1459,7 @@ serve(async (req) => {
               trend: trend,
               scan_interval: config.scan_interval,
               trend_timeframe: config.trend_timeframe,
+              filterStatus: analysis.filterStatus, // Include filter evaluation results
             },
             stop_loss: analysis.stopLoss,
             take_profit: analysis.takeProfit,
