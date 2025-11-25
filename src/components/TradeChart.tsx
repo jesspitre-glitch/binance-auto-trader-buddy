@@ -144,8 +144,8 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           return currentDiff < closestDiff ? current : closest;
         }, data[0]);
         
-        // Only find exit point if position is actually closed (not just has closed_at timestamp)
-        const isPositionClosed = trade.status === 'CLOSED' || (trade.closed_at != null && trade.exit_price != null);
+        // Only find exit point if position is actually closed
+        const isPositionClosed = trade.status === 'CLOSED';
         let exitPoint = null;
         if (isPositionClosed) {
           exitPoint = data.reduce((closest, current) => {
@@ -190,7 +190,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
   }
 
   // Check if position is actually closed
-  const isPositionClosed = trade.status === 'CLOSED' || (trade.closed_at != null && trade.exit_price != null);
+  const isPositionClosed = trade.status === 'CLOSED';
 
   const CustomShape = (props: any) => {
     const { cx, cy, fill } = props;
