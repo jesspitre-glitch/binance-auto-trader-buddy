@@ -268,11 +268,12 @@ serve(async (req) => {
         let trailingActivationEnabled = true; // default
         let trailingActivationAtr = 1.0; // default
         let autoExitEnabled = true; // default - hvis slukket lukkes positioner ikke automatisk
+        let maxPositionDurationMinutes = null; // default - hvis null/0 lukkes positioner ikke pga timeout
         
         if (position.strategy_hash) {
           const { data: configData } = await supabaseClient
             .from('indicator_config')
-            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, auto_exit_enabled')
+            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, auto_exit_enabled, max_position_duration_minutes')
             .eq('user_id', position.user_id)
             .single();
           
@@ -280,6 +281,7 @@ serve(async (req) => {
             trailingActivationEnabled = configData.trailing_stop_activation_enabled ?? true;
             trailingActivationAtr = configData.trailing_stop_activation_atr ?? 1.0;
             autoExitEnabled = configData.auto_exit_enabled ?? true;
+            maxPositionDurationMinutes = configData.max_position_duration_minutes;
           }
         }
 
@@ -434,15 +436,21 @@ serve(async (req) => {
           }
         }
 
-        // Check timeout (4 hours default)
+        // Definer tidspunkt variabler (bruges til både timeout check og duration beregning)
         const openedAt = new Date(position.opened_at);
         const now = new Date();
-        if (!shouldClose) {
-          const hoursSinceOpen = (now.getTime() - openedAt.getTime()) / (1000 * 60 * 60);
-          if (hoursSinceOpen >= 4) {
+
+        // Check timeout (only if enabled - max_position_duration_minutes > 0)
+        if (!shouldClose && maxPositionDurationMinutes && maxPositionDurationMinutes > 0) {
+          const minutesSinceOpen = (now.getTime() - openedAt.getTime()) / (1000 * 60);
+          
+          if (minutesSinceOpen >= maxPositionDurationMinutes) {
             shouldClose = true;
             closeReason = 'TIMEOUT';
+            console.log(`⏱️ Position ${position.symbol} exceeded max duration (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min), closing...`);
           }
+        } else if (!shouldClose && (!maxPositionDurationMinutes || maxPositionDurationMinutes === 0)) {
+          console.log(`⏱️ Position ${position.symbol} - max duration disabled (set to ${maxPositionDurationMinutes}), will only close on stop loss or trailing stop`);
         }
 
         // Calculate unrealized PnL
