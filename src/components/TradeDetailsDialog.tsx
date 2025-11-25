@@ -258,7 +258,7 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
                 )}
 
                 {/* MACD Section */}
-                {trade.indicators_snapshot.macd !== undefined && (
+                {(trade.indicators_snapshot.macd !== undefined || trade.indicators_snapshot.macdLine !== undefined) && (
                   <div>
                     <div className="text-xs font-semibold mb-2 text-primary">MACD (Moving Average Convergence Divergence)</div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
@@ -274,10 +274,20 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
                         <span className="text-muted-foreground">Signal:</span>
                         <span className="font-mono">9</span>
                       </div>
-                      <div className="flex justify-between border rounded p-2">
-                        <span className="text-muted-foreground">Histogram:</span>
-                        <span className="font-mono font-semibold">{Number(trade.indicators_snapshot.macd).toFixed(6)}</span>
-                      </div>
+                      {trade.indicators_snapshot.macdLine !== undefined && (
+                        <div className="flex justify-between border rounded p-2 bg-primary/10">
+                          <span className="text-muted-foreground">🔴 MACD Line:</span>
+                          <span className={`font-mono font-semibold ${trade.indicators_snapshot.macdLine > 0 ? 'text-success' : 'text-destructive'}`}>
+                            {Number(trade.indicators_snapshot.macdLine).toFixed(6)}
+                          </span>
+                        </div>
+                      )}
+                      {trade.indicators_snapshot.macd !== undefined && (
+                        <div className="flex justify-between border rounded p-2">
+                          <span className="text-muted-foreground">Histogram:</span>
+                          <span className="font-mono">{Number(trade.indicators_snapshot.macd).toFixed(6)}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between border rounded p-2">
                         <span className="text-muted-foreground">Threshold:</span>
                         <span className="font-mono">0.0</span>

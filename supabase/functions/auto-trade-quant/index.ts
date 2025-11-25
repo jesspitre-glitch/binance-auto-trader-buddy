@@ -672,20 +672,31 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   let macdLongOK = true;
   let macdShortOK = true;
   
-  if (config.macd_direction_enabled && config.macd_enabled && macd && macd.macd !== null) {
-    // 🚨 HÅRDT RETNINGSFILTER:
-    // LONG blokeres ALTID når MACD ≤ 0 (bearish)
-    // SHORT blokeres ALTID når MACD ≥ 0 (bullish)
-    macdLongOK = macd.macd > 0;  // LONG kun tilladt når MACD er positiv
-    macdShortOK = macd.macd < 0; // SHORT kun tilladt når MACD er negativ
-    
-    filterStatus.hard.macdDirection.long = macdLongOK;
-    filterStatus.hard.macdDirection.short = macdShortOK;
-    // BEMÆRK: Vi sætter IKKE passed her, da det er retnings-specifikt
-    
-    if (!macdLongOK && !macdShortOK) {
-      // Dette sker kun ved MACD nøjagtigt = 0 (ekstremt sjældent)
-      filterStatus.hard.macdDirection.reason = `MACD præcis på nul-linjen ${macd.macd.toFixed(6)}`;
+  if (config.macd_direction_enabled) {
+    // 🚨 KRITISK FIX: Tjek kun om MACD er tilgængelig, ikke om MACD indicator er enabled
+    // Hvis direction filter er enabled MEN MACD værdi mangler, bloker ALT for sikkerhed
+    if (config.macd_enabled && macd && macd.macd !== null) {
+      // 🚨 HÅRDT RETNINGSFILTER:
+      // LONG blokeres ALTID når MACD ≤ 0 (bearish)
+      // SHORT blokeres ALTID når MACD ≥ 0 (bullish)
+      macdLongOK = macd.macd > 0;  // LONG kun tilladt når MACD er positiv
+      macdShortOK = macd.macd < 0; // SHORT kun tilladt når MACD er negativ
+      
+      filterStatus.hard.macdDirection.long = macdLongOK;
+      filterStatus.hard.macdDirection.short = macdShortOK;
+      
+      if (!macdLongOK && !macdShortOK) {
+        // Dette sker kun ved MACD nøjagtigt = 0 (ekstremt sjældent)
+        filterStatus.hard.macdDirection.reason = `MACD præcis på nul-linjen ${macd.macd.toFixed(6)}`;
+      }
+    } else {
+      // MACD direction filter ER aktiveret men MACD værdi mangler - BLOKER ALT
+      macdLongOK = false;
+      macdShortOK = false;
+      filterStatus.hard.macdDirection.long = false;
+      filterStatus.hard.macdDirection.short = false;
+      filterStatus.hard.macdDirection.reason = `MACD direction filter aktiveret men MACD værdi mangler (macd_enabled=${config.macd_enabled})`;
+      console.log(`⚠️ ${filterStatus.hard.macdDirection.reason}`);
     }
   } else {
     // Filter er deaktiveret - alle retninger tilladt
@@ -1577,14 +1588,21 @@ serve(async (req) => {
           console.log(`\n🎯 Behandler signal ${selectedSignal.symbol} (styrke: ${selectedSignal.strength.toFixed(1)})`);
           
           // FINAL MACD RETNINGSCHECK FØR ORDER (ekstra sikkerhed)
-          const macdLine = analysis.indicators.macdLine;
-          if (macdLine !== null && macdLine !== undefined) {
-            if (signal === 'LONG' && macdLine <= 0) {
-              console.log(`🚨 BLOKERET: LONG for ${symbol} med MACD=${macdLine.toFixed(4)} ≤ 0`);
-              continue;
-            }
-            if (signal === 'SHORT' && macdLine >= 0) {
-              console.log(`🚨 BLOKERET: SHORT for ${symbol} med MACD=${macdLine.toFixed(4)} ≥ 0`);
+          // 🔴 KRITISK: Checker ALTID når macd_direction_enabled=true, uanset om MACD er aktiveret
+          if (config.macd_direction_enabled) {
+            const macdLine = analysis.indicators.macdLine;
+            if (macdLine !== null && macdLine !== undefined) {
+              if (signal === 'LONG' && macdLine <= 0) {
+                console.log(`🚨 BLOKERET: LONG for ${symbol} med MACD=${macdLine.toFixed(4)} ≤ 0`);
+                continue;
+              }
+              if (signal === 'SHORT' && macdLine >= 0) {
+                console.log(`🚨 BLOKERET: SHORT for ${symbol} med MACD=${macdLine.toFixed(4)} ≥ 0`);
+                continue;
+              }
+            } else if (config.macd_enabled) {
+              // MACD direction filter er aktiveret men MACD værdi mangler - bloker for sikkerhed
+              console.log(`🚨 BLOKERET: ${signal} for ${symbol} - MACD direction filter aktiveret men ingen MACD værdi`);
               continue;
             }
           }
