@@ -206,31 +206,20 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
     );
   };
 
-  // Beregn korrekt Y-akse range baseret på price data OG alle reference linjer
-  const prices = chartData.map(d => d.price).filter(p => p != null);
-  const allValues = [...prices];
+  // Beregn korrekt Y-akse range baseret KUN på faktiske price værdier
+  const prices = chartData.map(d => d.price).filter(p => p != null && !isNaN(p));
   
-  // Inkluder entry price
-  if (trade.entry_price) allValues.push(Number(trade.entry_price));
+  // Filtrer kun valide tal værdier for at undgå NaN eller null problemer
+  const validValues = prices.filter(v => typeof v === 'number' && isFinite(v));
   
-  // Inkluder exit price hvis positionens er lukket
-  if (isPositionClosed && trade.exit_price) allValues.push(Number(trade.exit_price));
-  
-  // Inkluder stop loss
-  const stopLossValue = trade.stop_loss || trade.indicators_snapshot?.stop_loss;
-  if (stopLossValue) allValues.push(Number(stopLossValue));
-  
-  // Inkluder take profit hvis sat
-  if (trade.take_profit && trade.take_profit > 0) allValues.push(Number(trade.take_profit));
-  
-  // Inkluder effectiveStop og trailing stop værdier fra chart data
-  chartData.forEach(d => {
-    if (d.effectiveStop != null) allValues.push(d.effectiveStop);
-    if (d.trailingStop != null) allValues.push(d.trailingStop);
+  console.log('Price range calculation:', {
+    validValuesCount: validValues.length,
+    minPrice: Math.min(...validValues),
+    maxPrice: Math.max(...validValues),
   });
   
-  const minPrice = Math.min(...allValues);
-  const maxPrice = Math.max(...allValues);
+  const minPrice = Math.min(...validValues);
+  const maxPrice = Math.max(...validValues);
   const priceRange = maxPrice - minPrice;
   const padding = priceRange * 0.1; // 10% padding
   
