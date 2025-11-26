@@ -44,6 +44,7 @@ interface IndicatorConfig {
   atr_period: number;
   min_atr: number;
   min_atr_percent: number;
+  adaptive_atr_enabled?: boolean;
   atr_base_min?: number;
   atr_floor?: number;
   atr_ceiling?: number;
@@ -54,6 +55,7 @@ interface IndicatorConfig {
   adx_enabled: boolean;
   adx_period: number;
   adx_threshold: number;
+  adaptive_adx_enabled?: boolean;
   adx_base_min?: number;
   adx_floor?: number;
   adx_ceiling?: number;
@@ -584,10 +586,10 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     if (config.min_atr_percent > 0) {
       const atrPercent = (atr / currentPrice) * 100;
       
-      // Beregn adaptive ATR threshold
+      // Beregn adaptive ATR threshold KUN hvis enabled
       let dynamicMinATR = config.min_atr_percent; // Fallback til standard
       
-      if (config.atr_base_min && config.atr_floor && config.atr_ceiling && currentVolume !== null && avgVolume !== null && avgVolume > 0) {
+      if (config.adaptive_atr_enabled && config.atr_base_min && config.atr_floor && config.atr_ceiling && currentVolume !== null && avgVolume !== null && avgVolume > 0) {
         const volumeRatio = currentVolume / avgVolume;
         dynamicMinATR = config.atr_base_min * volumeRatio;
         
@@ -612,10 +614,10 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   if (config.adx_enabled && adx !== null) {
     filterStatus.hard.adx.value = adx.toFixed(2);
     
-    // Beregn adaptive ADX threshold
+    // Beregn adaptive ADX threshold KUN hvis enabled
     let dynamicMinADX = config.adx_threshold; // Fallback til standard
     
-    if (config.adx_base_min && config.adx_floor && config.adx_ceiling && atr !== null) {
+    if (config.adaptive_adx_enabled && config.adx_base_min && config.adx_floor && config.adx_ceiling && atr !== null) {
       // Beregn nuværende og gennemsnitlig ATR%
       const currentATRPercent = (atr / currentPrice) * 100;
       

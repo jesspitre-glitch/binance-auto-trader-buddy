@@ -16,6 +16,8 @@ export type Database = {
     Tables: {
       indicator_config: {
         Row: {
+          adaptive_adx_enabled: boolean | null
+          adaptive_atr_enabled: boolean | null
           adx_base_min: number | null
           adx_ceiling: number | null
           adx_enabled: boolean | null
@@ -96,6 +98,8 @@ export type Database = {
           volume_multiplier: number | null
         }
         Insert: {
+          adaptive_adx_enabled?: boolean | null
+          adaptive_atr_enabled?: boolean | null
           adx_base_min?: number | null
           adx_ceiling?: number | null
           adx_enabled?: boolean | null
@@ -176,6 +180,8 @@ export type Database = {
           volume_multiplier?: number | null
         }
         Update: {
+          adaptive_adx_enabled?: boolean | null
+          adaptive_atr_enabled?: boolean | null
           adx_base_min?: number | null
           adx_ceiling?: number | null
           adx_enabled?: boolean | null
