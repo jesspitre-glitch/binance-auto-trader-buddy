@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, TrendingUp, TrendingDown } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { da } from "date-fns/locale";
 import { TradeDetailsDialog } from "./TradeDetailsDialog";
@@ -118,6 +118,9 @@ export const TradeHistoryTable = () => {
                       <Badge variant={trade.side === "LONG" ? "default" : "secondary"} className="text-xs">
                         {trade.side}
                       </Badge>
+                      <div className="flex items-center justify-center h-8 w-8 rounded-full bg-muted">
+                        <X className="h-4 w-4 text-muted-foreground" />
+                      </div>
                     </div>
                     
                     <div className="flex items-center gap-4">
