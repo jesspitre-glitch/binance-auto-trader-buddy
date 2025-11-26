@@ -213,7 +213,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           interval="preserveStartEnd"
         />
         <YAxis 
-          domain={['auto', 'auto']}
+          domain={['dataMin - 5', 'dataMax + 5']}
           tick={{ fontSize: 10 }}
         />
         <Tooltip 
@@ -284,15 +284,17 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           label="Entry"
         />
         
-        {/* Take Profit line */}
-        <ReferenceLine 
-          y={trade.take_profit} 
-          stroke="#10b981" 
-          strokeWidth={2}
-          strokeDasharray="5 5"
-          strokeOpacity={0.9}
-          label={{ value: "TP", fill: "#10b981", fontSize: 12, fontWeight: "bold" }}
-        />
+        {/* Take Profit line - only show if set */}
+        {trade.take_profit && trade.take_profit > 0 && (
+          <ReferenceLine 
+            y={trade.take_profit} 
+            stroke="#10b981" 
+            strokeWidth={2}
+            strokeDasharray="5 5"
+            strokeOpacity={0.9}
+            label={{ value: "TP", fill: "#10b981", fontSize: 12, fontWeight: "bold" }}
+          />
+        )}
         
         {/* Stop Loss line */}
         <ReferenceLine 
