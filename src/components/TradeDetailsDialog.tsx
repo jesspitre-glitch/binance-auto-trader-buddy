@@ -165,12 +165,14 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
               </div>
             </div>
 
-            <div className="border rounded-lg p-3">
-              <div className="text-xs text-muted-foreground mb-1">Lukket</div>
-              <div className="text-sm font-medium">
-                {formatBinanceDate(trade.closed_at, { includeTime: true })}
+            {trade.status === 'CLOSED' && trade.closed_at && (
+              <div className="border rounded-lg p-3">
+                <div className="text-xs text-muted-foreground mb-1">Lukket</div>
+                <div className="text-sm font-medium">
+                  {formatBinanceDate(trade.closed_at, { includeTime: true })}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Chart */}
