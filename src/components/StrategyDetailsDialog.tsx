@@ -5,8 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TrendingUp, TrendingDown, Copy, Check, Settings } from "lucide-react";
-import { format } from "date-fns";
-import { da } from "date-fns/locale";
+import { formatBinanceDate } from "@/lib/timeUtils";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -120,8 +119,8 @@ export const StrategyDetailsDialog = ({
     };
 
     const tradesText = trades.map(t => {
-      const opened = format(new Date(t.opened_at), 'dd/MM/yyyy HH:mm', { locale: da });
-      const closed = format(new Date(t.closed_at), 'dd/MM/yyyy HH:mm', { locale: da });
+      const opened = formatBinanceDate(t.opened_at, { includeTime: true });
+      const closed = formatBinanceDate(t.closed_at, { includeTime: true });
       const indicators = formatIndicatorLine(t.indicators_snapshot);
       return `${t.symbol}\t${t.side}\t${opened}\t${closed}\t${t.entry_price}\t${t.exit_price}\t${t.pnl.toFixed(2)}\t${t.pnl_percent.toFixed(2)}%\t${(t.duration_minutes || 0)}m\t${t.close_reason || ''}\t${indicators}`;
     }).join('\n');
@@ -353,10 +352,10 @@ export const StrategyDetailsDialog = ({
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs">
-                        {format(new Date(trade.opened_at), 'dd/MM HH:mm', { locale: da })}
+                        {formatBinanceDate(trade.opened_at, { includeTime: true })}
                       </TableCell>
                       <TableCell className="text-xs">
-                        {format(new Date(trade.closed_at), 'dd/MM HH:mm', { locale: da })}
+                        {formatBinanceDate(trade.closed_at, { includeTime: true })}
                       </TableCell>
                       <TableCell className="text-right font-mono text-xs">
                         ${trade.entry_price}

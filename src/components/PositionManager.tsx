@@ -6,8 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, TrendingUp, TrendingDown, X, BarChart2 } from "lucide-react";
 import { useBinanceFuturesPrices } from "@/hooks/useBinanceFuturesPrices";
-import { formatDistanceToNow } from "date-fns";
-import { da } from "date-fns/locale";
+import { getBinanceTimeAgo } from "@/lib/timeUtils";
 import { TradeDetailsDialog } from "./TradeDetailsDialog";
 
 export const PositionManager = () => {
@@ -263,10 +262,10 @@ export const PositionManager = () => {
                           {isProfitable ? "+" : ""}{pnl.toFixed(2)} USDT
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          Pris: {priceUpdatedAt[position.symbol] ? formatDistanceToNow(new Date(priceUpdatedAt[position.symbol]), { addSuffix: true, locale: da }) : 'venter...'}
+                          Pris: {priceUpdatedAt[position.symbol] ? getBinanceTimeAgo(new Date(priceUpdatedAt[position.symbol])) : 'venter...'}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          Åbnet: {formatDistanceToNow(new Date(openedTime), { addSuffix: true, locale: da })}
+                          Åbnet: {getBinanceTimeAgo(new Date(openedTime))}
                         </div>
                       </div>
                       

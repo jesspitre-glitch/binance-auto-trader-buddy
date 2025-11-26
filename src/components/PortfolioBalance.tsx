@@ -165,7 +165,7 @@ export const PortfolioBalance = () => {
             <div className="text-sm text-muted-foreground">Last Updated</div>
             <div className="text-sm">
               {portfolio?.updated_at
-                ? new Date(portfolio.updated_at).toLocaleString("da-DK")
+                ? new Date(portfolio.updated_at).toLocaleString("da-DK", { timeZone: "UTC" }) + " UTC"
                 : "Aldrig"}
             </div>
           </div>

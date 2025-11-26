@@ -4,8 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, TrendingUp, TrendingDown, X } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { da } from "date-fns/locale";
+import { getBinanceTimeAgo } from "@/lib/timeUtils";
 import { TradeDetailsDialog } from "./TradeDetailsDialog";
 import { ExportTradesDialog } from "./ExportTradesDialog";
 
@@ -109,10 +108,7 @@ export const TradeHistoryTable = () => {
                       <div>
                         <div className="font-semibold text-sm">{trade.symbol}</div>
                         <div className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(new Date(trade.closed_at), { 
-                            addSuffix: true,
-                            locale: da 
-                          })}
+                          {getBinanceTimeAgo(trade.closed_at)}
                         </div>
                       </div>
                       <Badge variant={trade.side === "LONG" ? "default" : "secondary"} className="text-xs">

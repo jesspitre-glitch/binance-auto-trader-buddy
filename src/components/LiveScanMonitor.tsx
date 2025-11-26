@@ -480,8 +480,9 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                   <span>{new Date(coin.lastUpdate).toLocaleTimeString("da-DK", { 
                     hour: '2-digit', 
                     minute: '2-digit',
-                    second: '2-digit'
-                  })}</span>
+                    second: '2-digit',
+                    timeZone: 'UTC'
+                  })} UTC</span>
                   {coin.signal === 'NONE' && coin.strength >= 80 && (
                     <Badge variant="outline" className="h-3 px-1 text-[8px] border-muted">
                       {coin.trend}

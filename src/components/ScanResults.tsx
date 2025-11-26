@@ -185,7 +185,7 @@ export const ScanResults = () => {
                   <div>
                     <div className="font-semibold">{result.symbol}</div>
                     <div className="text-sm text-muted-foreground">
-                      {new Date(result.created_at).toLocaleString("da-DK")}
+                      {new Date(result.created_at).toLocaleString("da-DK", { timeZone: "UTC" })} UTC
                     </div>
                   </div>
 
