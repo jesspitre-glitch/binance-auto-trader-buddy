@@ -206,23 +206,6 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
     );
   };
 
-  // Beregn korrekt Y-akse range baseret KUN på faktiske price værdier
-  const prices = chartData.map(d => d.price).filter(p => p != null && !isNaN(p));
-  
-  // Filtrer kun valide tal værdier for at undgå NaN eller null problemer
-  const validValues = prices.filter(v => typeof v === 'number' && isFinite(v));
-  
-  console.log('Price range calculation:', {
-    validValuesCount: validValues.length,
-    minPrice: Math.min(...validValues),
-    maxPrice: Math.max(...validValues),
-  });
-  
-  const minPrice = Math.min(...validValues);
-  const maxPrice = Math.max(...validValues);
-  const priceRange = maxPrice - minPrice;
-  const padding = priceRange * 0.1; // 10% padding
-  
   return (
     <ResponsiveContainer width="100%" height={300}>
       <ComposedChart data={chartData}>
@@ -233,7 +216,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           interval="preserveStartEnd"
         />
         <YAxis 
-          domain={[minPrice - padding, maxPrice + padding]}
+          domain={['auto', 'auto']}
           tick={{ fontSize: 10 }}
         />
         <Tooltip 
