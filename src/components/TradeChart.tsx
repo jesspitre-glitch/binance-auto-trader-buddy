@@ -206,6 +206,13 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
     );
   };
 
+  // Beregn Y-akse range baseret KUN på price værdier (ignorer null værdier fra andre linjer)
+  const prices = chartData.map(d => d.price).filter(p => p != null);
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+  const priceRange = maxPrice - minPrice;
+  const padding = priceRange * 0.15; // 15% padding
+  
   return (
     <ResponsiveContainer width="100%" height={300}>
       <ComposedChart data={chartData}>
@@ -216,7 +223,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           interval="preserveStartEnd"
         />
         <YAxis 
-          domain={['auto', 'auto']}
+          domain={[minPrice - padding, maxPrice + padding]}
           tick={{ fontSize: 10 }}
         />
         <Tooltip 
