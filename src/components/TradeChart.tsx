@@ -70,11 +70,14 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           
           // Trailing stop og effective stop beregnes løbende efter position åbnes
           let trailingStop = null;
-          let effectiveStop = currentStopLoss;
+          let effectiveStop: number | null = null; // Start med null før position åbnes
           
           if (timestamp >= openTime) {
             // VIGTIGT: Brug KUN close price (ikke high/low) for at matche backend monitor logik
             // Backend monitor bruger currentPrice (close) til at opdatere peak, ikke high/low
+            
+            // Sæt initial effective stop til currentStopLoss når positionen åbner
+            effectiveStop = currentStopLoss;
             
             // Beregn profit i ATR units korrekt for LONG vs SHORT
             const profitInAtr = side === 'LONG' 
@@ -117,9 +120,9 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
               // Opdater currentStopLoss så trailing kun kan bevæge sig én vej
               currentStopLoss = trailingStop;
               effectiveStop = trailingStop;
-            } else {
-              effectiveStop = currentStopLoss;
             }
+            // Hvis trailing ikke er aktiv, brug currentStopLoss (som kan være SL eller break-even)
+            // effectiveStop er allerede sat til currentStopLoss ovenfor
           }
           
           return {
