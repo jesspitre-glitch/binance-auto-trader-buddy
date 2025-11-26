@@ -1,8 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown, Clock, DollarSign, Target, AlertTriangle } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { da } from "date-fns/locale";
+import { getBinanceTimeAgo, formatBinanceDate } from "@/lib/timeUtils";
 import { TradeChart } from "./TradeChart";
 
 interface TradeDetailsDialogProps {
@@ -56,10 +55,7 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
                 {hours > 0 ? `${hours}t ` : ""}{minutes}m
               </div>
               <div className="text-sm text-muted-foreground">
-                {formatDistanceToNow(new Date(trade.closed_at), { 
-                  addSuffix: true,
-                  locale: da 
-                })}
+                {getBinanceTimeAgo(trade.closed_at)}
               </div>
             </div>
           </div>
@@ -165,14 +161,14 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
             <div className="border rounded-lg p-3">
               <div className="text-xs text-muted-foreground mb-1">Åbnet</div>
               <div className="text-sm font-medium">
-                {new Date(trade.opened_at).toLocaleString("da-DK")}
+                {formatBinanceDate(trade.opened_at, { includeTime: true })}
               </div>
             </div>
 
             <div className="border rounded-lg p-3">
               <div className="text-xs text-muted-foreground mb-1">Lukket</div>
               <div className="text-sm font-medium">
-                {new Date(trade.closed_at).toLocaleString("da-DK")}
+                {formatBinanceDate(trade.closed_at, { includeTime: true })}
               </div>
             </div>
           </div>

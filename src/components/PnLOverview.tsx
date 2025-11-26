@@ -44,24 +44,24 @@ export const PnLOverview = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Calculate date range
+      // Calculate date range in UTC (Binance server time)
       const now = new Date();
       const startDate = new Date();
       switch (range) {
         case "24h":
-          startDate.setHours(startDate.getHours() - 24);
+          startDate.setUTCHours(startDate.getUTCHours() - 24);
           break;
         case "7d":
-          startDate.setDate(startDate.getDate() - 7);
+          startDate.setUTCDate(startDate.getUTCDate() - 7);
           break;
         case "30d":
-          startDate.setDate(startDate.getDate() - 30);
+          startDate.setUTCDate(startDate.getUTCDate() - 30);
           break;
         case "90d":
-          startDate.setDate(startDate.getDate() - 90);
+          startDate.setUTCDate(startDate.getUTCDate() - 90);
           break;
         case "1y":
-          startDate.setFullYear(startDate.getFullYear() - 1);
+          startDate.setUTCFullYear(startDate.getUTCFullYear() - 1);
           break;
       }
 
@@ -123,41 +123,45 @@ export const PnLOverview = () => {
         profitFactor,
       });
 
-      // Create cumulative P&L chart data
+      // Create cumulative P&L chart data (UTC/Binance time)
       let cumulativePnL = 0;
       const cumulativeData = trades.map(trade => {
         cumulativePnL += Number(trade.pnl);
+        const date = new Date(trade.closed_at);
         return {
-          time: new Date(trade.closed_at).toLocaleString("da-DK", {
+          time: date.toLocaleString("da-DK", {
             month: "short",
             day: "numeric",
             hour: range === "24h" ? "2-digit" : undefined,
             minute: range === "24h" ? "2-digit" : undefined,
-          }),
+            timeZone: "UTC",
+          }) + " UTC",
           pnl: Number(Number(trade.pnl).toFixed(2)),
           cumulative: Number(cumulativePnL.toFixed(2)),
         };
       });
 
-      // Create aggregated P&L data for bar chart
+      // Create aggregated P&L data for bar chart (UTC/Binance time)
       const aggregatedPnL = new Map<string, number>();
       trades.forEach(trade => {
         const date = new Date(trade.closed_at);
         let timeKey: string;
         
         if (range === "24h") {
-          // Group by hour
-          timeKey = new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours()).toLocaleString("da-DK", {
+          // Group by hour in UTC
+          timeKey = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), date.getUTCHours())).toLocaleString("da-DK", {
             month: "short",
             day: "numeric",
             hour: "2-digit",
-          });
+            timeZone: "UTC",
+          }) + " UTC";
         } else {
-          // Group by day
-          timeKey = new Date(date.getFullYear(), date.getMonth(), date.getDate()).toLocaleString("da-DK", {
+          // Group by day in UTC
+          timeKey = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toLocaleString("da-DK", {
             month: "short",
             day: "numeric",
-          });
+            timeZone: "UTC",
+          }) + " UTC";
         }
         
         const currentPnL = aggregatedPnL.get(timeKey) || 0;
@@ -299,16 +303,18 @@ export const PnLOverview = () => {
                             let timeKey: string;
                             
                             if (timeRange === "24h") {
-                              timeKey = new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours()).toLocaleString("da-DK", {
+                              timeKey = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), date.getUTCHours())).toLocaleString("da-DK", {
                                 month: "short",
                                 day: "numeric",
                                 hour: "2-digit",
-                              });
+                                timeZone: "UTC",
+                              }) + " UTC";
                             } else {
-                              timeKey = new Date(date.getFullYear(), date.getMonth(), date.getDate()).toLocaleString("da-DK", {
+                              timeKey = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toLocaleString("da-DK", {
                                 month: "short",
                                 day: "numeric",
-                              });
+                                timeZone: "UTC",
+                              }) + " UTC";
                             }
                             
                             return timeKey === clickedTime;
@@ -471,8 +477,8 @@ export const PnLOverview = () => {
                   };
 
                   const rows = selectedPeriodTrades.map((t) => {
-                    const opened = new Date(t.opened_at).toLocaleString("da-DK");
-                    const closed = new Date(t.closed_at).toLocaleString("da-DK");
+                      const opened = new Date(t.opened_at).toLocaleString("da-DK", { timeZone: "UTC" }) + " UTC";
+                      const closed = new Date(t.closed_at).toLocaleString("da-DK", { timeZone: "UTC" }) + " UTC";
                     const entry = String(t.entry_price);
                     const exit = String(t.exit_price);
                     const pnl = `${Number(t.pnl) >= 0 ? "" : "-"}$${Math.abs(Number(t.pnl)).toFixed(2)}`;
@@ -556,7 +562,7 @@ export const PnLOverview = () => {
                       {Number(trade.pnl_percent) >= 0 ? "+" : ""}{Number(trade.pnl_percent).toFixed(2)}%
                     </TableCell>
                     <TableCell>
-                      {new Date(trade.closed_at).toLocaleString("da-DK")}
+                      {new Date(trade.closed_at).toLocaleString("da-DK", { timeZone: "UTC" })} UTC
                     </TableCell>
                   </TableRow>
                 ))}
