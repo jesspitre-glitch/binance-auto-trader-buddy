@@ -71,9 +71,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     atr_period: config?.atr_period || 14,
     min_atr: config?.min_atr ?? 0,
     min_atr_percent: config?.min_atr_percent ?? 0.5,
-    atr_base_min: config?.atr_base_min ?? 0.4,
-    atr_floor: config?.atr_floor ?? 0.2,
-    atr_ceiling: config?.atr_ceiling ?? 1.0,
+    adaptive_atr_enabled: config?.adaptive_atr_enabled ?? false,
+    atr_base_min: config?.atr_base_min ?? 1.0,
+    atr_floor: config?.atr_floor ?? 0.7,
+    atr_ceiling: config?.atr_ceiling ?? 2.0,
     atr_stop_loss_multiplier: config?.atr_stop_loss_multiplier || 2,
     atr_trailing_stop_multiplier: config?.atr_trailing_stop_multiplier || 1.5,
     break_even_atr: config?.break_even_atr || 1.0,
@@ -84,9 +85,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     adx_enabled: config?.adx_enabled ?? true,
     adx_period: config?.adx_period || 14,
     adx_threshold: config?.adx_threshold || 25,
-    adx_base_min: config?.adx_base_min ?? 30,
+    adaptive_adx_enabled: config?.adaptive_adx_enabled ?? false,
+    adx_base_min: config?.adx_base_min ?? 25,
     adx_floor: config?.adx_floor ?? 20,
-    adx_ceiling: config?.adx_ceiling ?? 50,
+    adx_ceiling: config?.adx_ceiling ?? 40,
     
     // Volume & Signal
     volume_enabled: config?.volume_enabled ?? true,
@@ -163,9 +165,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       atr_period: config.atr_period ?? 14,
       min_atr: config.min_atr ?? 0,
       min_atr_percent: config.min_atr_percent ?? 0.5,
-      atr_base_min: config.atr_base_min ?? 0.4,
-      atr_floor: config.atr_floor ?? 0.2,
-      atr_ceiling: config.atr_ceiling ?? 1.0,
+      adaptive_atr_enabled: config.adaptive_atr_enabled ?? false,
+      atr_base_min: config.atr_base_min ?? 1.0,
+      atr_floor: config.atr_floor ?? 0.7,
+      atr_ceiling: config.atr_ceiling ?? 2.0,
       atr_stop_loss_multiplier: config.atr_stop_loss_multiplier ?? 2,
       atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier ?? 1.5,
       break_even_atr: config.break_even_atr ?? 1.0,
@@ -175,9 +178,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       adx_enabled: config.adx_enabled ?? true,
       adx_period: config.adx_period ?? 14,
       adx_threshold: config.adx_threshold ?? 25,
-      adx_base_min: config.adx_base_min ?? 30,
+      adaptive_adx_enabled: config.adaptive_adx_enabled ?? false,
+      adx_base_min: config.adx_base_min ?? 25,
       adx_floor: config.adx_floor ?? 20,
-      adx_ceiling: config.adx_ceiling ?? 50,
+      adx_ceiling: config.adx_ceiling ?? 40,
       // Volume & Signal
       volume_enabled: config.volume_enabled ?? true,
       volume_avg_period: config.volume_avg_period ?? 20,
@@ -245,9 +249,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       atr_period: config.atr_period ?? 14,
       min_atr: config.min_atr ?? 0,
       min_atr_percent: config.min_atr_percent ?? 0.5,
-      atr_base_min: config.atr_base_min ?? 0.4,
-      atr_floor: config.atr_floor ?? 0.2,
-      atr_ceiling: config.atr_ceiling ?? 1.0,
+      adaptive_atr_enabled: config.adaptive_atr_enabled ?? false,
+      atr_base_min: config.atr_base_min ?? 1.0,
+      atr_floor: config.atr_floor ?? 0.7,
+      atr_ceiling: config.atr_ceiling ?? 2.0,
       atr_stop_loss_multiplier: config.atr_stop_loss_multiplier ?? 2,
       atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier ?? 1.5,
       break_even_atr: config.break_even_atr ?? 1.0,
@@ -256,9 +261,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       adx_enabled: config.adx_enabled ?? true,
       adx_period: config.adx_period ?? 14,
       adx_threshold: config.adx_threshold ?? 25,
-      adx_base_min: config.adx_base_min ?? 30,
+      adaptive_adx_enabled: config.adaptive_adx_enabled ?? false,
+      adx_base_min: config.adx_base_min ?? 25,
       adx_floor: config.adx_floor ?? 20,
-      adx_ceiling: config.adx_ceiling ?? 50,
+      adx_ceiling: config.adx_ceiling ?? 40,
       volume_enabled: config.volume_enabled ?? true,
       volume_avg_period: config.volume_avg_period ?? 20,
       volume_multiplier: config.volume_multiplier ?? 1.2,
@@ -842,12 +848,19 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <p className="text-xs text-muted-foreground">Bloker trade hvis (ATR/Price × 100) &lt; Minimum ATR (%)</p>
           </div>
           
-          <div className="space-y-2 sm:col-span-3 border-t pt-4">
-            <h4 className="font-semibold">🔄 Adaptive ATR Threshold</h4>
-            <p className="text-xs text-muted-foreground">
-              Dynamisk ATR% = Base × (Nuværende Volume / Gennemsnits Volume)<br/>
-              Bruges hvis værdi ligger mellem Floor og Ceiling
-            </p>
+          <div className="flex items-center justify-between sm:col-span-3 border-t pt-4">
+            <div>
+              <h4 className="font-semibold">🔄 Adaptive ATR (%)</h4>
+              <p className="text-xs text-muted-foreground">
+                Dynamisk ATR% = Base × (Nuværende Volume% eller ATR%)<br/>
+                Overskriver Minimum ATR% når aktiveret
+              </p>
+            </div>
+            <Switch
+              id="adaptive_atr_enabled"
+              checked={formData.adaptive_atr_enabled}
+              onCheckedChange={(checked) => setFormData({ ...formData, adaptive_atr_enabled: checked })}
+            />
           </div>
           
           <div className="space-y-2">
@@ -984,12 +997,19 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <p className="text-xs text-muted-foreground">Min trend styrke - højere = stærkere trend krævet</p>
           </div>
           
-          <div className="space-y-2 sm:col-span-2 border-t pt-4">
-            <h4 className="font-semibold">🔄 Adaptive ADX Threshold</h4>
-            <p className="text-xs text-muted-foreground">
-              Dynamisk ADX = Base × (Nuværende ATR% / Gennemsnits ATR%)<br/>
-              Bruges hvis værdi ligger mellem Floor og Ceiling
-            </p>
+          <div className="flex items-center justify-between sm:col-span-2 border-t pt-4">
+            <div>
+              <h4 className="font-semibold">🔄 Adaptive ADX</h4>
+              <p className="text-xs text-muted-foreground">
+                Dynamisk ADX = Base × (ATR% / Gennemsnits ATR%)<br/>
+                Overskriver ADX Tærskel når aktiveret
+              </p>
+            </div>
+            <Switch
+              id="adaptive_adx_enabled"
+              checked={formData.adaptive_adx_enabled}
+              onCheckedChange={(checked) => setFormData({ ...formData, adaptive_adx_enabled: checked })}
+            />
           </div>
           
           <div className="space-y-2">
