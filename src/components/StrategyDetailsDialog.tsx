@@ -216,8 +216,6 @@ export const StrategyDetailsDialog = ({
         max_open_positions: indicators.max_open_positions ?? 3,
         max_exposure_percent: indicators.max_exposure_percent ?? 5,
         daily_loss_limit_percent: indicators.daily_loss_limit_percent ?? 5,
-        // Risk/Reward
-        risk_reward_ratio: indicators.risk_reward_ratio ?? 2,
         max_position_duration_minutes: indicators.max_position_duration_minutes ?? 240,
         // Leverage
         leverage: indicators.leverage ?? 10,
