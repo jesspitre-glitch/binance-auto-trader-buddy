@@ -99,6 +99,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     // Timeframes
     scan_interval: config?.scan_interval || "5m",
     trend_timeframe: config?.trend_timeframe || config?.mtf_timeframe || "15m",
+    higher_trend_enabled: config?.higher_trend_enabled ?? true,
     higher_trend_timeframe: config?.higher_trend_timeframe || "1h",
     klines_limit: config?.klines_limit || 100,
     
@@ -190,6 +191,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       // Timeframes
       scan_interval: config.scan_interval ?? "5m",
       trend_timeframe: config.trend_timeframe ?? config.mtf_timeframe ?? "15m",
+      higher_trend_enabled: config.higher_trend_enabled ?? true,
       higher_trend_timeframe: config.higher_trend_timeframe ?? "1h",
       klines_limit: config.klines_limit ?? 100,
       // Risk Management
@@ -271,6 +273,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       signal_conditions_required: config.signal_conditions_required ?? 5,
       scan_interval: config.scan_interval ?? "5m",
       trend_timeframe: config.trend_timeframe ?? config.mtf_timeframe ?? "15m",
+      higher_trend_enabled: config.higher_trend_enabled ?? true,
       higher_trend_timeframe: config.higher_trend_timeframe ?? "1h",
       klines_limit: config.klines_limit ?? 100,
       position_size_percent: config.position_size_percent ?? 5,
@@ -1179,11 +1182,25 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             </Select>
             <p className="text-xs text-muted-foreground">Højere TF for trend-retning</p>
           </div>
+          <div className="space-y-2 sm:col-span-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="higher_trend_enabled">Overordnet Trend Filter</Label>
+              <Switch
+                id="higher_trend_enabled"
+                checked={formData.higher_trend_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, higher_trend_enabled: checked })}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Blokerer LONG hvis trend er bearish, SHORT hvis bullish
+            </p>
+          </div>
           <div className="space-y-2">
-            <Label htmlFor="higher_trend_timeframe">Overordnet Trend Filter (Valgfrit)</Label>
+            <Label htmlFor="higher_trend_timeframe">Overordnet Trend Timeframe</Label>
             <Select
               value={formData.higher_trend_timeframe}
               onValueChange={(value) => setFormData({ ...formData, higher_trend_timeframe: value })}
+              disabled={!formData.higher_trend_enabled}
             >
               <SelectTrigger id="higher_trend_timeframe">
                 <SelectValue placeholder="Vælg overordnet trend" />
@@ -1202,7 +1219,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 <SelectItem value="1w">1 uge</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">Blokerer LONG hvis trend er bearish, SHORT hvis bullish</p>
+            <p className="text-xs text-muted-foreground">Timeframe for overordnet trend analyse</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="klines_limit">Klines Limit</Label>

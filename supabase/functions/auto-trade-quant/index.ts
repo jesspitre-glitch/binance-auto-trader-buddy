@@ -72,6 +72,7 @@ interface IndicatorConfig {
   leverage: number;
   scan_interval: string;
   trend_timeframe: string;
+  higher_trend_enabled: boolean;
   higher_trend_timeframe: string;
   klines_limit: number;
 }
@@ -135,6 +136,7 @@ async function getStrategyIdentifier(config: IndicatorConfig): Promise<string> {
     leverage: config.leverage,
     scan_interval: config.scan_interval,
     trend_timeframe: config.trend_timeframe,
+    higher_trend_enabled: config.higher_trend_enabled,
     higher_trend_timeframe: config.higher_trend_timeframe,
     klines_limit: config.klines_limit,
   };
@@ -1444,39 +1446,47 @@ serve(async (req) => {
           // Add 100ms delay between symbols to avoid Binance rate limits (418 errors)
           await new Promise(resolve => setTimeout(resolve, 100));
           
-          // Fetch klines for scan interval, trend timeframe, and higher trend timeframe
+          // Fetch klines for scan interval, trend timeframe, and higher trend timeframe (if enabled)
           const scanKlines = await fetchKlines(symbol, config.scan_interval, config.klines_limit);
           const trendKlines = await fetchKlines(symbol, config.trend_timeframe, config.klines_limit);
-          const higherTrendKlines = await fetchKlines(symbol, config.higher_trend_timeframe, config.klines_limit);
           
-          // Determine trend on both timeframes
+          // Determine trend on medium timeframe (always)
           const trend = analyzeMediumTrend(trendKlines, config);
-          const higherTrend = analyzeHigherTrend(higherTrendKlines, config);
+          
+          // Only fetch and analyze higher trend if enabled
+          let higherTrend = 'NEUTRAL'; // Default til NEUTRAL hvis disabled
+          if (config.higher_trend_enabled) {
+            const higherTrendKlines = await fetchKlines(symbol, config.higher_trend_timeframe, config.klines_limit);
+            higherTrend = analyzeHigherTrend(higherTrendKlines, config);
+          }
           
           // Analyze signal on scan interval (men ADX beregnes på trend timeframe)
           const analysis = analyzeSignal(scanKlines, trendKlines, config);
           
-          // Filter signal based on BOTH trend timeframes
-          // BEGGE trends skal godkende handlen - ellers blokeres den
+          // Filter signal based on trend timeframes
           let filteredSignal = analysis.signal;
           
           if (filteredSignal === 'LONG') {
-            // LONG kræver BULLISH på begge timeframes
-            if (higherTrend !== 'BULLISH') {
-              filteredSignal = 'NONE';
-              console.log(`Blocked LONG on ${symbol}: Higher trend (${config.higher_trend_timeframe}) not BULLISH (is ${higherTrend})`);
-            } else if (trend !== 'BULLISH') {
+            // LONG kræver BULLISH på medium timeframe
+            if (trend !== 'BULLISH') {
               filteredSignal = 'NONE';
               console.log(`Blocked LONG on ${symbol}: Medium trend (${config.trend_timeframe}) not BULLISH (is ${trend})`);
+            } 
+            // Tjek også higher trend hvis enabled
+            else if (config.higher_trend_enabled && higherTrend !== 'BULLISH') {
+              filteredSignal = 'NONE';
+              console.log(`Blocked LONG on ${symbol}: Higher trend (${config.higher_trend_timeframe}) not BULLISH (is ${higherTrend})`);
             }
           } else if (filteredSignal === 'SHORT') {
-            // SHORT kræver BEARISH på begge timeframes
-            if (higherTrend !== 'BEARISH') {
-              filteredSignal = 'NONE';
-              console.log(`Blocked SHORT on ${symbol}: Higher trend (${config.higher_trend_timeframe}) not BEARISH (is ${higherTrend})`);
-            } else if (trend !== 'BEARISH') {
+            // SHORT kræver BEARISH på medium timeframe
+            if (trend !== 'BEARISH') {
               filteredSignal = 'NONE';
               console.log(`Blocked SHORT on ${symbol}: Medium trend (${config.trend_timeframe}) not BEARISH (is ${trend})`);
+            }
+            // Tjek også higher trend hvis enabled
+            else if (config.higher_trend_enabled && higherTrend !== 'BEARISH') {
+              filteredSignal = 'NONE';
+              console.log(`Blocked SHORT on ${symbol}: Higher trend (${config.higher_trend_timeframe}) not BEARISH (is ${higherTrend})`);
             }
           }
 
