@@ -46,6 +46,7 @@ export type Database = {
           ema_medium_trend: number | null
           ema_slow: number | null
           enabled: boolean | null
+          higher_trend_enabled: boolean | null
           higher_trend_timeframe: string | null
           histogram_momentum_enabled: boolean | null
           histogram_momentum_periods: number | null
@@ -128,6 +129,7 @@ export type Database = {
           ema_medium_trend?: number | null
           ema_slow?: number | null
           enabled?: boolean | null
+          higher_trend_enabled?: boolean | null
           higher_trend_timeframe?: string | null
           histogram_momentum_enabled?: boolean | null
           histogram_momentum_periods?: number | null
@@ -210,6 +212,7 @@ export type Database = {
           ema_medium_trend?: number | null
           ema_slow?: number | null
           enabled?: boolean | null
+          higher_trend_enabled?: boolean | null
           higher_trend_timeframe?: string | null
           histogram_momentum_enabled?: boolean | null
           histogram_momentum_periods?: number | null
