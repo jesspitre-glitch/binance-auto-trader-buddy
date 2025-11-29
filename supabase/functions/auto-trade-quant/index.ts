@@ -348,6 +348,20 @@ async function fetchAllUSDCSymbols(): Promise<string[]> {
       .map((s: any) => s.symbol);
     
     console.log(`Found ${usdcSymbols.length} USDC perpetual futures pairs`);
+    console.log(`USDC pairs: ${usdcSymbols.slice(0, 20).join(', ')}${usdcSymbols.length > 20 ? '...' : ''}`);
+    
+    // Check specifically for TIAUSDC
+    if (usdcSymbols.includes('TIAUSDC')) {
+      console.log('✅ TIAUSDC is in the list');
+    } else {
+      console.log('❌ TIAUSDC NOT in the list - checking why...');
+      const tiaSymbol = data.symbols.find((s: any) => s.symbol === 'TIAUSDC');
+      if (tiaSymbol) {
+        console.log('TIAUSDC exists but filtered out:', JSON.stringify(tiaSymbol));
+      } else {
+        console.log('TIAUSDC does not exist in Binance API response');
+      }
+    }
     
     // Update cache
     usdcSymbolsCache = {
