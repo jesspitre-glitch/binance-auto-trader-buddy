@@ -382,30 +382,50 @@ async function fetchAllUSDCSymbols(): Promise<string[]> {
   }
 }
 
-async function fetchKlines(symbol: string, interval: string, limit: number) {
+// Rate limiting and retry logic for Binance API
+async function fetchKlines(symbol: string, interval: string, limit: number, retries = 3) {
   const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-  const response = await fetch(url);
   
-  if (!response.ok) {
-    throw new Error(`Binance API error: ${response.status} ${response.statusText}`);
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const response = await fetch(url);
+      
+      if (response.status === 418) {
+        // Rate limit hit - wait longer before retry
+        const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 1s, 2s, 4s
+        console.log(`Rate limit hit for ${symbol}, waiting ${waitTime}ms before retry ${attempt + 1}/${retries}`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
+      
+      if (!response.ok) {
+        throw new Error(`Binance API error: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!Array.isArray(data)) {
+        console.error('Binance API response:', data);
+        throw new Error(`Invalid Binance response for ${symbol}: ${JSON.stringify(data)}`);
+      }
+      
+      return data.map((k: any) => ({
+        time: k[0],
+        open: parseFloat(k[1]),
+        high: parseFloat(k[2]),
+        low: parseFloat(k[3]),
+        close: parseFloat(k[4]),
+        volume: parseFloat(k[5]),
+      }));
+    } catch (error) {
+      if (attempt === retries - 1) throw error;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
   }
   
-  const data = await response.json();
-  
-  if (!Array.isArray(data)) {
-    console.error('Binance API response:', data);
-    throw new Error(`Invalid Binance response for ${symbol}: ${JSON.stringify(data)}`);
-  }
-  
-  return data.map((k: any) => ({
-    time: k[0],
-    open: parseFloat(k[1]),
-    high: parseFloat(k[2]),
-    low: parseFloat(k[3]),
-    close: parseFloat(k[4]),
-    volume: parseFloat(k[5]),
-  }));
+  throw new Error(`Failed to fetch klines for ${symbol} after ${retries} retries`);
 }
+
 
 // Binance filters
 type SymbolFilters = { stepSize: number; minQty: number; tickSize: number };
@@ -1181,8 +1201,6 @@ async function setLeverage(symbol: string, leverage: number) {
     const error = await response.text();
     throw new Error(`Failed to set leverage: ${error}`);
   }
-
-  return await response.json();
 }
 
 async function placeOrder(
@@ -1423,6 +1441,9 @@ serve(async (req) => {
       
       for (const symbol of symbols) {
         try {
+          // Add 100ms delay between symbols to avoid Binance rate limits (418 errors)
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
           // Fetch klines for scan interval, trend timeframe, and higher trend timeframe
           const scanKlines = await fetchKlines(symbol, config.scan_interval, config.klines_limit);
           const trendKlines = await fetchKlines(symbol, config.trend_timeframe, config.klines_limit);
