@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
@@ -1095,16 +1096,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             </p>
           </div>
           <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="signal_conditions_required">Signal Betingelser Påkrævet (Soft Rules)</Label>
-            <Input
+            <div className="flex items-center justify-between">
+              <Label htmlFor="signal_conditions_required">Signal Betingelser Påkrævet (Soft Rules)</Label>
+              <span className="text-sm font-medium">{formData.signal_conditions_required}</span>
+            </div>
+            <Slider
               id="signal_conditions_required"
-              type="number"
-              min="1"
-              max="6"
-              value={formData.signal_conditions_required}
-              onChange={(e) => {
-                setFormData({ ...formData, signal_conditions_required: Math.min(6, Math.max(1, parseInt(e.target.value) || 1)) });
-              }}
+              min={1}
+              max={6}
+              step={1}
+              value={[formData.signal_conditions_required]}
+              onValueChange={(value) => setFormData({ ...formData, signal_conditions_required: value[0] })}
             />
             <p className="text-xs text-muted-foreground">
               Kræver minimum X af følgende betingelser (1 point hver):<br/>
