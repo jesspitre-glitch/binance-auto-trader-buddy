@@ -384,11 +384,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           </div>
           <div className="flex items-center justify-between">
             <Label htmlFor="enabled">Aktiver Strategi</Label>
-            <Switch
-              id="enabled"
-              checked={formData.enabled}
-              onCheckedChange={(enabled) => setFormData({ ...formData, enabled })}
-            />
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="enabled"
+                checked={formData.enabled}
+                onCheckedChange={(enabled) => setFormData({ ...formData, enabled })}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -402,13 +405,16 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
-          <div className="flex items-center space-x-2 sm:col-span-3">
-            <Switch
-              id="ema_enabled"
-              checked={formData.ema_enabled}
-              onCheckedChange={(checked) => setFormData({ ...formData, ema_enabled: checked })}
-            />
+          <div className="flex items-center justify-between sm:col-span-3">
             <Label htmlFor="ema_enabled">Aktiver EMA</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.ema_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="ema_enabled"
+                checked={formData.ema_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, ema_enabled: checked })}
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="ema_fast">Hurtig EMA</Label>
@@ -475,13 +481,16 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
-          <div className="flex items-center space-x-2 sm:col-span-3">
-            <Switch
-              id="rsi_enabled"
-              checked={formData.rsi_enabled}
-              onCheckedChange={(checked) => setFormData({ ...formData, rsi_enabled: checked })}
-            />
+          <div className="flex items-center justify-between sm:col-span-3">
             <Label htmlFor="rsi_enabled">Aktiver RSI</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.rsi_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="rsi_enabled"
+                checked={formData.rsi_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, rsi_enabled: checked })}
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="rsi_period">RSI Periode</Label>
@@ -554,13 +563,16 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           <CardDescription>Overkøbt/Oversolgt baseret på RSI</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-5">
-          <div className="flex items-center space-x-2 sm:col-span-5">
-            <Switch
-              id="stochrsi_enabled"
-              checked={formData.stochrsi_enabled}
-              onCheckedChange={(checked) => setFormData({ ...formData, stochrsi_enabled: checked })}
-            />
+          <div className="flex items-center justify-between sm:col-span-5">
             <Label htmlFor="stochrsi_enabled">Aktiver StochRSI</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.stochrsi_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="stochrsi_enabled"
+                checked={formData.stochrsi_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, stochrsi_enabled: checked })}
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="stochrsi_period">RSI Periode</Label>
@@ -624,13 +636,16 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           <CardDescription>Support og resistance niveauer</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="pivot_points_enabled"
-              checked={formData.pivot_points_enabled}
-              onCheckedChange={(checked) => setFormData({ ...formData, pivot_points_enabled: checked })}
-            />
+          <div className="flex items-center justify-between sm:col-span-2">
             <Label htmlFor="pivot_points_enabled">Brug Pivot Points</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.pivot_points_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="pivot_points_enabled"
+                checked={formData.pivot_points_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, pivot_points_enabled: checked })}
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="pivot_points_timeframe">Tidsramme</Label>
@@ -679,13 +694,16 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           <CardDescription>Momentum bekræftelse</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-4">
-          <div className="flex items-center space-x-2 sm:col-span-4">
-            <Switch
-              id="macd_enabled"
-              checked={formData.macd_enabled}
-              onCheckedChange={(checked) => setFormData({ ...formData, macd_enabled: checked })}
-            />
+          <div className="flex items-center justify-between sm:col-span-4">
             <Label htmlFor="macd_enabled">Aktiver MACD</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.macd_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="macd_enabled"
+                checked={formData.macd_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, macd_enabled: checked })}
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="macd_fast">Hurtig</Label>
@@ -731,20 +749,26 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
           <div className="flex items-center justify-between sm:col-span-4">
             <Label htmlFor="macd_direction_enabled">MACD Retnings-Filter (hård)</Label>
-            <Switch
-              id="macd_direction_enabled"
-              checked={formData.macd_direction_enabled}
-              onCheckedChange={(checked) => setFormData({...formData, macd_direction_enabled: checked})}
-            />
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.macd_direction_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="macd_direction_enabled"
+                checked={formData.macd_direction_enabled}
+                onCheckedChange={(checked) => setFormData({...formData, macd_direction_enabled: checked})}
+              />
+            </div>
           </div>
 
           <div className="flex items-center justify-between sm:col-span-4">
             <Label htmlFor="histogram_momentum_enabled">Histogram Momentum Shift (blød)</Label>
-            <Switch
-              id="histogram_momentum_enabled"
-              checked={formData.histogram_momentum_enabled}
-              onCheckedChange={(checked) => setFormData({...formData, histogram_momentum_enabled: checked})}
-            />
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.histogram_momentum_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="histogram_momentum_enabled"
+                checked={formData.histogram_momentum_enabled}
+                onCheckedChange={(checked) => setFormData({...formData, histogram_momentum_enabled: checked})}
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -770,13 +794,16 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           <CardDescription>Volatilitet og breakouts</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div className="flex items-center space-x-2 sm:col-span-2">
-            <Switch
-              id="bb_enabled"
-              checked={formData.bb_enabled}
-              onCheckedChange={(checked) => setFormData({ ...formData, bb_enabled: checked })}
-            />
+          <div className="flex items-center justify-between sm:col-span-2">
             <Label htmlFor="bb_enabled">Aktiver Bollinger Bands</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.bb_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="bb_enabled"
+                checked={formData.bb_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, bb_enabled: checked })}
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="bb_period">Periode</Label>
@@ -811,13 +838,16 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
-          <div className="flex items-center space-x-2 sm:col-span-3">
-            <Switch
-              id="atr_enabled"
-              checked={formData.atr_enabled}
-              onCheckedChange={(checked) => setFormData({ ...formData, atr_enabled: checked })}
-            />
+          <div className="flex items-center justify-between sm:col-span-3">
             <Label htmlFor="atr_enabled">Aktiver ATR</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.atr_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="atr_enabled"
+                checked={formData.atr_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, atr_enabled: checked })}
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="atr_period">ATR Periode</Label>
@@ -860,11 +890,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 Overskriver Minimum ATR% når aktiveret
               </p>
             </div>
-            <Switch
-              id="adaptive_atr_enabled"
-              checked={formData.adaptive_atr_enabled}
-              onCheckedChange={(checked) => setFormData({ ...formData, adaptive_atr_enabled: checked })}
-            />
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.adaptive_atr_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="adaptive_atr_enabled"
+                checked={formData.adaptive_atr_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, adaptive_atr_enabled: checked })}
+              />
+            </div>
           </div>
           
           <div className="space-y-2">
@@ -941,11 +974,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               <Label htmlFor="trailing_stop_activation_enabled">Trailing Stop Aktivering (HARD FILTER)</Label>
               <p className="text-xs text-muted-foreground">Aktiver kun trailing stop når profit overstiger threshold</p>
             </div>
-            <Switch
-              id="trailing_stop_activation_enabled"
-              checked={formData.trailing_stop_activation_enabled}
-              onCheckedChange={(checked) => setFormData({...formData, trailing_stop_activation_enabled: checked})}
-            />
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.trailing_stop_activation_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="trailing_stop_activation_enabled"
+                checked={formData.trailing_stop_activation_enabled}
+                onCheckedChange={(checked) => setFormData({...formData, trailing_stop_activation_enabled: checked})}
+              />
+            </div>
           </div>
           
           <div className="space-y-2">
@@ -971,13 +1007,16 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div className="flex items-center space-x-2 sm:col-span-2">
-            <Switch
-              id="adx_enabled"
-              checked={formData.adx_enabled}
-              onCheckedChange={(checked) => setFormData({ ...formData, adx_enabled: checked })}
-            />
+          <div className="flex items-center justify-between sm:col-span-2">
             <Label htmlFor="adx_enabled">Aktiver ADX</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.adx_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="adx_enabled"
+                checked={formData.adx_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, adx_enabled: checked })}
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="adx_period">ADX Periode</Label>
@@ -1009,11 +1048,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 Overskriver ADX Tærskel når aktiveret
               </p>
             </div>
-            <Switch
-              id="adaptive_adx_enabled"
-              checked={formData.adaptive_adx_enabled}
-              onCheckedChange={(checked) => setFormData({ ...formData, adaptive_adx_enabled: checked })}
-            />
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.adaptive_adx_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="adaptive_adx_enabled"
+                checked={formData.adaptive_adx_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, adaptive_adx_enabled: checked })}
+              />
+            </div>
           </div>
           
           <div className="space-y-2">
@@ -1063,13 +1105,16 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div className="flex items-center space-x-2 sm:col-span-2">
-            <Switch
-              id="volume_enabled"
-              checked={formData.volume_enabled}
-              onCheckedChange={(checked) => setFormData({ ...formData, volume_enabled: checked })}
-            />
+          <div className="flex items-center justify-between sm:col-span-2">
             <Label htmlFor="volume_enabled">Aktiver Volume Check</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.volume_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="volume_enabled"
+                checked={formData.volume_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, volume_enabled: checked })}
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="volume_avg_period">Volumen Gennemsnit Periode</Label>
@@ -1187,11 +1232,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           <div className="space-y-2 sm:col-span-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="higher_trend_enabled">Overordnet Trend Filter</Label>
-              <Switch
-                id="higher_trend_enabled"
-                checked={formData.higher_trend_enabled}
-                onCheckedChange={(checked) => setFormData({ ...formData, higher_trend_enabled: checked })}
-              />
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">{formData.higher_trend_enabled ? "Tændt" : "Slukket"}</span>
+                <Switch
+                  id="higher_trend_enabled"
+                  checked={formData.higher_trend_enabled}
+                  onCheckedChange={(checked) => setFormData({ ...formData, higher_trend_enabled: checked })}
+                />
+              </div>
             </div>
             <p className="text-xs text-muted-foreground">
               Blokerer LONG hvis trend er bearish, SHORT hvis bullish
@@ -1322,11 +1370,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 Når slukket skal positioner lukkes manuelt - ingen automatisk stop loss/trailing stop
               </p>
             </div>
-            <Switch
-              id="auto_exit_enabled"
-              checked={formData.auto_exit_enabled}
-              onCheckedChange={(checked) => setFormData({ ...formData, auto_exit_enabled: checked })}
-            />
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.auto_exit_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="auto_exit_enabled"
+                checked={formData.auto_exit_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, auto_exit_enabled: checked })}
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="max_position_duration_minutes">Max Position Varighed (min)</Label>
