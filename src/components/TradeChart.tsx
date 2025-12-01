@@ -232,12 +232,12 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         />
         <Legend />
         
-        {/* Price line */}
+        {/* Price line - make it more prominent */}
         <Line 
           type="monotone" 
           dataKey="price" 
-          stroke="#8884d8" 
-          strokeWidth={2}
+          stroke="#3b82f6" 
+          strokeWidth={3}
           dot={false}
           name="Price"
         />
@@ -247,7 +247,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           type="stepAfter" 
           dataKey="effectiveStop" 
           stroke="#f59e0b" 
-          strokeWidth={3}
+          strokeWidth={4}
           strokeDasharray="5 3"
           dot={false}
           name="Effective Stop"
@@ -285,35 +285,36 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           />
         )}
         
-        {/* Entry price line */}
+        {/* Entry price line - more prominent */}
         <ReferenceLine 
           y={trade.entry_price} 
           stroke="#10b981" 
-          strokeDasharray="5 5"
-          strokeOpacity={0.5}
-          label="Entry"
+          strokeWidth={3}
+          strokeDasharray="8 4"
+          strokeOpacity={0.8}
+          label={{ value: "ENTRY", fill: "#10b981", fontSize: 14, fontWeight: "bold", position: "right" }}
         />
         
         {/* Take Profit line - only show if set */}
         {trade.take_profit && trade.take_profit > 0 && (
           <ReferenceLine 
             y={trade.take_profit} 
-            stroke="#10b981" 
-            strokeWidth={2}
+            stroke="#22c55e" 
+            strokeWidth={3}
             strokeDasharray="5 5"
             strokeOpacity={0.9}
-            label={{ value: "TP", fill: "#10b981", fontSize: 12, fontWeight: "bold" }}
+            label={{ value: "TP", fill: "#22c55e", fontSize: 14, fontWeight: "bold", position: "right" }}
           />
         )}
         
-        {/* Stop Loss line */}
+        {/* Stop Loss line - make it very visible */}
         <ReferenceLine 
           y={trade.stop_loss || trade.indicators_snapshot?.stop_loss} 
           stroke="#ef4444" 
-          strokeWidth={2}
-          strokeDasharray="3 3"
-          strokeOpacity={0.9}
-          label={{ value: "SL", fill: "#ef4444", fontSize: 12, fontWeight: "bold" }}
+          strokeWidth={3}
+          strokeDasharray="4 4"
+          strokeOpacity={1}
+          label={{ value: "SL", fill: "#ef4444", fontSize: 14, fontWeight: "bold", position: "right" }}
         />
         
         {/* Exit price line - only show if position is closed */}

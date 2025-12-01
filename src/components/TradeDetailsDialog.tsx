@@ -16,6 +16,26 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
   const hours = Math.floor(durationMinutes / 60);
   const minutes = durationMinutes % 60;
 
+  // Calculate live P&L if position is open
+  const isPositionOpen = trade.status === 'OPEN';
+  const currentPrice = Number(trade.current_price || trade.exit_price);
+  const entryPrice = Number(trade.entry_price);
+  const quantity = Number(trade.quantity);
+  
+  let livePnl = trade.pnl;
+  let livePnlPercent = trade.pnl_percent;
+  
+  if (isPositionOpen && currentPrice) {
+    if (trade.side === 'LONG') {
+      livePnl = (currentPrice - entryPrice) * quantity;
+    } else {
+      livePnl = (entryPrice - currentPrice) * quantity;
+    }
+    livePnlPercent = (livePnl / (entryPrice * quantity)) * 100;
+  }
+  
+  const isLiveProfitable = livePnl >= 0;
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -30,35 +50,83 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
             <Badge variant={trade.side === "LONG" ? "default" : "secondary"}>
               {trade.side}
             </Badge>
+            {isPositionOpen && (
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                LIVE
+              </Badge>
+            )}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* P&L Overview */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="border rounded-lg p-4">
-              <div className="text-sm text-muted-foreground mb-1">P&L</div>
-              <div className={`text-2xl font-bold ${isProfitable ? "text-profit" : "text-loss"}`}>
-                {isProfitable ? "+" : ""}{trade.pnl.toFixed(2)} USDT
-              </div>
-              <div className="text-sm text-muted-foreground">
-                {trade.pnl_percent >= 0 ? "+" : ""}{trade.pnl_percent.toFixed(2)}%
-              </div>
-            </div>
+          {/* Live Status - Only show for open positions */}
+          {isPositionOpen && (
+            <div className="border-2 border-primary/30 rounded-lg p-4 bg-primary/5">
+              <div className="text-sm font-semibold text-primary mb-3">📊 Live Position Status</div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Entry → Current</div>
+                  <div className="font-mono text-lg font-bold">
+                    ${entryPrice.toFixed(2)} → ${currentPrice.toFixed(4)}
+                  </div>
+                  <div className={`text-sm ${isLiveProfitable ? 'text-profit' : 'text-loss'}`}>
+                    {trade.side === 'LONG' ? 
+                      (currentPrice > entryPrice ? '↑' : '↓') : 
+                      (currentPrice < entryPrice ? '↑' : '↓')
+                    } ${Math.abs(currentPrice - entryPrice).toFixed(4)}
+                  </div>
+                </div>
+                
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Live P&L</div>
+                  <div className={`text-2xl font-bold ${isLiveProfitable ? "text-profit" : "text-loss"}`}>
+                    {isLiveProfitable ? "+" : ""}{livePnl.toFixed(2)}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {livePnlPercent >= 0 ? "+" : ""}{livePnlPercent.toFixed(2)}%
+                  </div>
+                </div>
 
-            <div className="border rounded-lg p-4">
-              <div className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                Varighed
-              </div>
-              <div className="text-2xl font-bold">
-                {hours > 0 ? `${hours}t ` : ""}{minutes}m
-              </div>
-              <div className="text-sm text-muted-foreground">
-                {getBinanceTimeAgo(trade.closed_at)}
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Varighed</div>
+                  <div className="text-lg font-semibold">
+                    {hours > 0 ? `${hours}t ` : ""}{minutes}m
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {getBinanceTimeAgo(trade.opened_at)}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* P&L Overview - For closed positions */}
+          {!isPositionOpen && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="border rounded-lg p-4">
+                <div className="text-sm text-muted-foreground mb-1">P&L</div>
+                <div className={`text-2xl font-bold ${isProfitable ? "text-profit" : "text-loss"}`}>
+                  {isProfitable ? "+" : ""}{trade.pnl.toFixed(2)} USDT
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {trade.pnl_percent >= 0 ? "+" : ""}{trade.pnl_percent.toFixed(2)}%
+                </div>
+              </div>
+
+              <div className="border rounded-lg p-4">
+                <div className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  Varighed
+                </div>
+                <div className="text-2xl font-bold">
+                  {hours > 0 ? `${hours}t ` : ""}{minutes}m
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {getBinanceTimeAgo(trade.closed_at)}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Trade Details */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
