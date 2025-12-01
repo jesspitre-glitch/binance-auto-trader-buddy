@@ -45,6 +45,7 @@ export type Database = {
           ema_medium: number | null
           ema_medium_trend: number | null
           ema_slow: number | null
+          ema_trend_hard_filter: boolean | null
           enabled: boolean | null
           higher_trend_enabled: boolean | null
           higher_trend_timeframe: string | null
@@ -128,6 +129,7 @@ export type Database = {
           ema_medium?: number | null
           ema_medium_trend?: number | null
           ema_slow?: number | null
+          ema_trend_hard_filter?: boolean | null
           enabled?: boolean | null
           higher_trend_enabled?: boolean | null
           higher_trend_timeframe?: string | null
@@ -211,6 +213,7 @@ export type Database = {
           ema_medium?: number | null
           ema_medium_trend?: number | null
           ema_slow?: number | null
+          ema_trend_hard_filter?: boolean | null
           enabled?: boolean | null
           higher_trend_enabled?: boolean | null
           higher_trend_timeframe?: string | null

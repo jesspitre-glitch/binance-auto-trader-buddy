@@ -29,6 +29,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     ema_slow: config?.ema_slow || 50,
     ema_medium_trend: config?.ema_medium_trend || 50,
     min_ema_spread_percent: config?.min_ema_spread_percent ?? 0.2,
+    ema_trend_hard_filter: config?.ema_trend_hard_filter ?? false,
     
     // RSI
     rsi_enabled: config?.rsi_enabled ?? true,
@@ -130,6 +131,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       ema_slow: config.ema_slow ?? 50,
       ema_medium_trend: config.ema_medium_trend ?? 50,
       min_ema_spread_percent: config.min_ema_spread_percent ?? 0.2,
+      ema_trend_hard_filter: config.ema_trend_hard_filter ?? false,
       // RSI
       rsi_enabled: config.rsi_enabled ?? true,
       rsi_period: config.rsi_period ?? 14,
@@ -221,6 +223,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       ema_slow: config.ema_slow ?? 50,
       ema_medium_trend: config.ema_medium_trend ?? 50,
       min_ema_spread_percent: config.min_ema_spread_percent ?? 0.2,
+      ema_trend_hard_filter: config.ema_trend_hard_filter ?? false,
       rsi_enabled: config.rsi_enabled ?? true,
       rsi_period: config.rsi_period ?? 14,
       rsi_min_long: config.rsi_min_long ?? 30,
@@ -413,6 +416,18 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 id="ema_enabled"
                 checked={formData.ema_enabled}
                 onCheckedChange={(checked) => setFormData({ ...formData, ema_enabled: checked })}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between sm:col-span-3">
+            <Label htmlFor="ema_trend_hard_filter">⚠️ EMA Retnings-Filter (HARD)</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.ema_trend_hard_filter ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="ema_trend_hard_filter"
+                checked={formData.ema_trend_hard_filter}
+                onCheckedChange={(checked) => setFormData({ ...formData, ema_trend_hard_filter: checked })}
               />
             </div>
           </div>
