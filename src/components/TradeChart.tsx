@@ -237,104 +237,118 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           tick={{ fontSize: 10 }}
         />
         <Tooltip 
-          contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '4px' }}
-          labelStyle={{ color: '#fff' }}
+          contentStyle={{ 
+            backgroundColor: 'rgba(0,0,0,0.95)', 
+            border: '1px solid rgba(255,255,255,0.2)', 
+            borderRadius: '8px',
+            padding: '12px'
+          }}
+          labelStyle={{ color: '#fff', fontWeight: 'bold', marginBottom: '8px' }}
+          itemStyle={{ color: '#fff', padding: '4px 0' }}
         />
-        <Legend />
+        <Legend 
+          wrapperStyle={{ 
+            paddingTop: '20px',
+            fontSize: '14px',
+            fontWeight: '600'
+          }}
+          iconType="line"
+        />
         
-        {/* Price line - make it more prominent */}
+        {/* Price line - blå, tykkere */}
         <Line 
           type="monotone" 
           dataKey="price" 
-          stroke="#3b82f6" 
-          strokeWidth={3}
+          stroke="#2563eb" 
+          strokeWidth={4}
           dot={false}
-          name="Price"
+          name="💰 Pris"
         />
         
-        {/* Effective Stop line - den rigtige stop der gælder (bedste af SL/break-even/trailing) */}
+        {/* Effective Stop line - orange, meget synlig */}
         <Line 
           type="stepAfter" 
           dataKey="effectiveStop" 
-          stroke="#f59e0b" 
-          strokeWidth={4}
-          strokeDasharray="5 3"
+          stroke="#f97316" 
+          strokeWidth={5}
+          strokeDasharray="8 4"
           dot={false}
-          name="Effective Stop"
+          name="🛑 Stop Loss"
           connectNulls={false}
         />
         
-        {/* Break-even line (shows when BE is activated) */}
+        {/* Break-even line - lilla, tydeligt dasharray */}
         <Line 
           type="stepAfter" 
           dataKey="breakEven" 
-          stroke="#8b5cf6" 
-          strokeWidth={2}
-          strokeDasharray="2 2"
-          strokeOpacity={0.6}
+          stroke="#a855f7" 
+          strokeWidth={3}
+          strokeDasharray="4 4"
+          strokeOpacity={0.9}
           dot={false}
-          name="Break-Even"
+          name="⚖️ Break-Even"
           connectNulls={false}
         />
         
-        {/* Entry marker (X) */}
+        {/* Entry marker (X) - grøn */}
         <Scatter 
           dataKey="entryMarker" 
-          fill="#10b981" 
+          fill="#16a34a" 
           shape={<CustomShape />}
-          name="Entry"
+          name="📍 Entry"
         />
         
-        {/* Exit marker (X) - only show if position is closed */}
+        {/* Exit marker (X) - rød, kun hvis lukket */}
         {isPositionClosed && (
           <Scatter 
             dataKey="exitMarker" 
-            fill="#ef4444" 
+            fill="#dc2626" 
             shape={<CustomShape />}
-            name="Exit"
+            name="🚪 Exit"
           />
         )}
         
-        {/* Entry price line - more prominent */}
+        {/* Entry price line - grøn, tydeligt */}
         <ReferenceLine 
           y={trade.entry_price} 
-          stroke="#10b981" 
-          strokeWidth={3}
-          strokeDasharray="8 4"
-          strokeOpacity={0.8}
-          label={{ value: "ENTRY", fill: "#10b981", fontSize: 14, fontWeight: "bold", position: "right" }}
+          stroke="#16a34a" 
+          strokeWidth={2}
+          strokeDasharray="10 5"
+          strokeOpacity={0.7}
+          label={{ value: "ENTRY", fill: "#16a34a", fontSize: 12, fontWeight: "bold", position: "insideTopRight" }}
         />
         
-        {/* Take Profit line - only show if set */}
+        {/* Take Profit line - kun hvis sat */}
         {trade.take_profit && trade.take_profit > 0 && (
           <ReferenceLine 
             y={trade.take_profit} 
-            stroke="#22c55e" 
-            strokeWidth={3}
-            strokeDasharray="5 5"
-            strokeOpacity={0.9}
-            label={{ value: "TP", fill: "#22c55e", fontSize: 14, fontWeight: "bold", position: "right" }}
+            stroke="#84cc16" 
+            strokeWidth={2}
+            strokeDasharray="6 3"
+            strokeOpacity={0.8}
+            label={{ value: "TAKE PROFIT", fill: "#84cc16", fontSize: 12, fontWeight: "bold", position: "insideTopRight" }}
           />
         )}
         
-        {/* Stop Loss line - make it very visible */}
+        {/* Initial Stop Loss line - rød, oprindelig SL */}
         <ReferenceLine 
           y={trade.stop_loss || trade.indicators_snapshot?.stop_loss} 
-          stroke="#ef4444" 
-          strokeWidth={3}
-          strokeDasharray="4 4"
-          strokeOpacity={1}
-          label={{ value: "SL", fill: "#ef4444", fontSize: 14, fontWeight: "bold", position: "right" }}
+          stroke="#dc2626" 
+          strokeWidth={2}
+          strokeDasharray="6 3"
+          strokeOpacity={0.6}
+          label={{ value: "INITIAL SL", fill: "#dc2626", fontSize: 12, fontWeight: "bold", position: "insideBottomRight" }}
         />
         
-        {/* Exit price line - only show if position is closed */}
+        {/* Exit price line - kun hvis lukket */}
         {isPositionClosed && trade.exit_price != null && (
           <ReferenceLine 
             y={trade.exit_price} 
-            stroke="#ef4444" 
-            strokeDasharray="5 5"
+            stroke="#dc2626" 
+            strokeWidth={2}
+            strokeDasharray="3 3"
             strokeOpacity={0.5}
-            label="Exit"
+            label={{ value: "EXIT", fill: "#dc2626", fontSize: 12, fontWeight: "bold", position: "insideTopRight" }}
           />
         )}
       </ComposedChart>
