@@ -138,13 +138,16 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
               <div className="font-mono font-semibold">${trade.entry_price}</div>
             </div>
 
-            <div className="border rounded-lg p-3">
-              <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                <Target className="h-3 w-3" />
-                Exit Price
+            {/* Exit Price - only show for closed positions */}
+            {!isPositionOpen && trade.exit_price && (
+              <div className="border rounded-lg p-3">
+                <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                  <Target className="h-3 w-3" />
+                  Exit Price
+                </div>
+                <div className="font-mono font-semibold">${trade.exit_price}</div>
               </div>
-              <div className="font-mono font-semibold">${trade.exit_price}</div>
-            </div>
+            )}
 
             <div className="border rounded-lg p-3">
               <div className="text-xs text-muted-foreground mb-1">Quantity</div>
@@ -162,7 +165,7 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
               <div className="border rounded-lg p-3">
                 <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3" />
-                  Stop Loss
+                  Stop Loss {trade.break_even_activated && "(Break-Even)"}
                 </div>
                 <div className="font-mono font-semibold text-loss">
                   ${(trade.stop_loss || trade.indicators_snapshot?.stop_loss)}
@@ -170,20 +173,29 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
               </div>
             )}
 
-            {(trade.indicators_snapshot?.trailing_stop) && (
-              <div className="border rounded-lg p-3">
-                <div className="text-xs text-muted-foreground mb-1">Trailing Stop</div>
+            {/* Trailing Stop - use position data for live, snapshot for closed */}
+            {(trade.trailing_stop || trade.indicators_snapshot?.trailing_stop) && (
+              <div className="border rounded-lg p-3 border-warning/50 bg-warning/5">
+                <div className="text-xs text-muted-foreground mb-1">🎯 Trailing Stop</div>
                 <div className="font-mono font-semibold text-warning">
-                  ${trade.indicators_snapshot.trailing_stop}
+                  ${Number(trade.trailing_stop || trade.indicators_snapshot?.trailing_stop).toFixed(2)}
                 </div>
+                {trade.trailing_stop_percent && (
+                  <div className="text-xs text-muted-foreground">
+                    {trade.trailing_stop_percent}% fra peak
+                  </div>
+                )}
               </div>
             )}
 
-            {(trade.indicators_snapshot?.peak_price) && (
+            {/* Peak Price - use position data for live */}
+            {(trade.peak_price || trade.indicators_snapshot?.peak_price) && (
               <div className="border rounded-lg p-3">
-                <div className="text-xs text-muted-foreground mb-1">Peak Price</div>
+                <div className="text-xs text-muted-foreground mb-1">
+                  📈 Peak Price {trade.side === 'SHORT' ? '(Lowest)' : '(Highest)'}
+                </div>
                 <div className="font-mono font-semibold">
-                  ${trade.indicators_snapshot.peak_price}
+                  ${Number(trade.peak_price || trade.indicators_snapshot?.peak_price).toFixed(2)}
                 </div>
               </div>
             )}
