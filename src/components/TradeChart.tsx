@@ -206,10 +206,20 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
     );
   };
 
-  // Beregn Y-akse range baseret KUN på price værdier (ignorer null værdier fra andre linjer)
-  const prices = chartData.map(d => d.price).filter(p => p != null);
-  const minPrice = Math.min(...prices);
-  const maxPrice = Math.max(...prices);
+  // Beregn Y-akse range baseret på price OG relevante stop/entry levels
+  const allRelevantValues = [
+    ...chartData.map(d => d.price).filter(p => p != null && isFinite(p)),
+    trade.entry_price,
+    trade.stop_loss,
+  ].filter(v => v != null && isFinite(v) && v > 0);
+  
+  // Tilføj take profit hvis sat
+  if (trade.take_profit && trade.take_profit > 0 && isFinite(trade.take_profit)) {
+    allRelevantValues.push(trade.take_profit);
+  }
+  
+  const minPrice = Math.min(...allRelevantValues);
+  const maxPrice = Math.max(...allRelevantValues);
   const priceRange = maxPrice - minPrice;
   const padding = priceRange * 0.15; // 15% padding
   
