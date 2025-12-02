@@ -51,6 +51,26 @@ export const ExportTradesDialog = ({
     };
     const exitReason = exitReasonMap[t.close_reason] || t.close_reason?.toLowerCase() || 'unknown';
 
+    // Calculate ATR% from snapshot if not directly available
+    const atrPct = snap.atr_percent ?? (snap.atr && snap.price ? (snap.atr / snap.price) * 100 : null);
+    
+    // Get EMA spread from snapshot or calculate
+    const emaSpread = snap.ema_spread_percent ?? snap.emaSpreadPercent ?? null;
+
+    // Get BB values - either from flattened fields or bb object
+    const bbUpper = snap.bb_upper ?? snap.bb?.upper ?? null;
+    const bbMiddle = snap.bb_middle ?? snap.bb?.middle ?? null;
+    const bbLower = snap.bb_lower ?? snap.bb?.lower ?? null;
+
+    // Get soft conditions from new or old format
+    const side = t.side?.toLowerCase() || 'long';
+    const softEmaTrend = snap.soft_ema_trend ?? snap.conditionDetails?.ema?.[side] ?? null;
+    const softStoch = snap.soft_stochrsi ?? snap.conditionDetails?.stochRSI?.[side] ?? null;
+    const softMacdColor = snap.soft_macd_color ?? snap.conditionDetails?.macd?.[side] ?? null;
+    const softBb = snap.soft_bb ?? snap.conditionDetails?.bb?.[side] ?? null;
+    const softVolume = snap.soft_volume ?? snap.conditionDetails?.volume?.[side] ?? null;
+    const softPivot = snap.soft_pivot ?? snap.conditionDetails?.pivotPoints?.[side] ?? null;
+
     return {
       // Core trade data
       symbol: t.symbol,
@@ -63,62 +83,61 @@ export const ExportTradesDialog = ({
       exit_reason: exitReason,
 
       // EMA
-      EMA_fast: snap.emaFast ? +snap.emaFast.toFixed(4) : null,
-      EMA_medium: snap.emaMedium ? +snap.emaMedium.toFixed(4) : null,
-      EMA_slow: snap.emaSlow ? +snap.emaSlow.toFixed(4) : null,
-      EMA_spread_pct: snap.ema_spread_percent ? +snap.ema_spread_percent.toFixed(4) : null,
+      EMA_fast: snap.emaFast != null ? +Number(snap.emaFast).toFixed(4) : null,
+      EMA_medium: snap.emaMedium != null ? +Number(snap.emaMedium).toFixed(4) : null,
+      EMA_slow: snap.emaSlow != null ? +Number(snap.emaSlow).toFixed(4) : null,
+      EMA_spread_pct: emaSpread != null ? +Number(emaSpread).toFixed(4) : null,
 
       // MACD
-      MACD_value: snap.macd ? +snap.macd.toFixed(6) : null,
-      MACD_histogram: snap.macd_histogram ? +snap.macd_histogram.toFixed(6) : null,
-      MACD_signal: snap.macd_signal ? +snap.macd_signal.toFixed(6) : null,
+      MACD_value: snap.macdLine != null ? +Number(snap.macdLine).toFixed(6) : null,
+      MACD_histogram: (snap.macd_histogram ?? snap.macd) != null ? +Number(snap.macd_histogram ?? snap.macd).toFixed(6) : null,
+      MACD_signal: (snap.macd_signal ?? snap.macdSignal) != null ? +Number(snap.macd_signal ?? snap.macdSignal).toFixed(6) : null,
       MACD_direction_filter_passed: snap.macd_direction_passed ?? null,
-      MACD_color_change_passed: snap.macd_color_change_passed ?? null,
+      MACD_color_change_passed: snap.soft_macd_color ?? null,
 
       // ATR
-      ATR_value: snap.atr ? +snap.atr.toFixed(6) : null,
-      ATR_pct: snap.atr_percent ? +snap.atr_percent.toFixed(4) : null,
+      ATR_value: snap.atr != null ? +Number(snap.atr).toFixed(6) : null,
+      ATR_pct: atrPct != null ? +Number(atrPct).toFixed(4) : null,
       ATR_filter_passed: snap.atr_filter_passed ?? null,
 
       // ADX
-      ADX_value: snap.adx ? +snap.adx.toFixed(2) : null,
+      ADX_value: snap.adx != null ? +Number(snap.adx).toFixed(2) : null,
       ADX_filter_passed: snap.adx_filter_passed ?? null,
 
       // Volume
-      volume_current: snap.volume ? +snap.volume.toFixed(2) : null,
-      volume_avg: snap.avgVolume ? +snap.avgVolume.toFixed(2) : null,
+      volume_current: snap.volume != null ? +Number(snap.volume).toFixed(2) : null,
+      volume_avg: snap.avgVolume != null ? +Number(snap.avgVolume).toFixed(2) : null,
       volume_multiplier_filter_passed: snap.volume_filter_passed ?? null,
 
       // StochRSI
-      stoch_rsi_k: snap.stochRSI_k ? +snap.stochRSI_k.toFixed(2) : null,
-      stoch_rsi_d: snap.stochRSI_d ? +snap.stochRSI_d.toFixed(2) : null,
-      stoch_rsi_zone_passed: snap.stochrsi_zone_passed ?? null,
+      stoch_rsi_k: snap.stochRSI_k != null ? +Number(snap.stochRSI_k).toFixed(2) : null,
+      stoch_rsi_d: snap.stochRSI_d != null ? +Number(snap.stochRSI_d).toFixed(2) : null,
+      stoch_rsi_zone_passed: snap.stochrsi_zone_passed ?? softStoch ?? null,
 
       // Bollinger Bands
-      bollinger_upper: snap.bb_upper ? +snap.bb_upper.toFixed(4) : null,
-      bollinger_middle: snap.bb_middle ? +snap.bb_middle.toFixed(4) : null,
-      bollinger_lower: snap.bb_lower ? +snap.bb_lower.toFixed(4) : null,
-      bollinger_signal_passed: snap.bb_signal_passed ?? null,
+      bollinger_upper: bbUpper != null ? +Number(bbUpper).toFixed(4) : null,
+      bollinger_middle: bbMiddle != null ? +Number(bbMiddle).toFixed(4) : null,
+      bollinger_lower: bbLower != null ? +Number(bbLower).toFixed(4) : null,
+      bollinger_signal_passed: softBb,
 
       // Soft conditions
-      soft_ema_trend_passed: snap.soft_ema_trend ?? null,
-      soft_stoch_passed: snap.soft_stochrsi ?? null,
-      soft_macd_color_passed: snap.soft_macd_color ?? null,
-      soft_bb_passed: snap.soft_bb ?? null,
-      soft_volume_passed: snap.soft_volume ?? null,
-      soft_pivot_passed: snap.soft_pivot ?? null,
-      soft_conditions_total: snap.conditionsMet ?? null,
+      soft_ema_trend_passed: softEmaTrend,
+      soft_stoch_passed: softStoch,
+      soft_macd_color_passed: softMacdColor,
+      soft_bb_passed: softBb,
+      soft_volume_passed: softVolume,
+      soft_pivot_passed: softPivot,
+      soft_conditions_total: snap.conditionsMet ?? snap.conditionDetails?.longConditionsMet ?? snap.conditionDetails?.shortConditionsMet ?? null,
 
       // Break-even & Trailing stop
       break_even_triggered: snap.break_even_activated ?? t.break_even_activated ?? false,
-      break_even_at_price: snap.break_even_price ? +snap.break_even_price.toFixed(4) : null,
-      trailing_stop_trigger_price: snap.trailing_stop ? +snap.trailing_stop.toFixed(4) : null,
+      break_even_at_price: snap.break_even_price != null ? +Number(snap.break_even_price).toFixed(4) : null,
+      trailing_stop_trigger_price: (snap.trailing_stop_initial ?? snap.trailing_stop) != null ? +Number(snap.trailing_stop_initial ?? snap.trailing_stop).toFixed(4) : null,
       trailing_stop_atr_multiplier: snap.atr_trailing_stop_multiplier ?? null,
 
-      // Multi-timeframe ATR%
-      atr_pct_1m: snap.atr_pct_1m ? +snap.atr_pct_1m.toFixed(4) : null,
-      atr_pct_5m: snap.atr_pct_5m ? +snap.atr_pct_5m.toFixed(4) : null,
-      atr_pct_15m: snap.atr_pct_15m ? +snap.atr_pct_15m.toFixed(4) : null,
+      // Trend data
+      trend_medium: snap.trend_medium ?? snap.trend ?? null,
+      trend_higher: snap.trend_higher ?? null,
 
       // Timestamps
       timestamp_open: openedAt.toISOString(),
