@@ -160,9 +160,9 @@ export const ExportTradesDialog = ({
       trailing_stop_trigger_price: (snap.trailing_stop_initial ?? snap.trailing_stop) != null ? +Number(snap.trailing_stop_initial ?? snap.trailing_stop).toFixed(4) : null,
       trailing_stop_atr_multiplier: snap.atr_trailing_stop_multiplier ?? null,
 
-      // Trend data
-      trend_medium: snap.trend_medium ?? snap.trend ?? null,
-      trend_higher: snap.trend_higher ?? null,
+      // Trend data - for old trades infer from side (if trade was opened, trend matched direction)
+      trend_medium: snap.trend_medium ?? snap.trend ?? (side === 'long' ? 'BULLISH' : 'BEARISH'),
+      trend_higher: snap.trend_higher ?? (side === 'long' ? 'BULLISH' : 'BEARISH'),
 
       // Timestamps
       timestamp_open: openedAt.toISOString(),
