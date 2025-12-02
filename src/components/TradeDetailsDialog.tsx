@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, Clock, DollarSign, Target, AlertTriangle } from "lucide-react";
+import { TrendingUp, TrendingDown, Clock, DollarSign, Target, AlertTriangle, X } from "lucide-react";
 import { getBinanceTimeAgo, formatBinanceDate } from "@/lib/timeUtils";
 import { TradeChart } from "./TradeChart";
 
@@ -50,10 +50,14 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
             <Badge variant={trade.side === "LONG" ? "default" : "secondary"}>
               {trade.side}
             </Badge>
-            {isPositionOpen && (
+            {isPositionOpen ? (
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
                 LIVE
               </Badge>
+            ) : (
+              <div className="flex items-center justify-center h-6 w-6 rounded-full bg-loss/20 border border-loss/40">
+                <X className="h-3.5 w-3.5 text-loss" />
+              </div>
             )}
           </DialogTitle>
         </DialogHeader>
