@@ -518,6 +518,69 @@ serve(async (req) => {
         }
       }
 
+      // 🛡️ CRITICAL SAFETY: Validate ALL open positions have correct SL
+      const { data: openPositions } = await supabaseClient
+        .from('positions')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'OPEN');
+
+      if (openPositions && openPositions.length > 0) {
+        for (const pos of openPositions) {
+          const entryPrice = Number(pos.entry_price);
+          const currentSL = pos.stop_loss ? Number(pos.stop_loss) : null;
+          const side = pos.side as 'LONG' | 'SHORT';
+          
+          let needsFix = false;
+          let fixReason = '';
+          
+          // Check if SL is missing or invalid
+          if (!currentSL || isNaN(currentSL) || !isFinite(currentSL) || currentSL <= 0) {
+            needsFix = true;
+            fixReason = `missing/invalid (was: ${currentSL})`;
+          }
+          // Check if SL is correctly placed for the side
+          else if (side === 'LONG' && currentSL >= entryPrice) {
+            needsFix = true;
+            fixReason = `incorrectly placed for LONG (SL ${currentSL.toFixed(4)} >= entry ${entryPrice.toFixed(4)})`;
+          }
+          else if (side === 'SHORT' && currentSL <= entryPrice) {
+            needsFix = true;
+            fixReason = `incorrectly placed for SHORT (SL ${currentSL.toFixed(4)} <= entry ${entryPrice.toFixed(4)})`;
+          }
+          
+          if (needsFix) {
+            // Calculate correct SL using 3% safety margin
+            const defaultSlPercent = 3.0;
+            let correctedSL: number;
+            
+            if (side === 'LONG') {
+              correctedSL = entryPrice * (1 - defaultSlPercent / 100);
+            } else {
+              correctedSL = entryPrice * (1 + defaultSlPercent / 100);
+            }
+            
+            console.log(`🛡️ SAFETY FIX: ${pos.symbol} ${side} - SL was ${fixReason}, correcting to ${correctedSL.toFixed(6)}`);
+            
+            await supabaseClient
+              .from('positions')
+              .update({
+                stop_loss: correctedSL,
+                trailing_stop: correctedSL,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', pos.id);
+            
+            updates.push({ 
+              symbol: pos.symbol, 
+              action: 'sl_corrected', 
+              reason: fixReason,
+              new_sl: correctedSL 
+            });
+          }
+        }
+      }
+
       allUpdates.push({
         userId: userId,
         updates: updates,
