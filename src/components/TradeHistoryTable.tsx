@@ -114,8 +114,8 @@ export const TradeHistoryTable = () => {
                       <Badge variant={trade.side === "LONG" ? "default" : "secondary"} className="text-xs">
                         {trade.side}
                       </Badge>
-                      <div className="flex items-center justify-center h-8 w-8 rounded-full bg-muted">
-                        <X className="h-4 w-4 text-muted-foreground" />
+                      <div className="flex items-center justify-center h-6 w-6 rounded-full bg-loss/20 border border-loss/40">
+                        <X className="h-3.5 w-3.5 text-loss" />
                       </div>
                     </div>
                     
