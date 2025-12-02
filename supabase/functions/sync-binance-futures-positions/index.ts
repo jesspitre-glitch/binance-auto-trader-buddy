@@ -357,6 +357,29 @@ serve(async (req) => {
           // Create new position if none exists
           console.log(`Creating new position for ${binancePos.symbol}`);
           
+          const entryPrice = parseFloat(binancePos.entryPrice);
+          
+          // Get user's indicator config for SL calculation
+          const { data: userConfig } = await supabaseClient
+            .from('indicator_config')
+            .select('atr_stop_loss_multiplier')
+            .eq('user_id', userId)
+            .limit(1)
+            .single();
+          
+          // Calculate a default stop loss based on entry price
+          // Use 3% as default safety margin if no config found
+          const defaultSlPercent = 3.0;
+          let stopLoss: number;
+          
+          if (side === 'LONG') {
+            stopLoss = entryPrice * (1 - defaultSlPercent / 100);
+          } else {
+            stopLoss = entryPrice * (1 + defaultSlPercent / 100);
+          }
+          
+          console.log(`⚠️ Setting default SL for synced position ${binancePos.symbol}: ${stopLoss.toFixed(4)} (${defaultSlPercent}% from entry)`);
+          
           // Check if bot detected a signal for this symbol recently (within last 10 minutes)
           const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
           const { data: recentSignals } = await supabaseClient
@@ -369,16 +392,22 @@ serve(async (req) => {
             .order('created_at', { ascending: false })
             .limit(1);
           
-          let openReason = `Position fundet på Binance (${side} @ ${parseFloat(binancePos.entryPrice).toFixed(4)})`;
+          let openReason = `Position synkroniseret fra Binance (${side} @ ${entryPrice.toFixed(4)}) - Default SL sat: ${stopLoss.toFixed(4)}`;
           let indicatorsSnapshot = null;
           
-          // If we found a recent signal from the bot, use that data
+          // If we found a recent signal from the bot, use that data including proper SL
           if (recentSignals && recentSignals.length > 0) {
             const signal = recentSignals[0];
             indicatorsSnapshot = signal.indicators;
             
-            // Create detailed open reason like the bot would
+            // Use the SL from the signal if available
             const indicators = signal.indicators as any;
+            if (indicators.stop_loss && indicators.stop_loss > 0) {
+              stopLoss = indicators.stop_loss;
+              console.log(`✅ Using bot signal SL for ${binancePos.symbol}: ${stopLoss.toFixed(4)}`);
+            }
+            
+            // Create detailed open reason like the bot would
             openReason = `${side} signal på ${binancePos.symbol} - ` +
               `Trend: ${indicators.trend || 'UNKNOWN'}. ` +
               `RSI: ${indicators.rsi?.toFixed(2) || 'N/A'}, ` +
@@ -395,10 +424,12 @@ serve(async (req) => {
               user_id: userId,
               symbol: binancePos.symbol,
               side,
-              entry_price: parseFloat(binancePos.entryPrice),
+              entry_price: entryPrice,
               quantity: absQuantity,
               current_price: currentPrice,
               peak_price: currentPrice,
+              stop_loss: stopLoss,
+              trailing_stop: stopLoss,
               trailing_stop_percent: 2.0,
               unrealized_pnl: unrealizedPnl,
               status: 'OPEN',
@@ -407,7 +438,7 @@ serve(async (req) => {
             });
           
           if (error) console.error('Insert error:', error);
-          updates.push({ symbol: binancePos.symbol, action: 'created' });
+          updates.push({ symbol: binancePos.symbol, action: 'created', stop_loss: stopLoss });
         }
       }
 
