@@ -1921,6 +1921,22 @@ serve(async (req) => {
             trend_higher: selectedSignal.higherTrend,
           };
 
+          // 🛡️ CRITICAL SAFETY: Ensure stop_loss is ALWAYS set
+          // If analysis.stopLoss is null, NaN, 0, or invalid - calculate a fallback
+          let finalStopLoss = analysis.stopLoss;
+          if (!finalStopLoss || isNaN(finalStopLoss) || !isFinite(finalStopLoss) || finalStopLoss <= 0) {
+            // Fallback: Use 3% from entry price if ATR-based SL failed
+            const fallbackSLPercent = 3.0;
+            if (signal === 'LONG') {
+              finalStopLoss = actualEntryPrice * (1 - fallbackSLPercent / 100);
+            } else {
+              finalStopLoss = actualEntryPrice * (1 + fallbackSLPercent / 100);
+            }
+            console.log(`⚠️ SAFETY: analysis.stopLoss was invalid (${analysis.stopLoss}), using fallback SL: ${finalStopLoss.toFixed(6)}`);
+          }
+          
+          console.log(`🛡️ Final Stop Loss for ${symbol}: ${finalStopLoss.toFixed(6)}`);
+
           // Save position to database with verified Binance data and indicators
           const { data: insertedPosition, error: insertError } = await supabaseClient
             .from('positions')
@@ -1930,7 +1946,7 @@ serve(async (req) => {
               side: signal,
               entry_price: actualEntryPrice,
               quantity: actualQuantity,
-              stop_loss: analysis.stopLoss,
+              stop_loss: finalStopLoss,
               take_profit: null, // TP er fjernet, vi bruger kun trailing stop
               trailing_stop: parseFloat(initialTrailingStop.toFixed(8)),
               current_price: actualEntryPrice,
