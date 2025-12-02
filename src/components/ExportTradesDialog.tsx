@@ -34,97 +34,111 @@ export const ExportTradesDialog = ({
   const [showFallback, setShowFallback] = useState(false);
   const { toast } = useToast();
 
-  const compressTradeData = (trades: any[]) => {
-    const summary = {
-      cnt: trades.length,
-      wr: ((trades.filter(t => t.pnl > 0).length / trades.length) * 100).toFixed(1) + "%",
-      pnl: trades.reduce((sum, t) => sum + t.pnl, 0).toFixed(2),
-      avg: (trades.reduce((sum, t) => sum + t.pnl, 0) / trades.length).toFixed(2),
-      from: new Date(trades[trades.length - 1].closed_at).toISOString().split('T')[0],
-      to: new Date(trades[0].closed_at).toISOString().split('T')[0]
-    };
+  const formatTradeForExport = (t: any) => {
+    const snap = t.indicators_snapshot || {};
+    const openedAt = new Date(t.opened_at);
+    const closedAt = new Date(t.closed_at);
+    const durationSec = Math.round((closedAt.getTime() - openedAt.getTime()) / 1000);
 
-    const formatIndicators = (snapshot: any) => {
-      if (!snapshot) return null;
-      
-      const compact: any = {};
-      
-      // EMA
-      if (snapshot.emaFast) compact.ema9 = +snapshot.emaFast.toFixed(2);
-      if (snapshot.emaMedium) compact.ema21 = +snapshot.emaMedium.toFixed(2);
-      if (snapshot.emaSlow) compact.ema50 = +snapshot.emaSlow.toFixed(2);
-      
-      // RSI
-      if (snapshot.rsi) compact.rsi = +snapshot.rsi.toFixed(2);
-      if (snapshot.rsi_min_long) compact.rsi_l = snapshot.rsi_min_long;
-      if (snapshot.rsi_max_short) compact.rsi_s = snapshot.rsi_max_short;
-      
-      // MACD
-      if (snapshot.macd) compact.macd = +snapshot.macd.toFixed(6);
-      if (snapshot.macd_histogram_threshold) compact.macd_th = snapshot.macd_histogram_threshold;
-      
-      // ATR
-      if (snapshot.atr) compact.atr = +snapshot.atr.toFixed(2);
-      if (snapshot.atr_stop_loss_multiplier) compact.atr_sl = snapshot.atr_stop_loss_multiplier;
-      if (snapshot.atr_take_profit_multiplier) compact.atr_tp = snapshot.atr_take_profit_multiplier;
-      if (snapshot.atr_trailing_stop_multiplier) compact.atr_ts = snapshot.atr_trailing_stop_multiplier;
-      if (snapshot.break_even_atr) compact.atr_be = snapshot.break_even_atr;
-      
-      // ADX
-      if (snapshot.adx) compact.adx = +snapshot.adx.toFixed(2);
-      if (snapshot.adx_threshold) compact.adx_th = snapshot.adx_threshold;
-      
-      // Volume
-      if (snapshot.volume) compact.vol = +snapshot.volume.toFixed(2);
-      if (snapshot.avgVolume) compact.vol_avg = +snapshot.avgVolume.toFixed(2);
-      
-      // Pivot
-      if (snapshot.pivotPoints) {
-        compact.pp = {
-          pp: snapshot.pivotPoints.pp?.toFixed(2),
-          r1: snapshot.pivotPoints.r1?.toFixed(2),
-          s1: snapshot.pivotPoints.s1?.toFixed(2)
-        };
-      }
-      
-      // Config
-      if (snapshot.leverage) compact.lev = snapshot.leverage;
-      if (snapshot.position_size_percent) compact.size = snapshot.position_size_percent;
-      if (snapshot.signal_conditions_required) compact.sig_req = snapshot.signal_conditions_required;
-      if (snapshot.price) compact.px = +snapshot.price.toFixed(2);
-      
-      // Enabled indicators (only true ones)
-      const en: string[] = [];
-      if (snapshot.ema_enabled) en.push("ema");
-      if (snapshot.rsi_enabled) en.push("rsi");
-      if (snapshot.macd_enabled) en.push("macd");
-      if (snapshot.atr_enabled) en.push("atr");
-      if (snapshot.adx_enabled) en.push("adx");
-      if (snapshot.volume_enabled) en.push("vol");
-      if (snapshot.pivot_points_enabled) en.push("pp");
-      if (en.length > 0) compact.en = en;
-      
-      return compact;
+    // Map close_reason to standardized exit_reason
+    const exitReasonMap: Record<string, string> = {
+      'TRAILING_STOP': 'trailing_stop',
+      'BREAK_EVEN': 'break_even',
+      'STOP_LOSS': 'stop_loss',
+      'TIMEOUT': 'timeout',
+      'MANUAL': 'manual',
+      'TAKE_PROFIT': 'take_profit'
     };
-
-    const compressedTrades = trades.map(t => ({
-      sym: t.symbol,
-      sd: t.side,
-      en: +t.entry_price,
-      ex: +t.exit_price,
-      pnl: +t.pnl.toFixed(2),
-      pnl_p: +t.pnl_percent.toFixed(2),
-      dur: Math.round((new Date(t.closed_at).getTime() - new Date(t.opened_at).getTime()) / 60000),
-      op_r: t.open_reason,
-      cl_r: t.close_reason,
-      op_t: new Date(t.opened_at).toISOString(),
-      cl_t: new Date(t.closed_at).toISOString(),
-      ind: formatIndicators(t.indicators_snapshot)
-    }));
+    const exitReason = exitReasonMap[t.close_reason] || t.close_reason?.toLowerCase() || 'unknown';
 
     return {
-      sum: summary,
-      trd: compressedTrades
+      // Core trade data
+      symbol: t.symbol,
+      side: t.side,
+      entry_price: +t.entry_price,
+      exit_price: +t.exit_price,
+      pnl_abs: +(t.pnl?.toFixed(4) || 0),
+      pnl_pct: +(t.pnl_percent?.toFixed(4) || 0),
+      duration_seconds: durationSec,
+      exit_reason: exitReason,
+
+      // EMA
+      EMA_fast: snap.emaFast ? +snap.emaFast.toFixed(4) : null,
+      EMA_medium: snap.emaMedium ? +snap.emaMedium.toFixed(4) : null,
+      EMA_slow: snap.emaSlow ? +snap.emaSlow.toFixed(4) : null,
+      EMA_spread_pct: snap.ema_spread_percent ? +snap.ema_spread_percent.toFixed(4) : null,
+
+      // MACD
+      MACD_value: snap.macd ? +snap.macd.toFixed(6) : null,
+      MACD_histogram: snap.macd_histogram ? +snap.macd_histogram.toFixed(6) : null,
+      MACD_signal: snap.macd_signal ? +snap.macd_signal.toFixed(6) : null,
+      MACD_direction_filter_passed: snap.macd_direction_passed ?? null,
+      MACD_color_change_passed: snap.macd_color_change_passed ?? null,
+
+      // ATR
+      ATR_value: snap.atr ? +snap.atr.toFixed(6) : null,
+      ATR_pct: snap.atr_percent ? +snap.atr_percent.toFixed(4) : null,
+      ATR_filter_passed: snap.atr_filter_passed ?? null,
+
+      // ADX
+      ADX_value: snap.adx ? +snap.adx.toFixed(2) : null,
+      ADX_filter_passed: snap.adx_filter_passed ?? null,
+
+      // Volume
+      volume_current: snap.volume ? +snap.volume.toFixed(2) : null,
+      volume_avg: snap.avgVolume ? +snap.avgVolume.toFixed(2) : null,
+      volume_multiplier_filter_passed: snap.volume_filter_passed ?? null,
+
+      // StochRSI
+      stoch_rsi_k: snap.stochRSI_k ? +snap.stochRSI_k.toFixed(2) : null,
+      stoch_rsi_d: snap.stochRSI_d ? +snap.stochRSI_d.toFixed(2) : null,
+      stoch_rsi_zone_passed: snap.stochrsi_zone_passed ?? null,
+
+      // Bollinger Bands
+      bollinger_upper: snap.bb_upper ? +snap.bb_upper.toFixed(4) : null,
+      bollinger_middle: snap.bb_middle ? +snap.bb_middle.toFixed(4) : null,
+      bollinger_lower: snap.bb_lower ? +snap.bb_lower.toFixed(4) : null,
+      bollinger_signal_passed: snap.bb_signal_passed ?? null,
+
+      // Soft conditions
+      soft_ema_trend_passed: snap.soft_ema_trend ?? null,
+      soft_stoch_passed: snap.soft_stochrsi ?? null,
+      soft_macd_color_passed: snap.soft_macd_color ?? null,
+      soft_bb_passed: snap.soft_bb ?? null,
+      soft_volume_passed: snap.soft_volume ?? null,
+      soft_pivot_passed: snap.soft_pivot ?? null,
+      soft_conditions_total: snap.conditionsMet ?? null,
+
+      // Break-even & Trailing stop
+      break_even_triggered: snap.break_even_activated ?? t.break_even_activated ?? false,
+      break_even_at_price: snap.break_even_price ? +snap.break_even_price.toFixed(4) : null,
+      trailing_stop_trigger_price: snap.trailing_stop ? +snap.trailing_stop.toFixed(4) : null,
+      trailing_stop_atr_multiplier: snap.atr_trailing_stop_multiplier ?? null,
+
+      // Multi-timeframe ATR%
+      atr_pct_1m: snap.atr_pct_1m ? +snap.atr_pct_1m.toFixed(4) : null,
+      atr_pct_5m: snap.atr_pct_5m ? +snap.atr_pct_5m.toFixed(4) : null,
+      atr_pct_15m: snap.atr_pct_15m ? +snap.atr_pct_15m.toFixed(4) : null,
+
+      // Timestamps
+      timestamp_open: openedAt.toISOString(),
+      timestamp_close: closedAt.toISOString()
+    };
+  };
+
+  const compressTradeData = (trades: any[]) => {
+    const summary = {
+      total_trades: trades.length,
+      win_rate: ((trades.filter(t => t.pnl > 0).length / trades.length) * 100).toFixed(2) + "%",
+      total_pnl: +trades.reduce((sum, t) => sum + t.pnl, 0).toFixed(4),
+      avg_pnl: +(trades.reduce((sum, t) => sum + t.pnl, 0) / trades.length).toFixed(4),
+      period_from: new Date(trades[trades.length - 1].closed_at).toISOString(),
+      period_to: new Date(trades[0].closed_at).toISOString()
+    };
+
+    return {
+      summary,
+      trades: trades.map(formatTradeForExport)
     };
   };
 
@@ -164,7 +178,7 @@ export const ExportTradesDialog = ({
       }
 
       const compressed = compressTradeData(trades);
-      const jsonStr = JSON.stringify(compressed, null, 2);
+      const jsonStr = JSON.stringify(compressed);
       
       // Try clipboard first, fallback to textarea on iOS/Safari
       try {
@@ -172,7 +186,7 @@ export const ExportTradesDialog = ({
         
         toast({
           title: "Eksporteret til clipboard! ✓",
-          description: `${trades.length} handler kopieret i komprimeret format`,
+          description: `${trades.length} handler kopieret i kompakt format`,
         });
         
         setOpen(false);
@@ -244,9 +258,9 @@ export const ExportTradesDialog = ({
               </div>
 
               <div className="text-xs text-muted-foreground space-y-1">
-                <p>• Handler bliver komprimeret til analyse-venligt format</p>
-                <p>• Inkluderer entry/exit regler fra strategien</p>
-                <p>• Kopieres direkte til clipboard</p>
+                <p>• Kompakt JSON med alle indikator-data</p>
+                <p>• Inkluderer filter-status og soft conditions</p>
+                <p>• Break-even, trailing stop, multi-TF ATR%</p>
               </div>
 
               <Button onClick={fetchAndExport} className="w-full">
