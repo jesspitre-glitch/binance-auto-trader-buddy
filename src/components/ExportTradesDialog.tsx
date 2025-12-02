@@ -43,6 +43,7 @@ export const ExportTradesDialog = ({
     // Map close_reason to standardized exit_reason
     const exitReasonMap: Record<string, string> = {
       'TRAILING_STOP': 'trailing_stop',
+      'TRAILING_STOP_HIT': 'trailing_stop',
       'BREAK_EVEN': 'break_even',
       'STOP_LOSS': 'stop_loss',
       'TIMEOUT': 'timeout',
@@ -51,10 +52,10 @@ export const ExportTradesDialog = ({
     };
     const exitReason = exitReasonMap[t.close_reason] || t.close_reason?.toLowerCase() || 'unknown';
 
-    // Calculate ATR% from snapshot if not directly available
+    // Calculate ATR% from snapshot
     const atrPct = snap.atr_percent ?? (snap.atr && snap.price ? (snap.atr / snap.price) * 100 : null);
     
-    // Get EMA spread from snapshot or calculate
+    // Get EMA spread from snapshot
     const emaSpread = snap.ema_spread_percent ?? snap.emaSpreadPercent ?? null;
 
     // Get BB values - either from flattened fields or bb object
@@ -70,6 +71,28 @@ export const ExportTradesDialog = ({
     const softBb = snap.soft_bb ?? snap.conditionDetails?.bb?.[side] ?? null;
     const softVolume = snap.soft_volume ?? snap.conditionDetails?.volume?.[side] ?? null;
     const softPivot = snap.soft_pivot ?? snap.conditionDetails?.pivotPoints?.[side] ?? null;
+
+    // For old trades: if trade was opened, hard filters must have passed (infer true)
+    // Check if we have explicit filter status, otherwise infer from trade existing
+    const hasExplicitFilterStatus = snap.atr_filter_passed !== undefined;
+    
+    // Volume filter: check if volumeRatio >= volume_multiplier (infer from stored data)
+    const volumeFilterInferred = snap.volumeRatio && snap.volume_multiplier 
+      ? snap.volumeRatio >= snap.volume_multiplier 
+      : true; // Trade exists, so it passed
+    
+    // ADX filter: check if adx >= adx_threshold
+    const adxFilterInferred = snap.adx && snap.adx_threshold
+      ? snap.adx >= snap.adx_threshold
+      : true;
+    
+    // ATR filter: infer from atr > 0
+    const atrFilterInferred = snap.atr ? snap.atr > 0 : true;
+    
+    // MACD direction filter: check macdLine vs side
+    const macdDirInferred = snap.macdLine != null
+      ? (side === 'long' ? snap.macdLine > 0 : snap.macdLine < 0)
+      : true;
 
     return {
       // Core trade data
@@ -92,27 +115,27 @@ export const ExportTradesDialog = ({
       MACD_value: snap.macdLine != null ? +Number(snap.macdLine).toFixed(6) : null,
       MACD_histogram: (snap.macd_histogram ?? snap.macd) != null ? +Number(snap.macd_histogram ?? snap.macd).toFixed(6) : null,
       MACD_signal: (snap.macd_signal ?? snap.macdSignal) != null ? +Number(snap.macd_signal ?? snap.macdSignal).toFixed(6) : null,
-      MACD_direction_filter_passed: snap.macd_direction_passed ?? null,
-      MACD_color_change_passed: snap.soft_macd_color ?? null,
+      MACD_direction_filter_passed: snap.macd_direction_passed ?? macdDirInferred,
+      MACD_color_change_passed: softMacdColor,
 
       // ATR
       ATR_value: snap.atr != null ? +Number(snap.atr).toFixed(6) : null,
       ATR_pct: atrPct != null ? +Number(atrPct).toFixed(4) : null,
-      ATR_filter_passed: snap.atr_filter_passed ?? null,
+      ATR_filter_passed: snap.atr_filter_passed ?? atrFilterInferred,
 
       // ADX
       ADX_value: snap.adx != null ? +Number(snap.adx).toFixed(2) : null,
-      ADX_filter_passed: snap.adx_filter_passed ?? null,
+      ADX_filter_passed: snap.adx_filter_passed ?? adxFilterInferred,
 
       // Volume
       volume_current: snap.volume != null ? +Number(snap.volume).toFixed(2) : null,
       volume_avg: snap.avgVolume != null ? +Number(snap.avgVolume).toFixed(2) : null,
-      volume_multiplier_filter_passed: snap.volume_filter_passed ?? null,
+      volume_multiplier_filter_passed: snap.volume_filter_passed ?? volumeFilterInferred,
 
       // StochRSI
       stoch_rsi_k: snap.stochRSI_k != null ? +Number(snap.stochRSI_k).toFixed(2) : null,
       stoch_rsi_d: snap.stochRSI_d != null ? +Number(snap.stochRSI_d).toFixed(2) : null,
-      stoch_rsi_zone_passed: snap.stochrsi_zone_passed ?? softStoch ?? null,
+      stoch_rsi_zone_passed: snap.stochrsi_zone_passed ?? softStoch,
 
       // Bollinger Bands
       bollinger_upper: bbUpper != null ? +Number(bbUpper).toFixed(4) : null,
@@ -127,7 +150,9 @@ export const ExportTradesDialog = ({
       soft_bb_passed: softBb,
       soft_volume_passed: softVolume,
       soft_pivot_passed: softPivot,
-      soft_conditions_total: snap.conditionsMet ?? snap.conditionDetails?.longConditionsMet ?? snap.conditionDetails?.shortConditionsMet ?? null,
+      soft_conditions_total: snap.conditionsMet ?? (side === 'long' 
+        ? snap.conditionDetails?.longConditionsMet 
+        : snap.conditionDetails?.shortConditionsMet) ?? null,
 
       // Break-even & Trailing stop
       break_even_triggered: snap.break_even_activated ?? t.break_even_activated ?? false,
