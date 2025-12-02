@@ -1858,6 +1858,69 @@ serve(async (req) => {
           console.log(`   Trailing Stop: ${initialTrailingStop.toFixed(8)}`);
           console.log(`   Order ID: ${orderData.orderId}`);
           
+          // Build comprehensive indicators_snapshot with ALL data needed for export
+          const atrPercent = analysis.indicators.atr && analysis.indicators.price 
+            ? (analysis.indicators.atr / analysis.indicators.price) * 100 
+            : null;
+          
+          const comprehensiveSnapshot = {
+            // Config values
+            ...config,
+            
+            // Core indicators
+            ...analysis.indicators,
+            
+            // Signal strength
+            signalStrength: selectedSignal.strength,
+            
+            // Explicit ATR percent
+            atr_percent: atrPercent,
+            
+            // EMA spread percent (already in indicators but ensuring it's there)
+            ema_spread_percent: analysis.indicators.emaSpreadPercent,
+            
+            // Bollinger Bands flattened
+            bb_upper: analysis.indicators.bb?.upper ?? null,
+            bb_middle: analysis.indicators.bb?.middle ?? null,
+            bb_lower: analysis.indicators.bb?.lower ?? null,
+            
+            // MACD values explicitly named
+            macd_histogram: analysis.indicators.macd,
+            macd_signal: analysis.indicators.macdSignal,
+            
+            // Hard filter pass/fail status
+            ema_spread_filter_passed: analysis.filterStatus?.hard?.emaSpread?.passed ?? true,
+            atr_filter_passed: analysis.filterStatus?.hard?.atr?.passed ?? true,
+            adx_filter_passed: analysis.filterStatus?.hard?.adx?.passed ?? true,
+            volume_filter_passed: analysis.filterStatus?.hard?.volume?.passed ?? true,
+            macd_direction_passed: signal === 'LONG' 
+              ? analysis.filterStatus?.hard?.macdDirection?.long ?? true
+              : analysis.filterStatus?.hard?.macdDirection?.short ?? true,
+            rsi_momentum_passed: signal === 'LONG'
+              ? analysis.filterStatus?.hard?.rsiMomentum?.long ?? true
+              : analysis.filterStatus?.hard?.rsiMomentum?.short ?? true,
+            
+            // Soft conditions individual results
+            soft_ema_trend: analysis.indicators.conditionDetails?.ema?.[signal.toLowerCase()] ?? false,
+            soft_stochrsi: analysis.indicators.conditionDetails?.stochRSI?.[signal.toLowerCase()] ?? false,
+            soft_macd_color: analysis.indicators.conditionDetails?.macd?.[signal.toLowerCase()] ?? false,
+            soft_bb: analysis.indicators.conditionDetails?.bb?.[signal.toLowerCase()] ?? false,
+            soft_volume: analysis.indicators.conditionDetails?.volume?.[signal.toLowerCase()] ?? false,
+            soft_pivot: analysis.indicators.conditionDetails?.pivotPoints?.[signal.toLowerCase()] ?? false,
+            
+            // StochRSI zone check
+            stochrsi_zone_passed: analysis.indicators.conditionDetails?.stochRSI?.[signal.toLowerCase()] ?? false,
+            
+            // Break-even and trailing stop config
+            break_even_atr_multiplier: config.break_even_atr,
+            atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier,
+            trailing_stop_initial: initialTrailingStop,
+            
+            // Trend data
+            trend_medium: selectedSignal.trend,
+            trend_higher: selectedSignal.higherTrend,
+          };
+
           // Save position to database with verified Binance data and indicators
           const { data: insertedPosition, error: insertError } = await supabaseClient
             .from('positions')
@@ -1877,11 +1940,7 @@ serve(async (req) => {
               status: 'OPEN',
               strategy_hash: strategyHash,
               open_reason: openReason,
-              indicators_snapshot: {
-                ...config,
-                ...analysis.indicators,
-                signalStrength: selectedSignal.strength,
-              },
+              indicators_snapshot: comprehensiveSnapshot,
             })
             .select()
             .single();
