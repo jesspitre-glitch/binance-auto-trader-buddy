@@ -104,6 +104,26 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
             </div>
           )}
 
+          {/* Closed Status Banner - For closed positions */}
+          {!isPositionOpen && (
+            <div className="flex items-center gap-3 border border-loss/30 rounded-lg p-4 bg-loss/10">
+              <div className="flex items-center justify-center h-10 w-10 rounded-full bg-loss/20 border border-loss/40">
+                <X className="h-5 w-5 text-loss" />
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-loss">Lukket Position</div>
+                <div className="text-xs text-muted-foreground">
+                  {trade.close_reason === 'STOP_LOSS_HIT' && 'Stop Loss ramt'}
+                  {trade.close_reason === 'TRAILING_STOP_HIT' && 'Trailing Stop ramt'}
+                  {trade.close_reason === 'TAKE_PROFIT_HIT' && 'Take Profit ramt'}
+                  {trade.close_reason === 'TIMEOUT' && 'Timeout'}
+                  {trade.close_reason === 'MANUAL' && 'Manuel lukning'}
+                  {!['STOP_LOSS_HIT', 'TRAILING_STOP_HIT', 'TAKE_PROFIT_HIT', 'TIMEOUT', 'MANUAL'].includes(trade.close_reason || '') && (trade.close_reason || 'Lukket')}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* P&L Overview - For closed positions */}
           {!isPositionOpen && (
             <div className="grid grid-cols-2 gap-4">
