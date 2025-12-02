@@ -206,22 +206,59 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
     );
   };
 
-  // Beregn Y-akse range baseret på price OG relevante stop/entry levels
-  const allRelevantValues = [
-    ...chartData.map(d => d.price).filter(p => p != null && isFinite(p)),
-    trade.entry_price,
-    trade.stop_loss,
-  ].filter(v => v != null && isFinite(v) && v > 0);
+  // Beregn Y-akse range KUN baseret på pris-data og entry - ikke outliers som SL/TP
+  const priceValues = chartData.map(d => d.price).filter(p => p != null && isFinite(p) && p > 0);
+  const entryPrice = Number(trade.entry_price);
   
-  // Tilføj take profit hvis sat
-  if (trade.take_profit && trade.take_profit > 0 && isFinite(trade.take_profit)) {
-    allRelevantValues.push(trade.take_profit);
+  // Inkluder effectiveStop værdier der faktisk vises på grafen
+  const effectiveStopValues = chartData
+    .map(d => d.effectiveStop)
+    .filter(v => v != null && isFinite(v) && v > 0);
+  
+  // Start med pris-data og entry
+  let allRelevantValues = [...priceValues, entryPrice];
+  
+  // Tilføj effectiveStop værdier kun hvis de er tæt på prisområdet
+  if (effectiveStopValues.length > 0) {
+    const priceMin = Math.min(...priceValues);
+    const priceMax = Math.max(...priceValues);
+    const priceRange = priceMax - priceMin;
+    const maxAllowedDistance = priceRange * 3; // Max 3x prisrange væk
+    
+    effectiveStopValues.forEach(v => {
+      if (Math.abs(v - entryPrice) <= maxAllowedDistance) {
+        allRelevantValues.push(v);
+      }
+    });
+  }
+  
+  // Tilføj stop_loss KUN hvis det er tæt på entry (inden for 10%)
+  const stopLoss = Number(trade.stop_loss);
+  if (stopLoss && isFinite(stopLoss) && stopLoss > 0) {
+    const distancePercent = Math.abs(stopLoss - entryPrice) / entryPrice * 100;
+    if (distancePercent <= 10) {
+      allRelevantValues.push(stopLoss);
+    }
+  }
+  
+  // Tilføj take profit KUN hvis det er tæt på entry (inden for 10%)
+  const takeProfit = Number(trade.take_profit);
+  if (takeProfit && isFinite(takeProfit) && takeProfit > 0) {
+    const distancePercent = Math.abs(takeProfit - entryPrice) / entryPrice * 100;
+    if (distancePercent <= 10) {
+      allRelevantValues.push(takeProfit);
+    }
+  }
+  
+  // Tilføj exit price hvis lukket
+  if (trade.exit_price && isFinite(trade.exit_price) && trade.exit_price > 0) {
+    allRelevantValues.push(Number(trade.exit_price));
   }
   
   const minPrice = Math.min(...allRelevantValues);
   const maxPrice = Math.max(...allRelevantValues);
-  const priceRange = maxPrice - minPrice;
-  const padding = priceRange * 0.15; // 15% padding
+  const priceRangeFinal = maxPrice - minPrice;
+  const padding = Math.max(priceRangeFinal * 0.08, entryPrice * 0.002); // Min 0.2% af entry
   
   return (
     <ResponsiveContainer width="100%" height={300}>
@@ -234,7 +271,9 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         />
         <YAxis 
           domain={[minPrice - padding, maxPrice + padding]}
-          tick={{ fontSize: 10 }}
+          tick={{ fontSize: 11 }}
+          tickFormatter={(value) => value.toFixed(entryPrice > 100 ? 2 : 4)}
+          width={65}
         />
         <Tooltip 
           contentStyle={{ 
