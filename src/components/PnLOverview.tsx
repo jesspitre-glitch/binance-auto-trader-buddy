@@ -40,6 +40,7 @@ export const PnLOverview = () => {
   const { toast } = useToast();
 
   const fetchPnLData = async (range: TimeRange) => {
+    setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
