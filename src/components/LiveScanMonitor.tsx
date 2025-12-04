@@ -281,6 +281,30 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
         }
       }
       
+      // MACD Color Change Check
+      if (config.macd_color_change_hard_filter && config.macd_enabled) {
+        enabledFilters.push('macdColorChange');
+        // Check if filterStatus is available from edge function
+        if (indicators.filterStatus?.hard?.macdColorChange) {
+          hardFilters.macdColorChange = indicators.filterStatus.hard.macdColorChange.passed;
+          hardFiltersProgress.macdColorChange = hardFilters.macdColorChange ? 100 : 0;
+        } else {
+          // Fallback - check histogram color shift from previous to current
+          const prevHistogram = indicators.macdHistogramPrev;
+          const curHistogram = indicators.macdHistogram;
+          
+          if (prevHistogram !== undefined && curHistogram !== undefined) {
+            const shiftedRedToGreen = prevHistogram <= 0 && curHistogram > 0;
+            const shiftedGreenToRed = prevHistogram >= 0 && curHistogram < 0;
+            hardFilters.macdColorChange = shiftedRedToGreen || shiftedGreenToRed;
+            hardFiltersProgress.macdColorChange = hardFilters.macdColorChange ? 100 : 0;
+          } else {
+            hardFilters.macdColorChange = false;
+            hardFiltersProgress.macdColorChange = 0;
+          }
+        }
+      }
+      
       // RSI Momentum Check (zone + momentum)
       if (config.rsi_enabled) {
         enabledFilters.push('rsiMomentum');
@@ -676,6 +700,23 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                               {coin.indicators.volumeRatio ? 
                                 (coin.indicators.volumeRatio / 100).toFixed(2) + 'x' : 
                                 'N/A'}
+                            </span>
+                          </div>
+                        )}
+                        {coin.hardFilters.macdColorChange !== undefined && (
+                          <div className="flex items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <CircularProgress 
+                                value={coin.hardFiltersProgress.macdColorChange || 0} 
+                                size={16}
+                                passed={coin.hardFilters.macdColorChange}
+                              />
+                              <span className={coin.hardFilters.macdColorChange ? 'text-green-500' : 'opacity-70'}>
+                                MACD Farveskift
+                              </span>
+                            </div>
+                            <span className="font-mono font-bold">
+                              {coin.hardFilters.macdColorChange ? '✓' : '✗'}
                             </span>
                           </div>
                         )}
