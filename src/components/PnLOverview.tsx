@@ -66,22 +66,33 @@ export const PnLOverview = () => {
           break;
       }
 
-      // Fetch trade history
-      const { data: trades, error } = await supabase
-        .from("trade_history")
-        .select("*")
-        .eq("user_id", user.id)
-        .neq("close_reason", "DUPLICATE")
-        .gte("closed_at", startDate.toISOString())
-        .order("closed_at", { ascending: true });
+      // Fetch trade history and portfolio balance in parallel
+      const [tradesResult, portfolioResult] = await Promise.all([
+        supabase
+          .from("trade_history")
+          .select("*")
+          .eq("user_id", user.id)
+          .neq("close_reason", "DUPLICATE")
+          .gte("closed_at", startDate.toISOString())
+          .order("closed_at", { ascending: true }),
+        supabase
+          .from("user_portfolio")
+          .select("futures_capital")
+          .eq("user_id", user.id)
+          .single()
+      ]);
 
-      if (error) throw error;
+      if (tradesResult.error) throw tradesResult.error;
+      
+      const trades = tradesResult.data;
+      const portfolioBalance = portfolioResult.data?.futures_capital || 0;
 
       setAllTrades(trades || []);
 
       if (!trades || trades.length === 0) {
         setStats({
           totalPnL: 0,
+          totalPnLPercent: 0,
           totalTrades: 0,
           winRate: 0,
           avgWin: 0,
@@ -96,6 +107,7 @@ export const PnLOverview = () => {
 
       // Calculate statistics
       const totalPnL = trades.reduce((sum, t) => sum + Number(t.pnl), 0);
+      const totalPnLPercent = portfolioBalance > 0 ? (totalPnL / portfolioBalance) * 100 : 0;
       const winners = trades.filter(t => Number(t.pnl) > 0);
       const losers = trades.filter(t => Number(t.pnl) < 0);
       const winRate = trades.length > 0 ? (winners.length / trades.length) * 100 : 0;
@@ -115,6 +127,7 @@ export const PnLOverview = () => {
 
       setStats({
         totalPnL,
+        totalPnLPercent,
         totalTrades: trades.length,
         winRate,
         avgWin,
@@ -233,6 +246,9 @@ export const PnLOverview = () => {
                   }`}
                 >
                   {isProfitable ? "+" : ""}${stats?.totalPnL.toFixed(2)}
+                  <span className="text-lg ml-2">
+                    ({isProfitable ? "+" : ""}{stats?.totalPnLPercent.toFixed(2)}%)
+                  </span>
                 </div>
               </div>
 
