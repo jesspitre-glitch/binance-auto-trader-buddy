@@ -35,6 +35,7 @@ interface IndicatorConfig {
   macd_signal: number;
   macd_histogram_threshold: number;
   macd_direction_enabled: boolean;
+  macd_color_change_hard_filter: boolean;
   histogram_momentum_enabled: boolean;
   histogram_momentum_periods: number;
   bb_enabled: boolean;
@@ -576,6 +577,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       adx: { passed: true, value: '', reason: '' },
       volume: { passed: true, value: '', reason: '' },
       macdDirection: { passed: true, long: false, short: false, reason: '' },
+      macdColorChange: { passed: true, long: false, short: false, reason: '' },
       rsiMomentum: { passed: true, long: false, short: false, reason: '' },
     },
     soft: {
@@ -753,7 +755,47 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     filterStatus.hard.macdDirection.short = true;
   }
   
-  // 6️⃣ RSI MOMENTUM (Hård regel)
+  // 6️⃣ MACD COLOR CHANGE FILTER (HÅRDT FILTER - kræver farveskift i histogram)
+  let macdColorChangeLongOK = true;
+  let macdColorChangeShortOK = true;
+  
+  if (config.macd_color_change_hard_filter) {
+    if (config.macd_enabled && macd && macdPrevious) {
+      // LONG: Histogram skal skifte fra rød til grøn (negativ til positiv)
+      const histogramRedToGreen = macdPrevious.histogram <= 0 && macd.histogram > 0;
+      macdColorChangeLongOK = histogramRedToGreen;
+      
+      // SHORT: Histogram skal skifte fra grøn til rød (positiv til negativ)
+      const histogramGreenToRed = macdPrevious.histogram >= 0 && macd.histogram < 0;
+      macdColorChangeShortOK = histogramGreenToRed;
+      
+      filterStatus.hard.macdColorChange.long = macdColorChangeLongOK;
+      filterStatus.hard.macdColorChange.short = macdColorChangeShortOK;
+      
+      if (!macdColorChangeLongOK && !macdColorChangeShortOK) {
+        filterStatus.hard.macdColorChange.passed = false;
+        filterStatus.hard.macdColorChange.reason = `Intet farveskift: Prev=${macdPrevious.histogram.toFixed(6)}, Cur=${macd.histogram.toFixed(6)}`;
+      }
+      
+      console.log(`   🎨 MACD Farveskift: Prev=${macdPrevious.histogram.toFixed(6)}, Cur=${macd.histogram.toFixed(6)}`);
+      console.log(`      LONG (rød→grøn): ${histogramRedToGreen ? '✅' : '❌'}`);
+      console.log(`      SHORT (grøn→rød): ${histogramGreenToRed ? '✅' : '❌'}`);
+    } else {
+      // MACD color change filter ER aktiveret men MACD værdi mangler - BLOKER ALT
+      macdColorChangeLongOK = false;
+      macdColorChangeShortOK = false;
+      filterStatus.hard.macdColorChange.long = false;
+      filterStatus.hard.macdColorChange.short = false;
+      filterStatus.hard.macdColorChange.reason = `MACD color change filter aktiveret men MACD værdi mangler`;
+      console.log(`⚠️ ${filterStatus.hard.macdColorChange.reason}`);
+    }
+  } else {
+    // Filter er deaktiveret - alle retninger tilladt
+    filterStatus.hard.macdColorChange.long = true;
+    filterStatus.hard.macdColorChange.short = true;
+  }
+  
+  // 7️⃣ RSI MOMENTUM (Hård regel)
   let rsiLongOK = true;
   let rsiShortOK = true;
   
@@ -817,6 +859,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   console.log(`   📈 ADX: ${filterStatus.hard.adx.passed ? '✅' : '❌'} ${filterStatus.hard.adx.value} ${filterStatus.hard.adx.reason ? `- ${filterStatus.hard.adx.reason}` : ''}`);
   console.log(`   🔊 Volume: ${filterStatus.hard.volume.passed ? '✅' : '❌'} ${filterStatus.hard.volume.value} ${filterStatus.hard.volume.reason ? `- ${filterStatus.hard.volume.reason}` : ''}`);
   console.log(`   📐 MACD Retning: ${filterStatus.hard.macdDirection.passed ? '✅' : '❌'} Long: ${filterStatus.hard.macdDirection.long ? '✅' : '❌'} Short: ${filterStatus.hard.macdDirection.short ? '✅' : '❌'} ${filterStatus.hard.macdDirection.reason ? `- ${filterStatus.hard.macdDirection.reason}` : ''}`);
+  console.log(`   🎨 MACD Farveskift: ${filterStatus.hard.macdColorChange.passed ? '✅' : '❌'} Long: ${filterStatus.hard.macdColorChange.long ? '✅' : '❌'} Short: ${filterStatus.hard.macdColorChange.short ? '✅' : '❌'} ${filterStatus.hard.macdColorChange.reason ? `- ${filterStatus.hard.macdColorChange.reason}` : ''}`);
   console.log(`   🎯 RSI Momentum: ${filterStatus.hard.rsiMomentum.passed ? '✅' : '❌'} Long: ${filterStatus.hard.rsiMomentum.long ? '✅' : '❌'} Short: ${filterStatus.hard.rsiMomentum.short ? '✅' : '❌'} ${filterStatus.hard.rsiMomentum.reason ? `- ${filterStatus.hard.rsiMomentum.reason}` : ''}\n`);
   console.log(`   📐 EMA Alignment: Long: ${filterStatus.soft.emaAlignment.long ? '✅' : '❌'} Short: ${filterStatus.soft.emaAlignment.short ? '✅' : '❌'}`);
   console.log(`   📉 MACD: Long: ${filterStatus.soft.macd.long ? '✅' : '❌'} Short: ${filterStatus.soft.macd.short ? '✅' : '❌'}`);
@@ -968,10 +1011,11 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   const longConditionsMet = longConditions.filter(c => c).length;
   const shortConditionsMet = shortConditions.filter(c => c).length;
 
-  // 🚨 FINAL SIGNAL BESLUTNING - Bløde betingelser + MACD retningsfilter
+  // 🚨 FINAL SIGNAL BESLUTNING - Bløde betingelser + MACD hårde filtre
   // MACD retningsfilter blokerer ALLE trades i forkert retning (evalueret FØR bløde betingelser)
-  const longSignal = longConditionsMet >= requiredConditions && macdLongOK; // LONG blokeres hvis MACD ≤ 0
-  const shortSignal = shortConditionsMet >= requiredConditions && macdShortOK; // SHORT blokeres hvis MACD ≥ 0
+  // MACD farveskift filter blokerer trades hvis histogram ikke skifter farve i trade retningen
+  const longSignal = longConditionsMet >= requiredConditions && macdLongOK && macdColorChangeLongOK; // LONG kræver MACD > 0 OG rød→grøn skift (hvis aktiveret)
+  const shortSignal = shortConditionsMet >= requiredConditions && macdShortOK && macdColorChangeShortOK; // SHORT kræver MACD < 0 OG grøn→rød skift (hvis aktiveret)
   
   // Calculate conditions met for signal strength
   const conditionsMet = Math.max(longConditionsMet, shortConditionsMet);

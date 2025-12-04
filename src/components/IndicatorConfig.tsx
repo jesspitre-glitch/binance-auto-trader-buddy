@@ -60,6 +60,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     macd_signal: config?.macd_signal || 9,
     macd_histogram_threshold: config?.macd_histogram_threshold || 0,
     macd_direction_enabled: config?.macd_direction_enabled ?? true,
+    macd_color_change_hard_filter: config?.macd_color_change_hard_filter ?? false,
     histogram_momentum_enabled: config?.histogram_momentum_enabled ?? true,
     histogram_momentum_periods: config?.histogram_momentum_periods || 3,
     
@@ -158,6 +159,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       macd_signal: config.macd_signal ?? 9,
       macd_histogram_threshold: config.macd_histogram_threshold ?? 0,
       macd_direction_enabled: config.macd_direction_enabled ?? true,
+      macd_color_change_hard_filter: config.macd_color_change_hard_filter ?? false,
       histogram_momentum_enabled: config.histogram_momentum_enabled ?? true,
       histogram_momentum_periods: config.histogram_momentum_periods ?? 3,
       // Bollinger Bands
@@ -246,6 +248,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       macd_signal: config.macd_signal ?? 9,
       macd_histogram_threshold: config.macd_histogram_threshold ?? 0,
       macd_direction_enabled: config.macd_direction_enabled ?? true,
+      macd_color_change_hard_filter: config.macd_color_change_hard_filter ?? false,
       histogram_momentum_enabled: config.histogram_momentum_enabled ?? true,
       histogram_momentum_periods: config.histogram_momentum_periods ?? 3,
       bb_enabled: config.bb_enabled ?? true,
@@ -773,6 +776,21 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               />
             </div>
           </div>
+
+          <div className="flex items-center justify-between sm:col-span-4">
+            <Label htmlFor="macd_color_change_hard_filter">MACD Farveskift-Filter (hård)</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.macd_color_change_hard_filter ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="macd_color_change_hard_filter"
+                checked={formData.macd_color_change_hard_filter}
+                onCheckedChange={(checked) => setFormData({...formData, macd_color_change_hard_filter: checked})}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground sm:col-span-4 -mt-2">
+            Når aktiveret: LONG kun ved skift rød→grøn, SHORT kun ved skift grøn→rød
+          </p>
 
           <div className="flex items-center justify-between sm:col-span-4">
             <Label htmlFor="histogram_momentum_enabled">Histogram Momentum Shift (blød)</Label>

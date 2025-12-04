@@ -54,6 +54,7 @@ export type Database = {
           id: string
           klines_limit: number | null
           leverage: number | null
+          macd_color_change_hard_filter: boolean | null
           macd_direction_enabled: boolean | null
           macd_enabled: boolean | null
           macd_fast: number | null
@@ -138,6 +139,7 @@ export type Database = {
           id?: string
           klines_limit?: number | null
           leverage?: number | null
+          macd_color_change_hard_filter?: boolean | null
           macd_direction_enabled?: boolean | null
           macd_enabled?: boolean | null
           macd_fast?: number | null
@@ -222,6 +224,7 @@ export type Database = {
           id?: string
           klines_limit?: number | null
           leverage?: number | null
+          macd_color_change_hard_filter?: boolean | null
           macd_direction_enabled?: boolean | null
           macd_enabled?: boolean | null
           macd_fast?: number | null
