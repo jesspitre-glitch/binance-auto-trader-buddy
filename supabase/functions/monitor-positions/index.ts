@@ -264,27 +264,32 @@ serve(async (req) => {
         let shouldClose = false;
         let closeReason = '';
 
-        // Get indicator config for this position (hvis strategy_hash findes)
+        // Get indicator config for this position (ALTID hent fra database - også for synkroniserede positioner!)
         let trailingActivationEnabled = true; // default
         let trailingActivationAtr = 1.0; // default
         let autoExitEnabled = true; // default - hvis slukket lukkes positioner ikke automatisk
-        let maxPositionDurationMinutes = null; // default - hvis null/0 lukkes positioner ikke pga timeout
+        let maxPositionDurationMinutes: number | null = null; // default - hvis null/0 lukkes positioner ikke pga timeout
         
         // Tjek om trailing stop ALLEREDE er aktiveret (fra database)
         let trailingAlreadyActivated = position.trailing_stop != null && position.trailing_stop > 0;
         
-        if (position.strategy_hash) {
-          const { data: configData } = await supabaseClient
-            .from('indicator_config')
-            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, auto_exit_enabled, max_position_duration_minutes')
-            .eq('user_id', position.user_id)
-            .single();
+        // Hent ALTID konfiguration fra database - ikke kun for auto-trade positioner
+        // Dette sikrer at synkroniserede Binance-positioner også får timeout og andre indstillinger
+        const { data: configData } = await supabaseClient
+          .from('indicator_config')
+          .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, auto_exit_enabled, max_position_duration_minutes')
+          .eq('user_id', position.user_id)
+          .single();
+        
+        if (configData) {
+          trailingActivationEnabled = configData.trailing_stop_activation_enabled ?? true;
+          trailingActivationAtr = configData.trailing_stop_activation_atr ?? 1.0;
+          autoExitEnabled = configData.auto_exit_enabled ?? true;
+          maxPositionDurationMinutes = configData.max_position_duration_minutes;
           
-          if (configData) {
-            trailingActivationEnabled = configData.trailing_stop_activation_enabled ?? true;
-            trailingActivationAtr = configData.trailing_stop_activation_atr ?? 1.0;
-            autoExitEnabled = configData.auto_exit_enabled ?? true;
-            maxPositionDurationMinutes = configData.max_position_duration_minutes;
+          // Log for synkroniserede positioner uden strategy_hash
+          if (!position.strategy_hash) {
+            console.log(`📋 Synkroniseret position ${position.symbol} bruger aktuel config: timeout=${maxPositionDurationMinutes}min, autoExit=${autoExitEnabled}`);
           }
         }
 
