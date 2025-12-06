@@ -219,15 +219,19 @@ export const PnLOverview = () => {
         }
         
         const current = new Date(rangeStart.getTime());
+        console.log(`Pre-fill: range=${range}, from ${rangeStart.toISOString()} to ${rangeEnd.toISOString()}`);
+        let prefillCount = 0;
         while (current <= rangeEnd) {
           const { key, label } = getKeyAndLabel(current, range);
           aggregatedPnL.set(key, { label, pnl: 0 });
+          prefillCount++;
           if (range === "24h") {
             current.setUTCHours(current.getUTCHours() + 1);
           } else {
             current.setUTCDate(current.getUTCDate() + 1);
           }
         }
+        console.log(`Pre-filled ${prefillCount} slots, Map size: ${aggregatedPnL.size}`);
       }
       
       trades.forEach(trade => {
@@ -241,6 +245,8 @@ export const PnLOverview = () => {
         }
       });
 
+      console.log(`After trades: Map size: ${aggregatedPnL.size}`);
+
       // Convert to array, sort by timestamp key, and extract display data
       const aggregatedData = Array.from(aggregatedPnL.entries())
         .sort((a, b) => a[0] - b[0])
@@ -248,6 +254,8 @@ export const PnLOverview = () => {
           time: data.label,
           pnl: Number(data.pnl.toFixed(2)),
         }));
+      
+      console.log(`Final aggregatedData length: ${aggregatedData.length}`, aggregatedData.slice(0, 5));
 
       setChartData(cumulativeData);
       setAggregatedData(aggregatedData);
