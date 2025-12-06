@@ -66,6 +66,8 @@ export const PnLOverview = () => {
           break;
       }
 
+      console.log(`Fetching trades from ${startDate.toISOString()} for range ${range}`);
+      
       // Fetch trade history and portfolio balance in parallel
       const [tradesResult, portfolioResult] = await Promise.all([
         supabase
