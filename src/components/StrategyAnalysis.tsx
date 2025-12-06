@@ -217,8 +217,9 @@ export const StrategyAnalysis = () => {
     }
   };
 
-  // Generate hash from config (must match backend logic)
+  // Generate hash from config (MUST match backend auto-trade-quant getStrategyIdentifier exactly!)
   async function generateConfigHash(config: any): Promise<string> {
+    // This must be IDENTICAL to the strategyParams object in auto-trade-quant/index.ts
     const strategyParams = {
       ema_enabled: config.ema_enabled,
       ema_fast: config.ema_fast,
@@ -230,6 +231,8 @@ export const StrategyAnalysis = () => {
       rsi_period: config.rsi_period,
       rsi_min_long: config.rsi_min_long,
       rsi_max_short: config.rsi_max_short,
+      rsi_zone_width: config.rsi_zone_width,
+      rsi_momentum_periods: config.rsi_momentum_periods,
       stochrsi_enabled: config.stochrsi_enabled,
       stochrsi_period: config.stochrsi_period,
       stochrsi_k_period: config.stochrsi_k_period,
@@ -245,6 +248,9 @@ export const StrategyAnalysis = () => {
       macd_slow: config.macd_slow,
       macd_signal: config.macd_signal,
       macd_histogram_threshold: config.macd_histogram_threshold,
+      macd_direction_enabled: config.macd_direction_enabled,
+      histogram_momentum_enabled: config.histogram_momentum_enabled,
+      histogram_momentum_periods: config.histogram_momentum_periods,
       bb_enabled: config.bb_enabled,
       bb_period: config.bb_period,
       bb_std_dev: config.bb_std_dev,
@@ -270,10 +276,12 @@ export const StrategyAnalysis = () => {
       leverage: config.leverage,
       scan_interval: config.scan_interval,
       trend_timeframe: config.trend_timeframe,
+      higher_trend_enabled: config.higher_trend_enabled,
       higher_trend_timeframe: config.higher_trend_timeframe,
       klines_limit: config.klines_limit,
     };
     
+    // Sort keys to ensure consistent hashing regardless of object property order
     const sortedJson = JSON.stringify(strategyParams, Object.keys(strategyParams).sort());
     const encoder = new TextEncoder();
     const data = encoder.encode(sortedJson);
