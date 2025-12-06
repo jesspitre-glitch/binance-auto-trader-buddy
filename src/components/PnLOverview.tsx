@@ -166,47 +166,66 @@ export const PnLOverview = () => {
         const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
         return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
       };
-      
-      trades.forEach(trade => {
-        const date = new Date(trade.closed_at);
-        let timeKey: string;
-        
-        if (range === "24h") {
-          // Group by hour in UTC
-          timeKey = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), date.getUTCHours())).toLocaleString("da-DK", {
+
+      // Helper to format date key
+      const formatDateKey = (date: Date, rangeType: TimeRange): string => {
+        if (rangeType === "24h") {
+          return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), date.getUTCHours())).toLocaleString("da-DK", {
             month: "short",
             day: "numeric",
             hour: "2-digit",
             timeZone: "UTC",
           }) + " UTC";
-        } else if (range === "7d" || range === "30d") {
-          // Group by day in UTC
-          timeKey = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toLocaleString("da-DK", {
+        } else if (rangeType === "7d" || rangeType === "30d") {
+          return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toLocaleString("da-DK", {
             month: "short",
             day: "numeric",
             timeZone: "UTC",
           }) + " UTC";
-        } else if (range === "90d") {
-          // Group by week in UTC
+        } else if (rangeType === "90d") {
           const weekNum = getWeekNumber(date);
-          timeKey = `Uge ${weekNum}, ${date.getUTCFullYear()}`;
+          return `Uge ${weekNum}, ${date.getUTCFullYear()}`;
         } else {
-          // 1y - Group by month in UTC
-          timeKey = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)).toLocaleString("da-DK", {
+          return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)).toLocaleString("da-DK", {
             month: "short",
             year: "numeric",
             timeZone: "UTC",
           });
         }
-        
+      };
+
+      // Pre-fill all time slots with 0 for ranges that need complete data
+      if (range === "24h" || range === "7d" || range === "30d") {
+        const current = new Date(startDate);
+        while (current <= now) {
+          const key = formatDateKey(current, range);
+          aggregatedPnL.set(key, 0);
+          if (range === "24h") {
+            current.setUTCHours(current.getUTCHours() + 1);
+          } else {
+            current.setUTCDate(current.getUTCDate() + 1);
+          }
+        }
+      }
+      
+      trades.forEach(trade => {
+        const date = new Date(trade.closed_at);
+        const timeKey = formatDateKey(date, range);
         const currentPnL = aggregatedPnL.get(timeKey) || 0;
         aggregatedPnL.set(timeKey, currentPnL + Number(trade.pnl));
       });
 
-      const aggregatedData = Array.from(aggregatedPnL.entries()).map(([time, pnl]) => ({
-        time,
-        pnl: Number(pnl.toFixed(2)),
-      }));
+      // Convert to array and sort chronologically
+      const aggregatedData = Array.from(aggregatedPnL.entries())
+        .sort((a, b) => {
+          // Parse the time keys back to comparable values
+          // This works because the keys are formatted consistently
+          return Array.from(aggregatedPnL.keys()).indexOf(a[0]) - Array.from(aggregatedPnL.keys()).indexOf(b[0]);
+        })
+        .map(([time, pnl]) => ({
+          time,
+          pnl: Number(pnl.toFixed(2)),
+        }));
 
       setChartData(cumulativeData);
       setAggregatedData(aggregatedData);
