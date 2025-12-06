@@ -234,18 +234,27 @@ export const PnLOverview = () => {
         console.log(`Pre-filled ${prefillCount} slots, Map size: ${aggregatedPnL.size}`);
       }
       
+      let matchedCount = 0;
+      let unmatchedCount = 0;
       trades.forEach(trade => {
         const date = new Date(trade.closed_at);
         const { key, label } = getKeyAndLabel(date, range);
         const existing = aggregatedPnL.get(key);
         if (existing) {
           existing.pnl += Number(trade.pnl);
+          matchedCount++;
         } else {
           aggregatedPnL.set(key, { label, pnl: Number(trade.pnl) });
+          unmatchedCount++;
         }
       });
 
+      console.log(`Trades processed: ${matchedCount} matched, ${unmatchedCount} unmatched, total: ${trades.length}`);
       console.log(`After trades: Map size: ${aggregatedPnL.size}`);
+      
+      // Log entries with non-zero pnl
+      const nonZeroEntries = Array.from(aggregatedPnL.entries()).filter(([_, data]) => data.pnl !== 0);
+      console.log(`Non-zero entries (${nonZeroEntries.length}):`, nonZeroEntries.map(([k, d]) => ({ key: k, label: d.label, pnl: d.pnl.toFixed(2) })));
 
       // Convert to array, sort by timestamp key, and extract display data
       const aggregatedData = Array.from(aggregatedPnL.entries())
@@ -255,7 +264,7 @@ export const PnLOverview = () => {
           pnl: Number(data.pnl.toFixed(2)),
         }));
       
-      console.log(`Final aggregatedData length: ${aggregatedData.length}`, aggregatedData.slice(0, 5));
+      console.log(`Final aggregatedData length: ${aggregatedData.length}`);
 
       setChartData(cumulativeData);
       setAggregatedData(aggregatedData);
