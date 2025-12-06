@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2 } from "lucide-react";
+import { Loader2, Copy, Check } from "lucide-react";
 
 interface IndicatorConfigProps {
   config?: any;
@@ -18,6 +18,7 @@ interface IndicatorConfigProps {
 export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [formData, setFormData] = useState({
     name: config?.name || "1",
     enabled: config?.enabled ?? true,
@@ -1437,6 +1438,162 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           disabled={!config?.id}
         >
           Fortryd Ændringer
+        </Button>
+        <Button 
+          onClick={() => {
+            const strategyExport = {
+              name: formData.name,
+              enabled: formData.enabled,
+              // Indicators aktivering
+              indicators_enabled: {
+                ema: formData.ema_enabled,
+                rsi: formData.rsi_enabled,
+                stochrsi: formData.stochrsi_enabled,
+                macd: formData.macd_enabled,
+                bb: formData.bb_enabled,
+                atr: formData.atr_enabled,
+                adx: formData.adx_enabled,
+                volume: formData.volume_enabled,
+                pivot_points: formData.pivot_points_enabled,
+              },
+              // Hard Filters
+              hard_filters: {
+                ema_spread: {
+                  enabled: formData.ema_enabled,
+                  min_spread_percent: formData.min_ema_spread_percent,
+                },
+                ema_trend_hard_filter: formData.ema_trend_hard_filter,
+                atr: {
+                  enabled: formData.atr_enabled,
+                  min_atr_percent: formData.min_atr_percent,
+                  adaptive_enabled: formData.adaptive_atr_enabled,
+                  adaptive_base: formData.atr_base_min,
+                  adaptive_floor: formData.atr_floor,
+                  adaptive_ceiling: formData.atr_ceiling,
+                },
+                adx: {
+                  enabled: formData.adx_enabled,
+                  threshold: formData.adx_threshold,
+                  adaptive_enabled: formData.adaptive_adx_enabled,
+                  adaptive_base: formData.adx_base_min,
+                  adaptive_floor: formData.adx_floor,
+                  adaptive_ceiling: formData.adx_ceiling,
+                },
+                volume: {
+                  enabled: formData.volume_enabled,
+                  multiplier: formData.volume_multiplier,
+                  avg_period: formData.volume_avg_period,
+                },
+                macd_direction: {
+                  enabled: formData.macd_direction_enabled && formData.macd_enabled,
+                },
+                macd_color_change: {
+                  enabled: formData.macd_color_change_hard_filter && formData.macd_enabled,
+                },
+                higher_trend: {
+                  enabled: formData.higher_trend_enabled,
+                  timeframe: formData.higher_trend_timeframe,
+                },
+              },
+              // Soft Conditions
+              soft_conditions: {
+                required_count: formData.signal_conditions_required,
+                ema_trend: { enabled: formData.ema_enabled },
+                rsi_zone: {
+                  enabled: formData.rsi_enabled,
+                  period: formData.rsi_period,
+                  min_long: formData.rsi_min_long,
+                  max_short: formData.rsi_max_short,
+                  zone_width: formData.rsi_zone_width,
+                },
+                rsi_momentum: {
+                  enabled: formData.rsi_enabled,
+                  periods: formData.rsi_momentum_periods,
+                },
+                macd_histogram: {
+                  enabled: formData.macd_enabled,
+                  fast: formData.macd_fast,
+                  slow: formData.macd_slow,
+                  signal: formData.macd_signal,
+                  threshold: formData.macd_histogram_threshold,
+                },
+                macd_histogram_momentum: {
+                  enabled: formData.histogram_momentum_enabled && formData.macd_enabled,
+                  periods: formData.histogram_momentum_periods,
+                },
+                bollinger_bands: {
+                  enabled: formData.bb_enabled,
+                  period: formData.bb_period,
+                  std_dev: formData.bb_std_dev,
+                },
+                stochrsi: {
+                  enabled: formData.stochrsi_enabled,
+                  period: formData.stochrsi_period,
+                  k_period: formData.stochrsi_k_period,
+                  d_period: formData.stochrsi_d_period,
+                  overbought: formData.stochrsi_overbought,
+                  oversold: formData.stochrsi_oversold,
+                },
+              },
+              // EMA Settings
+              ema_settings: {
+                fast: formData.ema_fast,
+                medium: formData.ema_medium,
+                slow: formData.ema_slow,
+                medium_trend: formData.ema_medium_trend,
+              },
+              // ATR Settings
+              atr_settings: {
+                period: formData.atr_period,
+                stop_loss_multiplier: formData.atr_stop_loss_multiplier,
+                trailing_stop_multiplier: formData.atr_trailing_stop_multiplier,
+                break_even_atr: formData.break_even_atr,
+                trailing_stop_activation_enabled: formData.trailing_stop_activation_enabled,
+                trailing_stop_activation_atr: formData.trailing_stop_activation_atr,
+              },
+              // ADX Settings
+              adx_settings: {
+                period: formData.adx_period,
+              },
+              // Pivot Points
+              pivot_points: {
+                timeframe: formData.pivot_points_timeframe,
+                lookback: formData.pivot_points_lookback,
+                near_threshold: formData.pivot_points_near_threshold,
+              },
+              // Timeframes
+              timeframes: {
+                scan_interval: formData.scan_interval,
+                trend_timeframe: formData.trend_timeframe,
+                higher_trend_timeframe: formData.higher_trend_timeframe,
+                klines_limit: formData.klines_limit,
+              },
+              // Risk Management
+              risk_management: {
+                position_size_percent: formData.position_size_percent,
+                risk_per_trade_percent: formData.risk_per_trade_percent,
+                max_open_positions: formData.max_open_positions,
+                max_exposure_percent: formData.max_exposure_percent,
+                daily_loss_limit_percent: formData.daily_loss_limit_percent,
+                leverage: formData.leverage,
+                auto_exit_enabled: formData.auto_exit_enabled,
+                max_position_duration_minutes: formData.max_position_duration_minutes,
+              },
+            };
+            
+            navigator.clipboard.writeText(JSON.stringify(strategyExport, null, 2));
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+            toast({
+              title: "Kopieret!",
+              description: "Strategi konfiguration er kopieret til udklipsholderen",
+            });
+          }}
+          variant="outline"
+          className="flex-1"
+        >
+          {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+          Kopiér Strategi
         </Button>
         <Button 
           onClick={handleSave} 
