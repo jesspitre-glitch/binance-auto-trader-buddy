@@ -69,7 +69,7 @@ export const PnLOverview = () => {
       console.log(`Fetching trades from ${startDate.toISOString()} for range ${range}`);
       
       // Fetch trade history and portfolio balance in parallel
-      // Use range() to get more than 1000 trades for longer periods
+      // Fetch ALL trades in period without limit - sort descending to get newest first
       const [tradesResult, portfolioResult] = await Promise.all([
         supabase
           .from("trade_history")
@@ -77,8 +77,7 @@ export const PnLOverview = () => {
           .eq("user_id", user.id)
           .neq("close_reason", "DUPLICATE")
           .gte("closed_at", startDate.toISOString())
-          .order("closed_at", { ascending: true })
-          .limit(10000),
+          .order("closed_at", { ascending: false }),
         supabase
           .from("user_portfolio")
           .select("futures_capital")
@@ -88,10 +87,13 @@ export const PnLOverview = () => {
 
       if (tradesResult.error) throw tradesResult.error;
       
-      const trades = tradesResult.data;
+      // Sort trades ascending for cumulative chart (they were fetched descending)
+      const trades = (tradesResult.data || []).sort((a, b) => 
+        new Date(a.closed_at).getTime() - new Date(b.closed_at).getTime()
+      );
       const portfolioBalance = portfolioResult.data?.futures_capital || 0;
 
-      setAllTrades(trades || []);
+      setAllTrades(trades);
 
       if (!trades || trades.length === 0) {
         setStats({
