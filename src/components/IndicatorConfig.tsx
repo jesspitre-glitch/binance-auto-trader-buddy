@@ -1430,21 +1430,12 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
         </CardContent>
       </Card>
 
-      <div className="flex gap-4">
-        <Button 
-          onClick={handleCancel} 
-          variant="outline" 
-          className="flex-1"
-          disabled={!config?.id}
-        >
-          Fortryd Ændringer
-        </Button>
+      <div className="flex flex-col gap-3">
         <Button 
           onClick={() => {
             const strategyExport = {
               name: formData.name,
               enabled: formData.enabled,
-              // Indicators aktivering
               indicators_enabled: {
                 ema: formData.ema_enabled,
                 rsi: formData.rsi_enabled,
@@ -1456,7 +1447,6 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 volume: formData.volume_enabled,
                 pivot_points: formData.pivot_points_enabled,
               },
-              // Hard Filters
               hard_filters: {
                 ema_spread: {
                   enabled: formData.ema_enabled,
@@ -1495,7 +1485,6 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                   timeframe: formData.higher_trend_timeframe,
                 },
               },
-              // Soft Conditions
               soft_conditions: {
                 required_count: formData.signal_conditions_required,
                 ema_trend: { enabled: formData.ema_enabled },
@@ -1535,14 +1524,12 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                   oversold: formData.stochrsi_oversold,
                 },
               },
-              // EMA Settings
               ema_settings: {
                 fast: formData.ema_fast,
                 medium: formData.ema_medium,
                 slow: formData.ema_slow,
                 medium_trend: formData.ema_medium_trend,
               },
-              // ATR Settings
               atr_settings: {
                 period: formData.atr_period,
                 stop_loss_multiplier: formData.atr_stop_loss_multiplier,
@@ -1551,24 +1538,20 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 trailing_stop_activation_enabled: formData.trailing_stop_activation_enabled,
                 trailing_stop_activation_atr: formData.trailing_stop_activation_atr,
               },
-              // ADX Settings
               adx_settings: {
                 period: formData.adx_period,
               },
-              // Pivot Points
               pivot_points: {
                 timeframe: formData.pivot_points_timeframe,
                 lookback: formData.pivot_points_lookback,
                 near_threshold: formData.pivot_points_near_threshold,
               },
-              // Timeframes
               timeframes: {
                 scan_interval: formData.scan_interval,
                 trend_timeframe: formData.trend_timeframe,
                 higher_trend_timeframe: formData.higher_trend_timeframe,
                 klines_limit: formData.klines_limit,
               },
-              // Risk Management
               risk_management: {
                 position_size_percent: formData.position_size_percent,
                 risk_per_trade_percent: formData.risk_per_trade_percent,
@@ -1589,20 +1572,30 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               description: "Strategi konfiguration er kopieret til udklipsholderen",
             });
           }}
-          variant="outline"
-          className="flex-1"
+          variant="secondary"
+          className="w-full"
         >
           {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-          Kopiér Strategi
+          Kopiér Strategi til AI Analyse
         </Button>
-        <Button 
-          onClick={handleSave} 
-          disabled={loading} 
-          className="flex-1"
-        >
-          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Gem Konfiguration
-        </Button>
+        <div className="flex gap-4">
+          <Button 
+            onClick={handleCancel} 
+            variant="outline" 
+            className="flex-1"
+            disabled={!config?.id}
+          >
+            Fortryd Ændringer
+          </Button>
+          <Button 
+            onClick={handleSave} 
+            disabled={loading} 
+            className="flex-1"
+          >
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Gem Konfiguration
+          </Button>
+        </div>
       </div>
     </div>
   );
