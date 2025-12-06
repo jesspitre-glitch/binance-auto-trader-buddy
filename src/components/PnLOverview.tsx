@@ -156,7 +156,8 @@ export const PnLOverview = () => {
       });
 
       // Create aggregated P&L data for bar chart (UTC/Binance time)
-      const aggregatedPnL = new Map<string, number>();
+      // Use timestamp as key for reliable sorting, store label separately
+      const aggregatedPnL = new Map<number, { label: string; pnl: number }>();
       
       // Helper to get week number
       const getWeekNumber = (date: Date): number => {
@@ -167,30 +168,38 @@ export const PnLOverview = () => {
         return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
       };
 
-      // Helper to format date key
-      const formatDateKey = (date: Date, rangeType: TimeRange): string => {
+      // Helper to get timestamp key and label for a date
+      const getKeyAndLabel = (date: Date, rangeType: TimeRange): { key: number; label: string } => {
         if (rangeType === "24h") {
-          return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), date.getUTCHours())).toLocaleString("da-DK", {
+          const key = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), date.getUTCHours());
+          const label = new Date(key).toLocaleString("da-DK", {
             month: "short",
             day: "numeric",
             hour: "2-digit",
             timeZone: "UTC",
           }) + " UTC";
+          return { key, label };
         } else if (rangeType === "7d" || rangeType === "30d") {
-          return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toLocaleString("da-DK", {
+          const key = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+          const label = new Date(key).toLocaleString("da-DK", {
             month: "short",
             day: "numeric",
             timeZone: "UTC",
           }) + " UTC";
+          return { key, label };
         } else if (rangeType === "90d") {
           const weekNum = getWeekNumber(date);
-          return `Uge ${weekNum}, ${date.getUTCFullYear()}`;
+          const key = Date.UTC(date.getUTCFullYear(), 0, 1) + (weekNum * 7 * 24 * 60 * 60 * 1000);
+          const label = `Uge ${weekNum}, ${date.getUTCFullYear()}`;
+          return { key, label };
         } else {
-          return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)).toLocaleString("da-DK", {
+          const key = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1);
+          const label = new Date(key).toLocaleString("da-DK", {
             month: "short",
             year: "numeric",
             timeZone: "UTC",
           });
+          return { key, label };
         }
       };
 
@@ -198,8 +207,8 @@ export const PnLOverview = () => {
       if (range === "24h" || range === "7d" || range === "30d") {
         const current = new Date(startDate);
         while (current <= now) {
-          const key = formatDateKey(current, range);
-          aggregatedPnL.set(key, 0);
+          const { key, label } = getKeyAndLabel(current, range);
+          aggregatedPnL.set(key, { label, pnl: 0 });
           if (range === "24h") {
             current.setUTCHours(current.getUTCHours() + 1);
           } else {
@@ -210,21 +219,21 @@ export const PnLOverview = () => {
       
       trades.forEach(trade => {
         const date = new Date(trade.closed_at);
-        const timeKey = formatDateKey(date, range);
-        const currentPnL = aggregatedPnL.get(timeKey) || 0;
-        aggregatedPnL.set(timeKey, currentPnL + Number(trade.pnl));
+        const { key, label } = getKeyAndLabel(date, range);
+        const existing = aggregatedPnL.get(key);
+        if (existing) {
+          existing.pnl += Number(trade.pnl);
+        } else {
+          aggregatedPnL.set(key, { label, pnl: Number(trade.pnl) });
+        }
       });
 
-      // Convert to array and sort chronologically
+      // Convert to array, sort by timestamp key, and extract display data
       const aggregatedData = Array.from(aggregatedPnL.entries())
-        .sort((a, b) => {
-          // Parse the time keys back to comparable values
-          // This works because the keys are formatted consistently
-          return Array.from(aggregatedPnL.keys()).indexOf(a[0]) - Array.from(aggregatedPnL.keys()).indexOf(b[0]);
-        })
-        .map(([time, pnl]) => ({
-          time,
-          pnl: Number(pnl.toFixed(2)),
+        .sort((a, b) => a[0] - b[0])
+        .map(([_, data]) => ({
+          time: data.label,
+          pnl: Number(data.pnl.toFixed(2)),
         }));
 
       setChartData(cumulativeData);
