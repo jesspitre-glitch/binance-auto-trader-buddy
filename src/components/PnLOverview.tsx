@@ -205,8 +205,21 @@ export const PnLOverview = () => {
 
       // Pre-fill all time slots with 0 for ranges that need complete data
       if (range === "24h" || range === "7d" || range === "30d") {
-        const current = new Date(startDate);
-        while (current <= now) {
+        // Create fresh copies to avoid mutating startDate
+        const rangeStart = new Date(startDate.getTime());
+        const rangeEnd = new Date(now.getTime());
+        
+        // Reset to start of day/hour for consistent keys
+        if (range === "24h") {
+          rangeStart.setUTCMinutes(0, 0, 0);
+          rangeEnd.setUTCMinutes(0, 0, 0);
+        } else {
+          rangeStart.setUTCHours(0, 0, 0, 0);
+          rangeEnd.setUTCHours(0, 0, 0, 0);
+        }
+        
+        const current = new Date(rangeStart.getTime());
+        while (current <= rangeEnd) {
           const { key, label } = getKeyAndLabel(current, range);
           aggregatedPnL.set(key, { label, pnl: 0 });
           if (range === "24h") {
