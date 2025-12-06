@@ -157,6 +157,16 @@ export const PnLOverview = () => {
 
       // Create aggregated P&L data for bar chart (UTC/Binance time)
       const aggregatedPnL = new Map<string, number>();
+      
+      // Helper to get week number
+      const getWeekNumber = (date: Date): number => {
+        const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+        const dayNum = d.getUTCDay() || 7;
+        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+      };
+      
       trades.forEach(trade => {
         const date = new Date(trade.closed_at);
         let timeKey: string;
@@ -169,13 +179,24 @@ export const PnLOverview = () => {
             hour: "2-digit",
             timeZone: "UTC",
           }) + " UTC";
-        } else {
+        } else if (range === "7d" || range === "30d") {
           // Group by day in UTC
           timeKey = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toLocaleString("da-DK", {
             month: "short",
             day: "numeric",
             timeZone: "UTC",
           }) + " UTC";
+        } else if (range === "90d") {
+          // Group by week in UTC
+          const weekNum = getWeekNumber(date);
+          timeKey = `Uge ${weekNum}, ${date.getUTCFullYear()}`;
+        } else {
+          // 1y - Group by month in UTC
+          timeKey = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)).toLocaleString("da-DK", {
+            month: "short",
+            year: "numeric",
+            timeZone: "UTC",
+          });
         }
         
         const currentPnL = aggregatedPnL.get(timeKey) || 0;
@@ -319,6 +340,15 @@ export const PnLOverview = () => {
                             const date = new Date(trade.closed_at);
                             let timeKey: string;
                             
+                            // Helper to get week number
+                            const getWeekNumber = (d: Date): number => {
+                              const utcDate = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+                              const dayNum = utcDate.getUTCDay() || 7;
+                              utcDate.setUTCDate(utcDate.getUTCDate() + 4 - dayNum);
+                              const yearStart = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1));
+                              return Math.ceil((((utcDate.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+                            };
+                            
                             if (timeRange === "24h") {
                               timeKey = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), date.getUTCHours())).toLocaleString("da-DK", {
                                 month: "short",
@@ -326,12 +356,21 @@ export const PnLOverview = () => {
                                 hour: "2-digit",
                                 timeZone: "UTC",
                               }) + " UTC";
-                            } else {
+                            } else if (timeRange === "7d" || timeRange === "30d") {
                               timeKey = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toLocaleString("da-DK", {
                                 month: "short",
                                 day: "numeric",
                                 timeZone: "UTC",
                               }) + " UTC";
+                            } else if (timeRange === "90d") {
+                              const weekNum = getWeekNumber(date);
+                              timeKey = `Uge ${weekNum}, ${date.getUTCFullYear()}`;
+                            } else {
+                              timeKey = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)).toLocaleString("da-DK", {
+                                month: "short",
+                                year: "numeric",
+                                timeZone: "UTC",
+                              });
                             }
                             
                             return timeKey === clickedTime;
