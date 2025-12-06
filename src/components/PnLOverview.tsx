@@ -69,6 +69,7 @@ export const PnLOverview = () => {
       console.log(`Fetching trades from ${startDate.toISOString()} for range ${range}`);
       
       // Fetch trade history and portfolio balance in parallel
+      // Use range() to get more than 1000 trades for longer periods
       const [tradesResult, portfolioResult] = await Promise.all([
         supabase
           .from("trade_history")
@@ -76,7 +77,8 @@ export const PnLOverview = () => {
           .eq("user_id", user.id)
           .neq("close_reason", "DUPLICATE")
           .gte("closed_at", startDate.toISOString())
-          .order("closed_at", { ascending: true }),
+          .order("closed_at", { ascending: true })
+          .limit(10000),
         supabase
           .from("user_portfolio")
           .select("futures_capital")
