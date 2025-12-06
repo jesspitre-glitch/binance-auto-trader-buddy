@@ -240,10 +240,23 @@ export const PnLOverview = () => {
       
       let matchedCount = 0;
       let unmatchedCount = 0;
-      trades.forEach(trade => {
+      
+      // Debug: log first and last few trades to see their dates
+      if (trades.length > 0) {
+        console.log(`First trade closed_at: ${trades[0].closed_at}`);
+        console.log(`Last trade closed_at: ${trades[trades.length - 1].closed_at}`);
+      }
+      
+      trades.forEach((trade, idx) => {
         const date = new Date(trade.closed_at);
         const { key, label } = getKeyAndLabel(date, range);
         const existing = aggregatedPnL.get(key);
+        
+        // Debug first few trades
+        if (idx < 3) {
+          console.log(`Trade ${idx}: closed_at=${trade.closed_at}, key=${key}, label=${label}, exists=${!!existing}`);
+        }
+        
         if (existing) {
           existing.pnl += Number(trade.pnl);
           matchedCount++;
@@ -255,6 +268,13 @@ export const PnLOverview = () => {
 
       console.log(`Trades processed: ${matchedCount} matched, ${unmatchedCount} unmatched, total: ${trades.length}`);
       console.log(`After trades: Map size: ${aggregatedPnL.size}`);
+      
+      // Log all pre-filled keys for 30d range
+      if (range === "30d") {
+        const allKeys = Array.from(aggregatedPnL.keys()).sort((a, b) => a - b);
+        console.log(`All pre-filled keys (first 5):`, allKeys.slice(0, 5).map(k => ({ key: k, date: new Date(k).toISOString() })));
+        console.log(`All pre-filled keys (last 5):`, allKeys.slice(-5).map(k => ({ key: k, date: new Date(k).toISOString() })));
+      }
       
       // Log entries with non-zero pnl
       const nonZeroEntries = Array.from(aggregatedPnL.entries()).filter(([_, data]) => data.pnl !== 0);
