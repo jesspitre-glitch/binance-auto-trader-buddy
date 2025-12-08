@@ -186,6 +186,34 @@ export const ExportTradesDialog = ({
     };
   };
 
+  // Format med linjeskift mellem handler ved ca. 2500 tegn for nemmere AI-læsning
+  const formatWithLineBreaks = (data: any): string => {
+    const summaryStr = JSON.stringify({ summary: data.summary });
+    const tradesFormatted: string[] = [];
+    
+    let currentChunk = "";
+    
+    for (const trade of data.trades) {
+      const tradeStr = JSON.stringify(trade);
+      
+      // Hvis currentChunk + denne handel > 2500 tegn, start ny linje
+      if (currentChunk.length > 0 && (currentChunk.length + tradeStr.length + 1) > 2500) {
+        tradesFormatted.push(currentChunk);
+        currentChunk = tradeStr;
+      } else {
+        currentChunk = currentChunk.length > 0 ? currentChunk + "," + tradeStr : tradeStr;
+      }
+    }
+    
+    // Tilføj sidste chunk
+    if (currentChunk.length > 0) {
+      tradesFormatted.push(currentChunk);
+    }
+    
+    // Byg final output med linjeskift mellem chunks
+    return summaryStr.slice(0, -1) + ',"trades":[\n' + tradesFormatted.join(',\n') + '\n]}'
+  };
+
   const fetchAndExport = async () => {
     try {
       let query = supabase
@@ -222,7 +250,7 @@ export const ExportTradesDialog = ({
       }
 
       const compressed = compressTradeData(trades);
-      const jsonStr = JSON.stringify(compressed);
+      const jsonStr = formatWithLineBreaks(compressed);
       
       // Try clipboard first, fallback to textarea on iOS/Safari
       try {
