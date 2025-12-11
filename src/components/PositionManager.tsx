@@ -8,12 +8,23 @@ import { Loader2, TrendingUp, TrendingDown, X, BarChart2 } from "lucide-react";
 import { useBinanceFuturesPrices } from "@/hooks/useBinanceFuturesPrices";
 import { getBinanceTimeAgo } from "@/lib/timeUtils";
 import { TradeDetailsDialog } from "./TradeDetailsDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const PositionManager = () => {
   const [positions, setPositions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [selectedPosition, setSelectedPosition] = useState<any>(null);
+  const [positionToClose, setPositionToClose] = useState<any>(null);
   const { toast } = useToast();
 
   const fetchPositions = async () => {
@@ -297,7 +308,7 @@ export const PositionManager = () => {
                           size="icon"
                           variant="ghost"
                           className="h-10 w-10 md:h-9 md:w-9"
-                          onClick={() => closePosition(position)}
+                          onClick={() => setPositionToClose(position)}
                         >
                           <X className="h-5 w-5 md:h-4 md:w-4" />
                         </Button>
@@ -318,6 +329,34 @@ export const PositionManager = () => {
           onClose={() => setSelectedPosition(null)}
         />
       )}
+
+      <AlertDialog open={!!positionToClose} onOpenChange={(open) => !open && setPositionToClose(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Luk position?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Er du sikker på, at du vil lukke positionen på{" "}
+              <span className="font-semibold">{positionToClose?.symbol}</span>?
+              <br />
+              Denne handling kan ikke fortrydes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuller</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (positionToClose) {
+                  closePosition(positionToClose);
+                  setPositionToClose(null);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Luk position
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };
