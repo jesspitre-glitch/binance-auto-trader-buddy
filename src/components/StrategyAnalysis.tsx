@@ -151,11 +151,11 @@ export const StrategyAnalysis = () => {
           rsi_max_short: snapshot.rsi_max_short ?? null,
           rsi_zone_width: snapshot.rsi_zone_width ?? null,
           rsi_momentum_periods: snapshot.rsi_momentum_periods ?? null,
-          // MACD settings
+          // MACD settings (use macd_signal_period for config, NOT macd_signal which is runtime value)
           macd_enabled: snapshot.macd_enabled ?? null,
           macd_fast: snapshot.macd_fast ?? null,
           macd_slow: snapshot.macd_slow ?? null,
-          macd_signal: snapshot.macd_signal ?? null,
+          macd_signal_period: snapshot.macd_signal_period ?? snapshot.macd_signal_param ?? null,
           macd_histogram_threshold: snapshot.macd_histogram_threshold ?? null,
           macd_direction_enabled: snapshot.macd_direction_enabled ?? null,
           macd_color_change_hard_filter: snapshot.macd_color_change_hard_filter ?? null,
