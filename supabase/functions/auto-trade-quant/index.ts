@@ -1485,6 +1485,7 @@ serve(async (req) => {
 
       // Calculate strategy identifier for this config
       const strategyHash = await getStrategyIdentifier(config);
+      console.log(`📋 Strategy hash calculated: ${strategyHash.substring(0, 16)}... (signal_conditions_required=${config.signal_conditions_required})`);
 
       // Check current open positions
       const { data: positions } = await supabaseClient
