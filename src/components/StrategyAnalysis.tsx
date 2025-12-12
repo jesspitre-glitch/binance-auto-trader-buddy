@@ -58,54 +58,25 @@ export const StrategyAnalysis = () => {
     try {
       setLoading(true);
       
-      // Find active strategy hash from current session
+      // Find active strategy hash from open positions (most reliable source)
       let activeHash: string | null = null;
       let source: string | null = null;
-      const { data: { user } } = await supabase.auth.getUser();
       
-      if (user) {
-        const { data: sessionRow } = await supabase
-          .from("trading_session")
-          .select("active_config_id")
-          .eq("user_id", user.id)
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      const { data: openPositions } = await supabase
+        .from("positions")
+        .select("strategy_hash, opened_at, status")
+        .eq("status", "OPEN")
+        .order("opened_at", { ascending: false });
 
-        if (sessionRow?.active_config_id) {
-          // Fetch the config to generate its hash
-          const { data: configData } = await supabase
-            .from("indicator_config")
-            .select("*")
-            .eq("id", sessionRow.active_config_id)
-            .maybeSingle();
-          
-          if (configData) {
-            // Generate hash from config parameters (same logic as backend)
-            activeHash = await generateConfigHash(configData);
-            source = 'session';
-          }
-        }
-      }
-      
-      // Fallback: find active hash from open positions if no session-based hash
-      if (!activeHash) {
-        const { data: openPositions } = await supabase
-          .from("positions")
-          .select("strategy_hash, opened_at, status")
-          .eq("status", "OPEN")
-          .order("opened_at", { ascending: false });
+      const openHashes = (openPositions || [])
+        .map((p: any) => p.strategy_hash)
+        .filter((h: any) => h && typeof h === 'string' && h.length === 64) as string[];
 
-        const openHashes = (openPositions || [])
-          .map((p: any) => p.strategy_hash)
-          .filter(Boolean) as string[];
-
-        if (openHashes.length) {
-          const counts: Record<string, number> = {};
-          openHashes.forEach((h) => { counts[h] = (counts[h] || 0) + 1; });
-          activeHash = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
-          source = 'open_positions';
-        }
+      if (openHashes.length) {
+        const counts: Record<string, number> = {};
+        openHashes.forEach((h) => { counts[h] = (counts[h] || 0) + 1; });
+        activeHash = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+        source = 'open_positions';
       }
       
       setActiveStrategyHash(activeHash);
@@ -138,20 +109,26 @@ export const StrategyAnalysis = () => {
       
       console.log(`[StrategyAnalysis] Fetched ${allFetchedTrades.length} total trades`);
       
-      const trades = allFetchedTrades;
+      // Filter to only include trades with valid 64-character hashes (exclude old numeric hashes like "1", "3", etc.)
+      const validTrades = allFetchedTrades.filter((trade: any) => {
+        const hash = trade.strategy_hash;
+        return hash && typeof hash === 'string' && hash.length === 64;
+      });
+      
+      console.log(`[StrategyAnalysis] ${validTrades.length} trades have valid strategy hashes (filtered out ${allFetchedTrades.length - validTrades.length} old trades)`);
 
-      if (!trades || trades.length === 0) {
+      if (!validTrades || validTrades.length === 0) {
         setStrategies([]);
         setAllTrades([]);
         setLoading(false);
         return;
       }
 
-      setAllTrades(trades);
+      setAllTrades(validTrades);
 
       // Group trades by strategy_hash
       const strategyMap = new Map<string, any[]>();
-      trades.forEach((trade: any) => {
+      validTrades.forEach((trade: any) => {
         const hash = String(trade.strategy_hash);
         if (!strategyMap.has(hash)) {
           strategyMap.set(hash, []);
@@ -177,9 +154,8 @@ export const StrategyAnalysis = () => {
         const totalPnl = strategyTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
         const avgPnl = totalPnl / strategyTrades.length;
         
-        // If hash is a pure number, use it as strategy_number; otherwise assign sequential number
-        const isNumericHash = /^\d+$/.test(hash);
-        const strategyNumber = isNumericHash ? parseInt(hash, 10) : nextStrategyNumber++;
+        // Assign sequential strategy numbers
+        const strategyNumber = nextStrategyNumber++;
         
         stats.push({
           strategy_hash: hash,
@@ -200,7 +176,7 @@ export const StrategyAnalysis = () => {
       // Pick the most active strategy in the last 24 hours (override session/positions if present)
       const recentWindowMs = 24 * 60 * 60 * 1000;
       const nowMs = Date.now();
-      const recentTrades = trades.filter((t: any) => t.closed_at && (nowMs - new Date(t.closed_at).getTime()) <= recentWindowMs);
+      const recentTrades = validTrades.filter((t: any) => t.closed_at && (nowMs - new Date(t.closed_at).getTime()) <= recentWindowMs);
       if (recentTrades.length > 0) {
         const recentCounts: Record<string, number> = {};
         for (const t of recentTrades) {
@@ -224,7 +200,7 @@ export const StrategyAnalysis = () => {
       setActiveStrategyHash(activeHash);
       setActiveSource(source);
 
-      console.debug('[StrategyAnalysis] active detection', { activeStrategyHash: activeHash, source, totalStrategies: stats.length, totalTrades: trades.length });
+      console.debug('[StrategyAnalysis] active detection', { activeStrategyHash: activeHash, source, totalStrategies: stats.length, totalTrades: validTrades.length });
 
       setStrategies(stats);
     } catch (error: any) {
@@ -238,112 +214,6 @@ export const StrategyAnalysis = () => {
     }
   };
 
-  // Generate hash from config (MUST match backend auto-trade-quant getStrategyIdentifier exactly!)
-  async function generateConfigHash(config: any): Promise<string> {
-    // This MUST be IDENTICAL to the strategyParams object in auto-trade-quant/index.ts
-    // CRITICAL: Every config field that affects trading behavior must be included!
-    const strategyParams = {
-      // EMA settings
-      ema_enabled: config.ema_enabled,
-      ema_fast: config.ema_fast,
-      ema_medium: config.ema_medium,
-      ema_slow: config.ema_slow,
-      ema_medium_trend: config.ema_medium_trend,
-      ema_trend_hard_filter: config.ema_trend_hard_filter,
-      min_ema_spread_percent: config.min_ema_spread_percent,
-      // RSI settings
-      rsi_enabled: config.rsi_enabled,
-      rsi_period: config.rsi_period,
-      rsi_min_long: config.rsi_min_long,
-      rsi_max_short: config.rsi_max_short,
-      rsi_zone_width: config.rsi_zone_width,
-      rsi_momentum_periods: config.rsi_momentum_periods,
-      rsi_overbought: config.rsi_overbought,
-      rsi_oversold: config.rsi_oversold,
-      // StochRSI settings
-      stochrsi_enabled: config.stochrsi_enabled,
-      stochrsi_period: config.stochrsi_period,
-      stochrsi_k_period: config.stochrsi_k_period,
-      stochrsi_d_period: config.stochrsi_d_period,
-      stochrsi_overbought: config.stochrsi_overbought,
-      stochrsi_oversold: config.stochrsi_oversold,
-      // Pivot Points settings
-      pivot_points_enabled: config.pivot_points_enabled,
-      pivot_points_timeframe: config.pivot_points_timeframe,
-      pivot_points_lookback: config.pivot_points_lookback,
-      pivot_points_near_threshold: config.pivot_points_near_threshold,
-      // MACD settings
-      macd_enabled: config.macd_enabled,
-      macd_fast: config.macd_fast,
-      macd_slow: config.macd_slow,
-      macd_signal: config.macd_signal,
-      macd_histogram_threshold: config.macd_histogram_threshold,
-      macd_direction_enabled: config.macd_direction_enabled,
-      macd_color_change_hard_filter: config.macd_color_change_hard_filter,
-      histogram_momentum_enabled: config.histogram_momentum_enabled,
-      histogram_momentum_periods: config.histogram_momentum_periods,
-      // Bollinger Bands settings
-      bb_enabled: config.bb_enabled,
-      bb_period: config.bb_period,
-      bb_std_dev: config.bb_std_dev,
-      // ATR settings
-      atr_enabled: config.atr_enabled,
-      atr_period: config.atr_period,
-      min_atr: config.min_atr,
-      min_atr_percent: config.min_atr_percent,
-      adaptive_atr_enabled: config.adaptive_atr_enabled,
-      atr_base_min: config.atr_base_min,
-      atr_floor: config.atr_floor,
-      atr_ceiling: config.atr_ceiling,
-      atr_stop_loss_multiplier: config.atr_stop_loss_multiplier,
-      atr_take_profit_multiplier: config.atr_take_profit_multiplier,
-      atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier,
-      break_even_atr: config.break_even_atr,
-      trailing_stop_activation_enabled: config.trailing_stop_activation_enabled,
-      trailing_stop_activation_atr: config.trailing_stop_activation_atr,
-      // ADX settings
-      adx_enabled: config.adx_enabled,
-      adx_period: config.adx_period,
-      adx_threshold: config.adx_threshold,
-      adaptive_adx_enabled: config.adaptive_adx_enabled,
-      adx_base_min: config.adx_base_min,
-      adx_floor: config.adx_floor,
-      adx_ceiling: config.adx_ceiling,
-      // Volume settings
-      volume_enabled: config.volume_enabled,
-      volume_avg_period: config.volume_avg_period,
-      volume_multiplier: config.volume_multiplier,
-      // Candle momentum
-      candle_momentum_enabled: config.candle_momentum_enabled,
-      min_candle_body_percent: config.min_candle_body_percent,
-      // Signal & position settings
-      signal_conditions_required: config.signal_conditions_required,
-      position_size_percent: config.position_size_percent,
-      risk_per_trade_percent: config.risk_per_trade_percent,
-      max_open_positions: config.max_open_positions,
-      max_exposure_percent: config.max_exposure_percent,
-      daily_loss_limit_percent: config.daily_loss_limit_percent,
-      max_position_duration_minutes: config.max_position_duration_minutes,
-      auto_exit_enabled: config.auto_exit_enabled,
-      leverage: config.leverage,
-      // Timeframe & scan settings
-      scan_interval: config.scan_interval,
-      trend_timeframe: config.trend_timeframe,
-      higher_trend_enabled: config.higher_trend_enabled,
-      higher_trend_timeframe: config.higher_trend_timeframe,
-      klines_limit: config.klines_limit,
-    };
-    
-    // Sort keys to ensure consistent hashing regardless of object property order
-    const sortedJson = JSON.stringify(strategyParams, Object.keys(strategyParams).sort());
-    const encoder = new TextEncoder();
-    const data = encoder.encode(sortedJson);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    
-    return hashHex;
-  }
 
   useEffect(() => {
     fetchStrategyStats();
