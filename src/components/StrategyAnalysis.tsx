@@ -126,14 +126,29 @@ export const StrategyAnalysis = () => {
 
       setAllTrades(validTrades);
 
-      // Group trades by strategy_hash
+      // Group trades by ACTUAL config values, not broken strategy_hash
+      // Create a config key from the essential strategy parameters stored in indicators_snapshot
       const strategyMap = new Map<string, any[]>();
       validTrades.forEach((trade: any) => {
-        const hash = String(trade.strategy_hash);
-        if (!strategyMap.has(hash)) {
-          strategyMap.set(hash, []);
+        const snapshot = trade.indicators_snapshot || {};
+        // Create a key from the essential config parameters that define a strategy
+        const configKey = JSON.stringify({
+          ema_fast: snapshot.ema_fast,
+          ema_medium: snapshot.ema_medium,
+          ema_slow: snapshot.ema_slow,
+          signal_conditions_required: snapshot.signal_conditions_required,
+          min_ema_spread_percent: snapshot.min_ema_spread_percent,
+          leverage: snapshot.leverage,
+          atr_stop_loss_multiplier: snapshot.atr_stop_loss_multiplier,
+          atr_take_profit_multiplier: snapshot.atr_take_profit_multiplier,
+          higher_trend_enabled: snapshot.higher_trend_enabled,
+          macd_direction_enabled: snapshot.macd_direction_enabled,
+          position_size_percent: snapshot.position_size_percent,
+        });
+        if (!strategyMap.has(configKey)) {
+          strategyMap.set(configKey, []);
         }
-        strategyMap.get(hash)!.push(trade);
+        strategyMap.get(configKey)!.push({ ...trade, _configKey: configKey });
       });
 
       // Calculate stats for each strategy
@@ -148,7 +163,7 @@ export const StrategyAnalysis = () => {
           return dateA - dateB;
         });
       
-      for (const [hash, strategyTrades] of sortedHashes) {
+      for (const [configKey, strategyTrades] of sortedHashes) {
         const winningTrades = strategyTrades.filter(t => t.pnl > 0);
         const losingTrades = strategyTrades.filter(t => t.pnl <= 0);
         const totalPnl = strategyTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
@@ -158,7 +173,7 @@ export const StrategyAnalysis = () => {
         const strategyNumber = nextStrategyNumber++;
         
         stats.push({
-          strategy_hash: hash,
+          strategy_hash: configKey, // Use configKey as identifier
           strategy_number: strategyNumber,
           total_trades: strategyTrades.length,
           winning_trades: winningTrades.length,
@@ -173,15 +188,28 @@ export const StrategyAnalysis = () => {
         });
       }
 
-      // Pick the most active strategy in the last 24 hours (override session/positions if present)
+      // Pick the most active strategy in the last 24 hours using configKey
       const recentWindowMs = 24 * 60 * 60 * 1000;
       const nowMs = Date.now();
       const recentTrades = validTrades.filter((t: any) => t.closed_at && (nowMs - new Date(t.closed_at).getTime()) <= recentWindowMs);
       if (recentTrades.length > 0) {
         const recentCounts: Record<string, number> = {};
         for (const t of recentTrades) {
-          const h = String(t.strategy_hash);
-          recentCounts[h] = (recentCounts[h] || 0) + 1;
+          const snapshot = t.indicators_snapshot || {};
+          const configKey = JSON.stringify({
+            ema_fast: snapshot.ema_fast,
+            ema_medium: snapshot.ema_medium,
+            ema_slow: snapshot.ema_slow,
+            signal_conditions_required: snapshot.signal_conditions_required,
+            min_ema_spread_percent: snapshot.min_ema_spread_percent,
+            leverage: snapshot.leverage,
+            atr_stop_loss_multiplier: snapshot.atr_stop_loss_multiplier,
+            atr_take_profit_multiplier: snapshot.atr_take_profit_multiplier,
+            higher_trend_enabled: snapshot.higher_trend_enabled,
+            macd_direction_enabled: snapshot.macd_direction_enabled,
+            position_size_percent: snapshot.position_size_percent,
+          });
+          recentCounts[configKey] = (recentCounts[configKey] || 0) + 1;
         }
         const recentTop = Object.entries(recentCounts).sort((a, b) => b[1] - a[1])[0];
         if (recentTop) {
