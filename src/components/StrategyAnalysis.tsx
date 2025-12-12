@@ -126,25 +126,23 @@ export const StrategyAnalysis = () => {
 
       setAllTrades(validTrades);
 
-      // Group trades by ACTUAL config values, not broken strategy_hash
-      // Create a config key from the essential strategy parameters stored in indicators_snapshot
+      // Group trades by ACTUAL config values only - these are the settings that define a unique strategy
+      // Only use values that are user-configurable, not runtime indicator values
       const strategyMap = new Map<string, any[]>();
-      validTrades.forEach((trade: any) => {
-        const snapshot = trade.indicators_snapshot || {};
-        // Create a key from the essential config parameters that define a strategy
-        const configKey = JSON.stringify({
+      
+      const getConfigKey = (snapshot: any) => {
+        return JSON.stringify({
           ema_fast: snapshot.ema_fast,
           ema_medium: snapshot.ema_medium,
           ema_slow: snapshot.ema_slow,
-          signal_conditions_required: snapshot.signal_conditions_required,
-          min_ema_spread_percent: snapshot.min_ema_spread_percent,
           leverage: snapshot.leverage,
-          atr_stop_loss_multiplier: snapshot.atr_stop_loss_multiplier,
-          atr_take_profit_multiplier: snapshot.atr_take_profit_multiplier,
-          higher_trend_enabled: snapshot.higher_trend_enabled,
-          macd_direction_enabled: snapshot.macd_direction_enabled,
-          position_size_percent: snapshot.position_size_percent,
+          signal_conditions_required: snapshot.signal_conditions_required,
         });
+      };
+      
+      validTrades.forEach((trade: any) => {
+        const snapshot = trade.indicators_snapshot || {};
+        const configKey = getConfigKey(snapshot);
         if (!strategyMap.has(configKey)) {
           strategyMap.set(configKey, []);
         }
@@ -196,19 +194,7 @@ export const StrategyAnalysis = () => {
         const recentCounts: Record<string, number> = {};
         for (const t of recentTrades) {
           const snapshot = t.indicators_snapshot || {};
-          const configKey = JSON.stringify({
-            ema_fast: snapshot.ema_fast,
-            ema_medium: snapshot.ema_medium,
-            ema_slow: snapshot.ema_slow,
-            signal_conditions_required: snapshot.signal_conditions_required,
-            min_ema_spread_percent: snapshot.min_ema_spread_percent,
-            leverage: snapshot.leverage,
-            atr_stop_loss_multiplier: snapshot.atr_stop_loss_multiplier,
-            atr_take_profit_multiplier: snapshot.atr_take_profit_multiplier,
-            higher_trend_enabled: snapshot.higher_trend_enabled,
-            macd_direction_enabled: snapshot.macd_direction_enabled,
-            position_size_percent: snapshot.position_size_percent,
-          });
+          const configKey = getConfigKey(snapshot);
           recentCounts[configKey] = (recentCounts[configKey] || 0) + 1;
         }
         const recentTop = Object.entries(recentCounts).sort((a, b) => b[1] - a[1])[0];
