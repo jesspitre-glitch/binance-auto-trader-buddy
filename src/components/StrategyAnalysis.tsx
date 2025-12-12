@@ -58,25 +58,126 @@ export const StrategyAnalysis = () => {
     try {
       setLoading(true);
       
-      // Find active strategy hash from open positions (most reliable source)
+      // Get user's ACTUAL current indicator_config - this is the TRUE active strategy
       let activeHash: string | null = null;
       let source: string | null = null;
+      let currentConfigKey: string | null = null;
       
-      const { data: openPositions } = await supabase
-        .from("positions")
-        .select("strategy_hash, opened_at, status")
-        .eq("status", "OPEN")
-        .order("opened_at", { ascending: false });
-
-      const openHashes = (openPositions || [])
-        .map((p: any) => p.strategy_hash)
-        .filter((h: any) => h && typeof h === 'string' && h.length === 64) as string[];
-
-      if (openHashes.length) {
-        const counts: Record<string, number> = {};
-        openHashes.forEach((h) => { counts[h] = (counts[h] || 0) + 1; });
-        activeHash = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
-        source = 'open_positions';
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Get trading session to find active config
+        const { data: session } = await supabase
+          .from("trading_session")
+          .select("active_config_id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        
+        let configId = session?.active_config_id;
+        
+        // If no active session, get most recent config
+        if (!configId) {
+          const { data: recentConfig } = await supabase
+            .from("indicator_config")
+            .select("id")
+            .eq("user_id", user.id)
+            .order("updated_at", { ascending: false })
+            .limit(1);
+          configId = recentConfig?.[0]?.id;
+        }
+        
+        if (configId) {
+          const { data: config } = await supabase
+            .from("indicator_config")
+            .select("*")
+            .eq("id", configId)
+            .single();
+          
+          if (config) {
+            // Generate config key from actual current config - this is the TRUE active strategy
+            currentConfigKey = JSON.stringify({
+              ema_enabled: config.ema_enabled ?? null,
+              ema_fast: config.ema_fast ?? null,
+              ema_medium: config.ema_medium ?? null,
+              ema_slow: config.ema_slow ?? null,
+              ema_medium_trend: config.ema_medium_trend ?? null,
+              ema_trend_hard_filter: config.ema_trend_hard_filter ?? null,
+              min_ema_spread_percent: config.min_ema_spread_percent ?? null,
+              rsi_enabled: config.rsi_enabled ?? null,
+              rsi_period: config.rsi_period ?? null,
+              rsi_overbought: config.rsi_overbought ?? null,
+              rsi_oversold: config.rsi_oversold ?? null,
+              rsi_min_long: config.rsi_min_long ?? null,
+              rsi_max_short: config.rsi_max_short ?? null,
+              rsi_zone_width: config.rsi_zone_width ?? null,
+              rsi_momentum_periods: config.rsi_momentum_periods ?? null,
+              macd_enabled: config.macd_enabled ?? null,
+              macd_fast: config.macd_fast ?? null,
+              macd_slow: config.macd_slow ?? null,
+              macd_signal_period: config.macd_signal ?? null, // DB uses macd_signal for config
+              macd_histogram_threshold: config.macd_histogram_threshold ?? null,
+              macd_direction_enabled: config.macd_direction_enabled ?? null,
+              macd_color_change_hard_filter: config.macd_color_change_hard_filter ?? null,
+              histogram_momentum_enabled: config.histogram_momentum_enabled ?? null,
+              histogram_momentum_periods: config.histogram_momentum_periods ?? null,
+              bb_enabled: config.bb_enabled ?? null,
+              bb_period: config.bb_period ?? null,
+              bb_std_dev: config.bb_std_dev ?? null,
+              atr_enabled: config.atr_enabled ?? null,
+              atr_period: config.atr_period ?? null,
+              atr_stop_loss_multiplier: config.atr_stop_loss_multiplier ?? null,
+              atr_take_profit_multiplier: config.atr_take_profit_multiplier ?? null,
+              atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier ?? null,
+              break_even_atr: config.break_even_atr ?? null,
+              min_atr: config.min_atr ?? null,
+              min_atr_percent: config.min_atr_percent ?? null,
+              atr_base_min: config.atr_base_min ?? null,
+              atr_floor: config.atr_floor ?? null,
+              atr_ceiling: config.atr_ceiling ?? null,
+              adaptive_atr_enabled: config.adaptive_atr_enabled ?? null,
+              trailing_stop_activation_enabled: config.trailing_stop_activation_enabled ?? null,
+              trailing_stop_activation_atr: config.trailing_stop_activation_atr ?? null,
+              adx_enabled: config.adx_enabled ?? null,
+              adx_period: config.adx_period ?? null,
+              adx_threshold: config.adx_threshold ?? null,
+              adx_base_min: config.adx_base_min ?? null,
+              adx_floor: config.adx_floor ?? null,
+              adx_ceiling: config.adx_ceiling ?? null,
+              adaptive_adx_enabled: config.adaptive_adx_enabled ?? null,
+              volume_enabled: config.volume_enabled ?? null,
+              volume_avg_period: config.volume_avg_period ?? null,
+              volume_multiplier: config.volume_multiplier ?? null,
+              stochrsi_enabled: config.stochrsi_enabled ?? null,
+              stochrsi_period: config.stochrsi_period ?? null,
+              stochrsi_k_period: config.stochrsi_k_period ?? null,
+              stochrsi_d_period: config.stochrsi_d_period ?? null,
+              stochrsi_overbought: config.stochrsi_overbought ?? null,
+              stochrsi_oversold: config.stochrsi_oversold ?? null,
+              pivot_points_enabled: config.pivot_points_enabled ?? null,
+              pivot_points_lookback: config.pivot_points_lookback ?? null,
+              pivot_points_near_threshold: config.pivot_points_near_threshold ?? null,
+              pivot_points_timeframe: config.pivot_points_timeframe ?? null,
+              leverage: config.leverage ?? null,
+              position_size_percent: config.position_size_percent ?? null,
+              risk_per_trade_percent: config.risk_per_trade_percent ?? null,
+              max_open_positions: config.max_open_positions ?? null,
+              max_exposure_percent: config.max_exposure_percent ?? null,
+              daily_loss_limit_percent: config.daily_loss_limit_percent ?? null,
+              max_position_duration_minutes: config.max_position_duration_minutes ?? null,
+              signal_conditions_required: config.signal_conditions_required ?? null,
+              candle_momentum_enabled: config.candle_momentum_enabled ?? null,
+              min_candle_body_percent: config.min_candle_body_percent ?? null,
+              auto_exit_enabled: config.auto_exit_enabled ?? null,
+              higher_trend_enabled: config.higher_trend_enabled ?? null,
+              scan_interval: config.scan_interval ?? null,
+              trend_timeframe: config.trend_timeframe ?? null,
+              higher_trend_timeframe: config.higher_trend_timeframe ?? null,
+              klines_limit: config.klines_limit ?? null,
+            });
+            activeHash = currentConfigKey;
+            source = 'current_config';
+            console.log('[StrategyAnalysis] Active strategy from current config');
+          }
+        }
       }
       
       setActiveStrategyHash(activeHash);
@@ -310,35 +411,10 @@ export const StrategyAnalysis = () => {
         });
       }
 
-      // Pick the most active strategy in the last 24 hours using configKey
-      const recentWindowMs = 24 * 60 * 60 * 1000;
-      const nowMs = Date.now();
-      const recentTrades = validTrades.filter((t: any) => t.closed_at && (nowMs - new Date(t.closed_at).getTime()) <= recentWindowMs);
-      if (recentTrades.length > 0) {
-        const recentCounts: Record<string, number> = {};
-        for (const t of recentTrades) {
-          const snapshot = t.indicators_snapshot || {};
-          const configKey = getConfigKey(snapshot);
-          recentCounts[configKey] = (recentCounts[configKey] || 0) + 1;
-        }
-        const recentTop = Object.entries(recentCounts).sort((a, b) => b[1] - a[1])[0];
-        if (recentTop) {
-          activeHash = recentTop[0];
-          source = 'most_active_24h';
-        }
-      } else if (!activeHash || !stats.some((s) => s.strategy_hash === activeHash)) {
-        // Fallback to most active overall if no recent trades
-        const topEntry = Array.from(strategyMap.entries()).sort((a, b) => b[1].length - a[1].length)[0];
-        if (topEntry) {
-          activeHash = topEntry[0];
-          source = 'most_active';
-        }
-      }
+      // Active strategy is ONLY determined by current indicator_config (set at start of function)
+      // No fallback to trade-based detection - the active strategy is what's configured in UI
       
-      setActiveStrategyHash(activeHash);
-      setActiveSource(source);
-
-      console.debug('[StrategyAnalysis] active detection', { activeStrategyHash: activeHash, source, totalStrategies: stats.length, totalTrades: validTrades.length });
+      console.debug('[StrategyAnalysis] active detection', { activeStrategyHash: activeHash?.slice(0, 50) + '...', source, totalStrategies: stats.length, totalTrades: validTrades.length });
 
       setStrategies(stats);
     } catch (error: any) {
