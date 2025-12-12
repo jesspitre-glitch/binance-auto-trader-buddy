@@ -366,7 +366,10 @@ export const StrategyAnalysis = () => {
           table: "trade_history",
         },
         () => {
-          fetchStrategyStats();
+          // Only refetch if dialog is not open to prevent crash
+          if (!selectedStrategy) {
+            fetchStrategyStats();
+          }
         }
       )
       .on(
@@ -377,7 +380,10 @@ export const StrategyAnalysis = () => {
           table: "positions",
         },
         () => {
-          fetchStrategyStats();
+          // Only refetch if dialog is not open to prevent crash
+          if (!selectedStrategy) {
+            fetchStrategyStats();
+          }
         }
       )
       .subscribe();
@@ -385,7 +391,7 @@ export const StrategyAnalysis = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [selectedStrategy]);
 
   if (loading) {
     return (
