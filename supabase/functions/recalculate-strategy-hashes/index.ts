@@ -7,80 +7,111 @@ const corsHeaders = {
 };
 
 // Same hash function as in auto-trade-quant
+// Exact same hash function as in auto-trade-quant - MUST match exactly!
 async function getStrategyIdentifier(config: any): Promise<string> {
-  const relevantFields = {
-    ema_enabled: config.ema_enabled ?? true,
-    ema_fast: config.ema_fast ?? 9,
-    ema_medium: config.ema_medium ?? 21,
-    ema_slow: config.ema_slow ?? 55,
-    ema_medium_trend: config.ema_medium_trend ?? 100,
-    min_ema_spread_percent: config.min_ema_spread_percent ?? 0.05,
-    ema_trend_hard_filter: config.ema_trend_hard_filter ?? false,
-    rsi_enabled: config.rsi_enabled ?? false,
-    rsi_period: config.rsi_period ?? 14,
-    rsi_overbought: config.rsi_overbought ?? 70,
-    rsi_oversold: config.rsi_oversold ?? 30,
-    rsi_min_long: config.rsi_min_long ?? 30,
-    rsi_max_short: config.rsi_max_short ?? 70,
-    rsi_zone_width: config.rsi_zone_width ?? 10,
-    rsi_momentum_periods: config.rsi_momentum_periods ?? 3,
-    stochrsi_enabled: config.stochrsi_enabled ?? true,
-    stochrsi_period: config.stochrsi_period ?? 14,
-    stochrsi_k_period: config.stochrsi_k_period ?? 3,
-    stochrsi_d_period: config.stochrsi_d_period ?? 3,
-    stochrsi_overbought: config.stochrsi_overbought ?? 80,
-    stochrsi_oversold: config.stochrsi_oversold ?? 20,
-    macd_enabled: config.macd_enabled ?? true,
-    macd_fast: config.macd_fast ?? 12,
-    macd_slow: config.macd_slow ?? 26,
-    macd_signal: config.macd_signal ?? 9,
-    macd_histogram_threshold: config.macd_histogram_threshold ?? 0,
-    macd_direction_enabled: config.macd_direction_enabled ?? true,
-    macd_color_change_hard_filter: config.macd_color_change_hard_filter ?? false,
-    bb_enabled: config.bb_enabled ?? true,
-    bb_period: config.bb_period ?? 20,
-    bb_std_dev: config.bb_std_dev ?? 2,
-    atr_enabled: config.atr_enabled ?? true,
-    atr_period: config.atr_period ?? 14,
-    min_atr: config.min_atr ?? 0.01,
-    min_atr_percent: config.min_atr_percent ?? 0.06,
-    atr_stop_loss_multiplier: config.atr_stop_loss_multiplier ?? 2.2,
-    atr_take_profit_multiplier: config.atr_take_profit_multiplier ?? 3,
-    atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier ?? 1.5,
-    adaptive_atr_enabled: config.adaptive_atr_enabled ?? false,
-    atr_base_min: config.atr_base_min ?? 1.0,
-    atr_floor: config.atr_floor ?? 0.7,
-    atr_ceiling: config.atr_ceiling ?? 2.0,
-    adx_enabled: config.adx_enabled ?? true,
-    adx_period: config.adx_period ?? 14,
-    adx_threshold: config.adx_threshold ?? 20,
-    adaptive_adx_enabled: config.adaptive_adx_enabled ?? false,
-    adx_base_min: config.adx_base_min ?? 25,
-    adx_floor: config.adx_floor ?? 20,
-    adx_ceiling: config.adx_ceiling ?? 40,
-    volume_enabled: config.volume_enabled ?? true,
-    volume_avg_period: config.volume_avg_period ?? 20,
-    volume_multiplier: config.volume_multiplier ?? 1.05,
-    signal_conditions_required: config.signal_conditions_required ?? 4,
-    histogram_momentum_enabled: config.histogram_momentum_enabled ?? false,
-    histogram_momentum_periods: config.histogram_momentum_periods ?? 3,
-    candle_momentum_enabled: config.candle_momentum_enabled ?? false,
-    min_candle_body_percent: config.min_candle_body_percent ?? 0.3,
-    higher_trend_enabled: config.higher_trend_enabled ?? true,
-    higher_trend_timeframe: config.higher_trend_timeframe ?? '15m',
-    trend_timeframe: config.trend_timeframe ?? '5m',
-    pivot_points_enabled: config.pivot_points_enabled ?? false,
-    pivot_points_timeframe: config.pivot_points_timeframe ?? '1h',
-    pivot_points_lookback: config.pivot_points_lookback ?? 24,
-    pivot_points_near_threshold: config.pivot_points_near_threshold ?? 0.5,
+  const strategyParams = {
+    // EMA settings
+    ema_enabled: config.ema_enabled,
+    ema_fast: config.ema_fast,
+    ema_medium: config.ema_medium,
+    ema_slow: config.ema_slow,
+    ema_medium_trend: config.ema_medium_trend,
+    ema_trend_hard_filter: config.ema_trend_hard_filter,
+    min_ema_spread_percent: config.min_ema_spread_percent,
+    // RSI settings
+    rsi_enabled: config.rsi_enabled,
+    rsi_period: config.rsi_period,
+    rsi_min_long: config.rsi_min_long,
+    rsi_max_short: config.rsi_max_short,
+    rsi_zone_width: config.rsi_zone_width,
+    rsi_momentum_periods: config.rsi_momentum_periods,
+    rsi_overbought: config.rsi_overbought,
+    rsi_oversold: config.rsi_oversold,
+    // StochRSI settings
+    stochrsi_enabled: config.stochrsi_enabled,
+    stochrsi_period: config.stochrsi_period,
+    stochrsi_k_period: config.stochrsi_k_period,
+    stochrsi_d_period: config.stochrsi_d_period,
+    stochrsi_overbought: config.stochrsi_overbought,
+    stochrsi_oversold: config.stochrsi_oversold,
+    // Pivot Points settings
+    pivot_points_enabled: config.pivot_points_enabled,
+    pivot_points_timeframe: config.pivot_points_timeframe,
+    pivot_points_lookback: config.pivot_points_lookback,
+    pivot_points_near_threshold: config.pivot_points_near_threshold,
+    // MACD settings
+    macd_enabled: config.macd_enabled,
+    macd_fast: config.macd_fast,
+    macd_slow: config.macd_slow,
+    macd_signal: config.macd_signal,
+    macd_histogram_threshold: config.macd_histogram_threshold,
+    macd_direction_enabled: config.macd_direction_enabled,
+    macd_color_change_hard_filter: config.macd_color_change_hard_filter,
+    histogram_momentum_enabled: config.histogram_momentum_enabled,
+    histogram_momentum_periods: config.histogram_momentum_periods,
+    // Bollinger Bands settings
+    bb_enabled: config.bb_enabled,
+    bb_period: config.bb_period,
+    bb_std_dev: config.bb_std_dev,
+    // ATR settings
+    atr_enabled: config.atr_enabled,
+    atr_period: config.atr_period,
+    min_atr: config.min_atr,
+    min_atr_percent: config.min_atr_percent,
+    adaptive_atr_enabled: config.adaptive_atr_enabled,
+    atr_base_min: config.atr_base_min,
+    atr_floor: config.atr_floor,
+    atr_ceiling: config.atr_ceiling,
+    atr_stop_loss_multiplier: config.atr_stop_loss_multiplier,
+    atr_take_profit_multiplier: config.atr_take_profit_multiplier,
+    atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier,
+    break_even_atr: config.break_even_atr,
+    trailing_stop_activation_enabled: config.trailing_stop_activation_enabled,
+    trailing_stop_activation_atr: config.trailing_stop_activation_atr,
+    // ADX settings
+    adx_enabled: config.adx_enabled,
+    adx_period: config.adx_period,
+    adx_threshold: config.adx_threshold,
+    adaptive_adx_enabled: config.adaptive_adx_enabled,
+    adx_base_min: config.adx_base_min,
+    adx_floor: config.adx_floor,
+    adx_ceiling: config.adx_ceiling,
+    // Volume settings
+    volume_enabled: config.volume_enabled,
+    volume_avg_period: config.volume_avg_period,
+    volume_multiplier: config.volume_multiplier,
+    // Candle momentum
+    candle_momentum_enabled: config.candle_momentum_enabled,
+    min_candle_body_percent: config.min_candle_body_percent,
+    // Signal & position settings
+    signal_conditions_required: config.signal_conditions_required,
+    position_size_percent: config.position_size_percent,
+    risk_per_trade_percent: config.risk_per_trade_percent,
+    max_open_positions: config.max_open_positions,
+    max_exposure_percent: config.max_exposure_percent,
+    daily_loss_limit_percent: config.daily_loss_limit_percent,
+    max_position_duration_minutes: config.max_position_duration_minutes,
+    auto_exit_enabled: config.auto_exit_enabled,
+    leverage: config.leverage,
+    // Timeframe & scan settings
+    scan_interval: config.scan_interval,
+    trend_timeframe: config.trend_timeframe,
+    higher_trend_enabled: config.higher_trend_enabled,
+    higher_trend_timeframe: config.higher_trend_timeframe,
+    klines_limit: config.klines_limit,
   };
-
-  const configString = JSON.stringify(relevantFields, Object.keys(relevantFields).sort());
+  
+  // Sort keys to ensure consistent hashing regardless of object property order
+  const sortedJson = JSON.stringify(strategyParams, Object.keys(strategyParams).sort());
+  
+  // Hash using SHA-256
   const encoder = new TextEncoder();
-  const data = encoder.encode(configString);
+  const data = encoder.encode(sortedJson);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  
+  return hashHex;
 }
 
 serve(async (req) => {
@@ -131,16 +162,11 @@ serve(async (req) => {
 
     // Calculate all hashes first
     for (const trade of trades) {
-      const snapshot = trade.indicators_snapshot;
-      let configForHash = snapshot;
+      const snapshot = trade.indicators_snapshot as any;
       
-      if (snapshot.config) {
-        configForHash = snapshot.config;
-      } else if (snapshot.strategy) {
-        configForHash = snapshot.strategy;
-      }
-
-      const newHash = await getStrategyIdentifier(configForHash);
+      // Extract ONLY the config fields that match getStrategyIdentifier exactly
+      // Pass snapshot directly - getStrategyIdentifier will extract only the needed fields
+      const newHash = await getStrategyIdentifier(snapshot);
 
       if (trade.strategy_hash !== newHash) {
         updates.push({ id: trade.id, newHash });
