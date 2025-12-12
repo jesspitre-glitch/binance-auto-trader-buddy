@@ -228,12 +228,14 @@ export const ExportTradesDialog = ({
       if (filterType === "count") {
         query = query.limit(parseInt(filterValue));
       } else if (filterType === "days") {
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - parseInt(filterValue));
+        // Use UTC time to match database timestamps
+        const cutoffMs = Date.now() - (parseInt(filterValue) * 24 * 60 * 60 * 1000);
+        const cutoff = new Date(cutoffMs);
         query = query.gte("closed_at", cutoff.toISOString());
       } else if (filterType === "hours") {
-        const cutoff = new Date();
-        cutoff.setHours(cutoff.getHours() - parseInt(filterValue));
+        // Use UTC time to match database timestamps
+        const cutoffMs = Date.now() - (parseInt(filterValue) * 60 * 60 * 1000);
+        const cutoff = new Date(cutoffMs);
         query = query.gte("closed_at", cutoff.toISOString());
       }
 
