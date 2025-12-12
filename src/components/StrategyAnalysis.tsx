@@ -230,20 +230,36 @@ export const StrategyAnalysis = () => {
       };
       
       // Debug: Log first few trades to see what config keys are generated
-      const debugTrades = validTrades.slice(0, 5);
-      console.log('[StrategyAnalysis] First 5 trades config debug:');
+      const debugTrades = validTrades.slice(0, 3);
       debugTrades.forEach((trade: any, i: number) => {
         const snapshot = trade.indicators_snapshot || {};
-        console.log(`Trade ${i}:`, {
-          id: trade.id,
-          closed_at: trade.closed_at,
-          signal_conditions_required: snapshot.signal_conditions_required,
-          leverage: snapshot.leverage,
-          scan_interval: snapshot.scan_interval,
-          ema_fast: snapshot.ema_fast,
-          typeOfSignalReq: typeof snapshot.signal_conditions_required,
-        });
+        const configKey = getConfigKey(snapshot);
+        console.log(`[DEBUG] Trade ${i} (${trade.id.slice(0,8)}):`, 
+          'signal_req=', snapshot.signal_conditions_required, 
+          'leverage=', snapshot.leverage,
+          'scan=', snapshot.scan_interval,
+          'ema_fast=', snapshot.ema_fast,
+          'configKey length=', configKey.length
+        );
       });
+      
+      // Check if first two trades have same config
+      if (debugTrades.length >= 2) {
+        const key1 = getConfigKey(debugTrades[0].indicators_snapshot || {});
+        const key2 = getConfigKey(debugTrades[1].indicators_snapshot || {});
+        console.log('[DEBUG] Keys match?', key1 === key2);
+        if (key1 !== key2) {
+          // Find first difference
+          const obj1 = JSON.parse(key1);
+          const obj2 = JSON.parse(key2);
+          for (const k of Object.keys(obj1)) {
+            if (JSON.stringify(obj1[k]) !== JSON.stringify(obj2[k])) {
+              console.log('[DEBUG] First diff at:', k, 'val1=', obj1[k], 'val2=', obj2[k]);
+              break;
+            }
+          }
+        }
+      }
       
       validTrades.forEach((trade: any) => {
         const snapshot = trade.indicators_snapshot || {};
