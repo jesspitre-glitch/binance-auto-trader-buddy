@@ -130,13 +130,75 @@ export const StrategyAnalysis = () => {
       // Only use values that are user-configurable, not runtime indicator values
       const strategyMap = new Map<string, any[]>();
       
+      // Create config key from ALL user-configurable settings (not runtime indicator values)
       const getConfigKey = (snapshot: any) => {
         return JSON.stringify({
+          // EMA settings
+          ema_enabled: snapshot.ema_enabled,
           ema_fast: snapshot.ema_fast,
           ema_medium: snapshot.ema_medium,
           ema_slow: snapshot.ema_slow,
+          ema_medium_trend: snapshot.ema_medium_trend,
+          min_ema_spread_percent: snapshot.min_ema_spread_percent,
+          // RSI settings
+          rsi_enabled: snapshot.rsi_enabled,
+          rsi_period: snapshot.rsi_period,
+          rsi_overbought: snapshot.rsi_overbought,
+          rsi_oversold: snapshot.rsi_oversold,
+          rsi_min_long: snapshot.rsi_min_long,
+          rsi_max_short: snapshot.rsi_max_short,
+          // MACD settings
+          macd_enabled: snapshot.macd_enabled,
+          macd_fast: snapshot.macd_fast,
+          macd_slow: snapshot.macd_slow,
+          macd_signal: snapshot.macd_signal,
+          macd_histogram_threshold: snapshot.macd_histogram_threshold,
+          // Bollinger Bands
+          bb_enabled: snapshot.bb_enabled,
+          bb_period: snapshot.bb_period,
+          bb_std_dev: snapshot.bb_std_dev,
+          // ATR settings
+          atr_enabled: snapshot.atr_enabled,
+          atr_period: snapshot.atr_period,
+          atr_stop_loss_multiplier: snapshot.atr_stop_loss_multiplier,
+          atr_take_profit_multiplier: snapshot.atr_take_profit_multiplier,
+          atr_trailing_stop_multiplier: snapshot.atr_trailing_stop_multiplier,
+          break_even_atr: snapshot.break_even_atr,
+          // ADX settings
+          adx_enabled: snapshot.adx_enabled,
+          adx_period: snapshot.adx_period,
+          adx_threshold: snapshot.adx_threshold,
+          // Volume settings
+          volume_enabled: snapshot.volume_enabled,
+          volume_avg_period: snapshot.volume_avg_period,
+          volume_multiplier: snapshot.volume_multiplier,
+          // StochRSI settings
+          stochrsi_enabled: snapshot.stochrsi_enabled,
+          stochrsi_period: snapshot.stochrsi_period,
+          stochrsi_k_period: snapshot.stochrsi_k_period,
+          stochrsi_d_period: snapshot.stochrsi_d_period,
+          stochrsi_overbought: snapshot.stochrsi_overbought,
+          stochrsi_oversold: snapshot.stochrsi_oversold,
+          // Pivot Points
+          pivot_points_enabled: snapshot.pivot_points_enabled,
+          pivot_points_lookback: snapshot.pivot_points_lookback,
+          pivot_points_near_threshold: snapshot.pivot_points_near_threshold,
+          pivot_points_timeframe: snapshot.pivot_points_timeframe,
+          // Position & Risk
           leverage: snapshot.leverage,
+          position_size_percent: snapshot.position_size_percent,
+          risk_per_trade_percent: snapshot.risk_per_trade_percent,
+          max_open_positions: snapshot.max_open_positions,
+          max_exposure_percent: snapshot.max_exposure_percent,
+          daily_loss_limit_percent: snapshot.daily_loss_limit_percent,
+          max_position_duration_minutes: snapshot.max_position_duration_minutes,
+          // Signal requirements
           signal_conditions_required: snapshot.signal_conditions_required,
+          // Timeframes
+          scan_interval: snapshot.scan_interval,
+          trend_timeframe: snapshot.trend_timeframe,
+          higher_trend_timeframe: snapshot.higher_trend_timeframe,
+          klines_limit: snapshot.klines_limit,
         });
       };
       
