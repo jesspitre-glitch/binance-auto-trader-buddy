@@ -229,6 +229,22 @@ export const StrategyAnalysis = () => {
         return JSON.stringify(config);
       };
       
+      // Debug: Log first few trades to see what config keys are generated
+      const debugTrades = validTrades.slice(0, 5);
+      console.log('[StrategyAnalysis] First 5 trades config debug:');
+      debugTrades.forEach((trade: any, i: number) => {
+        const snapshot = trade.indicators_snapshot || {};
+        console.log(`Trade ${i}:`, {
+          id: trade.id,
+          closed_at: trade.closed_at,
+          signal_conditions_required: snapshot.signal_conditions_required,
+          leverage: snapshot.leverage,
+          scan_interval: snapshot.scan_interval,
+          ema_fast: snapshot.ema_fast,
+          typeOfSignalReq: typeof snapshot.signal_conditions_required,
+        });
+      });
+      
       validTrades.forEach((trade: any) => {
         const snapshot = trade.indicators_snapshot || {};
         const configKey = getConfigKey(snapshot);
@@ -237,6 +253,8 @@ export const StrategyAnalysis = () => {
         }
         strategyMap.get(configKey)!.push({ ...trade, _configKey: configKey });
       });
+      
+      console.log('[StrategyAnalysis] Unique config keys:', strategyMap.size);
 
       // Calculate stats for each strategy
       const stats: StrategyStats[] = [];
