@@ -110,14 +110,35 @@ export const StrategyAnalysis = () => {
       
       setActiveStrategyHash(activeHash);
       setActiveSource(source);
-      // Fetch all trades with strategy_hash
-      const { data: trades, error } = await supabase
-        .from("trade_history")
-        .select("*")
-        .not("strategy_hash", "is", null)
-        .order("closed_at", { ascending: false });
-
-      if (error) throw error;
+      
+      // Fetch ALL trades with strategy_hash using pagination (Supabase has 1000 row limit)
+      let allFetchedTrades: any[] = [];
+      let offset = 0;
+      const batchSize = 1000;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const { data: batch, error } = await supabase
+          .from("trade_history")
+          .select("*")
+          .not("strategy_hash", "is", null)
+          .order("closed_at", { ascending: false })
+          .range(offset, offset + batchSize - 1);
+        
+        if (error) throw error;
+        
+        if (batch && batch.length > 0) {
+          allFetchedTrades = [...allFetchedTrades, ...batch];
+          offset += batchSize;
+          hasMore = batch.length === batchSize;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      console.log(`[StrategyAnalysis] Fetched ${allFetchedTrades.length} total trades`);
+      
+      const trades = allFetchedTrades;
 
       if (!trades || trades.length === 0) {
         setStrategies([]);
