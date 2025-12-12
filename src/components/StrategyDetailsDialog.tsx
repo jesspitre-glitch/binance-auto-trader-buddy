@@ -336,7 +336,9 @@ export const StrategyDetailsDialog = ({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {trades.map((trade) => (
+                  {[...trades]
+                    .sort((a, b) => new Date(b.closed_at).getTime() - new Date(a.closed_at).getTime())
+                    .map((trade) => (
                     <TableRow key={trade.id}>
                       <TableCell className="font-medium">{trade.symbol}</TableCell>
                       <TableCell>
