@@ -2,3 +2,6 @@ project_id = "kgtrlsmhqtnwynpjnpnm"
 
 [functions.continuous-sync-binance]
 verify_jwt = false
+
+[functions.recalculate-strategy-hashes]
+verify_jwt = false
