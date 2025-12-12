@@ -243,21 +243,22 @@ export const StrategyAnalysis = () => {
         );
       });
       
-      // Check if first two trades have same config
+      // Check if first two trades have same config - show ALL differences
       if (debugTrades.length >= 2) {
         const key1 = getConfigKey(debugTrades[0].indicators_snapshot || {});
         const key2 = getConfigKey(debugTrades[1].indicators_snapshot || {});
         console.log('[DEBUG] Keys match?', key1 === key2);
         if (key1 !== key2) {
-          // Find first difference
+          // Find ALL differences, not just first
           const obj1 = JSON.parse(key1);
           const obj2 = JSON.parse(key2);
+          const diffs: string[] = [];
           for (const k of Object.keys(obj1)) {
             if (JSON.stringify(obj1[k]) !== JSON.stringify(obj2[k])) {
-              console.log('[DEBUG] First diff at:', k, 'val1=', obj1[k], 'val2=', obj2[k]);
-              break;
+              diffs.push(`${k}: ${JSON.stringify(obj1[k])} vs ${JSON.stringify(obj2[k])}`);
             }
           }
+          console.log('[DEBUG] ALL differences between trade 0 and 1:', diffs);
         }
       }
       
