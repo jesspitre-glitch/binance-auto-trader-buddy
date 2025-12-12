@@ -1961,9 +1961,11 @@ serve(async (req) => {
             bb_middle: analysis.indicators.bb?.middle ?? null,
             bb_lower: analysis.indicators.bb?.lower ?? null,
             
-            // MACD values explicitly named
+            // MACD values explicitly named (runtime values)
             macd_histogram: analysis.indicators.macd,
-            macd_signal: analysis.indicators.macdSignal,
+            macd_signal_line: analysis.indicators.macdSignal, // Runtime MACD signal line value
+            // Config value preserved (don't overwrite macd_signal from config spread)
+            macd_signal_period: config.macd_signal, // Config parameter for MACD signal period
             
             // Hard filter pass/fail status
             ema_spread_filter_passed: analysis.filterStatus?.hard?.emaSpread?.passed ?? true,
