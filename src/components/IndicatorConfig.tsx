@@ -1084,7 +1084,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               value={formData.adx_ceiling}
               onChange={(e) => setFormData({ ...formData, adx_ceiling: parseFloat(e.target.value) })}
             />
-            <p className="text-xs text-muted-foreground">Maksimum ADX værdi (ceiling for adaptive)</p>
+            <p className="text-xs text-muted-foreground">Maksimum ADX værdi tilladt for trade</p>
           </div>
           
           <div className="flex items-center justify-between sm:col-span-2 border-t pt-4">
