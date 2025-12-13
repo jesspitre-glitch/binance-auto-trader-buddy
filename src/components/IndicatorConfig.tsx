@@ -1065,15 +1065,26 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <p className="text-xs text-muted-foreground">Antal bars til ADX (standard 14)</p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="adx_threshold">ADX Tærskel</Label>
+            <Label htmlFor="adx_floor">ADX Min</Label>
             <Input
-              id="adx_threshold"
+              id="adx_floor"
               type="number"
-              step="0.01"
-              value={formData.adx_threshold}
-              onChange={(e) => setFormData({ ...formData, adx_threshold: parseFloat(e.target.value) })}
+              step="0.1"
+              value={formData.adx_floor}
+              onChange={(e) => setFormData({ ...formData, adx_floor: parseFloat(e.target.value) })}
             />
-            <p className="text-xs text-muted-foreground">Min trend styrke - højere = stærkere trend krævet</p>
+            <p className="text-xs text-muted-foreground">Minimum ADX værdi krævet for trade</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="adx_ceiling">ADX Max</Label>
+            <Input
+              id="adx_ceiling"
+              type="number"
+              step="0.1"
+              value={formData.adx_ceiling}
+              onChange={(e) => setFormData({ ...formData, adx_ceiling: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">Maksimum ADX værdi (ceiling for adaptive)</p>
           </div>
           
           <div className="flex items-center justify-between sm:col-span-2 border-t pt-4">
@@ -1095,7 +1106,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="adx_base_min">ADX Base Minimum</Label>
+            <Label htmlFor="adx_base_min">ADX Base (Adaptive)</Label>
             <Input
               id="adx_base_min"
               type="number"
@@ -1104,30 +1115,6 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               onChange={(e) => setFormData({ ...formData, adx_base_min: parseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Base værdi for adaptive beregning</p>
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="adx_floor">ADX Floor</Label>
-            <Input
-              id="adx_floor"
-              type="number"
-              step="0.1"
-              value={formData.adx_floor}
-              onChange={(e) => setFormData({ ...formData, adx_floor: parseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Minimum værdi (floor)</p>
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="adx_ceiling">ADX Ceiling</Label>
-            <Input
-              id="adx_ceiling"
-              type="number"
-              step="0.1"
-              value={formData.adx_ceiling}
-              onChange={(e) => setFormData({ ...formData, adx_ceiling: parseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Maksimum værdi (ceiling)</p>
           </div>
         </CardContent>
       </Card>
