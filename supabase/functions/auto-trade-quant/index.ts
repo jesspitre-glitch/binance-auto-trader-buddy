@@ -680,20 +680,21 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     }
   }
   
-  // 3️⃣ ADX (med adaptive threshold)
+  // 3️⃣ ADX (med min/max range og optional adaptive threshold)
   if (config.adx_enabled && adx !== null) {
     filterStatus.hard.adx.value = adx.toFixed(2);
     
-    // Beregn adaptive ADX threshold KUN hvis enabled
-    let dynamicMinADX = config.adx_threshold; // Fallback til standard
+    // Brug adx_floor som minimum og adx_ceiling som maximum
+    const adxMin = config.adx_floor ?? 20;
+    const adxMax = config.adx_ceiling ?? 40;
     
-    if (config.adaptive_adx_enabled && config.adx_base_min && config.adx_floor && config.adx_ceiling && atr !== null) {
-      // Beregn nuværende og gennemsnitlig ATR%
+    // Hvis adaptive er enabled, beregn dynamisk minimum inden for floor/ceiling
+    let dynamicMinADX = adxMin;
+    
+    if (config.adaptive_adx_enabled && config.adx_base_min && atr !== null) {
       const currentATRPercent = (atr / currentPrice) * 100;
-      
-      // For gennemsnitlig ATR%, brug de sidste N perioder
       const atrPeriod = config.atr_period || 14;
-      let avgATRPercent = currentATRPercent; // Fallback
+      let avgATRPercent = currentATRPercent;
       
       if (closes.length >= atrPeriod) {
         const atrValues = [];
@@ -712,17 +713,21 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
         const atrRatio = currentATRPercent / avgATRPercent;
         dynamicMinADX = config.adx_base_min * atrRatio;
         
-        // Anvend floor og ceiling
-        if (dynamicMinADX < config.adx_floor) dynamicMinADX = config.adx_floor;
-        if (dynamicMinADX > config.adx_ceiling) dynamicMinADX = config.adx_ceiling;
+        // Clamp til floor/ceiling
+        if (dynamicMinADX < adxMin) dynamicMinADX = adxMin;
+        if (dynamicMinADX > adxMax) dynamicMinADX = adxMax;
         
-        console.log(`   🔄 Adaptive ADX: Base=${config.adx_base_min} × ATR%(${atrRatio.toFixed(2)}) = ${dynamicMinADX.toFixed(2)} (floor=${config.adx_floor}, ceiling=${config.adx_ceiling})`);
+        console.log(`   🔄 Adaptive ADX: Base=${config.adx_base_min} × ATR%(${atrRatio.toFixed(2)}) = ${dynamicMinADX.toFixed(2)} (min=${adxMin}, max=${adxMax})`);
       }
     }
     
+    // Tjek ADX er inden for min/max range
     if (adx < dynamicMinADX) {
       filterStatus.hard.adx.passed = false;
-      filterStatus.hard.adx.reason = `${adx.toFixed(2)} < ${dynamicMinADX.toFixed(2)} (adaptive threshold)`;
+      filterStatus.hard.adx.reason = `${adx.toFixed(2)} < ${dynamicMinADX.toFixed(2)} (minimum)`;
+    } else if (adx > adxMax) {
+      filterStatus.hard.adx.passed = false;
+      filterStatus.hard.adx.reason = `${adx.toFixed(2)} > ${adxMax.toFixed(2)} (maksimum)`;
     }
   }
   
