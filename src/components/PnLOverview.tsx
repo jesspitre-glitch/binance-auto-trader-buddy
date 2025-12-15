@@ -92,6 +92,8 @@ export const PnLOverview = () => {
 
       if (tradesResult.error) throw tradesResult.error;
       
+      console.log(`Trades returned from database: ${tradesResult.data?.length || 0}`);
+      
       // Sort trades ascending for cumulative chart (they were fetched descending)
       const trades = (tradesResult.data || []).sort((a, b) => 
         new Date(a.closed_at).getTime() - new Date(b.closed_at).getTime()
