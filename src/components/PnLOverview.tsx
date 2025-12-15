@@ -70,10 +70,10 @@ export const PnLOverview = () => {
           break;
       }
 
-      console.log(`Fetching trades from ${startDate.toISOString()} for range ${range}`);
+      console.log(`Fetching trades from ${startDate.toISOString()} for range ${range} (limit: 50000)`);
       
       // Fetch trade history and portfolio balance in parallel
-      // Fetch ALL trades in period - explicitly set high limit to override Supabase's default 1000 limit
+      // Fetch ALL trades in period - use range() to bypass Supabase's default 1000 limit
       const [tradesResult, portfolioResult] = await Promise.all([
         supabase
           .from("trade_history")
@@ -82,7 +82,7 @@ export const PnLOverview = () => {
           .neq("close_reason", "DUPLICATE")
           .gte("closed_at", startDate.toISOString())
           .order("closed_at", { ascending: false })
-          .limit(10000),
+          .range(0, 49999),
         supabase
           .from("user_portfolio")
           .select("futures_capital")
