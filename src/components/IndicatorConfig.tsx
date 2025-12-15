@@ -1180,11 +1180,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               Kræver minimum X af følgende betingelser (1 point hver):<br/>
               • EMA Trend ({formData.ema_enabled ? '✅' : '❌'})<br/>
               • StochRSI Zone ({formData.stochrsi_enabled ? '✅' : '❌'})<br/>
-              • MACD Color Change ({formData.macd_enabled ? '✅' : '❌'})<br/>
+              • MACD Histogram Momentum ({formData.histogram_momentum_enabled && formData.macd_enabled ? '✅' : '❌'})<br/>
               • Bollinger Bands ({formData.bb_enabled ? '✅' : '❌'})<br/>
               • Volume Surge ({formData.volume_enabled ? '✅' : '❌'})<br/>
               • Pivot Points ({formData.pivot_points_enabled ? '✅' : '❌'})<br/>
-              <strong>Aktive: {[formData.ema_enabled, formData.stochrsi_enabled, formData.macd_enabled, formData.bb_enabled, formData.volume_enabled, formData.pivot_points_enabled].filter(Boolean).length}/6</strong>
+              <strong>Aktive: {[formData.ema_enabled, formData.stochrsi_enabled, formData.histogram_momentum_enabled && formData.macd_enabled, formData.bb_enabled, formData.volume_enabled, formData.pivot_points_enabled].filter(Boolean).length}/6</strong>
             </p>
           </div>
         </CardContent>
