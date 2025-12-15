@@ -27,16 +27,31 @@ export const PortfolioBalance = () => {
       if (error) throw error;
       setPortfolio(data);
 
-      // Fetch all-time P&L from trade_history (sum of all closed trades)
-      const { data: pnlData, error: pnlError } = await supabase
-        .from("trade_history")
-        .select("pnl")
-        .eq("user_id", user.id);
-
-      if (pnlError) throw pnlError;
+      // Fetch ALL trades with pagination (Supabase has 1000 row limit per query)
+      let allPnL = 0;
+      let offset = 0;
+      const pageSize = 1000;
+      let hasMore = true;
       
-      const totalPnL = pnlData?.reduce((sum, trade) => sum + (trade.pnl || 0), 0) || 0;
-      setTotalPnLFromTrades(totalPnL);
+      while (hasMore) {
+        const { data: pnlData, error: pnlError } = await supabase
+          .from("trade_history")
+          .select("pnl")
+          .eq("user_id", user.id)
+          .range(offset, offset + pageSize - 1);
+
+        if (pnlError) throw pnlError;
+        
+        if (pnlData && pnlData.length > 0) {
+          allPnL += pnlData.reduce((sum, trade) => sum + (trade.pnl || 0), 0);
+          offset += pageSize;
+          hasMore = pnlData.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      setTotalPnLFromTrades(allPnL);
     } catch (error: any) {
       console.error("Portfolio fetch error:", error);
     } finally {
