@@ -1700,20 +1700,26 @@ serve(async (req) => {
       const slotsAvailable = config.max_open_positions - (positions?.length || 0);
       console.log(`\n🎯 Ledige positioner: ${slotsAvailable}/${config.max_open_positions}`);
       
-      // 📈 STEP 4: Tag top 3x slots, filtrer for hårde filtre + MACD retning, derefter vælg top slots
+      // 📈 STEP 4: Tag top 3x slots, filtrer for hårde filtre + MACD retning
+      // 🛡️ RACE CONDITION FIX: Kun behandl ÉT signal per scan-cyklus for at undgå race conditions
       const topCandidates = validSignals.slice(0, Math.min(slotsAvailable * 3, validSignals.length));
-      const signalsToTrade = topCandidates
-        .filter(s => s.hardFiltersPassed && s.signal !== 'NONE') // KRITISK: Bloker NONE signaler (MACD retningsfilter)
-        .slice(0, slotsAvailable);
+      const eligibleSignals = topCandidates
+        .filter(s => s.hardFiltersPassed && s.signal !== 'NONE'); // KRITISK: Bloker NONE signaler (MACD retningsfilter)
       
-      console.log(`\n📊 Efter hård filtrering: ${signalsToTrade.length}/${topCandidates.length} top signaler passerede hårde filtre`);
+      // 🛡️ KRITISK: Tag KUN det stærkeste signal for at undgå race conditions
+      // Tidligere: .slice(0, slotsAvailable) kunne åbne flere positioner samtidigt
+      // Nu: .slice(0, 1) sikrer kun én position åbnes per scan-cyklus
+      const signalsToTrade = eligibleSignals.slice(0, 1);
+      
+      console.log(`\n📊 Efter hård filtrering: ${eligibleSignals.length}/${topCandidates.length} top signaler passerede hårde filtre`);
+      console.log(`🛡️ RACE CONDITION GUARD: Behandler kun det stærkeste signal (${signalsToTrade.length} af ${eligibleSignals.length} eligible)`);
       
       if (signalsToTrade.length === 0) {
         console.log(`⚠️ Ingen signaler at handle eller ingen ledige positioner`);
         continue;
       }
       
-      console.log(`\n📈 Handler de ${signalsToTrade.length} stærkeste signaler:`);
+      console.log(`\n📈 Handler det stærkeste signal:`);
       
       // 🚀 STEP 5: Place orders for selected signals
       for (const selectedSignal of signalsToTrade) {
@@ -2105,8 +2111,8 @@ serve(async (req) => {
           console.log(`   Signal Strength: ${selectedSignal.strength.toFixed(1)}`);
           console.log(`   Open Reason: ${openReason}\n`);
 
-          // Immediately sync with Binance so DB matches source of truth
-          await supabaseClient.functions.invoke('sync-binance-futures-positions');
+          // NOTE: Removed immediate sync call to avoid race conditions
+          // sync-binance-futures-positions runs on its own schedule via auto-monitor-quant
             
         } catch (error: any) {
           console.error(`\n❌❌❌ CRITICAL ERROR in order placement for ${symbol}:`);
