@@ -70,32 +70,49 @@ export const PnLOverview = () => {
           break;
       }
 
-      console.log(`Fetching trades from ${startDate.toISOString()} for range ${range} (limit: 50000)`);
+      console.log(`Fetching trades from ${startDate.toISOString()} for range ${range}`);
       
-      // Fetch trade history and portfolio balance in parallel
-      // Fetch ALL trades in period - use range() to bypass Supabase's default 1000 limit
-      const [tradesResult, portfolioResult] = await Promise.all([
-        supabase
+      // Fetch portfolio balance
+      const portfolioResult = await supabase
+        .from("user_portfolio")
+        .select("futures_capital")
+        .eq("user_id", user.id)
+        .single();
+
+      // Fetch ALL trades using pagination to bypass Supabase's 1000 row limit
+      const allTradesData: any[] = [];
+      const pageSize = 1000;
+      let page = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
+        
+        const { data, error } = await supabase
           .from("trade_history")
           .select("*")
           .eq("user_id", user.id)
           .neq("close_reason", "DUPLICATE")
           .gte("closed_at", startDate.toISOString())
           .order("closed_at", { ascending: false })
-          .range(0, 49999),
-        supabase
-          .from("user_portfolio")
-          .select("futures_capital")
-          .eq("user_id", user.id)
-          .single()
-      ]);
+          .range(from, to);
 
-      if (tradesResult.error) throw tradesResult.error;
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allTradesData.push(...data);
+          hasMore = data.length === pageSize;
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
       
-      console.log(`Trades returned from database: ${tradesResult.data?.length || 0}`);
+      console.log(`Trades returned from database: ${allTradesData.length} (pages: ${page})`);
       
       // Sort trades ascending for cumulative chart (they were fetched descending)
-      const trades = (tradesResult.data || []).sort((a, b) => 
+      const trades = allTradesData.sort((a, b) => 
         new Date(a.closed_at).getTime() - new Date(b.closed_at).getTime()
       );
       const portfolioBalance = portfolioResult.data?.futures_capital || 0;
