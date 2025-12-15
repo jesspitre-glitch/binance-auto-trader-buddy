@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-type TimeRange = "24h" | "7d" | "30d" | "90d" | "1y";
+type TimeRange = "24h" | "7d" | "30d" | "90d" | "1y" | "all";
 
 export const PnLOverview = () => {
   const [loading, setLoading] = useState(true);
@@ -63,6 +63,10 @@ export const PnLOverview = () => {
           break;
         case "1y":
           startDate.setUTCFullYear(startDate.getUTCFullYear() - 1);
+          break;
+        case "all":
+          // Set to a very early date to get all trades
+          startDate.setUTCFullYear(2020, 0, 1);
           break;
       }
 
@@ -330,12 +334,13 @@ export const PnLOverview = () => {
       </CardHeader>
       <CardContent className="space-y-6">
         <Tabs value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="24h">24t</TabsTrigger>
-            <TabsTrigger value="7d">7 dage</TabsTrigger>
-            <TabsTrigger value="30d">30 dage</TabsTrigger>
-            <TabsTrigger value="90d">90 dage</TabsTrigger>
-            <TabsTrigger value="1y">1 år</TabsTrigger>
+            <TabsTrigger value="7d">7d</TabsTrigger>
+            <TabsTrigger value="30d">30d</TabsTrigger>
+            <TabsTrigger value="90d">90d</TabsTrigger>
+            <TabsTrigger value="1y">1år</TabsTrigger>
+            <TabsTrigger value="all">Alt</TabsTrigger>
           </TabsList>
 
           <TabsContent value={timeRange} className="space-y-6">
