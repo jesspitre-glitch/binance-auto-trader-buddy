@@ -7,6 +7,7 @@ import { Loader2, RefreshCw, TrendingUp, Wallet } from "lucide-react";
 
 export const PortfolioBalance = () => {
   const [portfolio, setPortfolio] = useState<any>(null);
+  const [totalPnLFromTrades, setTotalPnLFromTrades] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const { toast } = useToast();
@@ -16,14 +17,26 @@ export const PortfolioBalance = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Fetch portfolio balance
       const { data, error } = await supabase
         .from("user_portfolio")
         .select("*")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== "PGRST116") throw error;
+      if (error) throw error;
       setPortfolio(data);
+
+      // Fetch all-time P&L from trade_history (sum of all closed trades)
+      const { data: pnlData, error: pnlError } = await supabase
+        .from("trade_history")
+        .select("pnl")
+        .eq("user_id", user.id);
+
+      if (pnlError) throw pnlError;
+      
+      const totalPnL = pnlData?.reduce((sum, trade) => sum + (trade.pnl || 0), 0) || 0;
+      setTotalPnLFromTrades(totalPnL);
     } catch (error: any) {
       console.error("Portfolio fetch error:", error);
     } finally {
@@ -103,8 +116,10 @@ export const PortfolioBalance = () => {
   const deposited = portfolio?.futures_deposited || 0;
   const withdrawn = portfolio?.futures_withdrawn || 0;
   const netDeposits = deposited - withdrawn;
-  const totalPnL = futuresCapital - netDeposits;
-  const pnlPercent = netDeposits > 0 ? (totalPnL / netDeposits) * 100 : 0;
+  
+  // Use actual P&L from trade_history instead of balance-based calculation
+  const totalPnL = totalPnLFromTrades;
+  const pnlPercent = futuresCapital > 0 ? (totalPnL / futuresCapital) * 100 : 0;
 
   return (
     <Card>
