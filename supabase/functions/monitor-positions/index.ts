@@ -385,14 +385,21 @@ serve(async (req) => {
             
             if (breakEvenReached) {
               newStopLoss = position.entry_price;
+              // 🔴 FIX: Gem break_even_at_price i indicators_snapshot når BE aktiveres
+              const updatedSnapshot = {
+                ...position.indicators_snapshot,
+                break_even_at_price: currentPrice,
+                break_even_triggered_at: new Date().toISOString(),
+              };
               await supabaseClient
                 .from('positions')
                 .update({ 
                   stop_loss: newStopLoss, 
-                  break_even_activated: true 
+                  break_even_activated: true,
+                  indicators_snapshot: updatedSnapshot
                 })
                 .eq('id', position.id);
-              console.log(`   ✅ LEGACY BREAK-EVEN ACTIVATED: SL moved to entry ${newStopLoss}`);
+              console.log(`   ✅ LEGACY BREAK-EVEN ACTIVATED: SL moved to entry ${newStopLoss}, price was ${currentPrice}`);
             }
           } else {
             // ATR-baseret break-even
@@ -409,14 +416,21 @@ serve(async (req) => {
             
             if (breakEvenReached) {
               newStopLoss = position.entry_price;
+              // 🔴 FIX: Gem break_even_at_price i indicators_snapshot når BE aktiveres
+              const updatedSnapshot = {
+                ...position.indicators_snapshot,
+                break_even_at_price: currentPrice,
+                break_even_triggered_at: new Date().toISOString(),
+              };
               await supabaseClient
                 .from('positions')
                 .update({ 
                   stop_loss: newStopLoss, 
-                  break_even_activated: true 
+                  break_even_activated: true,
+                  indicators_snapshot: updatedSnapshot
                 })
                 .eq('id', position.id);
-              console.log(`   ✅ ATR BREAK-EVEN ACTIVATED: SL moved to entry ${newStopLoss}`);
+              console.log(`   ✅ ATR BREAK-EVEN ACTIVATED: SL moved to entry ${newStopLoss}, price was ${currentPrice}`);
             }
           }
         }

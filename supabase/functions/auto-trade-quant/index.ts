@@ -2099,7 +2099,7 @@ serve(async (req) => {
             macd_signal_period: config.macd_signal, // Config parameter for MACD signal period
             
             // 🔴 FIX: Hard filter pass/fail status - null hvis disabled (not evaluated)
-            // Også null hvis volume_current er null (ingen data at evaluere)
+            // Også null hvis volume er null (ingen data at evaluere)
             ema_spread_filter_passed: config.ema_enabled 
               ? (analysis.filterStatus?.hard?.emaSpread?.passed ?? null) 
               : null,
@@ -2111,17 +2111,21 @@ serve(async (req) => {
             adx_filter_passed: config.adx_enabled 
               ? (analysis.filterStatus?.hard?.adx?.passed ?? null) 
               : null,
-            // 🔴 FIX: Volume filter status - null hvis disabled ELLER volume_current er null
+            // 🔴 FIX: Volume filter status - null hvis disabled ELLER volume er null
+            // Bruger analysis.indicators.volume (ikke volume_current)
             volume_filter_passed: config.volume_enabled 
-              ? (analysis.indicators?.volume_current === null || analysis.indicators?.volume_current === undefined
+              ? (analysis.indicators?.volume === null || analysis.indicators?.volume === undefined
                   ? null  // Ingen volume data = ikke evalueret
                   : (analysis.filterStatus?.hard?.volume?.passed ?? null))
               : null,
             volume_multiplier_filter_passed: config.volume_enabled 
-              ? (analysis.indicators?.volume_current === null || analysis.indicators?.volume_current === undefined
+              ? (analysis.indicators?.volume === null || analysis.indicators?.volume === undefined
                   ? null  // Ingen volume data = ikke evalueret
                   : (analysis.filterStatus?.hard?.volume?.passed ?? null))
               : null,
+            // 🔴 FIX: Volume current value for debugging
+            volume_current: analysis.indicators?.volume ?? null,
+            
             macd_direction_passed: config.macd_direction_enabled 
               ? (signal === 'LONG' 
                   ? analysis.filterStatus?.hard?.macdDirection?.long ?? null
@@ -2133,39 +2137,45 @@ serve(async (req) => {
                   : analysis.filterStatus?.hard?.rsiMomentum?.short ?? null)
               : null,
             
-            // 🔴 FIX: Soft conditions individual results - med separate MACD fields
+            // 🔴 FIX: Soft conditions - beregn EKSPLICIT fra booleans, derefter sum
+            // Hver condition er enten true, false, eller null (disabled)
             soft_ema_trend_passed: config.ema_enabled 
-              ? (analysis.indicators.conditionDetails?.ema?.[signal.toLowerCase()] ?? false)
+              ? (analysis.indicators.conditionDetails?.ema?.[signal.toLowerCase()] === true)
               : null,
             soft_stochrsi_passed: config.stochrsi_enabled 
-              ? (analysis.indicators.conditionDetails?.stochRSI?.[signal.toLowerCase()] ?? false)
+              ? (analysis.indicators.conditionDetails?.stochRSI?.[signal.toLowerCase()] === true)
               : null,
+            // 🔴 FIX: MACD histogram - side-aware (LONG: hist > threshold, SHORT: hist < -threshold)
             soft_macd_histogram_passed: config.macd_enabled 
-              ? (analysis.indicators.conditionDetails?.macd?.[signal.toLowerCase()] ?? false)
+              ? (analysis.indicators.conditionDetails?.macd?.[signal.toLowerCase()] === true)
               : null,
+            // 🔴 FIX: MACD momentum - separat soft condition
             soft_macd_momentum_passed: config.histogram_momentum_enabled 
-              ? (analysis.indicators.conditionDetails?.histogramMomentum?.[signal.toLowerCase()] ?? false)
+              ? (analysis.indicators.conditionDetails?.histogramMomentum?.[signal.toLowerCase()] === true)
               : null,
             soft_bb_passed: config.bb_enabled 
-              ? (analysis.indicators.conditionDetails?.bb?.[signal.toLowerCase()] ?? false)
+              ? (analysis.indicators.conditionDetails?.bb?.[signal.toLowerCase()] === true)
               : null,
             soft_volume_passed: config.volume_enabled 
-              ? (analysis.indicators.conditionDetails?.volume?.[signal.toLowerCase()] ?? false)
+              ? (analysis.indicators.conditionDetails?.volume?.[signal.toLowerCase()] === true)
               : null,
             soft_pivot_passed: config.pivot_points_enabled 
-              ? (analysis.indicators.conditionDetails?.pivotPoints?.[signal.toLowerCase()] ?? false)
+              ? (analysis.indicators.conditionDetails?.pivotPoints?.[signal.toLowerCase()] === true)
               : null,
             
-            // 🔴 FIX: soft_conditions_total - sum of all passed soft conditions
-            soft_conditions_total: [
-              config.ema_enabled ? analysis.indicators.conditionDetails?.ema?.[signal.toLowerCase()] : null,
-              config.stochrsi_enabled ? analysis.indicators.conditionDetails?.stochRSI?.[signal.toLowerCase()] : null,
-              config.macd_enabled ? analysis.indicators.conditionDetails?.macd?.[signal.toLowerCase()] : null,
-              config.histogram_momentum_enabled ? analysis.indicators.conditionDetails?.histogramMomentum?.[signal.toLowerCase()] : null,
-              config.bb_enabled ? analysis.indicators.conditionDetails?.bb?.[signal.toLowerCase()] : null,
-              config.volume_enabled ? analysis.indicators.conditionDetails?.volume?.[signal.toLowerCase()] : null,
-              config.pivot_points_enabled ? analysis.indicators.conditionDetails?.pivotPoints?.[signal.toLowerCase()] : null,
-            ].filter(v => v === true).length,
+            // 🔴 FIX: soft_conditions_total - beregn DIREKTE fra de explicitte booleans ovenfor
+            // Tæller kun true (ikke false eller null)
+            soft_conditions_total: (() => {
+              let total = 0;
+              if (config.ema_enabled && analysis.indicators.conditionDetails?.ema?.[signal.toLowerCase()] === true) total++;
+              if (config.stochrsi_enabled && analysis.indicators.conditionDetails?.stochRSI?.[signal.toLowerCase()] === true) total++;
+              if (config.macd_enabled && analysis.indicators.conditionDetails?.macd?.[signal.toLowerCase()] === true) total++;
+              if (config.histogram_momentum_enabled && analysis.indicators.conditionDetails?.histogramMomentum?.[signal.toLowerCase()] === true) total++;
+              if (config.bb_enabled && analysis.indicators.conditionDetails?.bb?.[signal.toLowerCase()] === true) total++;
+              if (config.volume_enabled && analysis.indicators.conditionDetails?.volume?.[signal.toLowerCase()] === true) total++;
+              if (config.pivot_points_enabled && analysis.indicators.conditionDetails?.pivotPoints?.[signal.toLowerCase()] === true) total++;
+              return total;
+            })(),
             
             // StochRSI zone check
             stochrsi_zone_passed: analysis.indicators.conditionDetails?.stochRSI?.[signal.toLowerCase()] ?? false,
