@@ -308,33 +308,65 @@ serve(async (req) => {
           continue;
         }
 
-        // 🔍 AUDIT v6: Log exit_type for hver position
+        // 🔍 AUDIT v6: Identificer exit type - LEGACY_PERCENT_FALLBACK vs ATR_EXIT_OK
+        const snapshotAtr = position.indicators_snapshot?.atr;
+        const legacyPercentExit = position.indicators_snapshot?.legacy_percent_exit === true;
         const exitType = position.indicators_snapshot?.exit_type || 'UNKNOWN';
         const isSyncedPosition = position.indicators_snapshot?.is_synced_position || false;
         
-        if (exitType === 'PERCENT_FALLBACK' || isSyncedPosition) {
-          console.log(`⚠️ PERCENT_FALLBACK_DETECTED: ${position.symbol} (synced=${isSyncedPosition})`);
+        // Position er LEGACY hvis: legacy_percent_exit=true ELLER exit_type indeholder FALLBACK ELLER ATR er null/0
+        const isLegacyPosition = legacyPercentExit || 
+                                  exitType === 'PERCENT_FALLBACK_LEGACY' || 
+                                  exitType === 'PERCENT_FALLBACK' ||
+                                  !snapshotAtr || snapshotAtr <= 0 || !isFinite(snapshotAtr);
+        
+        // Log position type tydeligt
+        if (isLegacyPosition) {
+          console.log(`\n⚠️ LEGACY_PERCENT_FALLBACK: ${position.symbol} ${position.side}`);
           console.log(`   exit_type: ${exitType}`);
-          console.log(`   ATR: ${position.indicators_snapshot?.atr ?? 'NULL'}`);
+          console.log(`   legacy_percent_exit: ${legacyPercentExit}`);
+          console.log(`   ATR: ${snapshotAtr ?? 'NULL'}`);
+          console.log(`   -> Bruger 3% SL fallback og 1.8% trailing`);
+        } else {
+          console.log(`\n✅ ATR_EXIT_OK: ${position.symbol} ${position.side}`);
+          console.log(`   exit_type: ${exitType}`);
+          console.log(`   ATR: ${snapshotAtr}`);
+          console.log(`   -> Bruger ATR-baseret exit system`);
         }
         
-        // Beregn profit i ATR-enheder
+        // Beregn profit - forskelligt for legacy vs ATR positioner
         const profitDistance = position.side === 'LONG'
           ? currentPrice - position.entry_price
           : position.entry_price - currentPrice;
         
-        const atr = position.indicators_snapshot?.atr || 0;
+        const atr = snapshotAtr || 0;
         const profitInAtr = atr > 0 ? profitDistance / atr : 0;
+        const profitPercent = (profitDistance / position.entry_price) * 100;
         
-        // Trailing stop aktiveres når profit >= threshold, men forbliver aktiv efter første aktivering
-        const profitMeetsThreshold = profitInAtr >= trailingActivationAtr;
-        const trailingStopActive = trailingAlreadyActivated || !trailingActivationEnabled || profitMeetsThreshold;
+        // For legacy positioner: brug procent-baseret profit threshold (1% ~ 1 ATR equivalent)
+        // For ATR positioner: brug ATR-baseret threshold
+        let trailingStopActive: boolean;
         
-        if (trailingActivationEnabled) {
-          if (trailingAlreadyActivated) {
-            console.log(`✅ Trailing stop FORBLIVER aktiv for ${position.symbol} (profit=${profitInAtr.toFixed(2)} ATR, blev aktiveret tidligere)`);
-          } else {
-            console.log(`Trailing activation check for ${position.symbol}: profit=${profitInAtr.toFixed(2)} ATR (need ${trailingActivationAtr} ATR) - Active: ${trailingStopActive}`);
+        if (isLegacyPosition) {
+          // Legacy: 1.8% trailing activation (hardcoded for legacy)
+          const legacyActivationPercent = 1.0; // 1% profit for activation
+          const profitMeetsThreshold = profitPercent >= legacyActivationPercent;
+          trailingStopActive = trailingAlreadyActivated || !trailingActivationEnabled || profitMeetsThreshold;
+          
+          if (trailingActivationEnabled) {
+            console.log(`   LEGACY trailing activation: profit=${profitPercent.toFixed(2)}% (need ${legacyActivationPercent}%) - Active: ${trailingStopActive}`);
+          }
+        } else {
+          // ATR-baseret
+          const profitMeetsThreshold = profitInAtr >= trailingActivationAtr;
+          trailingStopActive = trailingAlreadyActivated || !trailingActivationEnabled || profitMeetsThreshold;
+          
+          if (trailingActivationEnabled) {
+            if (trailingAlreadyActivated) {
+              console.log(`   ✅ Trailing stop FORBLIVER aktiv (profit=${profitInAtr.toFixed(2)} ATR, blev aktiveret tidligere)`);
+            } else {
+              console.log(`   Trailing activation check: profit=${profitInAtr.toFixed(2)} ATR (need ${trailingActivationAtr} ATR) - Active: ${trailingStopActive}`);
+            }
           }
         }
 
@@ -344,16 +376,29 @@ serve(async (req) => {
         
         // Break-even logic: Move SL to entry hvis profit er nået (DO THIS FIRST!)
         if (!position.break_even_activated) {
-          // 🔴 KRITISK: ATR-baseret break-even - INGEN FALLBACK TILLADT
-          const snapshotAtr = position.indicators_snapshot?.atr;
-          const breakEvenAtrMultiplier = position.indicators_snapshot?.break_even_atr || 1.0;
-          
-          if (!snapshotAtr || snapshotAtr <= 0 || !isFinite(snapshotAtr)) {
-            console.log(`⚠️ Break-even SKIPPED for ${position.symbol}: ATR mangler i snapshot (${snapshotAtr})`);
-            console.log(`   Ingen fallback bruges - position fortsætter uden break-even check`);
+          if (isLegacyPosition) {
+            // LEGACY: Brug 1% break-even threshold (hardcoded for legacy positioner)
+            const legacyBreakEvenPercent = 1.0; // 1% profit for break-even
+            const breakEvenReached = profitPercent >= legacyBreakEvenPercent;
+            
+            console.log(`   LEGACY break-even check: profit=${profitPercent.toFixed(2)}% (need ${legacyBreakEvenPercent}%)`);
+            
+            if (breakEvenReached) {
+              newStopLoss = position.entry_price;
+              await supabaseClient
+                .from('positions')
+                .update({ 
+                  stop_loss: newStopLoss, 
+                  break_even_activated: true 
+                })
+                .eq('id', position.id);
+              console.log(`   ✅ LEGACY BREAK-EVEN ACTIVATED: SL moved to entry ${newStopLoss}`);
+            }
           } else {
+            // ATR-baseret break-even
+            const breakEvenAtrMultiplier = position.indicators_snapshot?.break_even_atr || 1.0;
             const breakEvenDistance = breakEvenAtrMultiplier * snapshotAtr;
-            console.log(`Break-even check for ${position.symbol}: ATR-baseret (${breakEvenAtrMultiplier} × ${snapshotAtr.toFixed(6)} = ${breakEvenDistance.toFixed(6)})`);
+            console.log(`   Break-even check (ATR): ${breakEvenAtrMultiplier} × ${snapshotAtr.toFixed(6)} = ${breakEvenDistance.toFixed(6)}`);
             
             let breakEvenReached = false;
             if (position.side === 'LONG') {
@@ -371,7 +416,7 @@ serve(async (req) => {
                   break_even_activated: true 
                 })
                 .eq('id', position.id);
-              console.log(`✅ BREAK-EVEN ACTIVATED: SL moved to entry ${newStopLoss} for ${position.symbol}`);
+              console.log(`   ✅ ATR BREAK-EVEN ACTIVATED: SL moved to entry ${newStopLoss}`);
             }
           }
         }
@@ -386,30 +431,38 @@ serve(async (req) => {
             newPeakPrice = currentPrice;
           }
           
-          // 🔴 KRITISK: ATR-BASERET TRAILING STOP - INGEN FALLBACK TILLADT
-          const snapshotAtr = position.indicators_snapshot?.atr;
-          const atrTrailingMultiplier = position.indicators_snapshot?.atr_trailing_stop_multiplier || 1.8;
-          
-          if (!snapshotAtr || snapshotAtr <= 0 || !isFinite(snapshotAtr)) {
-            console.log(`⚠️ Trailing stop SKIPPED for ${position.symbol}: ATR mangler i snapshot (${snapshotAtr})`);
-            console.log(`   Ingen fallback bruges - position fortsætter med original stop_loss`);
-            // Behold eksisterende trailing_stop hvis sat
+          if (isLegacyPosition) {
+            // LEGACY: Brug 1.8% trailing stop distance (hardcoded for legacy positioner)
+            const legacyTrailingPercent = 1.8;
+            const trailingDistance = position.entry_price * (legacyTrailingPercent / 100);
+            console.log(`   LEGACY trailing stop beregning:`);
+            console.log(`   Trailing %: ${legacyTrailingPercent}%`);
+            console.log(`   Distance: ${trailingDistance.toFixed(6)}`);
+            
+            if (position.side === 'LONG') {
+              const calculatedTrailingStop = newPeakPrice - trailingDistance;
+              newTrailingStop = newStopLoss ? Math.max(calculatedTrailingStop, newStopLoss) : calculatedTrailingStop;
+              console.log(`   LONG: peak=${newPeakPrice}, calculated=${calculatedTrailingStop.toFixed(4)}, final=${newTrailingStop.toFixed(4)}`);
+            } else {
+              const calculatedTrailingStop = newPeakPrice + trailingDistance;
+              newTrailingStop = newStopLoss ? Math.min(calculatedTrailingStop, newStopLoss) : calculatedTrailingStop;
+              console.log(`   SHORT: peak=${newPeakPrice}, calculated=${calculatedTrailingStop.toFixed(4)}, final=${newTrailingStop.toFixed(4)}`);
+            }
           } else {
-            // ✅ ATR-baseret trailing stop afstand
+            // ATR-baseret trailing stop
+            const atrTrailingMultiplier = position.indicators_snapshot?.atr_trailing_stop_multiplier || 1.8;
             const trailingDistance = snapshotAtr * atrTrailingMultiplier;
-            console.log(`Trailing stop beregning (ATR-baseret):`);
+            console.log(`   ATR trailing stop beregning:`);
             console.log(`   ATR: ${snapshotAtr.toFixed(6)}`);
             console.log(`   Multiplier: ${atrTrailingMultiplier}x`);
             console.log(`   Distance: ${trailingDistance.toFixed(6)}`);
             
             if (position.side === 'LONG') {
               const calculatedTrailingStop = newPeakPrice - trailingDistance;
-              // Trailing stop må aldrig være værre end original stop loss
               newTrailingStop = newStopLoss ? Math.max(calculatedTrailingStop, newStopLoss) : calculatedTrailingStop;
               console.log(`   LONG: peak=${newPeakPrice}, calculated=${calculatedTrailingStop.toFixed(4)}, final=${newTrailingStop.toFixed(4)}`);
             } else {
               const calculatedTrailingStop = newPeakPrice + trailingDistance;
-              // Trailing stop må aldrig være værre end original stop loss
               newTrailingStop = newStopLoss ? Math.min(calculatedTrailingStop, newStopLoss) : calculatedTrailingStop;
               console.log(`   SHORT: peak=${newPeakPrice}, calculated=${calculatedTrailingStop.toFixed(4)}, final=${newTrailingStop.toFixed(4)}`);
             }
@@ -419,16 +472,20 @@ serve(async (req) => {
           if (newTrailingStop && newTrailingStop > 0) {
             if (position.side === 'LONG' && currentPrice <= newTrailingStop) {
               shouldClose = true;
-              closeReason = 'TRAILING_STOP_HIT';
-              console.log(`TRAILING STOP HIT (LONG): price=${currentPrice} <= trailing=${newTrailingStop} for ${position.symbol}`);
+              closeReason = isLegacyPosition ? 'LEGACY_TRAILING_STOP_HIT' : 'TRAILING_STOP_HIT';
+              console.log(`TRAILING STOP HIT (LONG): price=${currentPrice} <= trailing=${newTrailingStop}`);
             } else if (position.side === 'SHORT' && currentPrice >= newTrailingStop) {
               shouldClose = true;
-              closeReason = 'TRAILING_STOP_HIT';
-              console.log(`TRAILING STOP HIT (SHORT): price=${currentPrice} >= trailing=${newTrailingStop} for ${position.symbol}`);
+              closeReason = isLegacyPosition ? 'LEGACY_TRAILING_STOP_HIT' : 'TRAILING_STOP_HIT';
+              console.log(`TRAILING STOP HIT (SHORT): price=${currentPrice} >= trailing=${newTrailingStop}`);
             }
           }
         } else {
-          console.log(`Trailing stop NOT active yet for ${position.symbol} (need ${trailingActivationAtr} ATR profit, have ${profitInAtr.toFixed(2)} ATR)`);
+          if (isLegacyPosition) {
+            console.log(`   LEGACY trailing stop NOT active yet (need 1.0% profit, have ${profitPercent.toFixed(2)}%)`);
+          } else {
+            console.log(`   Trailing stop NOT active yet (need ${trailingActivationAtr} ATR profit, have ${profitInAtr.toFixed(2)} ATR)`);
+          }
         }
         // (Break-even check er allerede håndteret ovenfor - ingen duplikering)
 
