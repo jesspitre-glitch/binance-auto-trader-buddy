@@ -2070,6 +2070,18 @@ serve(async (req) => {
           const atrPercent = analysis.indicators.atr && analysis.indicators.price 
             ? (analysis.indicators.atr / analysis.indicators.price) * 100 
             : null;
+
+          // 🔎 AUDIT: Volume multiplier tri-state (skal aldrig blive true når data mangler)
+          const volumeMultiplierFilterPassedTriState = config.volume_enabled !== true
+            ? null
+            : (analysis.indicators?.volume == null || analysis.indicators?.avgVolume == null)
+              ? null
+              : (analysis.indicators.volume >= analysis.indicators.avgVolume * config.volume_multiplier);
+
+          console.log(
+            `📊 VOLUME MULTIPLIER AUDIT | enabled=${config.volume_enabled} | current=${analysis.indicators?.volume ?? null} | avg=${analysis.indicators?.avgVolume ?? null} | multiplier=${config.volume_multiplier} | passed=${volumeMultiplierFilterPassedTriState}`
+          );
+
           
           const comprehensiveSnapshot = {
             // Config values
@@ -2114,16 +2126,9 @@ serve(async (req) => {
             // 🔴 FIX: Volume filter status - TRI-STATE LOGIC
             // null = disabled ELLER manglende data (volume_current eller volume_avg er null)
             // true/false = faktisk evalueret resultat
-            volume_filter_passed: config.volume_enabled !== true
-              ? null  // Volume filter disabled i UI
-              : (analysis.indicators?.volume == null || analysis.indicators?.avgVolume == null)
-                  ? null  // Manglende volume data - kan ikke evaluere
-                  : (analysis.indicators.volume >= analysis.indicators.avgVolume * config.volume_multiplier),
-            volume_multiplier_filter_passed: config.volume_enabled !== true
-              ? null  // Volume filter disabled i UI
-              : (analysis.indicators?.volume == null || analysis.indicators?.avgVolume == null)
-                  ? null  // Manglende volume data - kan ikke evaluere
-                  : (analysis.indicators.volume >= analysis.indicators.avgVolume * config.volume_multiplier),
+            volume_filter_passed: volumeMultiplierFilterPassedTriState,
+            volume_multiplier_filter_passed: volumeMultiplierFilterPassedTriState,
+
             // 🔴 FIX: Volume current value for debugging
             volume_current: analysis.indicators?.volume ?? null,
             
