@@ -724,12 +724,17 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     }
     
     // Tjek ADX er inden for min/max range
+    // 🔴 ADX Min er HÅRDT filter - blokerer trades med for lav trend
     if (adx < dynamicMinADX) {
       filterStatus.hard.adx.passed = false;
       filterStatus.hard.adx.reason = `${adx.toFixed(2)} < ${dynamicMinADX.toFixed(2)} (minimum)`;
-    } else if (adx > adxMax) {
-      filterStatus.hard.adx.passed = false;
-      filterStatus.hard.adx.reason = `${adx.toFixed(2)} > ${adxMax.toFixed(2)} (maksimum)`;
+    }
+    // 🟡 ADX Max er BLØDT veto - logges men blokerer IKKE automatisk
+    // Stærke trends (ADX > Max) tillades hvis trend og momentum matcher
+    if (adx > adxMax) {
+      console.log(`   ⚠️ ADX SOFT VETO: ${adx.toFixed(2)} > ${adxMax.toFixed(2)} (max) - Trade TILLADT da ADX Max er blødt filter`);
+      filterStatus.hard.adx.reason = `${adx.toFixed(2)} > ${adxMax.toFixed(2)} (over max, men tilladt - blødt veto)`;
+      // BEMÆRK: passed forbliver TRUE - ADX Max blokerer ikke længere
     }
   }
   
@@ -957,44 +962,84 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     conditionDetails.stochRSI.short = stochRSIShort;
   }
   
-  // MACD Histogram (hvis enabled)
+  // 🔴 MACD SOFT CONDITIONS - KUN ÉT POINT SAMLET
+  // Histogram og Histogram Momentum er korrelerede - de må IKKE begge give point
+  // Vi bruger den STÆRKESTE af de to, og giver maks 1 point
   if (config.macd_enabled && macd && macdPrevious) {
-    // LONG: Histogram skifter fra rød til grøn
-    const macdColorChangeToGreen = macd.histogram > config.macd_histogram_threshold && macdPrevious.histogram <= config.macd_histogram_threshold;
-    longConditions.push(macdColorChangeToGreen);
-    conditionDetails.macd.long = macdColorChangeToGreen;
+    let macdSoftLong = false;
+    let macdSoftShort = false;
+    let macdSoftSource = '';
     
-    // SHORT: Histogram skifter fra grøn til rød
-    const macdColorChangeToRed = macd.histogram < -config.macd_histogram_threshold && macdPrevious.histogram >= -config.macd_histogram_threshold;
-    shortConditions.push(macdColorChangeToRed);
-    conditionDetails.macd.short = macdColorChangeToRed;
-  }
-
-  // Histogram Momentum Shift (hvis enabled) - BLØD INDIKATOR
-  if (config.histogram_momentum_enabled && closes.length >= config.histogram_momentum_periods + 2) {
-    const histograms: number[] = [];
-    for (let i = 0; i < config.histogram_momentum_periods + 1; i++) {
-      const idx = closes.length - 1 - i;
-      if (idx >= 0) {
-        const m = calculateMACD(closes.slice(0, idx + 1), config.macd_fast, config.macd_slow, config.macd_signal);
-        histograms.unshift(m.histogram);
+    // Option 1: Histogram Color Change (farveskift)
+    const histogramShiftToGreen = macd.histogram > config.macd_histogram_threshold && 
+                                   macdPrevious.histogram <= config.macd_histogram_threshold;
+    const histogramShiftToRed = macd.histogram < -config.macd_histogram_threshold && 
+                                 macdPrevious.histogram >= -config.macd_histogram_threshold;
+    
+    // Option 2: Histogram Momentum (retning) - beregnes kun hvis enabled
+    let histogramMomentumLong = false;
+    let histogramMomentumShort = false;
+    let currentMomentum = 0;
+    let previousMomentum = 0;
+    
+    if (config.histogram_momentum_enabled && closes.length >= config.histogram_momentum_periods + 2) {
+      const histograms: number[] = [];
+      for (let i = 0; i < config.histogram_momentum_periods + 1; i++) {
+        const idx = closes.length - 1 - i;
+        if (idx >= 0) {
+          const m = calculateMACD(closes.slice(0, idx + 1), config.macd_fast, config.macd_slow, config.macd_signal);
+          histograms.unshift(m.histogram);
+        }
+      }
+      
+      if (histograms.length >= 3) {
+        currentMomentum = histograms[histograms.length - 1] - histograms[histograms.length - 2];
+        previousMomentum = histograms[histograms.length - 2] - histograms[histograms.length - 3];
+        
+        histogramMomentumLong = currentMomentum > previousMomentum && currentMomentum > 0;
+        histogramMomentumShort = currentMomentum < previousMomentum && currentMomentum < 0;
       }
     }
     
-    if (histograms.length >= 3) {
-      // Beregn momentum (ændringshastighed) i histogrammet
-      const currentMomentum = histograms[histograms.length - 1] - histograms[histograms.length - 2];
-      const previousMomentum = histograms[histograms.length - 2] - histograms[histograms.length - 3];
-      
-      // LONG: Momentum skifter til opad (accelererende grøn eller decelererende rød)
-      const momentumShiftUp = currentMomentum > previousMomentum && currentMomentum > 0;
-      longConditions.push(momentumShiftUp);
-      
-      // SHORT: Momentum skifter til nedad (accelererende rød eller decelererende grøn)
-      const momentumShiftDown = currentMomentum < previousMomentum && currentMomentum < 0;
-      shortConditions.push(momentumShiftDown);
-      
-      console.log(`   📊 Histogram Momentum: Long: ${momentumShiftUp ? '✅' : '❌'} Short: ${momentumShiftDown ? '✅' : '❌'} - Current: ${currentMomentum.toFixed(6)}, Previous: ${previousMomentum.toFixed(6)}`);
+    // 🎯 VALG: Brug farveskift hvis tilgængeligt, ellers momentum
+    // Men kun ÉT point gives - aldrig begge
+    if (histogramShiftToGreen) {
+      macdSoftLong = true;
+      macdSoftSource = 'color_change';
+    } else if (config.histogram_momentum_enabled && histogramMomentumLong) {
+      macdSoftLong = true;
+      macdSoftSource = 'momentum';
+    }
+    
+    if (histogramShiftToRed) {
+      macdSoftShort = true;
+      macdSoftSource = 'color_change';
+    } else if (config.histogram_momentum_enabled && histogramMomentumShort) {
+      macdSoftShort = true;
+      macdSoftSource = 'momentum';
+    }
+    
+    // Push KUN ÉT MACD soft condition point (ikke to separate)
+    longConditions.push(macdSoftLong);
+    shortConditions.push(macdSoftShort);
+    
+    conditionDetails.macd.long = macdSoftLong;
+    conditionDetails.macd.short = macdSoftShort;
+    
+    // Gem histogram momentum separat for logging (men det tæller IKKE som ekstra point)
+    conditionDetails.histogramMomentum = {
+      long: histogramMomentumLong,
+      short: histogramMomentumShort,
+      currentMomentum,
+      previousMomentum,
+      source: macdSoftSource, // Hvilken kilde gav pointet
+    };
+    
+    console.log(`   📊 MACD Soft (samlet): Long: ${macdSoftLong ? '✅' : '❌'} Short: ${macdSoftShort ? '✅' : '❌'} (kilde: ${macdSoftSource || 'ingen'})`);
+    console.log(`      Histogram: Current=${macd.histogram.toFixed(6)}, Previous=${macdPrevious.histogram.toFixed(6)}`);
+    console.log(`      Farveskift: Long=${histogramShiftToGreen}, Short=${histogramShiftToRed}`);
+    if (config.histogram_momentum_enabled) {
+      console.log(`      Momentum: Long=${histogramMomentumLong}, Short=${histogramMomentumShort} (cur=${currentMomentum.toFixed(6)}, prev=${previousMomentum.toFixed(6)})`);
     }
   }
   
@@ -1956,12 +2001,17 @@ serve(async (req) => {
           
           console.log(`📝 Open reason: ${openReason}`);
           
-          // Calculate trailing stop from ATR and config
-          const atrValue = analysis.indicators.atr || (analysis.indicators.price * 0.01); // Fallback til 1% hvis ATR disabled
+          // 🔴 KRITISK: Trailing stop beregnes KUN fra ATR - INGEN FALLBACK
+          // ATR er allerede valideret tidligere, så dette er garanteret gyldigt
+          const atrValue = analysis.indicators.atr;
           const trailingStopDistance = atrValue * config.atr_trailing_stop_multiplier;
           const trailingStopPercent = (trailingStopDistance / analysis.indicators.price) * 100;
           
-          console.log(`🎯 Trailing stop calculation: ATR=${atrValue.toFixed(6)}, Distance=${trailingStopDistance.toFixed(6)}, Percent=${trailingStopPercent.toFixed(2)}%`);
+          console.log(`🎯 Trailing stop beregning (ATR-baseret):`);
+          console.log(`   ATR: ${atrValue.toFixed(6)}`);
+          console.log(`   Multiplier: ${config.atr_trailing_stop_multiplier}x`);
+          console.log(`   Distance: ${trailingStopDistance.toFixed(6)}`);
+          console.log(`   Procent: ${trailingStopPercent.toFixed(2)}%`);
           
           // Use actual values from Binance for database insert
           const actualEntryPrice = parseFloat(binancePosition.entryPrice);
@@ -2046,21 +2096,21 @@ serve(async (req) => {
             trend_higher: selectedSignal.higherTrend,
           };
 
-          // 🛡️ CRITICAL SAFETY: Ensure stop_loss is ALWAYS set
-          // If analysis.stopLoss is null, NaN, 0, or invalid - calculate a fallback
-          let finalStopLoss = analysis.stopLoss;
+          // 🔴 KRITISK: Stop Loss er ALTID ATR-baseret - INGEN FALLBACK
+          // ATR og SL er allerede valideret tidligere i flowet
+          // Hvis vi kommer hertil, er analysis.stopLoss garanteret gyldig
+          const finalStopLoss = analysis.stopLoss;
+          
+          // Ekstra sikkerhedsvalidering - burde aldrig trigge efter tidligere checks
           if (!finalStopLoss || isNaN(finalStopLoss) || !isFinite(finalStopLoss) || finalStopLoss <= 0) {
-            // Fallback: Use 3% from entry price if ATR-based SL failed
-            const fallbackSLPercent = 3.0;
-            if (signal === 'LONG') {
-              finalStopLoss = actualEntryPrice * (1 - fallbackSLPercent / 100);
-            } else {
-              finalStopLoss = actualEntryPrice * (1 + fallbackSLPercent / 100);
-            }
-            console.log(`⚠️ SAFETY: analysis.stopLoss was invalid (${analysis.stopLoss}), using fallback SL: ${finalStopLoss.toFixed(6)}`);
+            console.log(`🚨 KRITISK FEJL: Stop Loss ugyldig trods tidligere validering (${analysis.stopLoss})`);
+            console.log(`   ❌ Trade AFVIST: Ingen fallback tilladt per strategi-regler`);
+            continue; // BLOKER trade - ingen fallback
           }
           
-          console.log(`🛡️ Final Stop Loss for ${symbol}: ${finalStopLoss.toFixed(6)}`);
+          console.log(`🛡️ Stop Loss (ATR-baseret) for ${symbol}: ${finalStopLoss.toFixed(6)}`);
+          console.log(`   ATR brugt: ${analysis.indicators.atr.toFixed(6)}`);
+          console.log(`   Multiplier: ${config.atr_stop_loss_multiplier}x`);
 
           // Save position to database with verified Binance data and indicators
           const { data: insertedPosition, error: insertError } = await supabaseClient
