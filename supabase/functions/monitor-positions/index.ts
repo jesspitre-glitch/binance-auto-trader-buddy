@@ -387,12 +387,14 @@ serve(async (req) => {
               // 🔴 FIX: break_even_at_price = den faktiske BE-pris (entry), IKKE trigger-prisen
               const breakEvenAtPrice = position.entry_price;
               newStopLoss = breakEvenAtPrice;
+              const stopLossAfterBE = newStopLoss; // Gem til assertion
               
               const updatedSnapshot = {
                 ...position.indicators_snapshot,
                 break_even_at_price: breakEvenAtPrice, // ✅ Den faktiske BE-pris hvor SL nu ligger
-                break_even_trigger_price: currentPrice, // Prisen der triggeде BE
+                break_even_trigger_price: currentPrice, // Prisen der triggede BE
                 break_even_triggered_at: new Date().toISOString(),
+                stop_loss_after_be: stopLossAfterBE, // Gem for audit
               };
               await supabaseClient
                 .from('positions')
@@ -403,15 +405,32 @@ serve(async (req) => {
                 })
                 .eq('id', position.id);
               
-              console.log(`\n📊 ═══════════════════════════════════════════`);
-              console.log(`📊 BREAK-EVEN AUDIT - ${position.symbol} ${position.side}`);
-              console.log(`📊 ═══════════════════════════════════════════`);
+              // 📊 BREAK-EVEN SUMMARY med assertion
+              const diff = Math.abs(stopLossAfterBE - breakEvenAtPrice);
+              const assertionPassed = diff < 1e-10;
+              
+              console.log(`\n📊 ═══════════════════════════════════════════════════════`);
+              console.log(`📊 BREAK-EVEN SUMMARY - ${position.symbol} ${position.side}`);
+              console.log(`📊 ═══════════════════════════════════════════════════════`);
               console.log(`   Type: LEGACY (1% threshold)`);
-              console.log(`   break_even_triggered: true`);
-              console.log(`   break_even_at_price: ${breakEvenAtPrice} (SL flyttet hertil)`);
-              console.log(`   break_even_trigger_price: ${currentPrice} (prisen der triggede)`);
-              console.log(`   Verification: break_even_at_price !== null: ${breakEvenAtPrice !== null}`);
-              console.log(`📊 ═══════════════════════════════════════════\n`);
+              console.log(`   entry_price: ${position.entry_price}`);
+              console.log(`   break_even_trigger_price: ${currentPrice}`);
+              console.log(`   break_even_at_price: ${breakEvenAtPrice}`);
+              console.log(`   stop_loss_after_be: ${stopLossAfterBE}`);
+              console.log(`   ─────────────────────────────────────────────────────────`);
+              console.log(`   ASSERTION: stop_loss_after_be == break_even_at_price`);
+              console.log(`   diff: ${diff.toExponential(10)}`);
+              if (assertionPassed) {
+                console.log(`   ✅ ASSERTION PASSED (diff < 1e-10)`);
+              } else {
+                console.log(`   ❌ ASSERTION FAILED!`);
+                console.log(`   ÅRSAG: stop_loss_after_be (${stopLossAfterBE}) != break_even_at_price (${breakEvenAtPrice})`);
+                console.log(`   Mulige årsager:`);
+                console.log(`     1. Afrundingsfejl i beregning`);
+                console.log(`     2. Race condition mellem BE og trailing stop`);
+                console.log(`     3. Uventet manipulation af newStopLoss variabel`);
+              }
+              console.log(`📊 ═══════════════════════════════════════════════════════\n`);
             }
           } else {
             // ATR-baseret break-even
@@ -430,12 +449,14 @@ serve(async (req) => {
               // 🔴 FIX: break_even_at_price = den faktiske BE-pris (entry), IKKE trigger-prisen
               const breakEvenAtPrice = position.entry_price;
               newStopLoss = breakEvenAtPrice;
+              const stopLossAfterBE = newStopLoss; // Gem til assertion
               
               const updatedSnapshot = {
                 ...position.indicators_snapshot,
                 break_even_at_price: breakEvenAtPrice, // ✅ Den faktiske BE-pris hvor SL nu ligger
                 break_even_trigger_price: currentPrice, // Prisen der triggede BE
                 break_even_triggered_at: new Date().toISOString(),
+                stop_loss_after_be: stopLossAfterBE, // Gem for audit
               };
               await supabaseClient
                 .from('positions')
@@ -446,16 +467,33 @@ serve(async (req) => {
                 })
                 .eq('id', position.id);
               
-              console.log(`\n📊 ═══════════════════════════════════════════`);
-              console.log(`📊 BREAK-EVEN AUDIT - ${position.symbol} ${position.side}`);
-              console.log(`📊 ═══════════════════════════════════════════`);
+              // 📊 BREAK-EVEN SUMMARY med assertion
+              const diff = Math.abs(stopLossAfterBE - breakEvenAtPrice);
+              const assertionPassed = diff < 1e-10;
+              
+              console.log(`\n📊 ═══════════════════════════════════════════════════════`);
+              console.log(`📊 BREAK-EVEN SUMMARY - ${position.symbol} ${position.side}`);
+              console.log(`📊 ═══════════════════════════════════════════════════════`);
               console.log(`   Type: ATR-BASED (${breakEvenAtrMultiplier}x ATR)`);
-              console.log(`   break_even_triggered: true`);
-              console.log(`   break_even_at_price: ${breakEvenAtPrice} (SL flyttet hertil)`);
-              console.log(`   break_even_trigger_price: ${currentPrice} (prisen der triggede)`);
+              console.log(`   entry_price: ${position.entry_price}`);
+              console.log(`   break_even_trigger_price: ${currentPrice}`);
+              console.log(`   break_even_at_price: ${breakEvenAtPrice}`);
+              console.log(`   stop_loss_after_be: ${stopLossAfterBE}`);
               console.log(`   ATR: ${snapshotAtr}, Threshold distance: ${breakEvenDistance.toFixed(6)}`);
-              console.log(`   Verification: break_even_at_price !== null: ${breakEvenAtPrice !== null}`);
-              console.log(`📊 ═══════════════════════════════════════════\n`);
+              console.log(`   ─────────────────────────────────────────────────────────`);
+              console.log(`   ASSERTION: stop_loss_after_be == break_even_at_price`);
+              console.log(`   diff: ${diff.toExponential(10)}`);
+              if (assertionPassed) {
+                console.log(`   ✅ ASSERTION PASSED (diff < 1e-10)`);
+              } else {
+                console.log(`   ❌ ASSERTION FAILED!`);
+                console.log(`   ÅRSAG: stop_loss_after_be (${stopLossAfterBE}) != break_even_at_price (${breakEvenAtPrice})`);
+                console.log(`   Mulige årsager:`);
+                console.log(`     1. Afrundingsfejl i beregning`);
+                console.log(`     2. Race condition mellem BE og trailing stop`);
+                console.log(`     3. Uventet manipulation af newStopLoss variabel`);
+              }
+              console.log(`📊 ═══════════════════════════════════════════════════════\n`);
             }
           }
         } else {
