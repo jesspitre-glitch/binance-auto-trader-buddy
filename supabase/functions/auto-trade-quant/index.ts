@@ -2119,6 +2119,22 @@ serve(async (req) => {
             atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier,
             trailing_stop_initial: initialTrailingStop,
             
+            // 🎯 AUDIT v6 FELTER - Beregnet ved trade open for verifikation
+            break_even_trigger_price: signal === 'LONG'
+              ? actualEntryPrice + ((analysis.indicators.atr || 0) * config.break_even_atr)
+              : actualEntryPrice - ((analysis.indicators.atr || 0) * config.break_even_atr),
+            trailing_activation_price: signal === 'LONG'
+              ? actualEntryPrice + ((analysis.indicators.atr || 0) * config.trailing_stop_activation_atr)
+              : actualEntryPrice - ((analysis.indicators.atr || 0) * config.trailing_stop_activation_atr),
+            trailing_distance: (analysis.indicators.atr || 0) * config.atr_trailing_stop_multiplier,
+            expected_stop_loss: signal === 'LONG'
+              ? actualEntryPrice - ((analysis.indicators.atr || 0) * config.atr_stop_loss_multiplier)
+              : actualEntryPrice + ((analysis.indicators.atr || 0) * config.atr_stop_loss_multiplier),
+            
+            // 🔴 EXIT TYPE FLAG - Bruges til AUDIT v6 verifikation
+            exit_type: 'ATR_BASED', // Altid ATR for bot trades - ALDRIG procent-fallback
+            is_synced_position: false, // Bot-åbnet, ikke synkroniseret fra Binance
+            
             // Trend data
             trend_medium: selectedSignal.trend,
             trend_higher: selectedSignal.higherTrend,
@@ -2199,6 +2215,26 @@ serve(async (req) => {
             console.error(`   Order ID: ${orderData.orderId}`);
             console.error(`   Manual sync required`);
             continue;
+          }
+          
+          // 🚨 POST-INSERT ASSERT: Verificer at ATR blev gemt korrekt
+          if (insertedPosition) {
+            const savedAtr = insertedPosition.indicators_snapshot?.atr;
+            const savedExitType = insertedPosition.indicators_snapshot?.exit_type;
+            
+            if (!savedAtr || savedAtr <= 0 || !isFinite(savedAtr)) {
+              console.log(`\n🚨🚨🚨 CRITICAL_ATR_NULL_OPENED 🚨🚨🚨`);
+              console.log(`   Symbol: ${symbol}`);
+              console.log(`   Side: ${signal}`);
+              console.log(`   Entry: ${actualEntryPrice}`);
+              console.log(`   Strategy: ${strategyHash}`);
+              console.log(`   Position ID: ${insertedPosition.id}`);
+              console.log(`   Saved ATR: ${savedAtr}`);
+              console.log(`   Exit Type: ${savedExitType}`);
+              console.log(`   ❌ DETTE BØR ALDRIG SKE - ATR VAR NULL VED INSERT!`);
+            } else {
+              console.log(`\n✅ POST-INSERT ASSERT PASSED: ATR=${savedAtr.toFixed(6)}, exit_type=${savedExitType}`);
+            }
           }
 
           // 🛡️ RACE CONDITION GUARD: Check if we exceeded max positions after insert

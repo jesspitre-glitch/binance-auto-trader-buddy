@@ -392,19 +392,55 @@ serve(async (req) => {
             .order('created_at', { ascending: false })
             .limit(1);
           
-          let openReason = `Position synkroniseret fra Binance (${side} @ ${entryPrice.toFixed(4)}) - Default SL sat: ${stopLoss.toFixed(4)}`;
-          let indicatorsSnapshot = null;
+          let openReason = `⚠️ SYNCED FROM BINANCE (${side} @ ${entryPrice.toFixed(4)}) - PERCENT_FALLBACK SL: ${stopLoss.toFixed(4)} (${defaultSlPercent}%)`;
+          
+          // 🔴 KRITISK: Marker synkroniserede positioner tydeligt
+          // Disse har IKKE ATR data og bruger procent-fallback
+          let indicatorsSnapshot: any = {
+            is_synced_position: true,
+            exit_type: 'PERCENT_FALLBACK', // IKKE ATR_BASED
+            atr: null, // Eksplicit null - ATR er IKKE tilgængelig
+            atr_percent: null,
+            stop_loss_percent_used: defaultSlPercent,
+            sync_timestamp: new Date().toISOString(),
+            warning: 'Position synced from Binance without bot signal - using percent-based stop loss fallback'
+          };
+          
+          console.log(`⚠️ PERCENT_FALLBACK_DETECTED: ${binancePos.symbol} synced without bot signal`);
+          console.log(`   exit_type: PERCENT_FALLBACK (${defaultSlPercent}% SL)`);
+          console.log(`   ATR: NULL (not available for synced positions)`);
           
           // If we found a recent signal from the bot, use that data including proper SL
           if (recentSignals && recentSignals.length > 0) {
             const signal = recentSignals[0];
-            indicatorsSnapshot = signal.indicators;
-            
-            // Use the SL from the signal if available
             const indicators = signal.indicators as any;
-            if (indicators.stop_loss && indicators.stop_loss > 0) {
-              stopLoss = indicators.stop_loss;
-              console.log(`✅ Using bot signal SL for ${binancePos.symbol}: ${stopLoss.toFixed(4)}`);
+            
+            // Check if bot signal has valid ATR
+            if (indicators && indicators.atr && indicators.atr > 0) {
+              indicatorsSnapshot = {
+                ...indicators,
+                is_synced_position: true, // Stadig synkroniseret, men har ATR data
+                exit_type: 'ATR_BASED', // HAR ATR fra bot signal
+              };
+              
+              // Use the SL from the signal if available
+              if (indicators.stop_loss && indicators.stop_loss > 0) {
+                stopLoss = indicators.stop_loss;
+                console.log(`✅ ATR_EXIT_OK: Using bot signal SL for ${binancePos.symbol}: ${stopLoss.toFixed(4)}`);
+                console.log(`   exit_type: ATR_BASED (from recent bot signal)`);
+                console.log(`   ATR: ${indicators.atr}`);
+              }
+            } else {
+              // Bot signal found but no ATR - still use percent fallback
+              console.log(`⚠️ Bot signal found but ATR missing for ${binancePos.symbol}`);
+              indicatorsSnapshot = {
+                ...indicators,
+                is_synced_position: true,
+                exit_type: 'PERCENT_FALLBACK',
+                atr: null,
+                stop_loss_percent_used: defaultSlPercent,
+                warning: 'Bot signal found but ATR was null - using percent fallback'
+              };
             }
             
             // Create detailed open reason like the bot would
