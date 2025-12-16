@@ -334,42 +334,35 @@ serve(async (req) => {
         
         // Break-even logic: Move SL to entry hvis profit er nået (DO THIS FIRST!)
         if (!position.break_even_activated) {
-          let breakEvenDistance = 0;
-          let breakEvenMethod = '';
-          
-          // 🎯 PRIMÆR: ATR-baseret break-even beregning
+          // 🔴 KRITISK: ATR-baseret break-even - INGEN FALLBACK TILLADT
           const snapshotAtr = position.indicators_snapshot?.atr;
           const breakEvenAtrMultiplier = position.indicators_snapshot?.break_even_atr || 1.0;
           
-          if (snapshotAtr && snapshotAtr > 0 && isFinite(snapshotAtr)) {
-            breakEvenDistance = breakEvenAtrMultiplier * snapshotAtr;
-            breakEvenMethod = `ATR-baseret (${breakEvenAtrMultiplier} × ${snapshotAtr.toFixed(6)} = ${breakEvenDistance.toFixed(6)})`;
+          if (!snapshotAtr || snapshotAtr <= 0 || !isFinite(snapshotAtr)) {
+            console.log(`⚠️ Break-even SKIPPED for ${position.symbol}: ATR mangler i snapshot (${snapshotAtr})`);
+            console.log(`   Ingen fallback bruges - position fortsætter uden break-even check`);
           } else {
-            // ⚠️ FAILSAFE: Kun for legacy positioner uden ATR
-            breakEvenDistance = position.entry_price * 0.015;
-            breakEvenMethod = `FALLBACK 1.5% (${breakEvenDistance.toFixed(6)}) - ATR MANGLER!`;
-            console.log(`⚠️ WARNING: Using percentage fallback for break-even on ${position.symbol} - ATR was: ${snapshotAtr}`);
-          }
-          
-          console.log(`Break-even check for ${position.symbol}: ${breakEvenMethod}`);
-          
-          let breakEvenReached = false;
-          if (position.side === 'LONG') {
-            breakEvenReached = currentPrice >= (position.entry_price + breakEvenDistance);
-          } else {
-            breakEvenReached = currentPrice <= (position.entry_price - breakEvenDistance);
-          }
-          
-          if (breakEvenReached) {
-            newStopLoss = position.entry_price;
-            await supabaseClient
-              .from('positions')
-              .update({ 
-                stop_loss: newStopLoss, 
-                break_even_activated: true 
-              })
-              .eq('id', position.id);
-            console.log(`✅ BREAK-EVEN ACTIVATED: SL moved to entry ${newStopLoss} for ${position.symbol}`);
+            const breakEvenDistance = breakEvenAtrMultiplier * snapshotAtr;
+            console.log(`Break-even check for ${position.symbol}: ATR-baseret (${breakEvenAtrMultiplier} × ${snapshotAtr.toFixed(6)} = ${breakEvenDistance.toFixed(6)})`);
+            
+            let breakEvenReached = false;
+            if (position.side === 'LONG') {
+              breakEvenReached = currentPrice >= (position.entry_price + breakEvenDistance);
+            } else {
+              breakEvenReached = currentPrice <= (position.entry_price - breakEvenDistance);
+            }
+            
+            if (breakEvenReached) {
+              newStopLoss = position.entry_price;
+              await supabaseClient
+                .from('positions')
+                .update({ 
+                  stop_loss: newStopLoss, 
+                  break_even_activated: true 
+                })
+                .eq('id', position.id);
+              console.log(`✅ BREAK-EVEN ACTIVATED: SL moved to entry ${newStopLoss} for ${position.symbol}`);
+            }
           }
         }
         
@@ -383,47 +376,46 @@ serve(async (req) => {
             newPeakPrice = currentPrice;
           }
           
-          // 🎯 ATR-BASERET TRAILING STOP (primær logik)
-          // Hent ATR og trailing stop multiplier fra snapshot
+          // 🔴 KRITISK: ATR-BASERET TRAILING STOP - INGEN FALLBACK TILLADT
           const snapshotAtr = position.indicators_snapshot?.atr;
           const atrTrailingMultiplier = position.indicators_snapshot?.atr_trailing_stop_multiplier || 1.8;
           
-          let trailingDistance: number;
-          let trailingMethod: string;
-          
-          if (snapshotAtr && snapshotAtr > 0 && isFinite(snapshotAtr)) {
-            // ✅ PRIMÆR: ATR-baseret trailing stop afstand
-            trailingDistance = snapshotAtr * atrTrailingMultiplier;
-            trailingMethod = `ATR-baseret (${snapshotAtr.toFixed(6)} × ${atrTrailingMultiplier} = ${trailingDistance.toFixed(6)})`;
+          if (!snapshotAtr || snapshotAtr <= 0 || !isFinite(snapshotAtr)) {
+            console.log(`⚠️ Trailing stop SKIPPED for ${position.symbol}: ATR mangler i snapshot (${snapshotAtr})`);
+            console.log(`   Ingen fallback bruges - position fortsætter med original stop_loss`);
+            // Behold eksisterende trailing_stop hvis sat
           } else {
-            // ⚠️ FAILSAFE: Fast procent kun hvis ATR mangler (legacy positioner)
-            const fallbackPercent = position.trailing_stop_percent || 2.0;
-            trailingDistance = newPeakPrice * (fallbackPercent / 100);
-            trailingMethod = `FALLBACK procent (${fallbackPercent}% = ${trailingDistance.toFixed(6)}) - ATR MANGLER!`;
-            console.log(`⚠️ WARNING: Using percentage fallback for ${position.symbol} - ATR was: ${snapshotAtr}`);
+            // ✅ ATR-baseret trailing stop afstand
+            const trailingDistance = snapshotAtr * atrTrailingMultiplier;
+            console.log(`Trailing stop beregning (ATR-baseret):`);
+            console.log(`   ATR: ${snapshotAtr.toFixed(6)}`);
+            console.log(`   Multiplier: ${atrTrailingMultiplier}x`);
+            console.log(`   Distance: ${trailingDistance.toFixed(6)}`);
+            
+            if (position.side === 'LONG') {
+              const calculatedTrailingStop = newPeakPrice - trailingDistance;
+              // Trailing stop må aldrig være værre end original stop loss
+              newTrailingStop = newStopLoss ? Math.max(calculatedTrailingStop, newStopLoss) : calculatedTrailingStop;
+              console.log(`   LONG: peak=${newPeakPrice}, calculated=${calculatedTrailingStop.toFixed(4)}, final=${newTrailingStop.toFixed(4)}`);
+            } else {
+              const calculatedTrailingStop = newPeakPrice + trailingDistance;
+              // Trailing stop må aldrig være værre end original stop loss
+              newTrailingStop = newStopLoss ? Math.min(calculatedTrailingStop, newStopLoss) : calculatedTrailingStop;
+              console.log(`   SHORT: peak=${newPeakPrice}, calculated=${calculatedTrailingStop.toFixed(4)}, final=${newTrailingStop.toFixed(4)}`);
+            }
           }
           
-          if (position.side === 'LONG') {
-            const calculatedTrailingStop = newPeakPrice - trailingDistance;
-            // Trailing stop må aldrig være værre end original stop loss
-            newTrailingStop = newStopLoss ? Math.max(calculatedTrailingStop, newStopLoss) : calculatedTrailingStop;
-            console.log(`Trailing stop (LONG): peak=${newPeakPrice}, ${trailingMethod}, calculated=${calculatedTrailingStop.toFixed(4)}, final=${newTrailingStop.toFixed(4)} for ${position.symbol}`);
-          } else {
-            const calculatedTrailingStop = newPeakPrice + trailingDistance;
-            // Trailing stop må aldrig være værre end original stop loss
-            newTrailingStop = newStopLoss ? Math.min(calculatedTrailingStop, newStopLoss) : calculatedTrailingStop;
-            console.log(`Trailing stop (SHORT): peak=${newPeakPrice}, ${trailingMethod}, calculated=${calculatedTrailingStop.toFixed(4)}, final=${newTrailingStop.toFixed(4)} for ${position.symbol}`);
-          }
-          
-          // Tjek om trailing stop er ramt (kun hvis aktiveret)
-          if (position.side === 'LONG' && currentPrice <= newTrailingStop) {
-            shouldClose = true;
-            closeReason = 'TRAILING_STOP_HIT';
-            console.log(`TRAILING STOP HIT (LONG): price=${currentPrice} <= trailing=${newTrailingStop} for ${position.symbol}`);
-          } else if (position.side === 'SHORT' && currentPrice >= newTrailingStop) {
-            shouldClose = true;
-            closeReason = 'TRAILING_STOP_HIT';
-            console.log(`TRAILING STOP HIT (SHORT): price=${currentPrice} >= trailing=${newTrailingStop} for ${position.symbol}`);
+          // Tjek om trailing stop er ramt (kun hvis aktiveret og beregnet)
+          if (newTrailingStop && newTrailingStop > 0) {
+            if (position.side === 'LONG' && currentPrice <= newTrailingStop) {
+              shouldClose = true;
+              closeReason = 'TRAILING_STOP_HIT';
+              console.log(`TRAILING STOP HIT (LONG): price=${currentPrice} <= trailing=${newTrailingStop} for ${position.symbol}`);
+            } else if (position.side === 'SHORT' && currentPrice >= newTrailingStop) {
+              shouldClose = true;
+              closeReason = 'TRAILING_STOP_HIT';
+              console.log(`TRAILING STOP HIT (SHORT): price=${currentPrice} >= trailing=${newTrailingStop} for ${position.symbol}`);
+            }
           }
         } else {
           console.log(`Trailing stop NOT active yet for ${position.symbol} (need ${trailingActivationAtr} ATR profit, have ${profitInAtr.toFixed(2)} ATR)`);
