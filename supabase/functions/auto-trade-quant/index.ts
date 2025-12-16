@@ -1734,6 +1734,14 @@ serve(async (req) => {
         try {
           console.log(`\n🎯 Behandler signal ${selectedSignal.symbol} (styrke: ${selectedSignal.strength.toFixed(1)})`);
           
+          // 🛡️ KRITISK ATR CHECK: Blok trade hvis ATR mangler
+          const atrForTrade = analysis.indicators.atr;
+          if (!atrForTrade || atrForTrade <= 0 || !isFinite(atrForTrade)) {
+            console.log(`🚨 BLOKERET: ${signal} for ${symbol} - ATR mangler eller ugyldig (atr=${atrForTrade}). ATR er PÅKRÆVET for exit-logik.`);
+            continue;
+          }
+          console.log(`✅ ATR valideret for ${symbol}: ${atrForTrade.toFixed(6)} (${((atrForTrade / analysis.indicators.price) * 100).toFixed(2)}%)`);
+          
           // FINAL MACD RETNINGSCHECK FØR ORDER (ekstra sikkerhed)
           // 🔴 KRITISK: Checker ALTID når macd_direction_enabled=true, uanset om MACD er aktiveret
           if (config.macd_direction_enabled) {
