@@ -2111,18 +2111,19 @@ serve(async (req) => {
             adx_filter_passed: config.adx_enabled 
               ? (analysis.filterStatus?.hard?.adx?.passed ?? null) 
               : null,
-            // 🔴 FIX: Volume filter status - null hvis disabled ELLER volume er null
-            // Bruger analysis.indicators.volume (ikke volume_current)
-            volume_filter_passed: config.volume_enabled 
-              ? (analysis.indicators?.volume === null || analysis.indicators?.volume === undefined
-                  ? null  // Ingen volume data = ikke evalueret
-                  : (analysis.filterStatus?.hard?.volume?.passed ?? null))
-              : null,
-            volume_multiplier_filter_passed: config.volume_enabled 
-              ? (analysis.indicators?.volume === null || analysis.indicators?.volume === undefined
-                  ? null  // Ingen volume data = ikke evalueret
-                  : (analysis.filterStatus?.hard?.volume?.passed ?? null))
-              : null,
+            // 🔴 FIX: Volume filter status - TRI-STATE LOGIC
+            // null = disabled ELLER manglende data (volume_current eller volume_avg er null)
+            // true/false = faktisk evalueret resultat
+            volume_filter_passed: config.volume_enabled !== true
+              ? null  // Volume filter disabled i UI
+              : (analysis.indicators?.volume == null || analysis.indicators?.avgVolume == null)
+                  ? null  // Manglende volume data - kan ikke evaluere
+                  : (analysis.indicators.volume >= analysis.indicators.avgVolume * config.volume_multiplier),
+            volume_multiplier_filter_passed: config.volume_enabled !== true
+              ? null  // Volume filter disabled i UI
+              : (analysis.indicators?.volume == null || analysis.indicators?.avgVolume == null)
+                  ? null  // Manglende volume data - kan ikke evaluere
+                  : (analysis.indicators.volume >= analysis.indicators.avgVolume * config.volume_multiplier),
             // 🔴 FIX: Volume current value for debugging
             volume_current: analysis.indicators?.volume ?? null,
             
