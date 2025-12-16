@@ -727,14 +727,14 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     // 🔴 ADX Min er HÅRDT filter - blokerer trades med for lav trend
     if (adx < dynamicMinADX) {
       filterStatus.hard.adx.passed = false;
-      filterStatus.hard.adx.reason = `${adx.toFixed(2)} < ${dynamicMinADX.toFixed(2)} (minimum)`;
+      filterStatus.hard.adx.reason = `ADX_BELOW_MIN: ${adx.toFixed(2)} < ${dynamicMinADX.toFixed(2)}`;
+      console.log(`   ❌ ADX HARD BLOCK: ${adx.toFixed(2)} < ${dynamicMinADX.toFixed(2)} (under minimum)`);
     }
-    // 🟡 ADX Max er BLØDT veto - logges men blokerer IKKE automatisk
-    // Stærke trends (ADX > Max) tillades hvis trend og momentum matcher
+    // 🔴 ADX Max er HÅRDT filter - blokerer trades med for høj volatilitet
     if (adx > adxMax) {
-      console.log(`   ⚠️ ADX SOFT VETO: ${adx.toFixed(2)} > ${adxMax.toFixed(2)} (max) - Trade TILLADT da ADX Max er blødt filter`);
-      filterStatus.hard.adx.reason = `${adx.toFixed(2)} > ${adxMax.toFixed(2)} (over max, men tilladt - blødt veto)`;
-      // BEMÆRK: passed forbliver TRUE - ADX Max blokerer ikke længere
+      filterStatus.hard.adx.passed = false;
+      filterStatus.hard.adx.reason = `ADX_ABOVE_MAX: ${adx.toFixed(2)} > ${adxMax.toFixed(2)}`;
+      console.log(`   ❌ ADX HARD BLOCK: ${adx.toFixed(2)} > ${adxMax.toFixed(2)} (over maximum)`);
     }
   }
   
@@ -962,26 +962,25 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     conditionDetails.stochRSI.short = stochRSIShort;
   }
   
-  // 🔴 MACD SOFT CONDITIONS - KUN ÉT POINT SAMLET
-  // Histogram og Histogram Momentum er korrelerede - de må IKKE begge give point
-  // Vi bruger den STÆRKESTE af de to, og giver maks 1 point
+  // 🟢 MACD SOFT CONDITIONS - SEPARATE POINTS (følger UI)
+  // Når både MACD Histogram og Histogram Momentum er tændt, giver de HVER 1 point
   if (config.macd_enabled && macd && macdPrevious) {
-    let macdSoftLong = false;
-    let macdSoftShort = false;
-    let macdSoftSource = '';
-    
-    // Option 1: Histogram Color Change (farveskift)
+    // Histogram Color Change (farveskift) - 1 separat point
     const histogramShiftToGreen = macd.histogram > config.macd_histogram_threshold && 
                                    macdPrevious.histogram <= config.macd_histogram_threshold;
     const histogramShiftToRed = macd.histogram < -config.macd_histogram_threshold && 
                                  macdPrevious.histogram >= -config.macd_histogram_threshold;
     
-    // Option 2: Histogram Momentum (retning) - beregnes kun hvis enabled
-    let histogramMomentumLong = false;
-    let histogramMomentumShort = false;
-    let currentMomentum = 0;
-    let previousMomentum = 0;
+    // Push MACD Histogram som separat soft condition (1 point)
+    longConditions.push(histogramShiftToGreen);
+    shortConditions.push(histogramShiftToRed);
+    conditionDetails.macd.long = histogramShiftToGreen;
+    conditionDetails.macd.short = histogramShiftToRed;
     
+    console.log(`   📊 MACD Histogram (1 point): Long: ${histogramShiftToGreen ? '✅' : '❌'} Short: ${histogramShiftToRed ? '✅' : '❌'}`);
+    console.log(`      Current=${macd.histogram.toFixed(6)}, Previous=${macdPrevious.histogram.toFixed(6)}`);
+    
+    // Histogram Momentum - separat 1 point (kun hvis enabled i UI)
     if (config.histogram_momentum_enabled && closes.length >= config.histogram_momentum_periods + 2) {
       const histograms: number[] = [];
       for (let i = 0; i < config.histogram_momentum_periods + 1; i++) {
@@ -992,6 +991,11 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
         }
       }
       
+      let histogramMomentumLong = false;
+      let histogramMomentumShort = false;
+      let currentMomentum = 0;
+      let previousMomentum = 0;
+      
       if (histograms.length >= 3) {
         currentMomentum = histograms[histograms.length - 1] - histograms[histograms.length - 2];
         previousMomentum = histograms[histograms.length - 2] - histograms[histograms.length - 3];
@@ -999,47 +1003,20 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
         histogramMomentumLong = currentMomentum > previousMomentum && currentMomentum > 0;
         histogramMomentumShort = currentMomentum < previousMomentum && currentMomentum < 0;
       }
-    }
-    
-    // 🎯 VALG: Brug farveskift hvis tilgængeligt, ellers momentum
-    // Men kun ÉT point gives - aldrig begge
-    if (histogramShiftToGreen) {
-      macdSoftLong = true;
-      macdSoftSource = 'color_change';
-    } else if (config.histogram_momentum_enabled && histogramMomentumLong) {
-      macdSoftLong = true;
-      macdSoftSource = 'momentum';
-    }
-    
-    if (histogramShiftToRed) {
-      macdSoftShort = true;
-      macdSoftSource = 'color_change';
-    } else if (config.histogram_momentum_enabled && histogramMomentumShort) {
-      macdSoftShort = true;
-      macdSoftSource = 'momentum';
-    }
-    
-    // Push KUN ÉT MACD soft condition point (ikke to separate)
-    longConditions.push(macdSoftLong);
-    shortConditions.push(macdSoftShort);
-    
-    conditionDetails.macd.long = macdSoftLong;
-    conditionDetails.macd.short = macdSoftShort;
-    
-    // Gem histogram momentum separat for logging (men det tæller IKKE som ekstra point)
-    conditionDetails.histogramMomentum = {
-      long: histogramMomentumLong,
-      short: histogramMomentumShort,
-      currentMomentum,
-      previousMomentum,
-      source: macdSoftSource, // Hvilken kilde gav pointet
-    };
-    
-    console.log(`   📊 MACD Soft (samlet): Long: ${macdSoftLong ? '✅' : '❌'} Short: ${macdSoftShort ? '✅' : '❌'} (kilde: ${macdSoftSource || 'ingen'})`);
-    console.log(`      Histogram: Current=${macd.histogram.toFixed(6)}, Previous=${macdPrevious.histogram.toFixed(6)}`);
-    console.log(`      Farveskift: Long=${histogramShiftToGreen}, Short=${histogramShiftToRed}`);
-    if (config.histogram_momentum_enabled) {
-      console.log(`      Momentum: Long=${histogramMomentumLong}, Short=${histogramMomentumShort} (cur=${currentMomentum.toFixed(6)}, prev=${previousMomentum.toFixed(6)})`);
+      
+      // Push MACD Histogram Momentum som separat soft condition (1 point)
+      longConditions.push(histogramMomentumLong);
+      shortConditions.push(histogramMomentumShort);
+      
+      conditionDetails.histogramMomentum = {
+        long: histogramMomentumLong,
+        short: histogramMomentumShort,
+        currentMomentum,
+        previousMomentum,
+      };
+      
+      console.log(`   📊 MACD Momentum (1 point): Long: ${histogramMomentumLong ? '✅' : '❌'} Short: ${histogramMomentumShort ? '✅' : '❌'}`);
+      console.log(`      cur=${currentMomentum.toFixed(6)}, prev=${previousMomentum.toFixed(6)}`);
     }
   }
   
