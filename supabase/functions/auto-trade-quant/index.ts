@@ -1776,6 +1776,15 @@ serve(async (req) => {
       const eligibleSignals = topCandidates
         .filter(s => s.hardFiltersPassed && s.signal !== 'NONE'); // KRITISK: Bloker NONE signaler (MACD retningsfilter)
       
+      // 🚨 LOG ALLE SIGNALS DER BLOKERES AF HÅRDE FILTRE
+      const hardFilterBlockedSignals = topCandidates.filter(s => !s.hardFiltersPassed && s.signal !== 'NONE');
+      for (const blocked of hardFilterBlockedSignals) {
+        console.log(`\n🚫 HARD_FILTERS_FAILED = true -> TRADE_OPEN_FORBIDDEN`);
+        console.log(`   Symbol: ${blocked.symbol}, Signal: ${blocked.signal}, Strength: ${blocked.strength.toFixed(1)}`);
+        console.log(`   ADX: ${blocked.analysis.indicators.adx?.toFixed(2) ?? 'N/A'}, Floor: ${config.adx_floor}, Ceiling: ${config.adx_ceiling}`);
+        console.log(`   Reason: Hard filter(s) blocked this trade`);
+      }
+      
       // 🛡️ KRITISK: Tag KUN det stærkeste signal for at undgå race conditions
       // Tidligere: .slice(0, slotsAvailable) kunne åbne flere positioner samtidigt
       // Nu: .slice(0, 1) sikrer kun én position åbnes per scan-cyklus
@@ -1807,7 +1816,10 @@ serve(async (req) => {
           // 🛡️ KRITISK ATR CHECK: Blok trade hvis ATR mangler
           const atrForTrade = analysis.indicators.atr;
           if (!atrForTrade || atrForTrade <= 0 || !isFinite(atrForTrade)) {
-            console.log(`🚨 BLOKERET: ${signal} for ${symbol} - ATR mangler eller ugyldig (atr=${atrForTrade}). ATR er PÅKRÆVET for exit-logik.`);
+            console.log(`\n🚨 TRADE_BLOCKED: ATR_MISSING_OR_INVALID`);
+            console.log(`   Symbol: ${symbol}, Signal: ${signal}`);
+            console.log(`   ATR_value: ${atrForTrade}`);
+            console.log(`   ❌ Reason: ATR er PÅKRÆVET for exit-logik (SL, BE, Trailing). Ingen trade uden gyldig ATR.`);
             continue;
           }
           console.log(`✅ ATR valideret for ${symbol}: ${atrForTrade.toFixed(6)} (${((atrForTrade / analysis.indicators.price) * 100).toFixed(2)}%)`);
@@ -2149,6 +2161,9 @@ serve(async (req) => {
           console.log(`   📏 trailing_distance: ${trailingDistanceValue.toFixed(6)}`);
           console.log(`      (ATR × Trailing_multiplier ${config.atr_trailing_stop_multiplier})`);
           console.log(`📊 ═══════════════════════════════════════════`);
+          
+          // 🎯 TRADE_OPEN AUDIT - Samlet one-liner for nem verifikation
+          console.log(`\n🎯 TRADE_OPEN AUDIT | ${symbol} ${signal} | Entry: ${actualEntryPrice.toFixed(6)} | ATR_value: ${atrValueForLogging?.toFixed(6) ?? 'NULL'} | ATR_pct: ${atrPctForLogging?.toFixed(4) ?? 'NULL'}% | SL_Multi: ${config.atr_stop_loss_multiplier} | BE_ATR: ${config.break_even_atr} | Activation_ATR: ${config.trailing_stop_activation_atr} | Trail_Multi: ${config.atr_trailing_stop_multiplier} | SL_Price: ${finalStopLoss.toFixed(6)} | BE_Trigger: ${breakEvenTriggerPrice.toFixed(6)} | Trail_Activation: ${trailingActivationPrice.toFixed(6)} | Trail_Distance: ${trailingDistanceValue.toFixed(6)}`);
           
           if (atrValueForLogging === null || atrValueForLogging === 0 || !isFinite(atrValueForLogging)) {
             console.log(`🚨 ❌ ATR_MISSING_OR_INVALID VED TRADE OPEN - DETTE BØR ALDRIG SKE!`);
