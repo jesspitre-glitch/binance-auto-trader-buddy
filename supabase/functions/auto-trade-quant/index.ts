@@ -1209,7 +1209,46 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     console.log(`📍 Pivot Points: ⚪ DISABLED\n`);
   }
   
-  // FINAL RESULTAT
+  // SOFT CONDITIONS POINT BREAKDOWN
+  console.log(`═══════════════════════════════════════════`);
+  console.log(`📊 SOFT CONDITIONS POINT BREAKDOWN:`);
+  console.log(`   Krævet: ${requiredConditions} points`);
+  console.log(`   ─────────────────────────────────────────`);
+  
+  // LONG breakdown
+  let longPointsBreakdown: string[] = [];
+  if (config.ema_enabled && conditionDetails.ema.long) longPointsBreakdown.push('EMA Trend: +1');
+  if (config.stochrsi_enabled && conditionDetails.stochRSI.long) longPointsBreakdown.push('StochRSI Zone: +1');
+  if (config.macd_enabled && conditionDetails.macd.long) longPointsBreakdown.push('MACD Histogram: +1');
+  if (config.histogram_momentum_enabled && conditionDetails.histogramMomentum?.long) longPointsBreakdown.push('MACD Momentum: +1');
+  if (config.bb_enabled && conditionDetails.bb.long) longPointsBreakdown.push('Bollinger: +1');
+  if (config.volume_enabled && conditionDetails.volume.long) longPointsBreakdown.push('Volume: +1');
+  if (config.pivot_points_enabled && conditionDetails.pivotPoints.long) longPointsBreakdown.push('Pivot: +1');
+  
+  console.log(`   LONG points (${longConditionsMet}/${requiredConditions}):`);
+  if (longPointsBreakdown.length > 0) {
+    longPointsBreakdown.forEach(p => console.log(`      • ${p}`));
+  } else {
+    console.log(`      • (ingen points opnået)`);
+  }
+  
+  // SHORT breakdown
+  let shortPointsBreakdown: string[] = [];
+  if (config.ema_enabled && conditionDetails.ema.short) shortPointsBreakdown.push('EMA Trend: +1');
+  if (config.stochrsi_enabled && conditionDetails.stochRSI.short) shortPointsBreakdown.push('StochRSI Zone: +1');
+  if (config.macd_enabled && conditionDetails.macd.short) shortPointsBreakdown.push('MACD Histogram: +1');
+  if (config.histogram_momentum_enabled && conditionDetails.histogramMomentum?.short) shortPointsBreakdown.push('MACD Momentum: +1');
+  if (config.bb_enabled && conditionDetails.bb.short) shortPointsBreakdown.push('Bollinger: +1');
+  if (config.volume_enabled && conditionDetails.volume.short) shortPointsBreakdown.push('Volume: +1');
+  if (config.pivot_points_enabled && conditionDetails.pivotPoints.short) shortPointsBreakdown.push('Pivot: +1');
+  
+  console.log(`   SHORT points (${shortConditionsMet}/${requiredConditions}):`);
+  if (shortPointsBreakdown.length > 0) {
+    shortPointsBreakdown.forEach(p => console.log(`      • ${p}`));
+  } else {
+    console.log(`      • (ingen points opnået)`);
+  }
+  
   console.log(`═══════════════════════════════════════════`);
   console.log(`🎯 FINAL RESULTAT:`);
   console.log(`   LONG: ${longConditionsMet}/${longConditions.length} betingelser opfyldt (kræver ${requiredConditions})`);
@@ -2085,9 +2124,35 @@ serve(async (req) => {
             continue; // BLOKER trade - ingen fallback
           }
           
-          console.log(`🛡️ Stop Loss (ATR-baseret) for ${symbol}: ${finalStopLoss.toFixed(6)}`);
-          console.log(`   ATR brugt: ${analysis.indicators.atr.toFixed(6)}`);
-          console.log(`   Multiplier: ${config.atr_stop_loss_multiplier}x`);
+          // 📊 KOMPLET ATR/EXIT LOGGING VED TRADE OPEN (sanity check)
+          const atrValueForLogging = analysis.indicators.atr;
+          const atrPctForLogging = atrValueForLogging ? (atrValueForLogging / actualEntryPrice) * 100 : null;
+          const breakEvenTriggerPrice = signal === 'LONG'
+            ? actualEntryPrice + (atrValueForLogging * config.break_even_atr)
+            : actualEntryPrice - (atrValueForLogging * config.break_even_atr);
+          const trailingActivationPrice = signal === 'LONG'
+            ? actualEntryPrice + (atrValueForLogging * config.trailing_stop_activation_atr)
+            : actualEntryPrice - (atrValueForLogging * config.trailing_stop_activation_atr);
+          const trailingDistanceValue = atrValueForLogging * config.atr_trailing_stop_multiplier;
+          
+          console.log(`\n📊 ═══════════════════════════════════════════`);
+          console.log(`📊 ATR/EXIT VÆRDIER VED TRADE OPEN - ${symbol} ${signal}`);
+          console.log(`📊 ═══════════════════════════════════════════`);
+          console.log(`   🎯 ATR_value: ${atrValueForLogging !== null ? atrValueForLogging.toFixed(6) : '❌ NULL'}`);
+          console.log(`   🎯 ATR_pct: ${atrPctForLogging !== null ? atrPctForLogging.toFixed(4) + '%' : '❌ NULL'}`);
+          console.log(`   🛡️ initial_stop_loss_price: ${finalStopLoss.toFixed(6)}`);
+          console.log(`      (Entry ${actualEntryPrice.toFixed(6)} ${signal === 'LONG' ? '-' : '+'} ATR ${atrValueForLogging?.toFixed(6)} × SL_multiplier ${config.atr_stop_loss_multiplier})`);
+          console.log(`   🔄 break_even_trigger_price: ${breakEvenTriggerPrice.toFixed(6)}`);
+          console.log(`      (Entry ${signal === 'LONG' ? '+' : '-'} ATR × BE_multiplier ${config.break_even_atr})`);
+          console.log(`   📈 trailing_activation_price: ${trailingActivationPrice.toFixed(6)}`);
+          console.log(`      (Entry ${signal === 'LONG' ? '+' : '-'} ATR × Activation_multiplier ${config.trailing_stop_activation_atr})`);
+          console.log(`   📏 trailing_distance: ${trailingDistanceValue.toFixed(6)}`);
+          console.log(`      (ATR × Trailing_multiplier ${config.atr_trailing_stop_multiplier})`);
+          console.log(`📊 ═══════════════════════════════════════════`);
+          
+          if (atrValueForLogging === null || atrValueForLogging === 0 || !isFinite(atrValueForLogging)) {
+            console.log(`🚨 ❌ ATR_MISSING_OR_INVALID VED TRADE OPEN - DETTE BØR ALDRIG SKE!`);
+          }
 
           // Save position to database with verified Binance data and indicators
           const { data: insertedPosition, error: insertError } = await supabaseClient
