@@ -2099,17 +2099,28 @@ serve(async (req) => {
             macd_signal_period: config.macd_signal, // Config parameter for MACD signal period
             
             // 🔴 FIX: Hard filter pass/fail status - null hvis disabled (not evaluated)
+            // Også null hvis volume_current er null (ingen data at evaluere)
             ema_spread_filter_passed: config.ema_enabled 
               ? (analysis.filterStatus?.hard?.emaSpread?.passed ?? null) 
               : null,
+            // 🔴 FIX: ATR filter status - null hvis ATR filter er slukket i UI
+            // (ATR beregnes stadig til exits, men filter_passed er "not evaluated")
             atr_filter_passed: config.atr_enabled 
               ? (analysis.filterStatus?.hard?.atr?.passed ?? null) 
               : null,
             adx_filter_passed: config.adx_enabled 
               ? (analysis.filterStatus?.hard?.adx?.passed ?? null) 
               : null,
+            // 🔴 FIX: Volume filter status - null hvis disabled ELLER volume_current er null
             volume_filter_passed: config.volume_enabled 
-              ? (analysis.filterStatus?.hard?.volume?.passed ?? null) 
+              ? (analysis.indicators?.volume_current === null || analysis.indicators?.volume_current === undefined
+                  ? null  // Ingen volume data = ikke evalueret
+                  : (analysis.filterStatus?.hard?.volume?.passed ?? null))
+              : null,
+            volume_multiplier_filter_passed: config.volume_enabled 
+              ? (analysis.indicators?.volume_current === null || analysis.indicators?.volume_current === undefined
+                  ? null  // Ingen volume data = ikke evalueret
+                  : (analysis.filterStatus?.hard?.volume?.passed ?? null))
               : null,
             macd_direction_passed: config.macd_direction_enabled 
               ? (signal === 'LONG' 
@@ -2162,12 +2173,17 @@ serve(async (req) => {
             // Break-even and trailing stop config
             break_even_atr_multiplier: config.break_even_atr,
             atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier,
-            trailing_stop_initial: initialTrailingStop,
             
-            // 🎯 AUDIT v6 FELTER - Beregnet ved trade open for verifikation
+            // 🔴 FIX: Omdøbt fra trailing_stop_initial til trailing_stop_initial_price
+            trailing_stop_initial_price: initialTrailingStop, // Fuld precision, ingen afrunding
+            
+            // 🎯 AUDIT v6 FELTER - Beregnet ved trade open for verifikation (fuld precision)
             break_even_trigger_price: signal === 'LONG'
               ? actualEntryPrice + ((analysis.indicators.atr || 0) * config.break_even_atr)
               : actualEntryPrice - ((analysis.indicators.atr || 0) * config.break_even_atr),
+            // 🔴 FIX: trailing_activation_price - korrekt fortegn baseret på side
+            // LONG: entry + ATR * activation_atr (aktiveres når pris stiger)
+            // SHORT: entry - ATR * activation_atr (aktiveres når pris falder)
             trailing_activation_price: signal === 'LONG'
               ? actualEntryPrice + ((analysis.indicators.atr || 0) * config.trailing_stop_activation_atr)
               : actualEntryPrice - ((analysis.indicators.atr || 0) * config.trailing_stop_activation_atr),
@@ -2211,20 +2227,21 @@ serve(async (req) => {
           console.log(`\n📊 ═══════════════════════════════════════════`);
           console.log(`📊 ATR/EXIT VÆRDIER VED TRADE OPEN - ${symbol} ${signal}`);
           console.log(`📊 ═══════════════════════════════════════════`);
-          console.log(`   🎯 ATR_value: ${atrValueForLogging !== null ? atrValueForLogging.toFixed(6) : '❌ NULL'}`);
-          console.log(`   🎯 ATR_pct: ${atrPctForLogging !== null ? atrPctForLogging.toFixed(4) + '%' : '❌ NULL'}`);
-          console.log(`   🛡️ initial_stop_loss_price: ${finalStopLoss.toFixed(6)}`);
-          console.log(`      (Entry ${actualEntryPrice.toFixed(6)} ${signal === 'LONG' ? '-' : '+'} ATR ${atrValueForLogging?.toFixed(6)} × SL_multiplier ${config.atr_stop_loss_multiplier})`);
-          console.log(`   🔄 break_even_trigger_price: ${breakEvenTriggerPrice.toFixed(6)}`);
+          // 🔴 FIX: Fuld precision - ingen afrunding for at undgå truncering på lavpris-coins (PEPE etc)
+          console.log(`   🎯 ATR_value: ${atrValueForLogging !== null ? atrValueForLogging : '❌ NULL'}`);
+          console.log(`   🎯 ATR_pct: ${atrPctForLogging !== null ? atrPctForLogging + '%' : '❌ NULL'}`);
+          console.log(`   🛡️ initial_stop_loss_price: ${finalStopLoss}`);
+          console.log(`      (Entry ${actualEntryPrice} ${signal === 'LONG' ? '-' : '+'} ATR ${atrValueForLogging} × SL_multiplier ${config.atr_stop_loss_multiplier})`);
+          console.log(`   🔄 break_even_trigger_price: ${breakEvenTriggerPrice}`);
           console.log(`      (Entry ${signal === 'LONG' ? '+' : '-'} ATR × BE_multiplier ${config.break_even_atr})`);
-          console.log(`   📈 trailing_activation_price: ${trailingActivationPrice.toFixed(6)}`);
+          console.log(`   📈 trailing_activation_price: ${trailingActivationPrice}`);
           console.log(`      (Entry ${signal === 'LONG' ? '+' : '-'} ATR × Activation_multiplier ${config.trailing_stop_activation_atr})`);
-          console.log(`   📏 trailing_distance: ${trailingDistanceValue.toFixed(6)}`);
+          console.log(`   📏 trailing_distance: ${trailingDistanceValue}`);
           console.log(`      (ATR × Trailing_multiplier ${config.atr_trailing_stop_multiplier})`);
           console.log(`📊 ═══════════════════════════════════════════`);
           
-          // 🎯 TRADE_OPEN AUDIT - Samlet one-liner for nem verifikation
-          console.log(`\n🎯 TRADE_OPEN AUDIT | ${symbol} ${signal} | Entry: ${actualEntryPrice.toFixed(6)} | ATR_value: ${atrValueForLogging?.toFixed(6) ?? 'NULL'} | ATR_pct: ${atrPctForLogging?.toFixed(4) ?? 'NULL'}% | SL_Multi: ${config.atr_stop_loss_multiplier} | BE_ATR: ${config.break_even_atr} | Activation_ATR: ${config.trailing_stop_activation_atr} | Trail_Multi: ${config.atr_trailing_stop_multiplier} | SL_Price: ${finalStopLoss.toFixed(6)} | BE_Trigger: ${breakEvenTriggerPrice.toFixed(6)} | Trail_Activation: ${trailingActivationPrice.toFixed(6)} | Trail_Distance: ${trailingDistanceValue.toFixed(6)}`);
+          // 🎯 TRADE_OPEN AUDIT - Samlet one-liner for nem verifikation (fuld precision)
+          console.log(`\n🎯 TRADE_OPEN AUDIT | ${symbol} ${signal} | Entry: ${actualEntryPrice} | ATR_value: ${atrValueForLogging ?? 'NULL'} | ATR_pct: ${atrPctForLogging ?? 'NULL'}% | SL_Multi: ${config.atr_stop_loss_multiplier} | BE_ATR: ${config.break_even_atr} | Activation_ATR: ${config.trailing_stop_activation_atr} | Trail_Multi: ${config.atr_trailing_stop_multiplier} | SL_Price: ${finalStopLoss} | BE_Trigger: ${breakEvenTriggerPrice} | Trail_Activation: ${trailingActivationPrice} | Trail_Distance: ${trailingDistanceValue}`);
           
           if (atrValueForLogging === null || atrValueForLogging === 0 || !isFinite(atrValueForLogging)) {
             console.log(`🚨 ❌ ATR_MISSING_OR_INVALID VED TRADE OPEN - DETTE BØR ALDRIG SKE!`);
