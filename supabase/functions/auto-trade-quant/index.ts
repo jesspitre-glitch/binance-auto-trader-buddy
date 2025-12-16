@@ -765,7 +765,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // 5️⃣ MACD RETNINGS-FILTER (HÅRDT FILTER - blokerer trades mod MACD retning)
   // ⚠️ VIGTIGT: Dette er et RETNINGS-SPECIFIKT filter og evalueres IKKE i hardFiltersPass
   // Det blokerer kun i longSignal/shortSignal baseret på retning
-  // 🔴 REGEL: LONG kræver macdLine > 0, SHORT kræver macdLine < 0
+  // 🔴 REGEL: LONG kræver macdLine > signalLine, SHORT kræver macdLine < signalLine
   let macdLongOK = true;
   let macdShortOK = true;
   
@@ -777,20 +777,20 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   if (config.macd_direction_enabled) {
     // 🚨 KRITISK FIX: Tjek kun om MACD er tilgængelig, ikke om MACD indicator er enabled
     // Hvis direction filter er enabled MEN MACD værdi mangler, bloker ALT for sikkerhed
-    if (config.macd_enabled && macd && macdLine !== null) {
+    if (config.macd_enabled && macd && macdLine !== null && macdSignalLine !== null) {
       // 🚨 HÅRDT RETNINGSFILTER (SIDE-BASERET, ALDRIG AND):
-      // LONG: macdLine > 0 (bullish)
-      // SHORT: macdLine < 0 (bearish)
-      macdLongOK = macdLine > 0;
-      macdShortOK = macdLine < 0;
+      // LONG: macdLine > signalLine (bullish crossover/above)
+      // SHORT: macdLine < signalLine (bearish crossover/below)
+      macdLongOK = macdLine > macdSignalLine;
+      macdShortOK = macdLine < macdSignalLine;
       
       filterStatus.hard.macdDirection.long = macdLongOK;
       filterStatus.hard.macdDirection.short = macdShortOK;
-      filterStatus.hard.macdDirection.value = `macdLine=${macdLine.toFixed(6)}`;
+      filterStatus.hard.macdDirection.value = `macdLine=${macdLine.toFixed(6)}, signalLine=${macdSignalLine.toFixed(6)}`;
       
-      if (macdLine === 0) {
-        // Ekstremt sjældent: MACD præcis på nul-linjen
-        filterStatus.hard.macdDirection.reason = `MACD præcis på nul-linjen`;
+      if (macdLine === macdSignalLine) {
+        // Ekstremt sjældent: MACD præcis på signal-linjen
+        filterStatus.hard.macdDirection.reason = `MACD præcis på signal-linjen`;
       }
     } else {
       // MACD direction filter ER aktiveret men MACD værdi mangler - BLOKER ALT
@@ -1094,8 +1094,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // 🚨 FINAL SIGNAL BESLUTNING - Bløde betingelser + MACD hårde filtre
   // MACD retningsfilter blokerer ALLE trades i forkert retning (evalueret FØR bløde betingelser)
   // MACD farveskift filter blokerer trades hvis histogram ikke skifter farve i trade retningen
-  const longSignal = longConditionsMet >= requiredConditions && macdLongOK && macdColorChangeLongOK; // LONG kræver MACD > 0 OG rød→grøn skift (hvis aktiveret)
-  const shortSignal = shortConditionsMet >= requiredConditions && macdShortOK && macdColorChangeShortOK; // SHORT kræver MACD < 0 OG grøn→rød skift (hvis aktiveret)
+  const longSignal = longConditionsMet >= requiredConditions && macdLongOK && macdColorChangeLongOK; // LONG kræver macdLine > signalLine OG rød→grøn skift (hvis aktiveret)
+  const shortSignal = shortConditionsMet >= requiredConditions && macdShortOK && macdColorChangeShortOK; // SHORT kræver macdLine < signalLine OG grøn→rød skift (hvis aktiveret)
   
   // Calculate conditions met for signal strength
   const conditionsMet = Math.max(longConditionsMet, shortConditionsMet);
@@ -1105,6 +1105,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   
   // 🔎 MACD DIRECTION AUDIT LOG (verificerer side-baseret logik)
   // Denne log viser præcis hvad der bestemmer MACD_direction_filter_passed
+  // KUN LOG NÅR side er LONG eller SHORT (ikke NONE) for at vise faktiske entry-evalueringer
   const macdDirectionFilterPassed = config.macd_direction_enabled
     ? (finalSide === 'LONG' ? macdLongOK : finalSide === 'SHORT' ? macdShortOK : null)
     : null;
@@ -1112,26 +1113,31 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     ? (finalSide === 'LONG' ? macdColorChangeLongOK : finalSide === 'SHORT' ? macdColorChangeShortOK : null)
     : null;
   
-  console.log(`\n🔎 MACD DIRECTION AUDIT:`);
-  console.log(`   macd_signal_period (config): ${config.macd_signal}`);
-  console.log(`   macd_line (runtime): ${macdLine !== null ? macdLine.toFixed(6) : 'null'}`);
-  console.log(`   macd_signal_line (runtime): ${macdSignalLine !== null ? macdSignalLine.toFixed(6) : 'null'}`);
-  console.log(`   macd_histogram (runtime): ${macdHistogram !== null ? macdHistogram.toFixed(6) : 'null'}`);
-  console.log(`   ─────────────────────────────────────────`);
-  console.log(`   macd_direction_enabled: ${config.macd_direction_enabled}`);
-  console.log(`   longOk (macdLine > 0): ${macdLongOK} (macdLine=${macdLine !== null ? macdLine.toFixed(6) : 'null'})`);
-  console.log(`   shortOk (macdLine < 0): ${macdShortOK} (macdLine=${macdLine !== null ? macdLine.toFixed(6) : 'null'})`);
-  console.log(`   side: ${finalSide}`);
-  console.log(`   MACD_direction_filter_passed: ${macdDirectionFilterPassed}`);
-  console.log(`   MACD_color_change_passed: ${macdColorChangeFilterPassed}`);
-  console.log(`   ─────────────────────────────────────────`);
-  console.log(`   REGLER:`);
-  console.log(`     A: LONG + longOk=true + shortOk=false -> passed=true ✓`);
-  console.log(`     B: SHORT + longOk=false + shortOk=true -> passed=true ✓`);
-  console.log(`     C: LONG + longOk=false -> passed=false ✗`);
-  console.log(`     D: SHORT + shortOk=false -> passed=false ✗`);
-  console.log(`   AKTUEL CASE: ${finalSide === 'LONG' ? (macdLongOK ? 'A (LONG passed)' : 'C (LONG blocked)') : finalSide === 'SHORT' ? (macdShortOK ? 'B (SHORT passed)' : 'D (SHORT blocked)') : 'NONE (no signal)'}`);
-  console.log(``);
+  // Kun log MACD audit når der er et faktisk signal (LONG eller SHORT)
+  if (finalSide === 'LONG' || finalSide === 'SHORT') {
+    console.log(`\n🔎 MACD DIRECTION AUDIT (ENTRY EVALUATION):`);
+    console.log(`   side: ${finalSide}`);
+    console.log(`   ─────────────────────────────────────────`);
+    console.log(`   macd_signal_period (config): ${config.macd_signal}`);
+    console.log(`   macd_line (runtime): ${macdLine !== null ? macdLine.toFixed(6) : 'null'}`);
+    console.log(`   macd_signal_line (runtime): ${macdSignalLine !== null ? macdSignalLine.toFixed(6) : 'null'}`);
+    console.log(`   macd_histogram (runtime): ${macdHistogram !== null ? macdHistogram.toFixed(6) : 'null'}`);
+    console.log(`   ─────────────────────────────────────────`);
+    console.log(`   macd_direction_enabled: ${config.macd_direction_enabled}`);
+    console.log(`   longOk (macdLine > signalLine): ${macdLongOK} (${macdLine?.toFixed(6)} > ${macdSignalLine?.toFixed(6)})`);
+    console.log(`   shortOk (macdLine < signalLine): ${macdShortOK} (${macdLine?.toFixed(6)} < ${macdSignalLine?.toFixed(6)})`);
+    console.log(`   MACD_direction_filter_passed: ${macdDirectionFilterPassed}`);
+    console.log(`   MACD_color_change_passed: ${macdColorChangeFilterPassed}`);
+    console.log(`   ─────────────────────────────────────────`);
+    console.log(`   REGLER (macdLine vs signalLine):`);
+    console.log(`     A: LONG + longOk=true (macdLine > signalLine) -> passed=true`);
+    console.log(`     B: SHORT + shortOk=true (macdLine < signalLine) -> passed=true`);
+    console.log(`     C: LONG + longOk=false (macdLine <= signalLine) -> passed=false`);
+    console.log(`     D: SHORT + shortOk=false (macdLine >= signalLine) -> passed=false`);
+    console.log(`   ─────────────────────────────────────────`);
+    console.log(`   AKTUEL CASE: ${finalSide === 'LONG' ? (macdLongOK ? 'A (LONG passed)' : 'C (LONG blocked)') : (macdShortOK ? 'B (SHORT passed)' : 'D (SHORT blocked)')}`);
+    console.log(``);
+  }
   
   // ═══════════════════════════════════════════════
   // 🚫 CHECK: BLOKERER HÅRDE FILTRE?
@@ -1197,16 +1203,17 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // MACD DETALJERET
   if (config.macd_enabled && macd && macdPrevious) {
     console.log(`📈 MACD:`);
-    console.log(`   MACD Line: ${macd.macd.toFixed(6)} (${macd.macd > 0 ? 'BULLISH ✅' : 'BEARISH ❌'})`);
+    console.log(`   MACD Line: ${macd.macd.toFixed(6)}`);
     console.log(`   Signal Line: ${macd.signal.toFixed(6)}`);
+    console.log(`   MACD vs Signal: ${macd.macd > macd.signal ? 'BULLISH (macdLine > signalLine) ✅' : macd.macd < macd.signal ? 'BEARISH (macdLine < signalLine) ❌' : 'NEUTRAL'}`);
     console.log(`   Current Histogram: ${macd.histogram.toFixed(6)}`);
     console.log(`   Previous Histogram: ${macdPrevious.histogram.toFixed(6)}`);
     console.log(`   Threshold: ${config.macd_histogram_threshold}`);
     
     if (config.macd_direction_enabled) {
-      console.log(`   🔴 HÅRDT RETNINGSFILTER (evalueret FØR bløde betingelser):`);
-      console.log(`      ⛔ BLOKER LONG når MACD ≤ 0 → Status: ${macd.macd > 0 ? '✅ LONG TILLADT' : '❌ LONG BLOKERET'} (MACD = ${macd.macd.toFixed(6)})`);
-      console.log(`      ⛔ BLOKER SHORT når MACD ≥ 0 → Status: ${macd.macd < 0 ? '✅ SHORT TILLADT' : '❌ SHORT BLOKERET'} (MACD = ${macd.macd.toFixed(6)})`);
+      console.log(`   🔴 HÅRDT RETNINGSFILTER (macdLine vs signalLine):`);
+      console.log(`      LONG kræver: macdLine > signalLine → ${macd.macd.toFixed(6)} > ${macd.signal.toFixed(6)} = ${macd.macd > macd.signal ? '✅ LONG TILLADT' : '❌ LONG BLOKERET'}`);
+      console.log(`      SHORT kræver: macdLine < signalLine → ${macd.macd.toFixed(6)} < ${macd.signal.toFixed(6)} = ${macd.macd < macd.signal ? '✅ SHORT TILLADT' : '❌ SHORT BLOKERET'}`);
     }
     
     console.log(`   LONG (Shift red→green): Current=${macd.histogram.toFixed(6)} > ${config.macd_histogram_threshold} && Prev=${macdPrevious.histogram.toFixed(6)} <= ${config.macd_histogram_threshold} = ${conditionDetails.macd.long ? '✅ TRUE' : '❌ FALSE'}`);
