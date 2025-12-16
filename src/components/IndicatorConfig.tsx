@@ -115,6 +115,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     daily_loss_limit_percent: config?.daily_loss_limit_percent || 5,
     max_position_duration_minutes: config?.max_position_duration_minutes || 240,
     auto_exit_enabled: config?.auto_exit_enabled !== undefined ? config?.auto_exit_enabled : true,
+    conditional_time_exit_enabled: config?.conditional_time_exit_enabled !== undefined ? config?.conditional_time_exit_enabled : true,
     
     // Leverage
     leverage: config?.leverage || 10,
@@ -210,6 +211,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       daily_loss_limit_percent: config.daily_loss_limit_percent ?? 5,
       max_position_duration_minutes: config.max_position_duration_minutes ?? 240,
       auto_exit_enabled: config.auto_exit_enabled !== undefined ? config.auto_exit_enabled : true,
+      conditional_time_exit_enabled: config.conditional_time_exit_enabled !== undefined ? config.conditional_time_exit_enabled : true,
       // Leverage
       leverage: config.leverage ?? 10,
     });
@@ -293,6 +295,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       daily_loss_limit_percent: config.daily_loss_limit_percent ?? 5,
       max_position_duration_minutes: config.max_position_duration_minutes ?? 240,
       auto_exit_enabled: config.auto_exit_enabled !== undefined ? config.auto_exit_enabled : true,
+      conditional_time_exit_enabled: config.conditional_time_exit_enabled !== undefined ? config.conditional_time_exit_enabled : true,
       leverage: config.leverage ?? 10,
     });
     
@@ -1416,6 +1419,37 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               Sæt til 0 eller lad være tom for at deaktivere timeout. Positioner lukkes kun på stop loss/trailing stop. (240 = 4 timer)
             </p>
           </div>
+          
+          <div className="flex items-center justify-between border-t pt-4">
+            <div className="space-y-1">
+              <Label htmlFor="conditional_time_exit_enabled">Betinget Tids-Exit (Anti-Sour Exit)</Label>
+              <p className="text-xs text-muted-foreground">
+                Når tændt: Timeout lukker KUN positioner uden momentum.<br/>
+                Aktive trends får lov at løbe uanset varighed.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.conditional_time_exit_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="conditional_time_exit_enabled"
+                checked={formData.conditional_time_exit_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, conditional_time_exit_enabled: checked })}
+                disabled={!formData.auto_exit_enabled}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-md">
+            <strong>Betingelser for tids-exit (alle skal være opfyldt):</strong><br/>
+            • Position overstiger max varighed<br/>
+            • ADX aftager (lavere end ved åbning)<br/>
+            • MACD Histogram Momentum er negativ/flad<br/>
+            • Pris har bevæget sig &lt; 0.3 ATR i perioden<br/>
+            • Trailing Stop er IKKE aktiveret<br/><br/>
+            <strong>Position holdes åben hvis:</strong><br/>
+            • ADX &gt; ADX Min (stærk trend)<br/>
+            • Trailing Stop er aktiveret eller tæt på<br/>
+            • Pris laver nye favorable ekstremer
+          </p>
         </CardContent>
       </Card>
 
@@ -1572,6 +1606,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               `Leverage:               ${formData.leverage}x`,
               `Auto Exit:              ${onOff(formData.auto_exit_enabled)}`,
               `Max Position Duration:  ${formData.max_position_duration_minutes} min`,
+              `Betinget Tids-Exit:     ${onOff(formData.conditional_time_exit_enabled)}`,
               "",
               "═══════════════════════════════════════════════════════════════════",
             ];

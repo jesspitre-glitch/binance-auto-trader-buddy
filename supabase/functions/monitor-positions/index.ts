@@ -269,6 +269,8 @@ serve(async (req) => {
         let trailingActivationAtr = 1.0; // default
         let autoExitEnabled = true; // default - hvis slukket lukkes positioner ikke automatisk
         let maxPositionDurationMinutes: number | null = null; // default - hvis null/0 lukkes positioner ikke pga timeout
+        let conditionalTimeExitEnabled = true; // default - betinget tids-exit (Anti-Sour Exit)
+        let adxFloor = 20; // default ADX min
         
         // Tjek om trailing stop ALLEREDE er aktiveret (fra database)
         let trailingAlreadyActivated = position.trailing_stop != null && position.trailing_stop > 0;
@@ -277,7 +279,7 @@ serve(async (req) => {
         // Dette sikrer at synkroniserede Binance-positioner også får timeout og andre indstillinger
         const { data: configData } = await supabaseClient
           .from('indicator_config')
-          .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, auto_exit_enabled, max_position_duration_minutes')
+          .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor')
           .eq('user_id', position.user_id)
           .single();
         
@@ -286,10 +288,12 @@ serve(async (req) => {
           trailingActivationAtr = configData.trailing_stop_activation_atr ?? 1.0;
           autoExitEnabled = configData.auto_exit_enabled ?? true;
           maxPositionDurationMinutes = configData.max_position_duration_minutes;
+          conditionalTimeExitEnabled = configData.conditional_time_exit_enabled ?? true;
+          adxFloor = configData.adx_floor ?? 20;
           
           // Log for synkroniserede positioner uden strategy_hash
           if (!position.strategy_hash) {
-            console.log(`📋 Synkroniseret position ${position.symbol} bruger aktuel config: timeout=${maxPositionDurationMinutes}min, autoExit=${autoExitEnabled}`);
+            console.log(`📋 Synkroniseret position ${position.symbol} bruger aktuel config: timeout=${maxPositionDurationMinutes}min, autoExit=${autoExitEnabled}, conditionalTimeExit=${conditionalTimeExitEnabled}`);
           }
         }
 
@@ -458,9 +462,70 @@ serve(async (req) => {
           const minutesSinceOpen = (now.getTime() - openedAt.getTime()) / (1000 * 60);
           
           if (minutesSinceOpen >= maxPositionDurationMinutes) {
-            shouldClose = true;
-            closeReason = 'TIMEOUT';
-            console.log(`⏱️ Position ${position.symbol} exceeded max duration (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min), closing...`);
+            // Betinget Tids-Exit (Anti-Sour Exit) logik
+            if (conditionalTimeExitEnabled) {
+              // Hent indikatorer fra snapshot
+              const snapshot = position.indicators_snapshot || {};
+              const openingADX = snapshot.adx || 0;
+              const currentADX = snapshot.adx || 0; // Ville kræve live ADX beregning
+              const histogramMomentum = snapshot.histogram_momentum_met || false;
+              const atr = snapshot.atr || 0;
+              
+              // Beregn prisbevægelse siden åbning
+              const priceMovement = Math.abs(currentPrice - position.entry_price);
+              const priceMovementInAtr = atr > 0 ? priceMovement / atr : 0;
+              
+              // Tjek om pris har lavet nye favorable ekstremer (peak opdateret for nylig)
+              const oldPeak = position.peak_price || position.entry_price;
+              const peakImproved = position.side === 'LONG' 
+                ? currentPrice > oldPeak 
+                : currentPrice < oldPeak;
+              
+              // Position er AKTIV og må IKKE lukkes hvis:
+              // 1. ADX > ADX Min (stærk trend)
+              // 2. Trailing Stop er aktiveret
+              // 3. Pris laver nye favorable ekstremer
+              const isActivePosition = 
+                currentADX > adxFloor || // Stærk trend
+                trailingAlreadyActivated || // Trailing stop aktiveret
+                peakImproved; // Pris forbedres stadig
+              
+              if (isActivePosition) {
+                console.log(`🚫 Position ${position.symbol} HOLDES ÅBEN trods timeout (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min) - AKTIV POSITION:`);
+                console.log(`   ADX: ${currentADX.toFixed(1)} (floor: ${adxFloor}), Trailing: ${trailingAlreadyActivated}, Peak improved: ${peakImproved}`);
+              } else {
+                // Position er DØD - tjek alle betingelser for tids-exit
+                // Alle disse skal være opfyldt for at lukke:
+                const deadConditions = {
+                  durationExceeded: minutesSinceOpen >= maxPositionDurationMinutes,
+                  lowADX: currentADX <= adxFloor,
+                  noHistogramMomentum: !histogramMomentum,
+                  lowPriceMovement: priceMovementInAtr < 0.3,
+                  noTrailingStop: !trailingAlreadyActivated
+                };
+                
+                const allDeadConditionsMet = Object.values(deadConditions).every(v => v);
+                
+                if (allDeadConditionsMet) {
+                  shouldClose = true;
+                  closeReason = 'TIMEOUT_NO_MOMENTUM';
+                  console.log(`⏱️💀 Position ${position.symbol} LUKKES - INGEN MOMENTUM:`);
+                  console.log(`   Duration: ${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min`);
+                  console.log(`   ADX: ${currentADX.toFixed(1)} (floor: ${adxFloor})`);
+                  console.log(`   Histogram momentum: ${histogramMomentum}`);
+                  console.log(`   Price movement: ${priceMovementInAtr.toFixed(2)} ATR (need < 0.3)`);
+                  console.log(`   Trailing stop: ${trailingAlreadyActivated}`);
+                } else {
+                  console.log(`⏱️⚠️ Position ${position.symbol} over max duration men HOLDES ÅBEN - ikke alle dead conditions opfyldt:`);
+                  console.log(`   Conditions: ${JSON.stringify(deadConditions)}`);
+                }
+              }
+            } else {
+              // Klassisk timeout uden betingelser
+              shouldClose = true;
+              closeReason = 'TIMEOUT';
+              console.log(`⏱️ Position ${position.symbol} exceeded max duration (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min), closing...`);
+            }
           }
         } else if (!shouldClose && (!maxPositionDurationMinutes || maxPositionDurationMinutes === 0)) {
           console.log(`⏱️ Position ${position.symbol} - max duration disabled (set to ${maxPositionDurationMinutes}), will only close on stop loss or trailing stop`);
