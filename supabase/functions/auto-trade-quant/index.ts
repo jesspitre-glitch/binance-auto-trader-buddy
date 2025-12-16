@@ -964,24 +964,31 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   
   // 🟢 MACD SOFT CONDITIONS - SEPARATE POINTS (følger UI)
   // Når både MACD Histogram og Histogram Momentum er tændt, giver de HVER 1 point
-  if (config.macd_enabled && macd && macdPrevious) {
-    // Histogram Color Change (farveskift) - 1 separat point
-    const histogramShiftToGreen = macd.histogram > config.macd_histogram_threshold && 
-                                   macdPrevious.histogram <= config.macd_histogram_threshold;
-    const histogramShiftToRed = macd.histogram < -config.macd_histogram_threshold && 
-                                 macdPrevious.histogram >= -config.macd_histogram_threshold;
+  let softMacdHistogramLong = false;
+  let softMacdHistogramShort = false;
+  let softMacdMomentumLong = false;
+  let softMacdMomentumShort = false;
+  
+  if (config.macd_enabled && macd) {
+    // 🔴 FIX: MACD Histogram soft point - rent niveau-check, ikke farveskift
+    // LONG: histogram > threshold (positiv momentum)
+    // SHORT: histogram < -threshold (negativ momentum)
+    softMacdHistogramLong = macd.histogram > config.macd_histogram_threshold;
+    softMacdHistogramShort = macd.histogram < -config.macd_histogram_threshold;
     
     // Push MACD Histogram som separat soft condition (1 point)
-    longConditions.push(histogramShiftToGreen);
-    shortConditions.push(histogramShiftToRed);
-    conditionDetails.macd.long = histogramShiftToGreen;
-    conditionDetails.macd.short = histogramShiftToRed;
+    longConditions.push(softMacdHistogramLong);
+    shortConditions.push(softMacdHistogramShort);
+    conditionDetails.macd.long = softMacdHistogramLong;
+    conditionDetails.macd.short = softMacdHistogramShort;
     
-    console.log(`   📊 MACD Histogram (1 point): Long: ${histogramShiftToGreen ? '✅' : '❌'} Short: ${histogramShiftToRed ? '✅' : '❌'}`);
-    console.log(`      Current=${macd.histogram.toFixed(6)}, Previous=${macdPrevious.histogram.toFixed(6)}`);
+    console.log(`   📊 MACD Histogram (1 point): Long: ${softMacdHistogramLong ? '✅' : '❌'} Short: ${softMacdHistogramShort ? '✅' : '❌'}`);
+    console.log(`      Histogram=${macd.histogram.toFixed(6)}, Threshold=${config.macd_histogram_threshold}`);
+    console.log(`      LONG check: ${macd.histogram.toFixed(6)} > ${config.macd_histogram_threshold} = ${softMacdHistogramLong}`);
+    console.log(`      SHORT check: ${macd.histogram.toFixed(6)} < -${config.macd_histogram_threshold} = ${softMacdHistogramShort}`);
     
     // Histogram Momentum - separat 1 point (kun hvis enabled i UI)
-    if (config.histogram_momentum_enabled && closes.length >= config.histogram_momentum_periods + 2) {
+    if (config.histogram_momentum_enabled && macdPrevious && closes.length >= config.histogram_momentum_periods + 2) {
       const histograms: number[] = [];
       for (let i = 0; i < config.histogram_momentum_periods + 1; i++) {
         const idx = closes.length - 1 - i;
@@ -991,8 +998,6 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
         }
       }
       
-      let histogramMomentumLong = false;
-      let histogramMomentumShort = false;
       let currentMomentum = 0;
       let previousMomentum = 0;
       
@@ -1000,23 +1005,25 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
         currentMomentum = histograms[histograms.length - 1] - histograms[histograms.length - 2];
         previousMomentum = histograms[histograms.length - 2] - histograms[histograms.length - 3];
         
-        histogramMomentumLong = currentMomentum > previousMomentum && currentMomentum > 0;
-        histogramMomentumShort = currentMomentum < previousMomentum && currentMomentum < 0;
+        // 🔴 FIX: Separat momentum evaluering
+        softMacdMomentumLong = currentMomentum > previousMomentum && currentMomentum > 0;
+        softMacdMomentumShort = currentMomentum < previousMomentum && currentMomentum < 0;
       }
       
       // Push MACD Histogram Momentum som separat soft condition (1 point)
-      longConditions.push(histogramMomentumLong);
-      shortConditions.push(histogramMomentumShort);
+      longConditions.push(softMacdMomentumLong);
+      shortConditions.push(softMacdMomentumShort);
       
       conditionDetails.histogramMomentum = {
-        long: histogramMomentumLong,
-        short: histogramMomentumShort,
+        long: softMacdMomentumLong,
+        short: softMacdMomentumShort,
         currentMomentum,
         previousMomentum,
       };
       
-      console.log(`   📊 MACD Momentum (1 point): Long: ${histogramMomentumLong ? '✅' : '❌'} Short: ${histogramMomentumShort ? '✅' : '❌'}`);
+      console.log(`   📊 MACD Momentum (1 point): Long: ${softMacdMomentumLong ? '✅' : '❌'} Short: ${softMacdMomentumShort ? '✅' : '❌'}`);
       console.log(`      cur=${currentMomentum.toFixed(6)}, prev=${previousMomentum.toFixed(6)}`);
+      console.log(`      histogram_momentum_periods: ${config.histogram_momentum_periods}`);
     }
   }
   
@@ -2091,25 +2098,63 @@ serve(async (req) => {
             // Config value preserved (don't overwrite macd_signal from config spread)
             macd_signal_period: config.macd_signal, // Config parameter for MACD signal period
             
-            // Hard filter pass/fail status
-            ema_spread_filter_passed: analysis.filterStatus?.hard?.emaSpread?.passed ?? true,
-            atr_filter_passed: analysis.filterStatus?.hard?.atr?.passed ?? true,
-            adx_filter_passed: analysis.filterStatus?.hard?.adx?.passed ?? true,
-            volume_filter_passed: analysis.filterStatus?.hard?.volume?.passed ?? true,
-            macd_direction_passed: signal === 'LONG' 
-              ? analysis.filterStatus?.hard?.macdDirection?.long ?? true
-              : analysis.filterStatus?.hard?.macdDirection?.short ?? true,
-            rsi_momentum_passed: signal === 'LONG'
-              ? analysis.filterStatus?.hard?.rsiMomentum?.long ?? true
-              : analysis.filterStatus?.hard?.rsiMomentum?.short ?? true,
+            // 🔴 FIX: Hard filter pass/fail status - null hvis disabled (not evaluated)
+            ema_spread_filter_passed: config.ema_enabled 
+              ? (analysis.filterStatus?.hard?.emaSpread?.passed ?? null) 
+              : null,
+            atr_filter_passed: config.atr_enabled 
+              ? (analysis.filterStatus?.hard?.atr?.passed ?? null) 
+              : null,
+            adx_filter_passed: config.adx_enabled 
+              ? (analysis.filterStatus?.hard?.adx?.passed ?? null) 
+              : null,
+            volume_filter_passed: config.volume_enabled 
+              ? (analysis.filterStatus?.hard?.volume?.passed ?? null) 
+              : null,
+            macd_direction_passed: config.macd_direction_enabled 
+              ? (signal === 'LONG' 
+                  ? analysis.filterStatus?.hard?.macdDirection?.long ?? null
+                  : analysis.filterStatus?.hard?.macdDirection?.short ?? null)
+              : null,
+            rsi_momentum_passed: config.rsi_enabled 
+              ? (signal === 'LONG'
+                  ? analysis.filterStatus?.hard?.rsiMomentum?.long ?? null
+                  : analysis.filterStatus?.hard?.rsiMomentum?.short ?? null)
+              : null,
             
-            // Soft conditions individual results
-            soft_ema_trend: analysis.indicators.conditionDetails?.ema?.[signal.toLowerCase()] ?? false,
-            soft_stochrsi: analysis.indicators.conditionDetails?.stochRSI?.[signal.toLowerCase()] ?? false,
-            soft_macd_color: analysis.indicators.conditionDetails?.macd?.[signal.toLowerCase()] ?? false,
-            soft_bb: analysis.indicators.conditionDetails?.bb?.[signal.toLowerCase()] ?? false,
-            soft_volume: analysis.indicators.conditionDetails?.volume?.[signal.toLowerCase()] ?? false,
-            soft_pivot: analysis.indicators.conditionDetails?.pivotPoints?.[signal.toLowerCase()] ?? false,
+            // 🔴 FIX: Soft conditions individual results - med separate MACD fields
+            soft_ema_trend_passed: config.ema_enabled 
+              ? (analysis.indicators.conditionDetails?.ema?.[signal.toLowerCase()] ?? false)
+              : null,
+            soft_stochrsi_passed: config.stochrsi_enabled 
+              ? (analysis.indicators.conditionDetails?.stochRSI?.[signal.toLowerCase()] ?? false)
+              : null,
+            soft_macd_histogram_passed: config.macd_enabled 
+              ? (analysis.indicators.conditionDetails?.macd?.[signal.toLowerCase()] ?? false)
+              : null,
+            soft_macd_momentum_passed: config.histogram_momentum_enabled 
+              ? (analysis.indicators.conditionDetails?.histogramMomentum?.[signal.toLowerCase()] ?? false)
+              : null,
+            soft_bb_passed: config.bb_enabled 
+              ? (analysis.indicators.conditionDetails?.bb?.[signal.toLowerCase()] ?? false)
+              : null,
+            soft_volume_passed: config.volume_enabled 
+              ? (analysis.indicators.conditionDetails?.volume?.[signal.toLowerCase()] ?? false)
+              : null,
+            soft_pivot_passed: config.pivot_points_enabled 
+              ? (analysis.indicators.conditionDetails?.pivotPoints?.[signal.toLowerCase()] ?? false)
+              : null,
+            
+            // 🔴 FIX: soft_conditions_total - sum of all passed soft conditions
+            soft_conditions_total: [
+              config.ema_enabled ? analysis.indicators.conditionDetails?.ema?.[signal.toLowerCase()] : null,
+              config.stochrsi_enabled ? analysis.indicators.conditionDetails?.stochRSI?.[signal.toLowerCase()] : null,
+              config.macd_enabled ? analysis.indicators.conditionDetails?.macd?.[signal.toLowerCase()] : null,
+              config.histogram_momentum_enabled ? analysis.indicators.conditionDetails?.histogramMomentum?.[signal.toLowerCase()] : null,
+              config.bb_enabled ? analysis.indicators.conditionDetails?.bb?.[signal.toLowerCase()] : null,
+              config.volume_enabled ? analysis.indicators.conditionDetails?.volume?.[signal.toLowerCase()] : null,
+              config.pivot_points_enabled ? analysis.indicators.conditionDetails?.pivotPoints?.[signal.toLowerCase()] : null,
+            ].filter(v => v === true).length,
             
             // StochRSI zone check
             stochrsi_zone_passed: analysis.indicators.conditionDetails?.stochRSI?.[signal.toLowerCase()] ?? false,
