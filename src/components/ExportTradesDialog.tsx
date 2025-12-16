@@ -76,10 +76,17 @@ export const ExportTradesDialog = ({
     // Check if we have explicit filter status, otherwise infer from trade existing
     const hasExplicitFilterStatus = snap.atr_filter_passed !== undefined;
     
-    // Volume filter: check if volumeRatio >= volume_multiplier (infer from stored data)
-    const volumeFilterInferred = snap.volumeRatio && snap.volume_multiplier 
-      ? snap.volumeRatio >= snap.volume_multiplier 
-      : true; // Trade exists, so it passed
+    // Volume multiplier hard filter tri-state (null = ikke evalueret)
+    const volumeEnabled = snap.volume_enabled === true;
+    const volumeCurrent = (snap.volume ?? snap.volume_current) ?? null;
+    const volumeAvg = (snap.avgVolume ?? snap.volume_avg) ?? null;
+    const volumeMultiplier = snap.volume_multiplier ?? null;
+    const volumeMultiplierFilterPassedTriState = volumeEnabled !== true
+      ? null
+      : (volumeCurrent == null || volumeAvg == null || volumeMultiplier == null)
+        ? null
+        : (volumeCurrent >= volumeAvg * volumeMultiplier);
+
     
     // ADX filter: check if adx >= adx_threshold
     const adxFilterInferred = snap.adx && snap.adx_threshold
@@ -128,9 +135,11 @@ export const ExportTradesDialog = ({
       ADX_filter_passed: snap.adx_filter_passed ?? adxFilterInferred,
 
       // Volume
-      volume_current: snap.volume != null ? +Number(snap.volume).toFixed(2) : null,
-      volume_avg: snap.avgVolume != null ? +Number(snap.avgVolume).toFixed(2) : null,
-      volume_multiplier_filter_passed: snap.volume_filter_passed ?? volumeFilterInferred,
+      volume_current: volumeCurrent != null ? +Number(volumeCurrent).toFixed(2) : null,
+      volume_avg: volumeAvg != null ? +Number(volumeAvg).toFixed(2) : null,
+      volume_multiplier_filter_passed: snap.volume_multiplier_filter_passed !== undefined
+        ? snap.volume_multiplier_filter_passed
+        : volumeMultiplierFilterPassedTriState,
 
       // StochRSI
       stoch_rsi_k: snap.stochRSI_k != null ? +Number(snap.stochRSI_k).toFixed(2) : null,
