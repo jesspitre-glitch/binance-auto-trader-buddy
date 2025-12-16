@@ -308,6 +308,16 @@ serve(async (req) => {
           continue;
         }
 
+        // 🔍 AUDIT v6: Log exit_type for hver position
+        const exitType = position.indicators_snapshot?.exit_type || 'UNKNOWN';
+        const isSyncedPosition = position.indicators_snapshot?.is_synced_position || false;
+        
+        if (exitType === 'PERCENT_FALLBACK' || isSyncedPosition) {
+          console.log(`⚠️ PERCENT_FALLBACK_DETECTED: ${position.symbol} (synced=${isSyncedPosition})`);
+          console.log(`   exit_type: ${exitType}`);
+          console.log(`   ATR: ${position.indicators_snapshot?.atr ?? 'NULL'}`);
+        }
+        
         // Beregn profit i ATR-enheder
         const profitDistance = position.side === 'LONG'
           ? currentPrice - position.entry_price
