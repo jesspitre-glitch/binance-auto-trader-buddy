@@ -384,11 +384,14 @@ serve(async (req) => {
             console.log(`   LEGACY break-even check: profit=${profitPercent.toFixed(2)}% (need ${legacyBreakEvenPercent}%)`);
             
             if (breakEvenReached) {
-              newStopLoss = position.entry_price;
-              // 🔴 FIX: Gem break_even_at_price i indicators_snapshot når BE aktiveres
+              // 🔴 FIX: break_even_at_price = den faktiske BE-pris (entry), IKKE trigger-prisen
+              const breakEvenAtPrice = position.entry_price;
+              newStopLoss = breakEvenAtPrice;
+              
               const updatedSnapshot = {
                 ...position.indicators_snapshot,
-                break_even_at_price: currentPrice,
+                break_even_at_price: breakEvenAtPrice, // ✅ Den faktiske BE-pris hvor SL nu ligger
+                break_even_trigger_price: currentPrice, // Prisen der triggeде BE
                 break_even_triggered_at: new Date().toISOString(),
               };
               await supabaseClient
@@ -399,7 +402,16 @@ serve(async (req) => {
                   indicators_snapshot: updatedSnapshot
                 })
                 .eq('id', position.id);
-              console.log(`   ✅ LEGACY BREAK-EVEN ACTIVATED: SL moved to entry ${newStopLoss}, price was ${currentPrice}`);
+              
+              console.log(`\n📊 ═══════════════════════════════════════════`);
+              console.log(`📊 BREAK-EVEN AUDIT - ${position.symbol} ${position.side}`);
+              console.log(`📊 ═══════════════════════════════════════════`);
+              console.log(`   Type: LEGACY (1% threshold)`);
+              console.log(`   break_even_triggered: true`);
+              console.log(`   break_even_at_price: ${breakEvenAtPrice} (SL flyttet hertil)`);
+              console.log(`   break_even_trigger_price: ${currentPrice} (prisen der triggede)`);
+              console.log(`   Verification: break_even_at_price !== null: ${breakEvenAtPrice !== null}`);
+              console.log(`📊 ═══════════════════════════════════════════\n`);
             }
           } else {
             // ATR-baseret break-even
@@ -415,11 +427,14 @@ serve(async (req) => {
             }
             
             if (breakEvenReached) {
-              newStopLoss = position.entry_price;
-              // 🔴 FIX: Gem break_even_at_price i indicators_snapshot når BE aktiveres
+              // 🔴 FIX: break_even_at_price = den faktiske BE-pris (entry), IKKE trigger-prisen
+              const breakEvenAtPrice = position.entry_price;
+              newStopLoss = breakEvenAtPrice;
+              
               const updatedSnapshot = {
                 ...position.indicators_snapshot,
-                break_even_at_price: currentPrice,
+                break_even_at_price: breakEvenAtPrice, // ✅ Den faktiske BE-pris hvor SL nu ligger
+                break_even_trigger_price: currentPrice, // Prisen der triggede BE
                 break_even_triggered_at: new Date().toISOString(),
               };
               await supabaseClient
@@ -430,8 +445,46 @@ serve(async (req) => {
                   indicators_snapshot: updatedSnapshot
                 })
                 .eq('id', position.id);
-              console.log(`   ✅ ATR BREAK-EVEN ACTIVATED: SL moved to entry ${newStopLoss}, price was ${currentPrice}`);
+              
+              console.log(`\n📊 ═══════════════════════════════════════════`);
+              console.log(`📊 BREAK-EVEN AUDIT - ${position.symbol} ${position.side}`);
+              console.log(`📊 ═══════════════════════════════════════════`);
+              console.log(`   Type: ATR-BASED (${breakEvenAtrMultiplier}x ATR)`);
+              console.log(`   break_even_triggered: true`);
+              console.log(`   break_even_at_price: ${breakEvenAtPrice} (SL flyttet hertil)`);
+              console.log(`   break_even_trigger_price: ${currentPrice} (prisen der triggede)`);
+              console.log(`   ATR: ${snapshotAtr}, Threshold distance: ${breakEvenDistance.toFixed(6)}`);
+              console.log(`   Verification: break_even_at_price !== null: ${breakEvenAtPrice !== null}`);
+              console.log(`📊 ═══════════════════════════════════════════\n`);
             }
+          }
+        } else {
+          // 🔴 AUDIT: Tjek eksisterende positioner med break_even_activated=true
+          const existingBEPrice = position.indicators_snapshot?.break_even_at_price;
+          if (existingBEPrice === null || existingBEPrice === undefined) {
+            console.log(`\n⚠️ ═══════════════════════════════════════════`);
+            console.log(`⚠️ BREAK-EVEN AUDIT WARNING - ${position.symbol} ${position.side}`);
+            console.log(`⚠️ ═══════════════════════════════════════════`);
+            console.log(`   ❌ break_even_activated: TRUE`);
+            console.log(`   ❌ break_even_at_price: NULL/UNDEFINED`);
+            console.log(`   Mulige årsager:`);
+            console.log(`     1. Position åbnet før break_even_at_price blev implementeret`);
+            console.log(`     2. Race condition ved BE aktivering`);
+            console.log(`     3. snapshot opdateret uden break_even_at_price felt`);
+            console.log(`   FIX: Sætter break_even_at_price = entry_price retroaktivt`);
+            console.log(`⚠️ ═══════════════════════════════════════════\n`);
+            
+            // Retroaktiv fix: Sæt break_even_at_price til entry_price
+            const fixedSnapshot = {
+              ...position.indicators_snapshot,
+              break_even_at_price: position.entry_price,
+              break_even_retroactive_fix: true,
+              break_even_fix_timestamp: new Date().toISOString(),
+            };
+            await supabaseClient
+              .from('positions')
+              .update({ indicators_snapshot: fixedSnapshot })
+              .eq('id', position.id);
           }
         }
         
