@@ -584,7 +584,9 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     ? calculateMACD(closes.slice(0, -1), config.macd_fast, config.macd_slow, config.macd_signal)
     : null;
   
-  const atr = config.atr_enabled ? calculateATR(highs, lows, closes, config.atr_period) : null;
+  // 🔴 KRITISK: ATR skal ALTID beregnes for exit-logik (SL, break-even, trailing stop)
+  // atr_enabled kontrollerer kun om ATR bruges som HARD FILTER, ikke om den beregnes
+  const atr = calculateATR(highs, lows, closes, config.atr_period);
   const bb = config.bb_enabled ? calculateBollingerBands(closes, config.bb_period, config.bb_std_dev) : null;
   
   // ADX beregnes på TREND timeframe, ikke scan interval
@@ -1193,8 +1195,9 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   console.log(`   SIGNAL: ${longSignal ? '🟢 LONG SIGNAL' : shortSignal ? '🔴 SHORT SIGNAL' : '⚪ INGEN SIGNAL'}`);
   console.log(`═══════════════════════════════════════════\n`);
   
-  // Calculate stop loss using ATR (fallback to 1% if ATR disabled)
-  const atrValue = atr || (currentPrice * 0.01);
+  // 🔴 KRITISK: ATR skal være gyldig - INGEN fallback tilladt
+  // Hvis ATR er null/0/NaN, skal trade BLOKERES senere i flowet
+  const atrValue = atr;
   
   const indicators = {
     price: currentPrice,
@@ -1227,12 +1230,18 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   
   console.log(`Indicators being saved: stochRSI_k=${indicators.stochRSI_k}, rsi=${indicators.rsi}, macd=${indicators.macd}, conditionsMet=${conditionsMet}`);
   
+  // 🔴 KRITISK: stopLoss beregnes kun hvis ATR er gyldig
+  // Hvis ATR er null/0/invalid, bliver stopLoss NaN - dette fanger vi senere
+  const stopLoss = (atrValue && isFinite(atrValue) && atrValue > 0)
+    ? (longSignal 
+        ? currentPrice - (atrValue * config.atr_stop_loss_multiplier)
+        : currentPrice + (atrValue * config.atr_stop_loss_multiplier))
+    : NaN; // Vil blokere trade senere
+  
   return {
     signal: longSignal ? 'LONG' : shortSignal ? 'SHORT' : 'NONE',
     indicators,
-    stopLoss: longSignal 
-      ? currentPrice - (atrValue * config.atr_stop_loss_multiplier) // LONG: SL below entry
-      : currentPrice + (atrValue * config.atr_stop_loss_multiplier), // SHORT: SL above entry
+    stopLoss,
     takeProfit: null,
     hardFiltersPassed: hardFiltersPass,
     filterStatus,
@@ -1816,6 +1825,24 @@ serve(async (req) => {
           // Get account balance
           const balance = await getAccountBalance();
           console.log(`✅ Balance check OK: ${balance} USDC`);
+          
+          // 🔴 KRITISK SIKKERHEDSCHECK: ATR SKAL VÆRE GYLDIG
+          // Uden ATR kan vi ikke beregne stop loss, break-even eller trailing stop korrekt
+          const atrFromAnalysis = analysis.indicators.atr;
+          if (!atrFromAnalysis || !isFinite(atrFromAnalysis) || atrFromAnalysis <= 0) {
+            console.log(`🚨 BLOKERET: ${symbol} - ATR mangler eller ugyldig (${atrFromAnalysis})`);
+            console.log(`   ❌ Trade AFVIST: Uden gyldig ATR kan exit-logik ikke fungere korrekt`);
+            console.log(`   ❌ Stop Loss, Break-Even og Trailing Stop ville bruge faste procenter istedet for ATR`);
+            continue;
+          }
+          console.log(`✅ ATR valideret: ${atrFromAnalysis.toFixed(6)} (${((atrFromAnalysis / analysis.indicators.price) * 100).toFixed(2)}%)`);
+          
+          // Tjek at stopLoss er gyldig (beregnet fra ATR)
+          if (!analysis.stopLoss || !isFinite(analysis.stopLoss) || analysis.stopLoss <= 0) {
+            console.log(`🚨 BLOKERET: ${symbol} - Stop Loss beregning fejlet (${analysis.stopLoss})`);
+            console.log(`   ❌ Trade AFVIST: Stop Loss er påkrævet for alle trades`);
+            continue;
+          }
           
           // Log config values
           console.log(`📊 Config - risk_per_trade: ${config.risk_per_trade_percent}%, position_size: ${config.position_size_percent}%, leverage: ${config.leverage}x`);
