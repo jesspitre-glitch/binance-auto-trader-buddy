@@ -555,7 +555,9 @@ serve(async (req) => {
             }
           } else {
             // ATR-baseret trailing stop
-            const rawMultiplier = position.indicators_snapshot?.atr_trailing_stop_multiplier;
+            // 🔴 BACKWARDS COMPATIBILITY: Læs fra begge mulige feltnavne
+            const rawMultiplier = position.indicators_snapshot?.atr_trailing_stop_multiplier 
+                               ?? position.indicators_snapshot?.trailing_stop_atr_multiplier;
             const DEFAULT_TRAILING_MULTIPLIER = 1.8;
             const multiplierUsedFallback = rawMultiplier === null || rawMultiplier === undefined;
             const atrTrailingMultiplier = rawMultiplier ?? DEFAULT_TRAILING_MULTIPLIER;
@@ -565,14 +567,15 @@ serve(async (req) => {
               console.log(`\n⚠️ ═══════════════════════════════════════════════════════`);
               console.log(`⚠️ TRAILING STOP AUDIT WARNING - ${position.symbol} ${position.side}`);
               console.log(`⚠️ ═══════════════════════════════════════════════════════`);
-              console.log(`   ❌ atr_trailing_stop_multiplier: ${rawMultiplier} (NULL/UNDEFINED)`);
+              console.log(`   ❌ atr_trailing_stop_multiplier: ${position.indicators_snapshot?.atr_trailing_stop_multiplier ?? 'NULL'}`);
+              console.log(`   ❌ trailing_stop_atr_multiplier: ${position.indicators_snapshot?.trailing_stop_atr_multiplier ?? 'NULL'}`);
               console.log(`   📋 Position ID: ${position.id}`);
               console.log(`   📋 Strategy Hash: ${position.strategy_hash || 'NULL'}`);
               console.log(`   📋 is_synced_position: ${position.indicators_snapshot?.is_synced_position || false}`);
               console.log(`   📋 exit_type: ${position.indicators_snapshot?.exit_type || 'UNKNOWN'}`);
               console.log(`   🔧 FALLBACK APPLIED: ${DEFAULT_TRAILING_MULTIPLIER}x`);
               console.log(`   Mulige årsager:`);
-              console.log(`     1. Position åbnet før atr_trailing_stop_multiplier blev gemt i snapshot`);
+              console.log(`     1. Position åbnet før multiplier blev gemt i snapshot`);
               console.log(`     2. Position synkroniseret fra Binance uden config`);
               console.log(`     3. Config-felt mangler i indicator_config`);
               console.log(`⚠️ ═══════════════════════════════════════════════════════\n`);
@@ -771,7 +774,9 @@ serve(async (req) => {
             // Add to trade history with actual values from Binance and indicators
             // Gem stop_loss, trailing_stop og multiplier værdier i indicators_snapshot
             const DEFAULT_TRAILING_MULTIPLIER = 1.8;
-            const rawTrailingMultiplier = position.indicators_snapshot?.atr_trailing_stop_multiplier;
+            // 🔴 BACKWARDS COMPATIBILITY: Læs fra begge mulige feltnavne
+            const rawTrailingMultiplier = position.indicators_snapshot?.atr_trailing_stop_multiplier 
+                                       ?? position.indicators_snapshot?.trailing_stop_atr_multiplier;
             const trailingMultiplierUsed = rawTrailingMultiplier ?? DEFAULT_TRAILING_MULTIPLIER;
             const trailingMultiplierWasFallback = rawTrailingMultiplier === null || rawTrailingMultiplier === undefined;
             
@@ -782,9 +787,10 @@ serve(async (req) => {
               trailing_stop_percent: position.trailing_stop_percent,
               peak_price: newPeakPrice,
               break_even_activated: position.break_even_activated,
-              // 🔴 FIX: Altid gem trailing_stop_atr_multiplier ved close
+              // 🔴 FIX: Gem BEGGE feltnavne for backwards compatibility
               atr_trailing_stop_multiplier: trailingMultiplierUsed,
-              atr_trailing_stop_multiplier_was_fallback: trailingMultiplierWasFallback,
+              trailing_stop_atr_multiplier: trailingMultiplierUsed, // Alias for eksisterende dashboards
+              trailing_stop_multiplier_was_fallback: trailingMultiplierWasFallback,
               close_timestamp: new Date().toISOString(),
               exit_price: actualExitPrice,
             };
