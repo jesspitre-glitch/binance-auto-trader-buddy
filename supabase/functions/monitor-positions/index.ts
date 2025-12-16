@@ -555,11 +555,33 @@ serve(async (req) => {
             }
           } else {
             // ATR-baseret trailing stop
-            const atrTrailingMultiplier = position.indicators_snapshot?.atr_trailing_stop_multiplier || 1.8;
+            const rawMultiplier = position.indicators_snapshot?.atr_trailing_stop_multiplier;
+            const DEFAULT_TRAILING_MULTIPLIER = 1.8;
+            const multiplierUsedFallback = rawMultiplier === null || rawMultiplier === undefined;
+            const atrTrailingMultiplier = rawMultiplier ?? DEFAULT_TRAILING_MULTIPLIER;
+            
+            // 🔴 AUDIT WARNING: Trailing stop bruges men multiplier er null
+            if (multiplierUsedFallback) {
+              console.log(`\n⚠️ ═══════════════════════════════════════════════════════`);
+              console.log(`⚠️ TRAILING STOP AUDIT WARNING - ${position.symbol} ${position.side}`);
+              console.log(`⚠️ ═══════════════════════════════════════════════════════`);
+              console.log(`   ❌ atr_trailing_stop_multiplier: ${rawMultiplier} (NULL/UNDEFINED)`);
+              console.log(`   📋 Position ID: ${position.id}`);
+              console.log(`   📋 Strategy Hash: ${position.strategy_hash || 'NULL'}`);
+              console.log(`   📋 is_synced_position: ${position.indicators_snapshot?.is_synced_position || false}`);
+              console.log(`   📋 exit_type: ${position.indicators_snapshot?.exit_type || 'UNKNOWN'}`);
+              console.log(`   🔧 FALLBACK APPLIED: ${DEFAULT_TRAILING_MULTIPLIER}x`);
+              console.log(`   Mulige årsager:`);
+              console.log(`     1. Position åbnet før atr_trailing_stop_multiplier blev gemt i snapshot`);
+              console.log(`     2. Position synkroniseret fra Binance uden config`);
+              console.log(`     3. Config-felt mangler i indicator_config`);
+              console.log(`⚠️ ═══════════════════════════════════════════════════════\n`);
+            }
+            
             const trailingDistance = snapshotAtr * atrTrailingMultiplier;
             console.log(`   ATR trailing stop beregning:`);
             console.log(`   ATR: ${snapshotAtr.toFixed(6)}`);
-            console.log(`   Multiplier: ${atrTrailingMultiplier}x`);
+            console.log(`   Multiplier: ${atrTrailingMultiplier}x${multiplierUsedFallback ? ' (FALLBACK!)' : ''}`);
             console.log(`   Distance: ${trailingDistance.toFixed(6)}`);
             
             if (position.side === 'LONG') {
@@ -747,7 +769,12 @@ serve(async (req) => {
               .eq('id', position.id);
 
             // Add to trade history with actual values from Binance and indicators
-            // Gem stop_loss og trailing_stop værdier i indicators_snapshot
+            // Gem stop_loss, trailing_stop og multiplier værdier i indicators_snapshot
+            const DEFAULT_TRAILING_MULTIPLIER = 1.8;
+            const rawTrailingMultiplier = position.indicators_snapshot?.atr_trailing_stop_multiplier;
+            const trailingMultiplierUsed = rawTrailingMultiplier ?? DEFAULT_TRAILING_MULTIPLIER;
+            const trailingMultiplierWasFallback = rawTrailingMultiplier === null || rawTrailingMultiplier === undefined;
+            
             const enhancedSnapshot = {
               ...(position.indicators_snapshot || {}),
               stop_loss: newStopLoss,
@@ -755,7 +782,40 @@ serve(async (req) => {
               trailing_stop_percent: position.trailing_stop_percent,
               peak_price: newPeakPrice,
               break_even_activated: position.break_even_activated,
+              // 🔴 FIX: Altid gem trailing_stop_atr_multiplier ved close
+              atr_trailing_stop_multiplier: trailingMultiplierUsed,
+              atr_trailing_stop_multiplier_was_fallback: trailingMultiplierWasFallback,
+              close_timestamp: new Date().toISOString(),
+              exit_price: actualExitPrice,
             };
+
+            // 📊 TRAILING STOP SUMMARY - Log når exit_reason er trailing stop relateret
+            if (closeReason.includes('TRAILING_STOP')) {
+              const snapshotAtrValue = position.indicators_snapshot?.atr || 0;
+              const trailingDistanceUsed = snapshotAtrValue * trailingMultiplierUsed;
+              
+              console.log(`\n📊 ═══════════════════════════════════════════════════════`);
+              console.log(`📊 TRAILING STOP SUMMARY - ${position.symbol} ${position.side}`);
+              console.log(`📊 ═══════════════════════════════════════════════════════`);
+              console.log(`   entry_price: ${position.entry_price}`);
+              console.log(`   exit_price: ${actualExitPrice}`);
+              console.log(`   peak_price: ${newPeakPrice}`);
+              console.log(`   trailing_stop_level: ${newTrailingStop}`);
+              console.log(`   ─────────────────────────────────────────────────────────`);
+              console.log(`   ATR (from snapshot): ${snapshotAtrValue || 'NULL'}`);
+              console.log(`   atr_trailing_stop_multiplier: ${trailingMultiplierUsed}x${trailingMultiplierWasFallback ? ' ⚠️ FALLBACK' : ''}`);
+              console.log(`   trailing_distance: ${trailingDistanceUsed.toFixed(6)}`);
+              console.log(`   ─────────────────────────────────────────────────────────`);
+              console.log(`   exit_type: ${position.indicators_snapshot?.exit_type || 'UNKNOWN'}`);
+              console.log(`   close_reason: ${closeReason}`);
+              if (trailingMultiplierWasFallback) {
+                console.log(`   ⚠️ AUDIT: Multiplier var NULL - brugte fallback ${DEFAULT_TRAILING_MULTIPLIER}x`);
+                console.log(`   Mulige årsager:`);
+                console.log(`     1. Position åbnet før atr_trailing_stop_multiplier blev gemt`);
+                console.log(`     2. Position synkroniseret fra Binance uden config`);
+              }
+              console.log(`📊 ═══════════════════════════════════════════════════════\n`);
+            }
 
             const { error: historyError } = await supabaseClient.from('trade_history').insert({
               user_id: position.user_id,
