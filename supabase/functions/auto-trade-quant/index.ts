@@ -2156,12 +2156,16 @@ serve(async (req) => {
             bb_middle: analysis.indicators.bb?.middle ?? null,
             bb_lower: analysis.indicators.bb?.lower ?? null,
             
-            // MACD values explicitly named (runtime values)
-            macd_histogram: analysis.indicators.macd,
-            macd_signal_line: analysis.indicators.macdSignal, // Runtime MACD signal line value
-            // Config value preserved (don't overwrite macd_signal from config spread)
-            macd_signal_period: config.macd_signal, // Config parameter for MACD signal period
+            // 🔴 MACD SCHEMA FIX - Klart opdelt i CONFIG vs RUNTIME værdier
+            // CONFIG (heltal):
+            macd_signal_period: config.macd_signal, // ✅ Config parameter (fx 9) - ALTID HELTAL
+            // RUNTIME (decimaler):
+            macd_line: analysis.indicators.macdLine, // ✅ Beregnet MACD linje værdi - DECIMAL
+            macd_signal_line: analysis.indicators.macdSignal, // ✅ Beregnet signal linje værdi - DECIMAL
+            macd_histogram: analysis.indicators.macd, // ✅ Histogram (macd - signal) - DECIMAL
             
+            // 🔴 FIX: config.macd_signal fra spread overskrevet af explicit macd_signal_period ovenfor
+
             // 🔴 FIX: Hard filter pass/fail status - null hvis disabled (not evaluated)
             // Også null hvis volume er null (ingen data at evaluere)
             ema_spread_filter_passed: config.ema_enabled 
@@ -2314,6 +2318,29 @@ serve(async (req) => {
           if (atrValueForLogging === null || atrValueForLogging === 0 || !isFinite(atrValueForLogging)) {
             console.log(`🚨 ❌ ATR_MISSING_OR_INVALID VED TRADE OPEN - DETTE BØR ALDRIG SKE!`);
           }
+
+          // 📊 MACD SCHEMA AUDIT - Verificerer korrekt navngivning og typer
+          const macdLineValue = analysis.indicators.macdLine;
+          const macdSignalLineValue = analysis.indicators.macdSignal;
+          const macdHistogramValue = analysis.indicators.macd;
+          const macdSignalPeriodValue = config.macd_signal;
+          
+          console.log(`\n📊 ═══════════════════════════════════════════`);
+          console.log(`📊 MACD SCHEMA AUDIT - ${symbol} ${signal}`);
+          console.log(`📊 ═══════════════════════════════════════════`);
+          console.log(`   CONFIG PARAMETER:`);
+          console.log(`   📌 macd_signal_period: ${macdSignalPeriodValue} (type: ${typeof macdSignalPeriodValue}, expected: number/integer)`);
+          console.log(`   RUNTIME VALUES:`);
+          console.log(`   📈 macd_line: ${macdLineValue !== null ? macdLineValue : 'NULL'} (type: ${typeof macdLineValue}, expected: number/decimal)`);
+          console.log(`   📉 macd_signal_line: ${macdSignalLineValue !== null ? macdSignalLineValue : 'NULL'} (type: ${typeof macdSignalLineValue}, expected: number/decimal)`);
+          console.log(`   📊 macd_histogram: ${macdHistogramValue !== null ? macdHistogramValue : 'NULL'} (type: ${typeof macdHistogramValue}, expected: number/decimal)`);
+          console.log(`   VERIFICATION:`);
+          console.log(`   ✅ macd_signal_period er heltal: ${Number.isInteger(macdSignalPeriodValue)}`);
+          console.log(`   ✅ macd_line er decimal: ${macdLineValue !== null && !Number.isInteger(macdLineValue)}`);
+          console.log(`   ✅ macd_signal_line er decimal: ${macdSignalLineValue !== null && !Number.isInteger(macdSignalLineValue)}`);
+          console.log(`   ✅ macd_histogram er decimal: ${macdHistogramValue !== null && !Number.isInteger(macdHistogramValue)}`);
+          console.log(`📊 ═══════════════════════════════════════════`);
+
 
           // Save position to database with verified Binance data and indicators
           const { data: insertedPosition, error: insertError } = await supabaseClient
