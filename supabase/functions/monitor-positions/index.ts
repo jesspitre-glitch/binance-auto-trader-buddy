@@ -622,15 +622,48 @@ serve(async (req) => {
             console.log(`   Multiplier: ${atrTrailingMultiplier}x${multiplierUsedFallback ? ' (FALLBACK!)' : ''}`);
             console.log(`   Distance: ${trailingDistance.toFixed(6)}`);
             
+            // 🔴 CLAMP TRACKING: Beregn expected trailing og track clamp separat
+            let calculatedTrailingStop: number;
+            let clampApplied = false;
+            let clampReason: string | null = null;
+            let clampDelta = 0;
+            
             if (position.side === 'LONG') {
-              const calculatedTrailingStop = newPeakPrice - trailingDistance;
-              newTrailingStop = newStopLoss ? Math.max(calculatedTrailingStop, newStopLoss) : calculatedTrailingStop;
-              console.log(`   LONG: peak=${newPeakPrice}, calculated=${calculatedTrailingStop.toFixed(4)}, final=${newTrailingStop.toFixed(4)}`);
+              calculatedTrailingStop = newPeakPrice - trailingDistance;
+              // Clamp: trailing må ikke gå under eksisterende SL (typisk BE eller initial SL)
+              if (newStopLoss && calculatedTrailingStop < newStopLoss) {
+                clampApplied = true;
+                clampDelta = newStopLoss - calculatedTrailingStop;
+                clampReason = breakEvenActivatedState ? 'CLAMP_TO_BREAK_EVEN' : 'CLAMP_TO_STOP_LOSS';
+                newTrailingStop = newStopLoss;
+              } else {
+                newTrailingStop = calculatedTrailingStop;
+              }
+              console.log(`   LONG: peak=${newPeakPrice}, expected=${calculatedTrailingStop.toFixed(8)}, final=${newTrailingStop.toFixed(8)}${clampApplied ? ` (${clampReason}, delta=${clampDelta.toFixed(8)})` : ''}`);
             } else {
-              const calculatedTrailingStop = newPeakPrice + trailingDistance;
-              newTrailingStop = newStopLoss ? Math.min(calculatedTrailingStop, newStopLoss) : calculatedTrailingStop;
-              console.log(`   SHORT: peak=${newPeakPrice}, calculated=${calculatedTrailingStop.toFixed(4)}, final=${newTrailingStop.toFixed(4)}`);
+              calculatedTrailingStop = newPeakPrice + trailingDistance;
+              // Clamp: trailing må ikke gå over eksisterende SL (typisk BE eller initial SL)
+              if (newStopLoss && calculatedTrailingStop > newStopLoss) {
+                clampApplied = true;
+                clampDelta = calculatedTrailingStop - newStopLoss;
+                clampReason = breakEvenActivatedState ? 'CLAMP_TO_BREAK_EVEN' : 'CLAMP_TO_STOP_LOSS';
+                newTrailingStop = newStopLoss;
+              } else {
+                newTrailingStop = calculatedTrailingStop;
+              }
+              console.log(`   SHORT: peak=${newPeakPrice}, expected=${calculatedTrailingStop.toFixed(8)}, final=${newTrailingStop.toFixed(8)}${clampApplied ? ` (${clampReason}, delta=${clampDelta.toFixed(8)})` : ''}`);
             }
+            
+            // 🔴 GEM clamp info i position context for brug i trailing_stop_exit_audit
+            // @ts-ignore - dynamisk tilføjet property
+            position._trailingClampInfo = {
+              expected_trailing_level: calculatedTrailingStop,
+              effective_trailing_level: newTrailingStop,
+              was_clamped: clampApplied,
+              clamp_reason: clampReason,
+              clamp_delta: clampDelta,
+              clamp_protection_level: clampApplied ? newStopLoss : null,
+            };
           }
           
           // Tjek om trailing stop er ramt (kun hvis aktiveret og beregnet)
@@ -948,52 +981,96 @@ serve(async (req) => {
               // 🔴 Explicit fjern gammelt felt ved at sætte til undefined (vil ikke blive inkluderet i JSON)
               MACD_signal: undefined,
               
-              // 📊 TRAILING STOP EXIT AUDIT FELTER (gemmes ved ALLE exits, men primært for trailing)
-              // 🔴 FIX: Ved trailing stop exit skal stop_loss_at_exit være newTrailingStop (det faktiske exit-niveau)
-              // newStopLoss kan afvige hvis break-even var aktiv (BE flytter SL til entry, men trailing beregnes separat)
-              // effective_stop_at_exit = det niveau der FAKTISK triggede exit i denne loop
-              trailing_stop_exit_audit: {
-                peak_price: newPeakPrice,
-                trailing_stop_price_at_exit: newTrailingStop,
-                // 🔴 CRITICAL FIX: Ved trailing exit skal stop_loss_at_exit være trailing niveauet, ikke BE/SL
-                // Dette sikrer entydighed: det niveau der bruges i exit-beslutningen er det der logges
-                stop_loss_at_exit: isTrailingStopExit ? newTrailingStop : newStopLoss,
-                // 🔴 NEW: Eksplicit felt der viser hvilken mekanisme der triggede exit
-                effective_exit_level: isTrailingStopExit ? newTrailingStop : newStopLoss,
-                effective_exit_mechanism: isTrailingStopExit ? 'TRAILING_STOP' : 
-                  (finalBreakEvenActivated ? 'BREAK_EVEN_SL' : 'INITIAL_SL'),
-                // Original SL (kan afvige fra effective_exit_level hvis BE er aktiv)
-                original_stop_loss: newStopLoss,
-                break_even_was_active: finalBreakEvenActivated,
-                break_even_at_price_at_exit: finalBreakEvenAtPrice,
-                // 🔴 ATR AUDIT - Entydigt dokumentation af hvilken ATR der blev brugt
-                atr_value_used_for_trailing: snapshotAtrForExit, // Fra entry snapshot - Model A
-                atr_value_at_exit: snapshotAtrForExit, // Alias for backwards compatibility
-                atr_source: 'entry', // Bekræfter at vi bruger entry-ATR, ikke live
-                atr_timeframe: position.indicators_snapshot?.atr_audit?.atr_timeframe 
-                  ?? position.indicators_snapshot?.trend_timeframe 
-                  ?? position.indicators_snapshot?.scan_interval 
-                  ?? 'unknown',
-                atr_period: position.indicators_snapshot?.atr_audit?.atr_period 
-                  ?? position.indicators_snapshot?.atr_period 
-                  ?? 14,
-                trailing_distance: trailingDistanceForExit,
-                distance_from_peak_pct: distanceFromPeakPct,
-                distance_from_peak_atr: distanceFromPeakAtr,
-                multiplier_used: trailingMultiplierUsed,
-                multiplier_was_fallback: trailingMultiplierWasFallback,
-                is_legacy_position: isLegacyPosition,
-                exit_trigger_price: actualExitPrice,
-                entry_price: position.entry_price,
-                // Verificerbar beregning
-                expected_trailing_from_peak: newPeakPrice && trailingDistanceForExit
-                  ? (position.side === 'LONG' ? newPeakPrice - trailingDistanceForExit : newPeakPrice + trailingDistanceForExit)
-                  : null,
-                // 🔴 FIX: trailing_calculation_matches validerer nu effective_exit_level, ikke bare trailing price
-                trailing_calculation_matches: isTrailingStopExit && newTrailingStop && newPeakPrice && trailingDistanceForExit
-                  ? Math.abs(newTrailingStop - (position.side === 'LONG' ? newPeakPrice - trailingDistanceForExit : newPeakPrice + trailingDistanceForExit)) < 1e-6
-                  : null,
-              },
+              // 📊 TRAILING STOP EXIT AUDIT FELTER - bygget nedenfor med clamp-info
+              trailing_stop_exit_audit: (() => {
+                // 🔴 CLAMP INFO: Hent fra position context (sat i trailing-beregningen)
+                // @ts-ignore - dynamisk tilføjet property
+                const clampInfo = position._trailingClampInfo || {
+                  expected_trailing_level: null,
+                  effective_trailing_level: newTrailingStop,
+                  was_clamped: false,
+                  clamp_reason: null,
+                  clamp_delta: 0,
+                  clamp_protection_level: null,
+                };
+                
+                // 🔴 EXPECTED: Ren beregning fra peak ± ATR*multiplier (ingen clamp)
+                const expectedTrailingLevel = clampInfo.expected_trailing_level 
+                  ?? (newPeakPrice && trailingDistanceForExit
+                    ? (position.side === 'LONG' ? newPeakPrice - trailingDistanceForExit : newPeakPrice + trailingDistanceForExit)
+                    : null);
+                
+                // 🔴 EFFECTIVE: Det niveau der faktisk bruges (kan være clamped)
+                const effectiveTrailingLevel = clampInfo.effective_trailing_level ?? newTrailingStop;
+                
+                // 🔴 trailing_calculation_matches: Validerer at REN MATEMATIK er korrekt (ignorer clamp)
+                const trailingMathIsCorrect = (expectedTrailingLevel !== null && newPeakPrice && trailingDistanceForExit)
+                  ? Math.abs(expectedTrailingLevel - (position.side === 'LONG' ? newPeakPrice - trailingDistanceForExit : newPeakPrice + trailingDistanceForExit)) < 1e-6
+                  : null;
+                
+                // 🔴 clamp_applied_correctly: Validerer at clamp-reglen blev udført korrekt
+                let clampAppliedCorrectly: boolean | null = null;
+                if (clampInfo.was_clamped && clampInfo.clamp_protection_level !== null && effectiveTrailingLevel !== null) {
+                  if (position.side === 'LONG') {
+                    clampAppliedCorrectly = effectiveTrailingLevel >= clampInfo.clamp_protection_level - 1e-10;
+                  } else {
+                    clampAppliedCorrectly = effectiveTrailingLevel <= clampInfo.clamp_protection_level + 1e-10;
+                  }
+                } else if (!clampInfo.was_clamped) {
+                  clampAppliedCorrectly = expectedTrailingLevel !== null && effectiveTrailingLevel !== null
+                    ? Math.abs(effectiveTrailingLevel - expectedTrailingLevel) < 1e-6
+                    : null;
+                }
+                
+                return {
+                  peak_price: newPeakPrice,
+                  
+                  // 🔴 TODELT AUDIT: expected vs effective
+                  expected_trailing_level: expectedTrailingLevel,
+                  effective_exit_level: isTrailingStopExit ? effectiveTrailingLevel : newStopLoss,
+                  effective_exit_mechanism: isTrailingStopExit 
+                    ? (clampInfo.was_clamped ? `TRAILING_CLAMPED_${clampInfo.clamp_reason}` : 'TRAILING')
+                    : (finalBreakEvenActivated ? 'BREAK_EVEN_SL' : 'INITIAL_SL'),
+                  
+                  // 🔴 CLAMP TRACKING
+                  was_clamped: clampInfo.was_clamped,
+                  clamp_reason: clampInfo.clamp_reason,
+                  clamp_delta: clampInfo.clamp_delta,
+                  clamp_protection_level: clampInfo.clamp_protection_level,
+                  
+                  // 🔴 VERIFIKATION
+                  trailing_calculation_matches: trailingMathIsCorrect,
+                  clamp_applied_correctly: clampAppliedCorrectly,
+                  
+                  // Backwards compatibility felter
+                  trailing_stop_price_at_exit: effectiveTrailingLevel,
+                  stop_loss_at_exit: isTrailingStopExit ? effectiveTrailingLevel : newStopLoss,
+                  original_stop_loss: newStopLoss,
+                  break_even_was_active: finalBreakEvenActivated,
+                  break_even_at_price_at_exit: finalBreakEvenAtPrice,
+                  
+                  // ATR AUDIT
+                  atr_value_used_for_trailing: snapshotAtrForExit,
+                  atr_value_at_exit: snapshotAtrForExit,
+                  atr_source: 'entry',
+                  atr_timeframe: position.indicators_snapshot?.atr_audit?.atr_timeframe 
+                    ?? position.indicators_snapshot?.trend_timeframe 
+                    ?? position.indicators_snapshot?.scan_interval 
+                    ?? 'unknown',
+                  atr_period: position.indicators_snapshot?.atr_audit?.atr_period 
+                    ?? position.indicators_snapshot?.atr_period 
+                    ?? 14,
+                  trailing_distance: trailingDistanceForExit,
+                  distance_from_peak_pct: distanceFromPeakPct,
+                  distance_from_peak_atr: distanceFromPeakAtr,
+                  multiplier_used: trailingMultiplierUsed,
+                  multiplier_was_fallback: trailingMultiplierWasFallback,
+                  is_legacy_position: isLegacyPosition,
+                  exit_trigger_price: actualExitPrice,
+                  entry_price: position.entry_price,
+                  expected_trailing_from_peak: expectedTrailingLevel,
+                };
+              })(),
             };
             
             // 🔴 FINAL ASSERTION: Verificer at BE-felter er konsistente
@@ -1048,32 +1125,43 @@ serve(async (req) => {
               }
               
               // 🔴 AUDIT ASSERTION: Verificer at trailing level matcher expected beregning
-              const expectedTrailing = audit.expected_trailing_from_peak;
+              // NB: Kun flag divergence hvis IKKE clamped - clamp er bevidst divergens
+              const expectedTrailing = audit.expected_trailing_level;
               const actualTrailing = audit.trailing_stop_price_at_exit;
-              if (expectedTrailing && actualTrailing) {
+              if (expectedTrailing && actualTrailing && !audit.was_clamped) {
                 const trailingDiff = Math.abs(actualTrailing - expectedTrailing);
                 if (trailingDiff >= 1e-6) {
-                  console.log(`\n❌ TRAILING CALCULATION DIVERGENCE DETECTED!`);
+                  console.log(`\n❌ TRAILING CALCULATION DIVERGENCE DETECTED (INGEN CLAMP)!`);
                   console.log(`   actual trailing: ${actualTrailing}`);
                   console.log(`   expected from peak: ${expectedTrailing}`);
                   console.log(`   diff: ${trailingDiff.toExponential(10)}`);
+                  console.log(`   was_clamped: ${audit.was_clamped}`);
                   console.log(`   break_even_was_active: ${audit.break_even_was_active}`);
-                  console.log(`   original_stop_loss: ${audit.original_stop_loss}`);
                 }
               }
               
               console.log(`\n📊 ═══════════════════════════════════════════════════════`);
               console.log(`📊 TRAILING STOP EXIT AUDIT - ${position.symbol} ${position.side}`);
               console.log(`📊 ═══════════════════════════════════════════════════════`);
-              console.log(`   EXIT NIVEAUER:`);
+              console.log(`   EXIT NIVEAUER (TODELT AUDIT):`);
+              console.log(`   📍 expected_trailing_level: ${audit.expected_trailing_level?.toFixed(8) ?? 'NULL'} (ren beregning)`);
               console.log(`   📍 effective_exit_level: ${audit.effective_exit_level} (${audit.effective_exit_mechanism})`);
-              console.log(`   📍 stop_loss_at_exit: ${audit.stop_loss_at_exit}`);
               console.log(`   📍 trailing_stop_price_at_exit: ${audit.trailing_stop_price_at_exit}`);
-              console.log(`   📍 original_stop_loss: ${audit.original_stop_loss}`);
+              console.log(`   📍 stop_loss_at_exit: ${audit.stop_loss_at_exit}`);
+              console.log(`   ─────────────────────────────────────────────────────────`);
+              console.log(`   🔒 CLAMP TRACKING:`);
+              console.log(`   🔒 was_clamped: ${audit.was_clamped}`);
+              if (audit.was_clamped) {
+                console.log(`   🔒 clamp_reason: ${audit.clamp_reason}`);
+                console.log(`   🔒 clamp_delta: ${audit.clamp_delta?.toFixed(8)}`);
+                console.log(`   🔒 clamp_protection_level: ${audit.clamp_protection_level}`);
+                console.log(`   ${audit.clamp_applied_correctly === true ? '✅' : '❌'} clamp_applied_correctly: ${audit.clamp_applied_correctly}`);
+              }
               console.log(`   ─────────────────────────────────────────────────────────`);
               console.log(`   BREAK-EVEN STATUS:`);
               console.log(`   🔴 break_even_was_active: ${audit.break_even_was_active}`);
               console.log(`   🔴 break_even_at_price_at_exit: ${audit.break_even_at_price_at_exit ?? 'NULL'}`);
+              console.log(`   📍 original_stop_loss: ${audit.original_stop_loss}`);
               console.log(`   ─────────────────────────────────────────────────────────`);
               console.log(`   PRISER:`);
               console.log(`   📍 entry_price: ${audit.entry_price}`);
@@ -1090,8 +1178,8 @@ serve(async (req) => {
               console.log(`   📏 distance_from_peak_atr: ${audit.distance_from_peak_atr?.toFixed(4) ?? 'NULL'} ATR`);
               console.log(`   ─────────────────────────────────────────────────────────`);
               console.log(`   VERIFIKATION:`);
-              console.log(`   📐 expected_trailing_from_peak: ${audit.expected_trailing_from_peak?.toFixed(8) ?? 'NULL'}`);
-              console.log(`   ${audit.trailing_calculation_matches === true ? '✅' : audit.trailing_calculation_matches === false ? '❌' : '⚪'} trailing_calculation_matches: ${audit.trailing_calculation_matches}`);
+              console.log(`   ${audit.trailing_calculation_matches === true ? '✅' : audit.trailing_calculation_matches === false ? '❌' : '⚪'} trailing_calculation_matches: ${audit.trailing_calculation_matches} (ren matematik)`);
+              console.log(`   ${audit.clamp_applied_correctly === true ? '✅' : audit.clamp_applied_correctly === false ? '❌' : '⚪'} clamp_applied_correctly: ${audit.clamp_applied_correctly}`);
               console.log(`   🏷️ is_legacy_position: ${audit.is_legacy_position}`);
               console.log(`   ─────────────────────────────────────────────────────────`);
               console.log(`   CLOSE INFO:`);
@@ -1099,15 +1187,11 @@ serve(async (req) => {
               console.log(`   📋 exit_type: ${position.indicators_snapshot?.exit_type || 'UNKNOWN'}`);
               if (audit.multiplier_was_fallback) {
                 console.log(`   ⚠️ FALLBACK AUDIT: Multiplier var NULL - brugte default`);
-                console.log(`   Mulige årsager:`);
-                console.log(`     1. Position åbnet før atr_trailing_stop_multiplier blev gemt`);
-                console.log(`     2. Position synkroniseret fra Binance uden config`);
               }
-              if (audit.trailing_calculation_matches === false) {
-                console.log(`   ❌ TRAILING CALCULATION MISMATCH!`);
+              if (audit.trailing_calculation_matches === false && !audit.was_clamped) {
+                console.log(`   ❌ TRAILING CALCULATION MISMATCH (ingen clamp)!`);
                 console.log(`      actual: ${audit.trailing_stop_price_at_exit}`);
-                console.log(`      expected: ${audit.expected_trailing_from_peak}`);
-                console.log(`      Mulige årsager: UI afrunding, break-even override, race condition`);
+                console.log(`      expected: ${audit.expected_trailing_level}`);
               }
               console.log(`📊 ═══════════════════════════════════════════════════════\n`);
             }
