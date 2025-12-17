@@ -820,8 +820,71 @@ serve(async (req) => {
             }
             
             // 🔴 Byg enhancedSnapshot med LOKALE værdier (ikke fra position.indicators_snapshot)
+            // 🔴 MACD SCHEMA FIX: Fjern gammelt MACD_signal felt og behold kun de 4 korrekte felter
+            const rawSnapshot = position.indicators_snapshot || {};
+            
+            // 🔴 Udtræk MACD værdier fra eksisterende snapshot (sat ved trade open)
+            const macdSignalPeriod = rawSnapshot.macd_signal_period ?? rawSnapshot.MACD_signal ?? null;
+            const macdLine = rawSnapshot.macd_line ?? null;
+            const macdSignalLine = rawSnapshot.macd_signal_line ?? null;
+            const macdHistogram = rawSnapshot.macd_histogram ?? null;
+            
+            // 🔴 MACD SCHEMA AUDIT - Type-check alle 4 felter
+            const macdSchemaErrors: string[] = [];
+            
+            // Check 1: macd_signal_period skal være int (eller null)
+            if (macdSignalPeriod !== null && !Number.isInteger(macdSignalPeriod)) {
+              macdSchemaErrors.push(`macd_signal_period er ikke int: ${macdSignalPeriod} (type: ${typeof macdSignalPeriod})`);
+            }
+            
+            // Check 2: runtime-felter må ikke være null (hvis MACD var aktiv)
+            const macdWasActive = macdSignalPeriod !== null;
+            if (macdWasActive) {
+              if (macdLine === null || macdLine === undefined) {
+                macdSchemaErrors.push(`macd_line er null/undefined`);
+              }
+              if (macdSignalLine === null || macdSignalLine === undefined) {
+                macdSchemaErrors.push(`macd_signal_line er null/undefined`);
+              }
+              if (macdHistogram === null || macdHistogram === undefined) {
+                macdSchemaErrors.push(`macd_histogram er null/undefined`);
+              }
+            }
+            
+            // Check 3: Histogram konsistens - skal matche (macd_line - macd_signal_line)
+            if (macdLine !== null && macdSignalLine !== null && macdHistogram !== null) {
+              const expectedHistogram = macdLine - macdSignalLine;
+              const histogramDiff = Math.abs(macdHistogram - expectedHistogram);
+              if (histogramDiff > 1e-10) {
+                macdSchemaErrors.push(`macd_histogram inkonsistent: ${macdHistogram} vs expected ${expectedHistogram} (diff: ${histogramDiff.toExponential(10)})`);
+              }
+            }
+            
+            // Log MACD SCHEMA AUDIT
+            if (macdSchemaErrors.length > 0) {
+              console.log(`\n❌ ═══════════════════════════════════════════════════════`);
+              console.log(`❌ MACD SCHEMA AUDIT ERROR - ${position.symbol} ${position.side}`);
+              console.log(`❌ ═══════════════════════════════════════════════════════`);
+              console.log(`   Gammel MACD_signal i snapshot: ${rawSnapshot.MACD_signal ?? 'IKKE FUNDET'}`);
+              console.log(`   macd_signal_period: ${macdSignalPeriod} (type: ${typeof macdSignalPeriod})`);
+              console.log(`   macd_line: ${macdLine}`);
+              console.log(`   macd_signal_line: ${macdSignalLine}`);
+              console.log(`   macd_histogram: ${macdHistogram}`);
+              console.log(`   ─────────────────────────────────────────────────────────`);
+              for (const err of macdSchemaErrors) {
+                console.log(`   ❌ ${err}`);
+              }
+              console.log(`❌ ═══════════════════════════════════════════════════════\n`);
+            } else if (macdWasActive) {
+              console.log(`✅ MACD SCHEMA OK: period=${macdSignalPeriod}, line=${macdLine}, signal=${macdSignalLine}, hist=${macdHistogram}`);
+            }
+            
+            // 🔴 Byg snapshot UDEN det gamle MACD_signal felt
+            // Destructure for at fjerne MACD_signal
+            const { MACD_signal: _removedMacdSignal, ...cleanSnapshot } = rawSnapshot;
+            
             const enhancedSnapshot = {
-              ...(position.indicators_snapshot || {}),
+              ...cleanSnapshot,
               stop_loss: newStopLoss,
               trailing_stop: newTrailingStop,
               trailing_stop_percent: position.trailing_stop_percent,
@@ -837,6 +900,13 @@ serve(async (req) => {
               trailing_stop_multiplier_was_fallback: trailingMultiplierWasFallback,
               close_timestamp: new Date().toISOString(),
               exit_price: actualExitPrice,
+              // 🔴 MACD SCHEMA: Explicit sæt de 4 korrekte felter (overskriver eventuelle gamle)
+              macd_signal_period: macdSignalPeriod, // int config
+              macd_line: macdLine, // decimal runtime
+              macd_signal_line: macdSignalLine, // decimal runtime  
+              macd_histogram: macdHistogram, // decimal runtime
+              // 🔴 Explicit fjern gammelt felt ved at sætte til undefined (vil ikke blive inkluderet i JSON)
+              MACD_signal: undefined,
             };
             
             // 🔴 FINAL ASSERTION: Verificer at BE-felter er konsistente
