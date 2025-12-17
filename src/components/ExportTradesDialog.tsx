@@ -138,9 +138,19 @@ export const ExportTradesDialog = ({
       ATR_pct: atrPct != null ? +Number(atrPct).toFixed(4) : null,
       ATR_filter_passed: snap.atr_filter_passed ?? atrFilterInferred,
 
-      // ADX
+      // ADX - med audit felter
       ADX_value: snap.adx != null ? +Number(snap.adx).toFixed(2) : null,
       ADX_filter_passed: snap.adx_filter_passed ?? adxFilterInferred,
+      ADX_audit: snap.adx_audit ? {
+        adx_value: snap.adx_audit.adx_value,
+        adx_period: snap.adx_audit.adx_period,
+        adx_timeframe: snap.adx_audit.adx_timeframe,
+        adx_floor_used: snap.adx_audit.adx_floor_used,
+        adx_ceiling_used: snap.adx_audit.adx_ceiling_used,
+        plus_di: snap.adx_audit.plus_di != null ? +Number(snap.adx_audit.plus_di).toFixed(2) : null,
+        minus_di: snap.adx_audit.minus_di != null ? +Number(snap.adx_audit.minus_di).toFixed(2) : null,
+        dx_instant: snap.adx_audit.dx_instant != null ? +Number(snap.adx_audit.dx_instant).toFixed(2) : null,
+      } : null,
 
       // Volume
       volume_current: volumeCurrent != null ? +Number(volumeCurrent).toFixed(2) : null,

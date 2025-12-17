@@ -350,7 +350,7 @@ function calculateBollingerBands(prices: number[], period: number, stdDev: numbe
   };
 }
 
-function calculateADX(high: number[], low: number[], close: number[], period: number): number {
+function calculateADX(high: number[], low: number[], close: number[], period: number): { adx: number, plusDI: number, minusDI: number, dx: number } {
   const tr: number[] = [];
   const dmPlus: number[] = [];
   const dmMinus: number[] = [];
@@ -369,14 +369,52 @@ function calculateADX(high: number[], low: number[], close: number[], period: nu
     dmMinus.push(lowDiff > highDiff && lowDiff > 0 ? lowDiff : 0);
   }
   
-  // Smooth the values
-  const atr = tr.slice(-period).reduce((a, b) => a + b, 0) / period;
-  const diPlus = (dmPlus.slice(-period).reduce((a, b) => a + b, 0) / period / atr) * 100;
-  const diMinus = (dmMinus.slice(-period).reduce((a, b) => a + b, 0) / period / atr) * 100;
+  if (tr.length < period * 2) {
+    // Ikke nok data til at beregne smoothed ADX
+    return { adx: 50, plusDI: 50, minusDI: 50, dx: 50 };
+  }
   
-  // Calculate DX and ADX
-  const dx = Math.abs(diPlus - diMinus) / (diPlus + diMinus) * 100;
-  return dx;
+  // Calculate smoothed TR, +DM, -DM using Wilder's smoothing (EMA-like)
+  let smoothedTR = tr.slice(0, period).reduce((a, b) => a + b, 0);
+  let smoothedDMPlus = dmPlus.slice(0, period).reduce((a, b) => a + b, 0);
+  let smoothedDMMinus = dmMinus.slice(0, period).reduce((a, b) => a + b, 0);
+  
+  const dxValues: number[] = [];
+  
+  for (let i = period; i < tr.length; i++) {
+    // Wilder's smoothing: smoothed = prev - (prev/period) + current
+    smoothedTR = smoothedTR - (smoothedTR / period) + tr[i];
+    smoothedDMPlus = smoothedDMPlus - (smoothedDMPlus / period) + dmPlus[i];
+    smoothedDMMinus = smoothedDMMinus - (smoothedDMMinus / period) + dmMinus[i];
+    
+    // Calculate +DI and -DI
+    const plusDI = (smoothedDMPlus / smoothedTR) * 100;
+    const minusDI = (smoothedDMMinus / smoothedTR) * 100;
+    
+    // Calculate DX
+    const diSum = plusDI + minusDI;
+    const dx = diSum > 0 ? (Math.abs(plusDI - minusDI) / diSum) * 100 : 0;
+    dxValues.push(dx);
+  }
+  
+  // Calculate ADX as smoothed average of DX values (Wilder's smoothing)
+  if (dxValues.length < period) {
+    const lastDX = dxValues[dxValues.length - 1] || 50;
+    return { adx: lastDX, plusDI: 50, minusDI: 50, dx: lastDX };
+  }
+  
+  let adx = dxValues.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  
+  for (let i = period; i < dxValues.length; i++) {
+    adx = ((adx * (period - 1)) + dxValues[i]) / period;
+  }
+  
+  // Return current values for audit
+  const lastPlusDI = (smoothedDMPlus / smoothedTR) * 100;
+  const lastMinusDI = (smoothedDMMinus / smoothedTR) * 100;
+  const lastDX = dxValues[dxValues.length - 1];
+  
+  return { adx, plusDI: lastPlusDI, minusDI: lastMinusDI, dx: lastDX };
 }
 
 // Cache for symbol filters and USDC symbols to reduce API calls
@@ -617,7 +655,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   const trendHighs = trendKlines.map(k => k.high);
   const trendLows = trendKlines.map(k => k.low);
   const trendCloses = trendKlines.map(k => k.close);
-  const adx = config.adx_enabled ? calculateADX(trendHighs, trendLows, trendCloses, config.adx_period) : null;
+  const adxResult = config.adx_enabled ? calculateADX(trendHighs, trendLows, trendCloses, config.adx_period) : null;
+  const adx = adxResult?.adx ?? null; // Udtræk kun adx-værdien for kompatibilitet
   
   const avgVolume = config.volume_enabled
     ? volumes.slice(-config.volume_avg_period).reduce((a, b) => a + b, 0) / config.volume_avg_period
@@ -1363,7 +1402,19 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     macdSignal: macd?.signal ?? null,                    // DEPRECATED: brug macd_signal_line
     atr: atr,
     bb,
+    // ADX - med fuldt audit objekt
     adx,
+    adx_audit: adxResult ? {
+      adx_value: adxResult.adx,
+      adx_period: config.adx_period,
+      adx_timeframe: config.trend_timeframe,
+      adx_floor_used: config.adx_floor ?? 20,
+      adx_ceiling_used: config.adx_ceiling ?? 40,
+      plus_di: adxResult.plusDI,
+      minus_di: adxResult.minusDI,
+      dx_instant: adxResult.dx,
+      adx_filter_passed: config.adx_enabled ? (adx !== null && adx >= (config.adx_floor ?? 20) && adx <= (config.adx_ceiling ?? 40)) : null,
+    } : null,
     volume: currentVolume,
     avgVolume,
     volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
