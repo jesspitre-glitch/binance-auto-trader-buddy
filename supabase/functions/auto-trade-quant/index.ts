@@ -263,28 +263,52 @@ function calculateRSI(prices: number[], period: number): number {
 }
 
 function calculateStochRSI(prices: number[], rsiPeriod: number, kPeriod: number, dPeriod: number): { k: number, d: number } {
-  // Calculate RSI values for the period
+  // Calculate RSI values for all available prices
   const rsiValues: number[] = [];
   for (let i = rsiPeriod; i < prices.length; i++) {
     const slice = prices.slice(i - rsiPeriod, i + 1);
     rsiValues.push(calculateRSI(slice, rsiPeriod));
   }
   
-  if (rsiValues.length < rsiPeriod) {
+  // Need enough RSI values: rsiPeriod for stochastic + kPeriod for K smoothing + dPeriod for D smoothing
+  const minRequired = rsiPeriod + kPeriod + dPeriod;
+  if (rsiValues.length < minRequired) {
+    console.log(`StochRSI: Not enough data. Have ${rsiValues.length} RSI values, need ${minRequired}`);
     return { k: 50, d: 50 };
   }
   
-  // Calculate Stochastic of RSI
-  const latestRSIValues = rsiValues.slice(-rsiPeriod);
-  const maxRSI = Math.max(...latestRSIValues);
-  const minRSI = Math.min(...latestRSIValues);
-  const currentRSI = latestRSIValues[latestRSIValues.length - 1];
+  // Calculate raw StochRSI for each RSI value (using rsiPeriod lookback)
+  const rawStochRSI: number[] = [];
+  for (let i = rsiPeriod - 1; i < rsiValues.length; i++) {
+    const lookback = rsiValues.slice(i - rsiPeriod + 1, i + 1);
+    const maxRSI = Math.max(...lookback);
+    const minRSI = Math.min(...lookback);
+    const currentRSI = rsiValues[i];
+    const stoch = maxRSI !== minRSI ? ((currentRSI - minRSI) / (maxRSI - minRSI)) * 100 : 50;
+    rawStochRSI.push(stoch);
+  }
   
-  const stochRSI = maxRSI !== minRSI ? ((currentRSI - minRSI) / (maxRSI - minRSI)) * 100 : 50;
+  // K = SMA of raw StochRSI over kPeriod
+  const kValues: number[] = [];
+  for (let i = kPeriod - 1; i < rawStochRSI.length; i++) {
+    const kSlice = rawStochRSI.slice(i - kPeriod + 1, i + 1);
+    const kSMA = kSlice.reduce((a, b) => a + b, 0) / kPeriod;
+    kValues.push(kSMA);
+  }
   
-  // For simplicity, K = StochRSI, D = SMA of K (here we use current value for both)
-  // In production, you'd want to maintain a rolling buffer for proper SMA calculation
-  return { k: stochRSI, d: stochRSI };
+  if (kValues.length < dPeriod) {
+    console.log(`StochRSI: Not enough K values for D. Have ${kValues.length}, need ${dPeriod}`);
+    return { k: kValues[kValues.length - 1] ?? 50, d: kValues[kValues.length - 1] ?? 50 };
+  }
+  
+  // D = SMA of K over dPeriod
+  const dSlice = kValues.slice(-dPeriod);
+  const d = dSlice.reduce((a, b) => a + b, 0) / dPeriod;
+  const k = kValues[kValues.length - 1];
+  
+  console.log(`StochRSI BEREGNING: rawStochRSI_count=${rawStochRSI.length}, K_count=${kValues.length}, K=${k.toFixed(2)}, D=${d.toFixed(2)}`);
+  
+  return { k, d };
 }
 
 function calculateMACD(prices: number[], fastPeriod: number, slowPeriod: number, signalPeriod: number) {
