@@ -40,6 +40,12 @@ export const ExportTradesDialog = ({
     const closedAt = new Date(t.closed_at);
     const durationSec = Math.round((closedAt.getTime() - openedAt.getTime()) / 1000);
 
+    // 🔴 SCHEMA VERSION CHECK - Determines which fields to use
+    // v2+ = guaranteed fields, NO fallbacks
+    // v1/undefined = legacy trades, fallbacks allowed
+    const schemaVersion = snap.schema_version ?? 1;
+    const isLegacy = schemaVersion < 2;
+
     // Map close_reason to standardized exit_reason
     const exitReasonMap: Record<string, string> = {
       'TRAILING_STOP': 'trailing_stop',
@@ -52,63 +58,121 @@ export const ExportTradesDialog = ({
     };
     const exitReason = exitReasonMap[t.close_reason] || t.close_reason?.toLowerCase() || 'unknown';
 
-    // Calculate ATR% from snapshot
-    const atrPct = snap.atr_percent ?? (snap.atr && snap.price ? (snap.atr / snap.price) * 100 : null);
+    // 🔴 V2 SCHEMA: Direct field access - NO FALLBACKS
+    // 🔴 V1 LEGACY: Fallback to old field names
     
-    // Get EMA spread from snapshot
-    const emaSpread = snap.ema_spread_percent ?? snap.emaSpreadPercent ?? null;
+    // ATR percent
+    const atrPct = isLegacy 
+      ? (snap.atr_percent ?? (snap.atr && snap.price ? (snap.atr / snap.price) * 100 : null))
+      : snap.atr_percent; // v2: must exist or null
+    
+    // EMA spread
+    const emaSpread = isLegacy
+      ? (snap.ema_spread_percent ?? snap.emaSpreadPercent ?? null)
+      : snap.ema_spread_percent; // v2: direct
 
-    // Get BB values - either from flattened fields or bb object
-    const bbUpper = snap.bb_upper ?? snap.bb?.upper ?? null;
-    const bbMiddle = snap.bb_middle ?? snap.bb?.middle ?? null;
-    const bbLower = snap.bb_lower ?? snap.bb?.lower ?? null;
+    // BB values
+    const bbUpper = isLegacy ? (snap.bb_upper ?? snap.bb?.upper ?? null) : snap.bb_upper;
+    const bbMiddle = isLegacy ? (snap.bb_middle ?? snap.bb?.middle ?? null) : snap.bb_middle;
+    const bbLower = isLegacy ? (snap.bb_lower ?? snap.bb?.lower ?? null) : snap.bb_lower;
 
-    // Get soft conditions from new or old format
+    // Soft conditions
     const side = t.side?.toLowerCase() || 'long';
-    const softEmaTrend = snap.soft_ema_trend ?? snap.conditionDetails?.ema?.[side] ?? null;
-    const softStoch = snap.soft_stochrsi ?? snap.conditionDetails?.stochRSI?.[side] ?? null;
-    const softMacdColor = snap.soft_macd_color ?? snap.conditionDetails?.macd?.[side] ?? null;
-    const softBb = snap.soft_bb ?? snap.conditionDetails?.bb?.[side] ?? null;
-    const softVolume = snap.soft_volume ?? snap.conditionDetails?.volume?.[side] ?? null;
-    const softPivot = snap.soft_pivot ?? snap.conditionDetails?.pivotPoints?.[side] ?? null;
+    const softEmaTrend = isLegacy 
+      ? (snap.soft_ema_trend_passed ?? snap.soft_ema_trend ?? snap.conditionDetails?.ema?.[side] ?? null)
+      : snap.soft_ema_trend_passed;
+    const softStoch = isLegacy 
+      ? (snap.soft_stochrsi_passed ?? snap.soft_stochrsi ?? snap.conditionDetails?.stochRSI?.[side] ?? null)
+      : snap.soft_stochrsi_passed;
+    const softMacdHistogram = isLegacy 
+      ? (snap.soft_macd_histogram_passed ?? snap.soft_macd_color ?? snap.conditionDetails?.macd?.[side] ?? null)
+      : snap.soft_macd_histogram_passed;
+    const softMacdMomentum = isLegacy
+      ? (snap.soft_macd_momentum_passed ?? null)
+      : snap.soft_macd_momentum_passed;
+    const softBb = isLegacy 
+      ? (snap.soft_bb_passed ?? snap.soft_bb ?? snap.conditionDetails?.bb?.[side] ?? null)
+      : snap.soft_bb_passed;
+    const softVolume = isLegacy 
+      ? (snap.soft_volume_passed ?? snap.soft_volume ?? snap.conditionDetails?.volume?.[side] ?? null)
+      : snap.soft_volume_passed;
+    const softPivot = isLegacy 
+      ? (snap.soft_pivot_passed ?? snap.soft_pivot ?? snap.conditionDetails?.pivotPoints?.[side] ?? null)
+      : snap.soft_pivot_passed;
 
-    // For old trades: if trade was opened, hard filters must have passed (infer true)
-    // Check if we have explicit filter status, otherwise infer from trade existing
-    const hasExplicitFilterStatus = snap.atr_filter_passed !== undefined;
-    
-    // Volume multiplier hard filter tri-state (null = ikke evalueret)
-    const volumeEnabled = snap.volume_enabled === true;
-    const volumeCurrent = (snap.volume ?? snap.volume_current) ?? null;
-    const volumeAvg = (snap.avgVolume ?? snap.volume_avg) ?? null;
-    const volumeMultiplier = snap.volume_multiplier ?? null;
-    const volumeMultiplierFilterPassedTriState = volumeEnabled !== true
-      ? null
-      : (volumeCurrent == null || volumeAvg == null || volumeMultiplier == null)
-        ? null
-        : (volumeCurrent >= volumeAvg * volumeMultiplier);
+    // Volume multiplier tri-state
+    const volumeCurrent = isLegacy 
+      ? ((snap.volume ?? snap.volume_current) ?? null)
+      : snap.volume_current;
+    const volumeAvg = isLegacy 
+      ? ((snap.avgVolume ?? snap.volume_avg) ?? null)
+      : snap.volume_avg;
 
+    // 🔴 V2: Use explicit filter status - NO inference
+    // 🔴 V1: Fall back to inference
+    const adxFilterPassed = isLegacy
+      ? (snap.adx_filter_passed ?? (snap.adx && snap.adx_threshold ? snap.adx >= snap.adx_threshold : null))
+      : snap.adx_filter_passed;
     
-    // ADX filter: check if adx >= adx_threshold
-    const adxFilterInferred = snap.adx && snap.adx_threshold
-      ? snap.adx >= snap.adx_threshold
-      : true;
+    const atrFilterPassed = isLegacy
+      ? (snap.atr_filter_passed ?? (snap.atr ? snap.atr > 0 : null))
+      : snap.atr_filter_passed;
     
-    // ATR filter: infer from atr > 0
-    const atrFilterInferred = snap.atr ? snap.atr > 0 : true;
-    
-    // MACD schema (CONFIG vs RUNTIME)
-    // NOTE: snap.macd_signal i snapshots er ofte CONFIG-perioden (fx 9) og må IKKE eksporteres som "MACD_signal".
-    const macdSignalPeriod = snap.macd_signal_period ?? (Number.isInteger(snap.macd_signal) ? snap.macd_signal : null);
-    const macdLine = snap.macd_line ?? snap.macdLine ?? null;
-    const macdSignalLine = snap.macd_signal_line ?? snap.macdSignalLine ?? null;
-    const macdHistogram = snap.macd_histogram ?? snap.macdHistogram ?? snap.macd ?? null;
+    // 🔴 MACD SCHEMA - V2 har garanterede felter
+    const macdSignalPeriod = isLegacy 
+      ? (snap.macd_signal_period ?? (Number.isInteger(snap.macd_signal) ? snap.macd_signal : null))
+      : snap.macd_signal_period; // v2: guaranteed int
+    const macdLine = isLegacy 
+      ? (snap.macd_line ?? snap.macdLine ?? null)
+      : snap.macd_line; // v2: guaranteed
+    const macdSignalLine = isLegacy 
+      ? (snap.macd_signal_line ?? snap.macdSignalLine ?? null)
+      : snap.macd_signal_line; // v2: guaranteed
+    const macdHistogram = isLegacy 
+      ? (snap.macd_histogram ?? snap.macdHistogram ?? snap.macd ?? null)
+      : snap.macd_histogram; // v2: guaranteed
 
-    // MACD direction filter inference: compare macd_line vs macd_signal_line (not vs 0)
-    const macdDirInferred = (macdLine != null && macdSignalLine != null)
-      ? (side === 'long' ? macdLine > macdSignalLine : macdLine < macdSignalLine)
-      : null;
+    // MACD direction filter
+    const macdDirPassed = isLegacy
+      ? (snap.macd_direction_passed ?? snap.macd_direction_filter_passed ?? 
+         ((macdLine != null && macdSignalLine != null)
+           ? (side === 'long' ? macdLine > macdSignalLine : macdLine < macdSignalLine)
+           : null))
+      : snap.macd_direction_passed; // v2: direct
+
+    // StochRSI - v2 har separate felter
+    const stochRsiK = isLegacy 
+      ? (snap.stochRSI_k ?? snap.stochRSI?.k ?? null)
+      : snap.stochRSI_k;
+    const stochRsiD = isLegacy 
+      ? (snap.stochRSI_d ?? snap.stochRSI?.d ?? null)
+      : snap.stochRSI_d;
+
+    // Break-even - v2 garanterer at break_even_at_price ikke er null når BE aktiveret
+    const breakEvenTriggered = isLegacy
+      ? (snap.break_even_activated ?? t.break_even_activated ?? false)
+      : snap.break_even_activated;
+    const breakEvenAtPrice = snap.break_even_at_price; // v2: guaranteed if BE triggered
+
+    // Soft conditions total
+    const softConditionsTotal = isLegacy
+      ? (snap.soft_conditions_total ?? snap.conditionsMet ?? 
+         (side === 'long' ? snap.conditionDetails?.longConditionsMet : snap.conditionDetails?.shortConditionsMet) ?? null)
+      : snap.soft_conditions_total;
+
+    // Trend data
+    const trendMedium = isLegacy
+      ? (snap.trend_medium ?? snap.trend ?? (side === 'long' ? 'BULLISH' : 'BEARISH'))
+      : snap.trend_medium;
+    const trendHigher = isLegacy
+      ? (snap.trend_higher ?? (side === 'long' ? 'BULLISH' : 'BEARISH'))
+      : snap.trend_higher;
 
     return {
+      // 🔴 SCHEMA VERSION - For audit/debugging
+      schema_version: schemaVersion,
+      is_legacy: isLegacy,
+
       // Core trade data
       symbol: t.symbol,
       side: t.side,
@@ -130,17 +194,18 @@ export const ExportTradesDialog = ({
       macd_line: macdLine != null ? +Number(macdLine).toFixed(12) : null,
       macd_signal_line: macdSignalLine != null ? +Number(macdSignalLine).toFixed(12) : null,
       macd_histogram: macdHistogram != null ? +Number(macdHistogram).toFixed(12) : null,
-      MACD_direction_filter_passed: snap.macd_direction_filter_passed ?? snap.macd_direction_passed ?? macdDirInferred,
-      MACD_color_change_passed: softMacdColor,
+      MACD_direction_filter_passed: macdDirPassed,
+      MACD_histogram_soft_passed: softMacdHistogram,
+      MACD_momentum_soft_passed: softMacdMomentum,
 
       // ATR
       ATR_value: snap.atr != null ? +Number(snap.atr).toFixed(6) : null,
       ATR_pct: atrPct != null ? +Number(atrPct).toFixed(4) : null,
-      ATR_filter_passed: snap.atr_filter_passed ?? atrFilterInferred,
+      ATR_filter_passed: atrFilterPassed,
 
-      // ADX - med audit felter
+      // ADX - med audit felter (v2 garanterer adx_audit hvis ADX enabled)
       ADX_value: snap.adx != null ? +Number(snap.adx).toFixed(2) : null,
-      ADX_filter_passed: snap.adx_filter_passed ?? adxFilterInferred,
+      ADX_filter_passed: adxFilterPassed,
       ADX_audit: snap.adx_audit ? {
         adx_value: snap.adx_audit.adx_value,
         adx_period: snap.adx_audit.adx_period,
@@ -155,14 +220,12 @@ export const ExportTradesDialog = ({
       // Volume
       volume_current: volumeCurrent != null ? +Number(volumeCurrent).toFixed(2) : null,
       volume_avg: volumeAvg != null ? +Number(volumeAvg).toFixed(2) : null,
-      volume_multiplier_filter_passed: snap.volume_multiplier_filter_passed !== undefined
-        ? snap.volume_multiplier_filter_passed
-        : volumeMultiplierFilterPassedTriState,
+      volume_multiplier_filter_passed: snap.volume_multiplier_filter_passed,
 
-      // StochRSI
-      stoch_rsi_k: snap.stochRSI_k != null ? +Number(snap.stochRSI_k).toFixed(2) : null,
-      stoch_rsi_d: snap.stochRSI_d != null ? +Number(snap.stochRSI_d).toFixed(2) : null,
-      stoch_rsi_zone_passed: snap.stochrsi_zone_passed ?? softStoch,
+      // StochRSI (v2: separate k/d felter)
+      stoch_rsi_k: stochRsiK != null ? +Number(stochRsiK).toFixed(2) : null,
+      stoch_rsi_d: stochRsiD != null ? +Number(stochRsiD).toFixed(2) : null,
+      stoch_rsi_zone_passed: isLegacy ? (snap.stochrsi_zone_passed ?? softStoch) : snap.stochrsi_zone_passed,
 
       // Bollinger Bands
       bollinger_upper: bbUpper != null ? +Number(bbUpper).toFixed(4) : null,
@@ -173,21 +236,24 @@ export const ExportTradesDialog = ({
       // Soft conditions
       soft_ema_trend_passed: softEmaTrend,
       soft_stoch_passed: softStoch,
-      soft_macd_color_passed: softMacdColor,
+      soft_macd_histogram_passed: softMacdHistogram,
+      soft_macd_momentum_passed: softMacdMomentum,
       soft_bb_passed: softBb,
       soft_volume_passed: softVolume,
       soft_pivot_passed: softPivot,
-      soft_conditions_total: snap.conditionsMet ?? (side === 'long' 
-        ? snap.conditionDetails?.longConditionsMet 
-        : snap.conditionDetails?.shortConditionsMet) ?? null,
+      soft_conditions_total: softConditionsTotal,
 
-      // Break-even & Trailing stop
-      break_even_triggered: snap.break_even_activated ?? t.break_even_activated ?? false,
-      break_even_at_price: snap.break_even_at_price != null ? +Number(snap.break_even_at_price).toFixed(8) : null,
-      trailing_stop_trigger_price: (snap.trailing_stop_initial ?? snap.trailing_stop) != null ? +Number(snap.trailing_stop_initial ?? snap.trailing_stop).toFixed(8) : null,
+      // Break-even (v2: break_even_at_price guaranteed if triggered)
+      break_even_triggered: breakEvenTriggered,
+      break_even_at_price: breakEvenAtPrice != null ? +Number(breakEvenAtPrice).toFixed(8) : null,
+      
+      // Trailing stop config
+      trailing_stop_initial_price: snap.trailing_stop_initial_price != null 
+        ? +Number(snap.trailing_stop_initial_price).toFixed(8) 
+        : (isLegacy && snap.trailing_stop_initial != null ? +Number(snap.trailing_stop_initial).toFixed(8) : null),
       trailing_stop_atr_multiplier: snap.atr_trailing_stop_multiplier ?? null,
       
-      // 📊 TRAILING STOP EXIT AUDIT (når exit_reason indeholder TRAILING_STOP)
+      // 📊 TRAILING STOP EXIT AUDIT (v2: guaranteed when exit_reason=trailing_stop)
       trailing_stop_exit_audit: snap.trailing_stop_exit_audit ? {
         peak_price: snap.trailing_stop_exit_audit.peak_price,
         trailing_stop_price_at_exit: snap.trailing_stop_exit_audit.trailing_stop_price_at_exit,
@@ -202,9 +268,9 @@ export const ExportTradesDialog = ({
         trailing_calculation_matches: snap.trailing_stop_exit_audit.trailing_calculation_matches,
       } : null,
 
-      // Trend data - for old trades infer from side (if trade was opened, trend matched direction)
-      trend_medium: snap.trend_medium ?? snap.trend ?? (side === 'long' ? 'BULLISH' : 'BEARISH'),
-      trend_higher: snap.trend_higher ?? (side === 'long' ? 'BULLISH' : 'BEARISH'),
+      // Trend data
+      trend_medium: trendMedium,
+      trend_higher: trendHigher,
 
       // Timestamps
       timestamp_open: openedAt.toISOString(),
