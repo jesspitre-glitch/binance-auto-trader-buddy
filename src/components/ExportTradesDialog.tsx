@@ -84,6 +84,42 @@ export const ExportTradesDialog = ({
         schemaErrors.push('trailing_stop_exit_audit (trailing exit but audit missing)');
       }
       
+      // 🔴 CLAMP-AWARE TRAILING AUDIT VALIDATION (v2)
+      // Trigger: schema_version >= 2 AND close_reason === 'TRAILING_STOP_HIT' AND trailing_stop_exit_audit !== null
+      if (t.close_reason === 'TRAILING_STOP_HIT' && snap.trailing_stop_exit_audit) {
+        const audit = snap.trailing_stop_exit_audit;
+        
+        // Always required (må aldrig være undefined)
+        if (audit.was_clamped === undefined) {
+          schemaErrors.push('trailing_stop_exit_audit.was_clamped');
+        }
+        if (audit.clamp_applied_correctly === undefined) {
+          schemaErrors.push('trailing_stop_exit_audit.clamp_applied_correctly');
+        }
+        if (audit.expected_trailing_level === undefined) {
+          schemaErrors.push('trailing_stop_exit_audit.expected_trailing_level');
+        }
+        if (audit.effective_exit_level === undefined) {
+          schemaErrors.push('trailing_stop_exit_audit.effective_exit_level');
+        }
+        
+        // Conditional required (kun når was_clamped === true)
+        if (audit.was_clamped === true) {
+          if (audit.clamp_reason === null || audit.clamp_reason === undefined) {
+            schemaErrors.push('trailing_stop_exit_audit.clamp_reason');
+          }
+          if (audit.clamp_protection_level === null || audit.clamp_protection_level === undefined) {
+            schemaErrors.push('trailing_stop_exit_audit.clamp_protection_level');
+          }
+          if (audit.clamp_delta === undefined || audit.clamp_delta === null || audit.clamp_delta <= 0) {
+            schemaErrors.push('trailing_stop_exit_audit.clamp_delta');
+          }
+          if (audit.clamp_applied_correctly !== true) {
+            schemaErrors.push('trailing_stop_exit_audit.clamp_applied_correctly (must be true)');
+          }
+        }
+      }
+      
       // StochRSI separate fields
       if (snap.stochrsi_enabled === true) {
         if (snap.stochRSI_k === undefined) schemaErrors.push('stochRSI_k');
@@ -336,6 +372,14 @@ export const ExportTradesDialog = ({
         multiplier_was_fallback: snap.trailing_stop_exit_audit.multiplier_was_fallback,
         is_legacy_position: snap.trailing_stop_exit_audit.is_legacy_position,
         trailing_calculation_matches: snap.trailing_stop_exit_audit.trailing_calculation_matches,
+        // 🔴 CLAMP-AWARE FIELDS (v2 guaranteed for trailing exits)
+        expected_trailing_level: snap.trailing_stop_exit_audit.expected_trailing_level,
+        effective_exit_level: snap.trailing_stop_exit_audit.effective_exit_level,
+        was_clamped: snap.trailing_stop_exit_audit.was_clamped,
+        clamp_reason: snap.trailing_stop_exit_audit.clamp_reason,
+        clamp_delta: snap.trailing_stop_exit_audit.clamp_delta,
+        clamp_protection_level: snap.trailing_stop_exit_audit.clamp_protection_level,
+        clamp_applied_correctly: snap.trailing_stop_exit_audit.clamp_applied_correctly,
       } : null,
 
       // Trend data
