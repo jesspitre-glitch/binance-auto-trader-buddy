@@ -2217,6 +2217,11 @@ serve(async (req) => {
 
           
           const comprehensiveSnapshot = {
+            // 🔴 SCHEMA VERSION - Bruges til at skelne legacy vs nye snapshots
+            // v1 = legacy trades før schema fixes (ingen garanti for felter)
+            // v2 = nye trades med garanterede felter (MACD, BE, ADX audit, trailing audit, StochRSI)
+            schema_version: 2,
+            
             // Config values
             ...config,
             
