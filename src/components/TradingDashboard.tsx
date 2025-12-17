@@ -80,6 +80,16 @@ export const TradingDashboard = () => {
     fetchConfigs();
     fetchSession();
 
+    // Refresh data when user returns to the tab
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchConfigs();
+        fetchSession();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     const channel = supabase
       .channel("indicator-config-listener")
       .on(
@@ -92,6 +102,7 @@ export const TradingDashboard = () => {
       .subscribe();
 
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       supabase.removeChannel(channel);
     };
   }, []);
