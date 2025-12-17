@@ -136,6 +136,20 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
 
     const indicators = result.indicators;
     const conditionsRequired = config?.signal_conditions_required || 2;
+    
+    // 🔍 DIAGNOSTIC: Log MACD and Higher Trend keys for N/A debugging
+    console.log(`📊 [${result.symbol}] MACD keys:`, {
+      macdLine: indicators.macdLine,
+      macdSignalLine: indicators.macdSignalLine,
+      macdSignal: indicators.macdSignal,
+      macd_line: indicators.macd_line,
+      macd_signal_line: indicators.macd_signal_line,
+    });
+    console.log(`📊 [${result.symbol}] Higher Trend keys:`, {
+      higherTrend: indicators.higherTrend,
+      trend_higher: indicators.trend_higher,
+      trend: indicators.trend,
+    });
     // conditionsMet will be calculated based on trend-specific conditions below
 
     // Check HÅRDE FILTRE - kun inkluder dem der er enabled
