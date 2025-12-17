@@ -511,9 +511,22 @@ serve(async (req) => {
             }
           }
         } else {
-          // 🔴 AUDIT: Tjek eksisterende positioner med break_even_activated=true
+          // 🔴 FIX: Break-even er ALLEREDE aktiveret - sørg for at newStopLoss reflekterer BE-prisen
+          // Dette er kritisk for at trailing_stop_exit_audit.stop_loss_at_exit er korrekt
           const existingBEPrice = position.indicators_snapshot?.break_even_at_price;
-          if (existingBEPrice === null || existingBEPrice === undefined) {
+          
+          if (existingBEPrice !== null && existingBEPrice !== undefined && isFinite(existingBEPrice)) {
+            // 🔴 Sæt alle lokale variabler konsistent med eksisterende BE-state
+            newStopLoss = existingBEPrice;
+            breakEvenAtPrice = existingBEPrice;
+            breakEvenActivatedState = true;
+            stopLossAfterBE = existingBEPrice;
+            
+            console.log(`📋 Break-even ALLEREDE AKTIV for ${position.symbol}:`);
+            console.log(`   break_even_at_price: ${existingBEPrice}`);
+            console.log(`   newStopLoss synkroniseret: ${newStopLoss}`);
+          } else {
+            // 🔴 AUDIT WARNING: break_even_activated=true men break_even_at_price er null
             console.log(`\n⚠️ ═══════════════════════════════════════════`);
             console.log(`⚠️ BREAK-EVEN AUDIT WARNING - ${position.symbol} ${position.side}`);
             console.log(`⚠️ ═══════════════════════════════════════════`);
@@ -523,10 +536,15 @@ serve(async (req) => {
             console.log(`     1. Position åbnet før break_even_at_price blev implementeret`);
             console.log(`     2. Race condition ved BE aktivering`);
             console.log(`     3. snapshot opdateret uden break_even_at_price felt`);
-            console.log(`   FIX: Sætter break_even_at_price = entry_price retroaktivt`);
+            console.log(`   FIX: Sætter newStopLoss = entry_price retroaktivt`);
             console.log(`⚠️ ═══════════════════════════════════════════\n`);
             
-            // Retroaktiv fix: Sæt break_even_at_price til entry_price
+            // Retroaktiv fix: Brug entry_price som BE-pris
+            newStopLoss = position.entry_price;
+            breakEvenAtPrice = position.entry_price;
+            breakEvenActivatedState = true;
+            stopLossAfterBE = position.entry_price;
+            
             const fixedSnapshot = {
               ...position.indicators_snapshot,
               break_even_at_price: position.entry_price,
@@ -535,7 +553,10 @@ serve(async (req) => {
             };
             await supabaseClient
               .from('positions')
-              .update({ indicators_snapshot: fixedSnapshot })
+              .update({ 
+                indicators_snapshot: fixedSnapshot,
+                stop_loss: position.entry_price // 🔴 Opdater også DB-felt
+              })
               .eq('id', position.id);
           }
         }
@@ -968,6 +989,30 @@ serve(async (req) => {
                 console.log(`   stop_loss_after_be: ${enhancedSnapshot.stop_loss_after_be}`);
                 console.log(`   break_even_at_price: ${enhancedSnapshot.break_even_at_price}`);
                 console.log(`   diff: ${beAssertionDiff.toExponential(10)} (expected < 1e-10)`);
+              }
+              
+              // 🔴 CRITICAL AUDIT: Verificer stop_loss_at_exit matcher BE-price når BE er aktiv
+              const slAtExitFromAudit = enhancedSnapshot.trailing_stop_exit_audit?.stop_loss_at_exit;
+              const expectedSlWithBE = enhancedSnapshot.break_even_at_price;
+              if (slAtExitFromAudit !== null && slAtExitFromAudit !== undefined && 
+                  expectedSlWithBE !== null && expectedSlWithBE !== undefined) {
+                const slAuditDiff = Math.abs(slAtExitFromAudit - expectedSlWithBE);
+                if (slAuditDiff >= 1e-10) {
+                  console.log(`\n❌ ═══════════════════════════════════════════════════════`);
+                  console.log(`❌ STOP_LOSS_AT_EXIT AUDIT ASSERTION FAILED!`);
+                  console.log(`❌ ═══════════════════════════════════════════════════════`);
+                  console.log(`   break_even_activated: ${enhancedSnapshot.break_even_activated}`);
+                  console.log(`   break_even_at_price: ${expectedSlWithBE}`);
+                  console.log(`   stop_loss_at_exit (audit): ${slAtExitFromAudit}`);
+                  console.log(`   DIFF: ${slAuditDiff} (expected < 1e-10)`);
+                  console.log(`   ─────────────────────────────────────────────────────────`);
+                  console.log(`   KONKLUSION: stop_loss_at_exit afviger fra BE-price!`);
+                  console.log(`   Dette indikerer at newStopLoss ikke blev synkroniseret korrekt`);
+                  console.log(`   med break-even state ved loop-start.`);
+                  console.log(`❌ ═══════════════════════════════════════════════════════\n`);
+                } else {
+                  console.log(`✅ STOP_LOSS_AT_EXIT AUDIT OK: ${slAtExitFromAudit} matches BE price ${expectedSlWithBE}`);
+                }
               }
             }
 
