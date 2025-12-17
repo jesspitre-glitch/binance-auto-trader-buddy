@@ -173,9 +173,24 @@ export const ExportTradesDialog = ({
 
       // Break-even & Trailing stop
       break_even_triggered: snap.break_even_activated ?? t.break_even_activated ?? false,
-      break_even_at_price: snap.break_even_price != null ? +Number(snap.break_even_price).toFixed(4) : null,
-      trailing_stop_trigger_price: (snap.trailing_stop_initial ?? snap.trailing_stop) != null ? +Number(snap.trailing_stop_initial ?? snap.trailing_stop).toFixed(4) : null,
+      break_even_at_price: snap.break_even_at_price != null ? +Number(snap.break_even_at_price).toFixed(8) : null,
+      trailing_stop_trigger_price: (snap.trailing_stop_initial ?? snap.trailing_stop) != null ? +Number(snap.trailing_stop_initial ?? snap.trailing_stop).toFixed(8) : null,
       trailing_stop_atr_multiplier: snap.atr_trailing_stop_multiplier ?? null,
+      
+      // 📊 TRAILING STOP EXIT AUDIT (når exit_reason indeholder TRAILING_STOP)
+      trailing_stop_exit_audit: snap.trailing_stop_exit_audit ? {
+        peak_price: snap.trailing_stop_exit_audit.peak_price,
+        trailing_stop_price_at_exit: snap.trailing_stop_exit_audit.trailing_stop_price_at_exit,
+        stop_loss_at_exit: snap.trailing_stop_exit_audit.stop_loss_at_exit,
+        atr_value_at_exit: snap.trailing_stop_exit_audit.atr_value_at_exit,
+        trailing_distance: snap.trailing_stop_exit_audit.trailing_distance,
+        distance_from_peak_pct: snap.trailing_stop_exit_audit.distance_from_peak_pct,
+        distance_from_peak_atr: snap.trailing_stop_exit_audit.distance_from_peak_atr,
+        multiplier_used: snap.trailing_stop_exit_audit.multiplier_used,
+        multiplier_was_fallback: snap.trailing_stop_exit_audit.multiplier_was_fallback,
+        is_legacy_position: snap.trailing_stop_exit_audit.is_legacy_position,
+        trailing_calculation_matches: snap.trailing_stop_exit_audit.trailing_calculation_matches,
+      } : null,
 
       // Trend data - for old trades infer from side (if trade was opened, trend matched direction)
       trend_medium: snap.trend_medium ?? snap.trend ?? (side === 'long' ? 'BULLISH' : 'BEARISH'),
