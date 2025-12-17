@@ -259,12 +259,15 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
         const macdLine = indicators.macdLine;
         const macdSignalLine = indicators.macdSignalLine;
         
-        if (macdLine !== null && macdLine !== undefined && macdSignalLine !== null && macdSignalLine !== undefined) {
+        // Support both field names: macdSignalLine (new) and macdSignal (deprecated)
+        const effectiveSignalLine = macdSignalLine ?? indicators.macdSignal;
+        
+        if (macdLine !== null && macdLine !== undefined && effectiveSignalLine !== null && effectiveSignalLine !== undefined) {
           // MACD Direction filteret er RETNINGSSPECIFIKT:
           // - For LONG: macdLine > signalLine
           // - For SHORT: macdLine < signalLine
-          const macdLongOK = macdLine > macdSignalLine;
-          const macdShortOK = macdLine < macdSignalLine;
+          const macdLongOK = macdLine > effectiveSignalLine;
+          const macdShortOK = macdLine < effectiveSignalLine;
           
           // Check mod trend retning
           if (trend === 'long') {
@@ -773,8 +776,8 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                               </span>
                             </div>
                             <span className="font-mono font-bold text-[8px]">
-                              {coin.indicators.macdLine !== undefined && coin.indicators.macdSignalLine !== undefined ? (
-                                coin.indicators.macdLine > coin.indicators.macdSignalLine ? 
+                              {coin.indicators.macdLine !== undefined && (coin.indicators.macdSignalLine !== undefined || coin.indicators.macdSignal !== undefined) ? (
+                                coin.indicators.macdLine > (coin.indicators.macdSignalLine ?? coin.indicators.macdSignal) ? 
                                   <span className="text-green-500">BULL</span> : 
                                   <span className="text-red-500">BEAR</span>
                               ) : 'N/A'}

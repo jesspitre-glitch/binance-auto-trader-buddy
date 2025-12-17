@@ -1796,6 +1796,8 @@ serve(async (req) => {
             indicators: {
               ...analysis.indicators,
               trend: trend,
+              higherTrend: higherTrend, // Add higher trend to scan_results
+              trend_higher: higherTrend, // Also save as trend_higher for compatibility
               scan_interval: config.scan_interval,
               trend_timeframe: config.trend_timeframe,
               filterStatus: analysis.filterStatus, // Include filter evaluation results
