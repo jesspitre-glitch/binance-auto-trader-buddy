@@ -253,28 +253,31 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
         }
       }
       
-      // MACD Direction Check
+      // MACD Direction Check - Retningsspecifik baseret på trend
       if (config.macd_direction_enabled && config.macd_enabled) {
         enabledFilters.push('macdDirection');
-        if (indicators.macdLine !== null && indicators.macdLine !== undefined) {
-          // Check if filterStatus is available
-          if (indicators.filterStatus?.hard?.macdDirection) {
-            const macdLongOK = indicators.filterStatus.hard.macdDirection.long;
-            const macdShortOK = indicators.filterStatus.hard.macdDirection.short;
-            const macdOK = macdLongOK || macdShortOK;
-            
-            hardFilters.macdDirection = macdOK;
-            const macdAbs = Math.abs(indicators.macdLine);
-            hardFiltersProgress.macdDirection = hardFilters.macdDirection ? Math.min(macdAbs * 1000, 100) : 0;
+        const macdLine = indicators.macdLine;
+        const macdSignalLine = indicators.macdSignalLine;
+        
+        if (macdLine !== null && macdLine !== undefined && macdSignalLine !== null && macdSignalLine !== undefined) {
+          // MACD Direction filteret er RETNINGSSPECIFIKT:
+          // - For LONG: macdLine > signalLine
+          // - For SHORT: macdLine < signalLine
+          const macdLongOK = macdLine > macdSignalLine;
+          const macdShortOK = macdLine < macdSignalLine;
+          
+          // Check mod trend retning
+          if (trend === 'long') {
+            hardFilters.macdDirection = macdLongOK;
+          } else if (trend === 'short') {
+            hardFilters.macdDirection = macdShortOK;
           } else {
-            const macdLongOK = indicators.macdLine > 0;
-            const macdShortOK = indicators.macdLine < 0;
-            const macdOK = macdLongOK || macdShortOK;
-            
-            const macdAbs = Math.abs(indicators.macdLine);
-            hardFiltersProgress.macdDirection = Math.min(macdAbs * 1000, 100);
-            hardFilters.macdDirection = macdOK;
+            // Ingen trend - check om nogen af dem er OK
+            hardFilters.macdDirection = macdLongOK || macdShortOK;
           }
+          
+          const diff = Math.abs(macdLine - macdSignalLine);
+          hardFiltersProgress.macdDirection = hardFilters.macdDirection ? 100 : Math.min(diff * 500, 99);
         } else {
           hardFiltersProgress.macdDirection = 0;
           hardFilters.macdDirection = false;
@@ -303,6 +306,43 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
             hardFiltersProgress.macdColorChange = 0;
           }
         }
+      }
+      
+      // Higher Trend Check (KRITISK HARD FILTER)
+      if (config.higher_trend_enabled) {
+        enabledFilters.push('higherTrend');
+        const higherTrend = indicators.higherTrend || indicators.trend_higher;
+        
+        if (higherTrend && trend) {
+          // Higher trend skal matche signal retning
+          const trendMatches = (trend === 'long' && higherTrend === 'BULLISH') || 
+                              (trend === 'short' && higherTrend === 'BEARISH');
+          hardFilters.higherTrend = trendMatches;
+          hardFiltersProgress.higherTrend = trendMatches ? 100 : 0;
+        } else if (higherTrend) {
+          // Ingen trend endnu - vis bare om higher trend er aktiv
+          hardFilters.higherTrend = higherTrend !== 'NEUTRAL';
+          hardFiltersProgress.higherTrend = higherTrend !== 'NEUTRAL' ? 50 : 0;
+        } else {
+          hardFilters.higherTrend = false;
+          hardFiltersProgress.higherTrend = 0;
+        }
+      }
+      
+      // EMA Trend Hard Filter (hvis aktiveret som hårdt filter)
+      if (config.ema_trend_hard_filter && config.ema_enabled) {
+        enabledFilters.push('emaTrend');
+        const emaAlignmentLong = indicators.filterStatus?.soft?.emaAlignment?.long;
+        const emaAlignmentShort = indicators.filterStatus?.soft?.emaAlignment?.short;
+        
+        if (trend === 'long') {
+          hardFilters.emaTrend = emaAlignmentLong === true;
+        } else if (trend === 'short') {
+          hardFilters.emaTrend = emaAlignmentShort === true;
+        } else {
+          hardFilters.emaTrend = emaAlignmentLong === true || emaAlignmentShort === true;
+        }
+        hardFiltersProgress.emaTrend = hardFilters.emaTrend ? 100 : 0;
       }
       
       // RSI Momentum Check (zone + momentum)
@@ -732,8 +772,46 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                                 MACD Retning
                               </span>
                             </div>
-                            <span className="font-mono font-bold">
-                              {coin.indicators.macdDirection || 'N/A'}
+                            <span className="font-mono font-bold text-[8px]">
+                              {coin.indicators.macdLine !== undefined && coin.indicators.macdSignalLine !== undefined ? (
+                                coin.indicators.macdLine > coin.indicators.macdSignalLine ? 
+                                  <span className="text-green-500">BULL</span> : 
+                                  <span className="text-red-500">BEAR</span>
+                              ) : 'N/A'}
+                            </span>
+                          </div>
+                        )}
+                        {coin.hardFilters.higherTrend !== undefined && (
+                          <div className="flex items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <CircularProgress 
+                                value={coin.hardFiltersProgress.higherTrend || 0} 
+                                size={16}
+                                passed={coin.hardFilters.higherTrend}
+                              />
+                              <span className={coin.hardFilters.higherTrend ? 'text-green-500' : 'opacity-70'}>
+                                Higher Trend
+                              </span>
+                            </div>
+                            <span className="font-mono font-bold text-[8px]">
+                              {coin.indicators.higherTrend || coin.indicators.trend_higher || 'N/A'}
+                            </span>
+                          </div>
+                        )}
+                        {coin.hardFilters.emaTrend !== undefined && (
+                          <div className="flex items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <CircularProgress 
+                                value={coin.hardFiltersProgress.emaTrend || 0} 
+                                size={16}
+                                passed={coin.hardFilters.emaTrend}
+                              />
+                              <span className={coin.hardFilters.emaTrend ? 'text-green-500' : 'opacity-70'}>
+                                EMA Trend
+                              </span>
+                            </div>
+                            <span className="font-mono font-bold text-[8px]">
+                              {coin.hardFilters.emaTrend ? '✓' : '✗'}
                             </span>
                           </div>
                         )}
