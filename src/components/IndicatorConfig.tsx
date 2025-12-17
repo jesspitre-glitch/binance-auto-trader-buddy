@@ -1144,7 +1144,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h4 className="font-semibold">📊 Profit %-baseret Break-Even</h4>
-                    <p className="text-xs text-muted-foreground">Trigger ved profit = X% af entry pris</p>
+                    <p className="text-xs text-muted-foreground">
+                      Trigger ved profit = X% af entry pris.<br/>
+                      <strong>LONG:</strong> Trigger når price ≥ entry × (1 + X/100), stop = entry × (1 + Y/100)<br/>
+                      <strong>SHORT:</strong> Trigger når price ≤ entry × (1 - X/100), stop = entry × (1 - Y/100)
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">{formData.break_even_profit_pct_enabled ? "Tændt" : "Slukket"}</span>
@@ -1171,7 +1175,12 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                           setFormData({ ...formData, break_even_profit_pct_trigger: val });
                         }}
                       />
-                      <p className="text-xs text-muted-foreground">Aktiver BE når profit ≥ X% af entry</p>
+                      <p className="text-xs text-muted-foreground">
+                        Aktiver BE når profit ≥ X% af entry
+                        {formData.break_even_profit_pct_trigger === 0 && (
+                          <span className="text-destructive block mt-1">⚠️ Trigger = 0%: BE aktiveres straks! Risiko for instant stop-out pga. spread/fees.</span>
+                        )}
+                      </p>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="break_even_profit_pct_stop_over_entry">Stop Over Entry %</Label>
@@ -1190,12 +1199,21 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                         }}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Stop placeres X% over entry. Skal være ≤ Trigger %.
+                        Stop placeres X% over entry (LONG) / under entry (SHORT). Skal være ≤ Trigger %.
                         {formData.break_even_profit_pct_stop_over_entry > formData.break_even_profit_pct_trigger && (
                           <span className="text-destructive block">⚠️ Må ikke overstige Trigger %!</span>
                         )}
                       </p>
                     </div>
+                    
+                    {/* Info om når begge modes er aktive */}
+                    {formData.break_even_atr_enabled && (
+                      <div className="sm:col-span-2 p-3 bg-muted/50 rounded-md">
+                        <p className="text-xs text-muted-foreground">
+                          <strong>ℹ️ Begge BE-modes er aktive:</strong> Når begge trigges, vælges det mest beskyttende stop (højeste for LONG, laveste for SHORT).
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
