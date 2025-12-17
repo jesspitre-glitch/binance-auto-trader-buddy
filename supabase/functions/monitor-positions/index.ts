@@ -949,12 +949,26 @@ serve(async (req) => {
               MACD_signal: undefined,
               
               // 📊 TRAILING STOP EXIT AUDIT FELTER (gemmes ved ALLE exits, men primært for trailing)
+              // 🔴 FIX: Ved trailing stop exit skal stop_loss_at_exit være newTrailingStop (det faktiske exit-niveau)
+              // newStopLoss kan afvige hvis break-even var aktiv (BE flytter SL til entry, men trailing beregnes separat)
+              // effective_stop_at_exit = det niveau der FAKTISK triggede exit i denne loop
               trailing_stop_exit_audit: {
                 peak_price: newPeakPrice,
                 trailing_stop_price_at_exit: newTrailingStop,
-                stop_loss_at_exit: newStopLoss,
+                // 🔴 CRITICAL FIX: Ved trailing exit skal stop_loss_at_exit være trailing niveauet, ikke BE/SL
+                // Dette sikrer entydighed: det niveau der bruges i exit-beslutningen er det der logges
+                stop_loss_at_exit: isTrailingStopExit ? newTrailingStop : newStopLoss,
+                // 🔴 NEW: Eksplicit felt der viser hvilken mekanisme der triggede exit
+                effective_exit_level: isTrailingStopExit ? newTrailingStop : newStopLoss,
+                effective_exit_mechanism: isTrailingStopExit ? 'TRAILING_STOP' : 
+                  (finalBreakEvenActivated ? 'BREAK_EVEN_SL' : 'INITIAL_SL'),
+                // Original SL (kan afvige fra effective_exit_level hvis BE er aktiv)
+                original_stop_loss: newStopLoss,
+                break_even_was_active: finalBreakEvenActivated,
+                break_even_at_price_at_exit: finalBreakEvenAtPrice,
                 // 🔴 ATR AUDIT - Entydigt dokumentation af hvilken ATR der blev brugt
                 atr_value_used_for_trailing: snapshotAtrForExit, // Fra entry snapshot - Model A
+                atr_value_at_exit: snapshotAtrForExit, // Alias for backwards compatibility
                 atr_source: 'entry', // Bekræfter at vi bruger entry-ATR, ikke live
                 atr_timeframe: position.indicators_snapshot?.atr_audit?.atr_timeframe 
                   ?? position.indicators_snapshot?.trend_timeframe 
@@ -975,7 +989,8 @@ serve(async (req) => {
                 expected_trailing_from_peak: newPeakPrice && trailingDistanceForExit
                   ? (position.side === 'LONG' ? newPeakPrice - trailingDistanceForExit : newPeakPrice + trailingDistanceForExit)
                   : null,
-                trailing_calculation_matches: newTrailingStop && newPeakPrice && trailingDistanceForExit
+                // 🔴 FIX: trailing_calculation_matches validerer nu effective_exit_level, ikke bare trailing price
+                trailing_calculation_matches: isTrailingStopExit && newTrailingStop && newPeakPrice && trailingDistanceForExit
                   ? Math.abs(newTrailingStop - (position.side === 'LONG' ? newPeakPrice - trailingDistanceForExit : newPeakPrice + trailingDistanceForExit)) < 1e-6
                   : null,
               },
@@ -1020,14 +1035,49 @@ serve(async (req) => {
             if (closeReason.includes('TRAILING_STOP')) {
               const audit = enhancedSnapshot.trailing_stop_exit_audit;
               
+              // 🔴 AUDIT ASSERTION: Verificer at stop_loss_at_exit matcher effective_exit_level ved trailing exit
+              const trailingExitMismatch = audit.stop_loss_at_exit !== audit.effective_exit_level;
+              if (trailingExitMismatch) {
+                console.log(`\n❌ ═══════════════════════════════════════════════════════`);
+                console.log(`❌ TRAILING EXIT AUDIT ASSERTION FAILED!`);
+                console.log(`❌ ═══════════════════════════════════════════════════════`);
+                console.log(`   stop_loss_at_exit: ${audit.stop_loss_at_exit}`);
+                console.log(`   effective_exit_level: ${audit.effective_exit_level}`);
+                console.log(`   DISSE BØR VÆRE IDENTISKE VED TRAILING EXIT!`);
+                console.log(`❌ ═══════════════════════════════════════════════════════\n`);
+              }
+              
+              // 🔴 AUDIT ASSERTION: Verificer at trailing level matcher expected beregning
+              const expectedTrailing = audit.expected_trailing_from_peak;
+              const actualTrailing = audit.trailing_stop_price_at_exit;
+              if (expectedTrailing && actualTrailing) {
+                const trailingDiff = Math.abs(actualTrailing - expectedTrailing);
+                if (trailingDiff >= 1e-6) {
+                  console.log(`\n❌ TRAILING CALCULATION DIVERGENCE DETECTED!`);
+                  console.log(`   actual trailing: ${actualTrailing}`);
+                  console.log(`   expected from peak: ${expectedTrailing}`);
+                  console.log(`   diff: ${trailingDiff.toExponential(10)}`);
+                  console.log(`   break_even_was_active: ${audit.break_even_was_active}`);
+                  console.log(`   original_stop_loss: ${audit.original_stop_loss}`);
+                }
+              }
+              
               console.log(`\n📊 ═══════════════════════════════════════════════════════`);
               console.log(`📊 TRAILING STOP EXIT AUDIT - ${position.symbol} ${position.side}`);
               console.log(`📊 ═══════════════════════════════════════════════════════`);
+              console.log(`   EXIT NIVEAUER:`);
+              console.log(`   📍 effective_exit_level: ${audit.effective_exit_level} (${audit.effective_exit_mechanism})`);
+              console.log(`   📍 stop_loss_at_exit: ${audit.stop_loss_at_exit}`);
+              console.log(`   📍 trailing_stop_price_at_exit: ${audit.trailing_stop_price_at_exit}`);
+              console.log(`   📍 original_stop_loss: ${audit.original_stop_loss}`);
+              console.log(`   ─────────────────────────────────────────────────────────`);
+              console.log(`   BREAK-EVEN STATUS:`);
+              console.log(`   🔴 break_even_was_active: ${audit.break_even_was_active}`);
+              console.log(`   🔴 break_even_at_price_at_exit: ${audit.break_even_at_price_at_exit ?? 'NULL'}`);
+              console.log(`   ─────────────────────────────────────────────────────────`);
               console.log(`   PRISER:`);
               console.log(`   📍 entry_price: ${audit.entry_price}`);
               console.log(`   📍 peak_price: ${audit.peak_price}`);
-              console.log(`   📍 trailing_stop_price_at_exit: ${audit.trailing_stop_price_at_exit}`);
-              console.log(`   📍 stop_loss_at_exit: ${audit.stop_loss_at_exit}`);
               console.log(`   📍 exit_trigger_price: ${audit.exit_trigger_price}`);
               console.log(`   ─────────────────────────────────────────────────────────`);
               console.log(`   ATR & MULTIPLIER:`);
