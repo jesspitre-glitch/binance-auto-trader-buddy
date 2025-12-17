@@ -1400,6 +1400,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     macd: macd?.histogram ?? null,                       // DEPRECATED: brug macd_histogram
     macdLine: macd?.macd ?? null,                        // DEPRECATED: brug macd_line
     macdSignal: macd?.signal ?? null,                    // DEPRECATED: brug macd_signal_line
+    macdSignalLine: macd?.signal ?? null,                // v2: Frontend forventer dette navn
+    macdHistogram: macd?.histogram ?? null,              // v2: For MACD color change check
     atr: atr,
     bb,
     // ADX - med fuldt audit objekt
