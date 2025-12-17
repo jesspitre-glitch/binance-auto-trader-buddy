@@ -2234,6 +2234,17 @@ serve(async (req) => {
             // Explicit ATR percent
             atr_percent: atrPercent,
             
+            // 🔴 ATR AUDIT - Entydig dokumentation af ATR source
+            // Model A: Entry-ATR bruges som fast reference for alle exits
+            atr_audit: {
+              atr_value: analysis.indicators.atr,
+              atr_percent: atrPercent,
+              atr_period: config.atr_period,
+              atr_timeframe: config.trend_timeframe || config.scan_interval || '5m',
+              atr_source: 'entry', // ATR samplet ved signal-tidspunkt, bruges hele positionens levetid
+              atr_captured_at: new Date().toISOString(),
+            },
+            
             // EMA spread percent (already in indicators but ensuring it's there)
             ema_spread_percent: analysis.indicators.emaSpreadPercent,
             
