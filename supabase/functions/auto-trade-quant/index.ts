@@ -1352,9 +1352,15 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     rsi: rsiCurrent,
     stochRSI_k: stochRSI?.k ?? null,
     stochRSI_d: stochRSI?.d ?? null,
-    macd: macd?.histogram ?? null,
-    macdLine: macd?.macd ?? null,
-    macdSignal: macd?.signal ?? null,
+    // MACD - ENTYDIGT SCHEMA (config vs runtime adskilt)
+    macd_signal_period: config.macd_signal,              // CONFIG: periode (int, fx 9)
+    macd_line: macd?.macd ?? null,                       // RUNTIME: MACD-linjen (EMA fast - EMA slow)
+    macd_signal_line: macd?.signal ?? null,              // RUNTIME: Signal-linjen (EMA af macd_line)
+    macd_histogram: macd?.histogram ?? null,             // RUNTIME: macd_line - macd_signal_line
+    // LEGACY felter (for bagudkompatibilitet med gamle exports)
+    macd: macd?.histogram ?? null,                       // DEPRECATED: brug macd_histogram
+    macdLine: macd?.macd ?? null,                        // DEPRECATED: brug macd_line
+    macdSignal: macd?.signal ?? null,                    // DEPRECATED: brug macd_signal_line
     atr: atr,
     bb,
     adx,
@@ -2344,25 +2350,35 @@ serve(async (req) => {
           }
 
           // 📊 MACD SCHEMA AUDIT - Verificerer korrekt navngivning og typer
-          const macdLineValue = analysis.indicators.macdLine;
-          const macdSignalLineValue = analysis.indicators.macdSignal;
-          const macdHistogramValue = analysis.indicators.macd;
-          const macdSignalPeriodValue = config.macd_signal;
+          const macdLineValue = analysis.indicators.macd_line;
+          const macdSignalLineValue = analysis.indicators.macd_signal_line;
+          const macdHistogramValue = analysis.indicators.macd_histogram;
+          const macdSignalPeriodValue = analysis.indicators.macd_signal_period;
+          
+          // 🔴 KRITISK VERIFIKATION: histogram SKAL være macd_line - macd_signal_line
+          const expectedHistogram = (macdLineValue !== null && macdSignalLineValue !== null) 
+            ? macdLineValue - macdSignalLineValue 
+            : null;
+          const histogramMatchesCalc = (expectedHistogram !== null && macdHistogramValue !== null)
+            ? Math.abs(macdHistogramValue - expectedHistogram) < 1e-10
+            : (macdHistogramValue === null && expectedHistogram === null);
           
           console.log(`\n📊 ═══════════════════════════════════════════`);
           console.log(`📊 MACD SCHEMA AUDIT - ${symbol} ${signal}`);
           console.log(`📊 ═══════════════════════════════════════════`);
           console.log(`   CONFIG PARAMETER:`);
-          console.log(`   📌 macd_signal_period: ${macdSignalPeriodValue} (type: ${typeof macdSignalPeriodValue}, expected: number/integer)`);
+          console.log(`   📌 macd_signal_period: ${macdSignalPeriodValue} (type: ${typeof macdSignalPeriodValue}, expected: integer)`);
           console.log(`   RUNTIME VALUES:`);
-          console.log(`   📈 macd_line: ${macdLineValue !== null ? macdLineValue : 'NULL'} (type: ${typeof macdLineValue}, expected: number/decimal)`);
-          console.log(`   📉 macd_signal_line: ${macdSignalLineValue !== null ? macdSignalLineValue : 'NULL'} (type: ${typeof macdSignalLineValue}, expected: number/decimal)`);
-          console.log(`   📊 macd_histogram: ${macdHistogramValue !== null ? macdHistogramValue : 'NULL'} (type: ${typeof macdHistogramValue}, expected: number/decimal)`);
-          console.log(`   VERIFICATION:`);
+          console.log(`   📈 macd_line: ${macdLineValue !== null ? macdLineValue.toFixed(12) : 'NULL'}`);
+          console.log(`   📉 macd_signal_line: ${macdSignalLineValue !== null ? macdSignalLineValue.toFixed(12) : 'NULL'}`);
+          console.log(`   📊 macd_histogram: ${macdHistogramValue !== null ? macdHistogramValue.toFixed(12) : 'NULL'}`);
+          console.log(`   VERIFIKATION:`);
           console.log(`   ✅ macd_signal_period er heltal: ${Number.isInteger(macdSignalPeriodValue)}`);
-          console.log(`   ✅ macd_line er decimal: ${macdLineValue !== null && !Number.isInteger(macdLineValue)}`);
-          console.log(`   ✅ macd_signal_line er decimal: ${macdSignalLineValue !== null && !Number.isInteger(macdSignalLineValue)}`);
-          console.log(`   ✅ macd_histogram er decimal: ${macdHistogramValue !== null && !Number.isInteger(macdHistogramValue)}`);
+          console.log(`   📐 expected_histogram (line - signal): ${expectedHistogram !== null ? expectedHistogram.toFixed(12) : 'NULL'}`);
+          console.log(`   ${histogramMatchesCalc ? '✅' : '❌'} histogram == macd_line - macd_signal_line: ${histogramMatchesCalc}`);
+          if (!histogramMatchesCalc && macdHistogramValue !== null && expectedHistogram !== null) {
+            console.log(`   🚨 HISTOGRAM MISMATCH: stored=${macdHistogramValue.toFixed(12)}, expected=${expectedHistogram.toFixed(12)}, diff=${Math.abs(macdHistogramValue - expectedHistogram)}`);
+          }
           console.log(`📊 ═══════════════════════════════════════════`);
 
 
