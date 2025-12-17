@@ -703,22 +703,21 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     }
   }
   
-  // 2️⃣ ATR (med adaptive threshold)
+  // 2️⃣ ATR (KUN ATR% check - raw ATR er deprecated)
   if (config.atr_enabled && atr !== null) {
     filterStatus.hard.atr.value = atr.toFixed(6);
+    
+    // FAILSAFE: Log advarsel hvis min_atr (raw) er sat - den ignoreres nu
+    if (config.min_atr && config.min_atr > 0) {
+      console.log(`   ⚠️ ADVARSEL: min_atr (raw) = ${config.min_atr} er sat men IGNORERES. Brug kun min_atr_percent!`);
+    }
     
     if (atr === 0) {
       filterStatus.hard.atr.passed = false;
       filterStatus.hard.atr.reason = 'ATR = 0 (kan ikke beregne stop-loss)';
     }
     
-    // Check absolut ATR minimum
-    if (config.min_atr > 0 && atr < config.min_atr) {
-      filterStatus.hard.atr.passed = false;
-      filterStatus.hard.atr.reason = `ATR ${atr.toFixed(6)} < ${config.min_atr.toFixed(6)} (lav volatilitet)`;
-    }
-    
-    // Check ATR som procent af pris med ADAPTIVE threshold
+    // KUN ATR% check - raw ATR check er FJERNET
     if (config.min_atr_percent > 0) {
       const atrPercent = (atr / currentPrice) * 100;
       
