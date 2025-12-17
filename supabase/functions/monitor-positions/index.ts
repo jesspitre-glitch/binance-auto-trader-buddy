@@ -932,7 +932,16 @@ serve(async (req) => {
                 peak_price: newPeakPrice,
                 trailing_stop_price_at_exit: newTrailingStop,
                 stop_loss_at_exit: newStopLoss,
-                atr_value_at_exit: snapshotAtrForExit,
+                // 🔴 ATR AUDIT - Entydigt dokumentation af hvilken ATR der blev brugt
+                atr_value_used_for_trailing: snapshotAtrForExit, // Fra entry snapshot - Model A
+                atr_source: 'entry', // Bekræfter at vi bruger entry-ATR, ikke live
+                atr_timeframe: position.indicators_snapshot?.atr_audit?.atr_timeframe 
+                  ?? position.indicators_snapshot?.trend_timeframe 
+                  ?? position.indicators_snapshot?.scan_interval 
+                  ?? 'unknown',
+                atr_period: position.indicators_snapshot?.atr_audit?.atr_period 
+                  ?? position.indicators_snapshot?.atr_period 
+                  ?? 14,
                 trailing_distance: trailingDistanceForExit,
                 distance_from_peak_pct: distanceFromPeakPct,
                 distance_from_peak_atr: distanceFromPeakAtr,
@@ -1022,6 +1031,15 @@ serve(async (req) => {
               // ATR (required for exits)
               if (enhancedSnapshot.atr === undefined || enhancedSnapshot.atr === null) schemaErrors.push('atr');
               if (enhancedSnapshot.atr_percent === undefined) schemaErrors.push('atr_percent');
+              
+              // ATR audit (required for v2 - entydigt dokumentation af ATR source)
+              if (!enhancedSnapshot.atr_audit) {
+                schemaErrors.push('atr_audit');
+              } else {
+                if (enhancedSnapshot.atr_audit.atr_timeframe === undefined) schemaErrors.push('atr_audit.atr_timeframe');
+                if (enhancedSnapshot.atr_audit.atr_period === undefined) schemaErrors.push('atr_audit.atr_period');
+                if (enhancedSnapshot.atr_audit.atr_source === undefined) schemaErrors.push('atr_audit.atr_source');
+              }
               
               // Break-even: if triggered, at_price must exist
               if (enhancedSnapshot.break_even_activated === true && enhancedSnapshot.break_even_at_price === null) {

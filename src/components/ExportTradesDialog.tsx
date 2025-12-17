@@ -59,6 +59,15 @@ export const ExportTradesDialog = ({
       if (snap.atr === undefined || snap.atr === null) schemaErrors.push('atr');
       if (snap.atr_percent === undefined) schemaErrors.push('atr_percent');
       
+      // ATR audit (required for v2 - entydigt dokumentation af ATR source)
+      if (!snap.atr_audit) {
+        schemaErrors.push('atr_audit');
+      } else {
+        if (snap.atr_audit.atr_timeframe === undefined) schemaErrors.push('atr_audit.atr_timeframe');
+        if (snap.atr_audit.atr_period === undefined) schemaErrors.push('atr_audit.atr_period');
+        if (snap.atr_audit.atr_source === undefined) schemaErrors.push('atr_audit.atr_source');
+      }
+      
       // Break-even: if triggered, at_price must exist
       if (snap.break_even_activated === true && snap.break_even_at_price === null) {
         schemaErrors.push('break_even_at_price (BE activated but price null)');
@@ -249,6 +258,15 @@ export const ExportTradesDialog = ({
       ATR_value: snap.atr != null ? +Number(snap.atr).toFixed(6) : null,
       ATR_pct: atrPct != null ? +Number(atrPct).toFixed(4) : null,
       ATR_filter_passed: atrFilterPassed,
+      // 🔴 ATR AUDIT - Entydigt dokumentation af ATR source (v2 garanti)
+      ATR_audit: snap.atr_audit ? {
+        atr_value: snap.atr_audit.atr_value,
+        atr_percent: snap.atr_audit.atr_percent,
+        atr_period: snap.atr_audit.atr_period,
+        atr_timeframe: snap.atr_audit.atr_timeframe,
+        atr_source: snap.atr_audit.atr_source, // 'entry' = Model A
+        atr_captured_at: snap.atr_audit.atr_captured_at,
+      } : null,
 
       // ADX - med audit felter (v2 garanterer adx_audit hvis ADX enabled)
       ADX_value: snap.adx != null ? +Number(snap.adx).toFixed(2) : null,
@@ -305,7 +323,12 @@ export const ExportTradesDialog = ({
         peak_price: snap.trailing_stop_exit_audit.peak_price,
         trailing_stop_price_at_exit: snap.trailing_stop_exit_audit.trailing_stop_price_at_exit,
         stop_loss_at_exit: snap.trailing_stop_exit_audit.stop_loss_at_exit,
-        atr_value_at_exit: snap.trailing_stop_exit_audit.atr_value_at_exit,
+        // 🔴 ATR AUDIT - Entydigt dokumentation af hvilken ATR der blev brugt
+        atr_value_used_for_trailing: snap.trailing_stop_exit_audit.atr_value_used_for_trailing 
+          ?? snap.trailing_stop_exit_audit.atr_value_at_exit, // Legacy fallback
+        atr_source: snap.trailing_stop_exit_audit.atr_source ?? 'entry', // Model A
+        atr_timeframe: snap.trailing_stop_exit_audit.atr_timeframe,
+        atr_period: snap.trailing_stop_exit_audit.atr_period,
         trailing_distance: snap.trailing_stop_exit_audit.trailing_distance,
         distance_from_peak_pct: snap.trailing_stop_exit_audit.distance_from_peak_pct,
         distance_from_peak_atr: snap.trailing_stop_exit_audit.distance_from_peak_atr,
