@@ -96,10 +96,17 @@ export const ExportTradesDialog = ({
     // ATR filter: infer from atr > 0
     const atrFilterInferred = snap.atr ? snap.atr > 0 : true;
     
-    // MACD direction filter: check macdLine vs side
-    const macdDirInferred = snap.macdLine != null
-      ? (side === 'long' ? snap.macdLine > 0 : snap.macdLine < 0)
-      : true;
+    // MACD schema (CONFIG vs RUNTIME)
+    // NOTE: snap.macd_signal i snapshots er ofte CONFIG-perioden (fx 9) og må IKKE eksporteres som "MACD_signal".
+    const macdSignalPeriod = snap.macd_signal_period ?? (Number.isInteger(snap.macd_signal) ? snap.macd_signal : null);
+    const macdLine = snap.macd_line ?? snap.macdLine ?? null;
+    const macdSignalLine = snap.macd_signal_line ?? snap.macdSignalLine ?? null;
+    const macdHistogram = snap.macd_histogram ?? snap.macdHistogram ?? snap.macd ?? null;
+
+    // MACD direction filter inference: compare macd_line vs macd_signal_line (not vs 0)
+    const macdDirInferred = (macdLine != null && macdSignalLine != null)
+      ? (side === 'long' ? macdLine > macdSignalLine : macdLine < macdSignalLine)
+      : null;
 
     return {
       // Core trade data
@@ -118,11 +125,12 @@ export const ExportTradesDialog = ({
       EMA_slow: snap.emaSlow != null ? +Number(snap.emaSlow).toFixed(4) : null,
       EMA_spread_pct: emaSpread != null ? +Number(emaSpread).toFixed(4) : null,
 
-      // MACD
-      MACD_value: snap.macdLine != null ? +Number(snap.macdLine).toFixed(6) : null,
-      MACD_histogram: (snap.macd_histogram ?? snap.macd) != null ? +Number(snap.macd_histogram ?? snap.macd).toFixed(6) : null,
-      MACD_signal: (snap.macd_signal ?? snap.macdSignal) != null ? +Number(snap.macd_signal ?? snap.macdSignal).toFixed(6) : null,
-      MACD_direction_filter_passed: snap.macd_direction_passed ?? macdDirInferred,
+      // MACD (entydigt schema)
+      macd_signal_period: macdSignalPeriod,
+      macd_line: macdLine != null ? +Number(macdLine).toFixed(12) : null,
+      macd_signal_line: macdSignalLine != null ? +Number(macdSignalLine).toFixed(12) : null,
+      macd_histogram: macdHistogram != null ? +Number(macdHistogram).toFixed(12) : null,
+      MACD_direction_filter_passed: snap.macd_direction_filter_passed ?? snap.macd_direction_passed ?? macdDirInferred,
       MACD_color_change_passed: softMacdColor,
 
       // ATR
