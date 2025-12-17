@@ -883,6 +883,25 @@ serve(async (req) => {
             // Destructure for at fjerne MACD_signal
             const { MACD_signal: _removedMacdSignal, ...cleanSnapshot } = rawSnapshot;
             
+            // 📊 Beregn TRAILING STOP AUDIT felter (altid beregnet, gemmes kun ved trailing exit)
+            const snapshotAtrForExit = position.indicators_snapshot?.atr || null;
+            const trailingDistanceForExit = (snapshotAtrForExit && trailingMultiplierUsed) 
+              ? snapshotAtrForExit * trailingMultiplierUsed 
+              : null;
+            
+            // Distance fra peak i procent (hvor langt trailing stop var fra peak)
+            const distanceFromPeakPct = (newPeakPrice && newTrailingStop && newPeakPrice !== 0)
+              ? Math.abs(newPeakPrice - newTrailingStop) / newPeakPrice * 100
+              : null;
+            
+            // Distance fra peak i ATR (for audit)
+            const distanceFromPeakAtr = (snapshotAtrForExit && snapshotAtrForExit > 0 && newPeakPrice && newTrailingStop)
+              ? Math.abs(newPeakPrice - newTrailingStop) / snapshotAtrForExit
+              : null;
+            
+            // Er dette en trailing stop exit?
+            const isTrailingStopExit = closeReason.includes('TRAILING_STOP');
+            
             const enhancedSnapshot = {
               ...cleanSnapshot,
               stop_loss: newStopLoss,
@@ -907,6 +926,29 @@ serve(async (req) => {
               macd_histogram: macdHistogram, // decimal runtime
               // 🔴 Explicit fjern gammelt felt ved at sætte til undefined (vil ikke blive inkluderet i JSON)
               MACD_signal: undefined,
+              
+              // 📊 TRAILING STOP EXIT AUDIT FELTER (gemmes ved ALLE exits, men primært for trailing)
+              trailing_stop_exit_audit: {
+                peak_price: newPeakPrice,
+                trailing_stop_price_at_exit: newTrailingStop,
+                stop_loss_at_exit: newStopLoss,
+                atr_value_at_exit: snapshotAtrForExit,
+                trailing_distance: trailingDistanceForExit,
+                distance_from_peak_pct: distanceFromPeakPct,
+                distance_from_peak_atr: distanceFromPeakAtr,
+                multiplier_used: trailingMultiplierUsed,
+                multiplier_was_fallback: trailingMultiplierWasFallback,
+                is_legacy_position: isLegacyPosition,
+                exit_trigger_price: actualExitPrice,
+                entry_price: position.entry_price,
+                // Verificerbar beregning
+                expected_trailing_from_peak: newPeakPrice && trailingDistanceForExit
+                  ? (position.side === 'LONG' ? newPeakPrice - trailingDistanceForExit : newPeakPrice + trailingDistanceForExit)
+                  : null,
+                trailing_calculation_matches: newTrailingStop && newPeakPrice && trailingDistanceForExit
+                  ? Math.abs(newTrailingStop - (position.side === 'LONG' ? newPeakPrice - trailingDistanceForExit : newPeakPrice + trailingDistanceForExit)) < 1e-6
+                  : null,
+              },
             };
             
             // 🔴 FINAL ASSERTION: Verificer at BE-felter er konsistente
@@ -922,28 +964,46 @@ serve(async (req) => {
 
             // 📊 TRAILING STOP SUMMARY - Log når exit_reason er trailing stop relateret
             if (closeReason.includes('TRAILING_STOP')) {
-              const snapshotAtrValue = position.indicators_snapshot?.atr || 0;
-              const trailingDistanceUsed = snapshotAtrValue * trailingMultiplierUsed;
+              const audit = enhancedSnapshot.trailing_stop_exit_audit;
               
               console.log(`\n📊 ═══════════════════════════════════════════════════════`);
-              console.log(`📊 TRAILING STOP SUMMARY - ${position.symbol} ${position.side}`);
+              console.log(`📊 TRAILING STOP EXIT AUDIT - ${position.symbol} ${position.side}`);
               console.log(`📊 ═══════════════════════════════════════════════════════`);
-              console.log(`   entry_price: ${position.entry_price}`);
-              console.log(`   exit_price: ${actualExitPrice}`);
-              console.log(`   peak_price: ${newPeakPrice}`);
-              console.log(`   trailing_stop_level: ${newTrailingStop}`);
+              console.log(`   PRISER:`);
+              console.log(`   📍 entry_price: ${audit.entry_price}`);
+              console.log(`   📍 peak_price: ${audit.peak_price}`);
+              console.log(`   📍 trailing_stop_price_at_exit: ${audit.trailing_stop_price_at_exit}`);
+              console.log(`   📍 stop_loss_at_exit: ${audit.stop_loss_at_exit}`);
+              console.log(`   📍 exit_trigger_price: ${audit.exit_trigger_price}`);
               console.log(`   ─────────────────────────────────────────────────────────`);
-              console.log(`   ATR (from snapshot): ${snapshotAtrValue || 'NULL'}`);
-              console.log(`   atr_trailing_stop_multiplier: ${trailingMultiplierUsed}x${trailingMultiplierWasFallback ? ' ⚠️ FALLBACK' : ''}`);
-              console.log(`   trailing_distance: ${trailingDistanceUsed.toFixed(6)}`);
+              console.log(`   ATR & MULTIPLIER:`);
+              console.log(`   📐 atr_value_at_exit: ${audit.atr_value_at_exit ?? 'NULL'}`);
+              console.log(`   📐 multiplier_used: ${audit.multiplier_used}x${audit.multiplier_was_fallback ? ' ⚠️ FALLBACK' : ''}`);
+              console.log(`   📐 trailing_distance: ${audit.trailing_distance?.toFixed(8) ?? 'NULL'}`);
               console.log(`   ─────────────────────────────────────────────────────────`);
-              console.log(`   exit_type: ${position.indicators_snapshot?.exit_type || 'UNKNOWN'}`);
-              console.log(`   close_reason: ${closeReason}`);
-              if (trailingMultiplierWasFallback) {
-                console.log(`   ⚠️ AUDIT: Multiplier var NULL - brugte fallback ${DEFAULT_TRAILING_MULTIPLIER}x`);
+              console.log(`   DISTANCE FRA PEAK:`);
+              console.log(`   📏 distance_from_peak_pct: ${audit.distance_from_peak_pct?.toFixed(4) ?? 'NULL'}%`);
+              console.log(`   📏 distance_from_peak_atr: ${audit.distance_from_peak_atr?.toFixed(4) ?? 'NULL'} ATR`);
+              console.log(`   ─────────────────────────────────────────────────────────`);
+              console.log(`   VERIFIKATION:`);
+              console.log(`   📐 expected_trailing_from_peak: ${audit.expected_trailing_from_peak?.toFixed(8) ?? 'NULL'}`);
+              console.log(`   ${audit.trailing_calculation_matches === true ? '✅' : audit.trailing_calculation_matches === false ? '❌' : '⚪'} trailing_calculation_matches: ${audit.trailing_calculation_matches}`);
+              console.log(`   🏷️ is_legacy_position: ${audit.is_legacy_position}`);
+              console.log(`   ─────────────────────────────────────────────────────────`);
+              console.log(`   CLOSE INFO:`);
+              console.log(`   📋 close_reason: ${closeReason}`);
+              console.log(`   📋 exit_type: ${position.indicators_snapshot?.exit_type || 'UNKNOWN'}`);
+              if (audit.multiplier_was_fallback) {
+                console.log(`   ⚠️ FALLBACK AUDIT: Multiplier var NULL - brugte default`);
                 console.log(`   Mulige årsager:`);
                 console.log(`     1. Position åbnet før atr_trailing_stop_multiplier blev gemt`);
                 console.log(`     2. Position synkroniseret fra Binance uden config`);
+              }
+              if (audit.trailing_calculation_matches === false) {
+                console.log(`   ❌ TRAILING CALCULATION MISMATCH!`);
+                console.log(`      actual: ${audit.trailing_stop_price_at_exit}`);
+                console.log(`      expected: ${audit.expected_trailing_from_peak}`);
+                console.log(`      Mulige årsager: UI afrunding, break-even override, race condition`);
               }
               console.log(`📊 ═══════════════════════════════════════════════════════\n`);
             }
