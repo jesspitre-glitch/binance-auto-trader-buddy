@@ -211,15 +211,16 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
             let atrPassed = true;
             
             if (indicators.atr === 0) atrPassed = false;
-            if (config.min_atr > 0 && indicators.atr < config.min_atr) atrPassed = false;
+            // NOTE: Raw min_atr check er FJERNET - kun ATR% bruges nu
             
             if (config.min_atr_percent > 0) {
               const atrPercent = (indicators.atr / indicators.price) * 100;
               hardFiltersProgress.atr = Math.min((atrPercent / config.min_atr_percent) * 100, 100);
               if (atrPercent < config.min_atr_percent) atrPassed = false;
             } else {
-              const minATR = config.min_atr || 0.0001;
-              hardFiltersProgress.atr = Math.min((indicators.atr / minATR) * 100, 100);
+              // Fallback: vis progress baseret på ATR%
+              const atrPercent = (indicators.atr / indicators.price) * 100;
+              hardFiltersProgress.atr = Math.min(atrPercent * 100, 100);
             }
             
             hardFilters.atr = atrPassed;

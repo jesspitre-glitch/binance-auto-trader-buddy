@@ -922,17 +922,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             />
             <p className="text-xs text-muted-foreground">Antal bars til volatilitet (standard 14)</p>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="min_atr">Minimum ATR (HARD FILTER)</Label>
-            <Input
-              id="min_atr"
-              type="number"
-              step="0.000001"
-              value={formData.min_atr}
-              onChange={(e) => setFormData({ ...formData, min_atr: parseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Bloker trades hvis ATR &lt; Minimum ATR. Bruges til at filtrere lav-volatilitets-coins.</p>
-          </div>
+          {/* min_atr (raw) er DEPRECATED og skjult - kun ATR% bruges nu */}
           <div className="space-y-2">
             <Label htmlFor="min_atr_percent">Minimum ATR (%) – HARD FILTER</Label>
             <Input
