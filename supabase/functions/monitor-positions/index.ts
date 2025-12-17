@@ -1008,6 +1008,75 @@ serve(async (req) => {
               console.log(`📊 ═══════════════════════════════════════════════════════\n`);
             }
 
+            // 🔴 SCHEMA VALIDATION AUDIT - Log errors for v2 trades before saving to history
+            const schemaVersion = enhancedSnapshot?.schema_version ?? 1;
+            if (schemaVersion >= 2) {
+              const schemaErrors: string[] = [];
+              
+              // MACD guaranteed fields
+              if (enhancedSnapshot.macd_signal_period === undefined) schemaErrors.push('macd_signal_period');
+              if (enhancedSnapshot.macd_line === undefined) schemaErrors.push('macd_line');
+              if (enhancedSnapshot.macd_signal_line === undefined) schemaErrors.push('macd_signal_line');
+              if (enhancedSnapshot.macd_histogram === undefined) schemaErrors.push('macd_histogram');
+              
+              // ATR (required for exits)
+              if (enhancedSnapshot.atr === undefined || enhancedSnapshot.atr === null) schemaErrors.push('atr');
+              if (enhancedSnapshot.atr_percent === undefined) schemaErrors.push('atr_percent');
+              
+              // Break-even: if triggered, at_price must exist
+              if (enhancedSnapshot.break_even_activated === true && enhancedSnapshot.break_even_at_price === null) {
+                schemaErrors.push('break_even_at_price (BE activated but price null)');
+              }
+              
+              // ADX audit (if ADX enabled)
+              if (enhancedSnapshot.adx_enabled === true && !enhancedSnapshot.adx_audit) {
+                schemaErrors.push('adx_audit (ADX enabled but audit missing)');
+              }
+              
+              // Trailing stop exit audit (if exit reason is trailing_stop)
+              if (closeReason?.toUpperCase().includes('TRAILING') && !enhancedSnapshot.trailing_stop_exit_audit) {
+                schemaErrors.push('trailing_stop_exit_audit (trailing exit but audit missing)');
+              }
+              
+              // StochRSI separate fields
+              if (enhancedSnapshot.stochrsi_enabled === true) {
+                if (enhancedSnapshot.stochRSI_k === undefined) schemaErrors.push('stochRSI_k');
+                if (enhancedSnapshot.stochRSI_d === undefined) schemaErrors.push('stochRSI_d');
+              }
+              
+              // Soft conditions total
+              if (enhancedSnapshot.soft_conditions_total === undefined) schemaErrors.push('soft_conditions_total');
+              
+              // Exit type flag
+              if (enhancedSnapshot.exit_type === undefined) schemaErrors.push('exit_type');
+              
+              if (schemaErrors.length > 0) {
+                console.log(`\n🚨 ═══════════════════════════════════════════════════════`);
+                console.log(`🚨 SCHEMA VALIDATION AUDIT - ERRORS DETECTED!`);
+                console.log(`🚨 ═══════════════════════════════════════════════════════`);
+                console.log(`   📋 position_id: ${position.id}`);
+                console.log(`   📋 symbol: ${position.symbol}`);
+                console.log(`   📋 side: ${position.side}`);
+                console.log(`   📋 schema_version: ${schemaVersion}`);
+                console.log(`   📋 close_reason: ${closeReason}`);
+                console.log(`   📋 closed_at: ${new Date().toISOString()}`);
+                console.log(`   ─────────────────────────────────────────────────────────`);
+                console.log(`   ❌ MISSING GUARANTEED FIELDS (${schemaErrors.length}):`);
+                schemaErrors.forEach((err, i) => {
+                  console.log(`      ${i + 1}. ${err}`);
+                });
+                console.log(`   ─────────────────────────────────────────────────────────`);
+                console.log(`   ⚠️ Dette er en REGRESSION - v2 trades skal have alle felter!`);
+                console.log(`🚨 ═══════════════════════════════════════════════════════\n`);
+                
+                // Add schema error info to the snapshot for traceability
+                enhancedSnapshot.schema_error = true;
+                enhancedSnapshot.schema_error_reason = schemaErrors.join(', ');
+              } else {
+                console.log(`✅ SCHEMA VALIDATION OK | ${position.symbol} | v${schemaVersion} | All guaranteed fields present`);
+              }
+            }
+
             const { error: historyError } = await supabaseClient.from('trade_history').insert({
               user_id: position.user_id,
               symbol: position.symbol,
