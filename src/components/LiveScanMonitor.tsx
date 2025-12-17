@@ -279,7 +279,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
             hardFilters.macdDirection = macdLongOK || macdShortOK;
           }
           
-          const diff = Math.abs(macdLine - macdSignalLine);
+          const diff = Math.abs(macdLine - effectiveSignalLine);
           hardFiltersProgress.macdDirection = hardFilters.macdDirection ? 100 : Math.min(diff * 500, 99);
         } else {
           hardFiltersProgress.macdDirection = 0;
