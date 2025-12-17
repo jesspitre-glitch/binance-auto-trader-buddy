@@ -37,6 +37,13 @@ export type Database = {
           bb_period: number | null
           bb_std_dev: number | null
           break_even_atr: number | null
+          break_even_atr_enabled: boolean | null
+          break_even_atr_stop_offset: number | null
+          break_even_enabled: boolean | null
+          break_even_profit_pct_enabled: boolean | null
+          break_even_profit_pct_stop_over_entry: number | null
+          break_even_profit_pct_trigger: number | null
+          break_even_ratchet_only: boolean | null
           candle_momentum_enabled: boolean | null
           conditional_time_exit_enabled: boolean | null
           created_at: string | null
@@ -123,6 +130,13 @@ export type Database = {
           bb_period?: number | null
           bb_std_dev?: number | null
           break_even_atr?: number | null
+          break_even_atr_enabled?: boolean | null
+          break_even_atr_stop_offset?: number | null
+          break_even_enabled?: boolean | null
+          break_even_profit_pct_enabled?: boolean | null
+          break_even_profit_pct_stop_over_entry?: number | null
+          break_even_profit_pct_trigger?: number | null
+          break_even_ratchet_only?: boolean | null
           candle_momentum_enabled?: boolean | null
           conditional_time_exit_enabled?: boolean | null
           created_at?: string | null
@@ -209,6 +223,13 @@ export type Database = {
           bb_period?: number | null
           bb_std_dev?: number | null
           break_even_atr?: number | null
+          break_even_atr_enabled?: boolean | null
+          break_even_atr_stop_offset?: number | null
+          break_even_enabled?: boolean | null
+          break_even_profit_pct_enabled?: boolean | null
+          break_even_profit_pct_stop_over_entry?: number | null
+          break_even_profit_pct_trigger?: number | null
+          break_even_ratchet_only?: boolean | null
           candle_momentum_enabled?: boolean | null
           conditional_time_exit_enabled?: boolean | null
           created_at?: string | null

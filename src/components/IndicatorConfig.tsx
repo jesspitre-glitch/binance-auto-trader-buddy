@@ -81,9 +81,18 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     atr_ceiling: config?.atr_ceiling ?? 2.0,
     atr_stop_loss_multiplier: config?.atr_stop_loss_multiplier || 2,
     atr_trailing_stop_multiplier: config?.atr_trailing_stop_multiplier || 1.5,
-    break_even_atr: config?.break_even_atr || 1.0,
     trailing_stop_activation_enabled: config?.trailing_stop_activation_enabled !== undefined ? config?.trailing_stop_activation_enabled : true,
     trailing_stop_activation_atr: config?.trailing_stop_activation_atr ?? 1.0,
+    
+    // Break-Even (structured)
+    break_even_enabled: config?.break_even_enabled !== undefined ? config?.break_even_enabled : true,
+    break_even_ratchet_only: config?.break_even_ratchet_only !== undefined ? config?.break_even_ratchet_only : false,
+    break_even_atr_enabled: config?.break_even_atr_enabled !== undefined ? config?.break_even_atr_enabled : true,
+    break_even_atr: config?.break_even_atr ?? 1.0,
+    break_even_atr_stop_offset: config?.break_even_atr_stop_offset ?? 0,
+    break_even_profit_pct_enabled: config?.break_even_profit_pct_enabled !== undefined ? config?.break_even_profit_pct_enabled : false,
+    break_even_profit_pct_trigger: config?.break_even_profit_pct_trigger ?? 1.5,
+    break_even_profit_pct_stop_over_entry: config?.break_even_profit_pct_stop_over_entry ?? 0.1,
     
     // ADX
     adx_enabled: config?.adx_enabled !== undefined ? config?.adx_enabled : true,
@@ -181,9 +190,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       atr_ceiling: config.atr_ceiling ?? 2.0,
       atr_stop_loss_multiplier: config.atr_stop_loss_multiplier ?? 2,
       atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier ?? 1.5,
-      break_even_atr: config.break_even_atr ?? 1.0,
       trailing_stop_activation_enabled: config.trailing_stop_activation_enabled !== undefined ? config.trailing_stop_activation_enabled : true,
       trailing_stop_activation_atr: config.trailing_stop_activation_atr ?? 1.0,
+      // Break-Even (structured)
+      break_even_enabled: config.break_even_enabled !== undefined ? config.break_even_enabled : true,
+      break_even_ratchet_only: config.break_even_ratchet_only !== undefined ? config.break_even_ratchet_only : false,
+      break_even_atr_enabled: config.break_even_atr_enabled !== undefined ? config.break_even_atr_enabled : true,
+      break_even_atr: config.break_even_atr ?? 1.0,
+      break_even_atr_stop_offset: config.break_even_atr_stop_offset ?? 0,
+      break_even_profit_pct_enabled: config.break_even_profit_pct_enabled !== undefined ? config.break_even_profit_pct_enabled : false,
+      break_even_profit_pct_trigger: config.break_even_profit_pct_trigger ?? 1.5,
+      break_even_profit_pct_stop_over_entry: config.break_even_profit_pct_stop_over_entry ?? 0.1,
       // ADX
       adx_enabled: config.adx_enabled !== undefined ? config.adx_enabled : true,
       adx_period: config.adx_period ?? 14,
@@ -269,9 +286,16 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       atr_ceiling: config.atr_ceiling ?? 2.0,
       atr_stop_loss_multiplier: config.atr_stop_loss_multiplier ?? 2,
       atr_trailing_stop_multiplier: config.atr_trailing_stop_multiplier ?? 1.5,
-      break_even_atr: config.break_even_atr ?? 1.0,
       trailing_stop_activation_enabled: config.trailing_stop_activation_enabled !== undefined ? config.trailing_stop_activation_enabled : true,
       trailing_stop_activation_atr: config.trailing_stop_activation_atr ?? 1.0,
+      break_even_enabled: config.break_even_enabled !== undefined ? config.break_even_enabled : true,
+      break_even_ratchet_only: config.break_even_ratchet_only !== undefined ? config.break_even_ratchet_only : false,
+      break_even_atr_enabled: config.break_even_atr_enabled !== undefined ? config.break_even_atr_enabled : true,
+      break_even_atr: config.break_even_atr ?? 1.0,
+      break_even_atr_stop_offset: config.break_even_atr_stop_offset ?? 0,
+      break_even_profit_pct_enabled: config.break_even_profit_pct_enabled !== undefined ? config.break_even_profit_pct_enabled : false,
+      break_even_profit_pct_trigger: config.break_even_profit_pct_trigger ?? 1.5,
+      break_even_profit_pct_stop_over_entry: config.break_even_profit_pct_stop_over_entry ?? 0.1,
       adx_enabled: config.adx_enabled !== undefined ? config.adx_enabled : true,
       adx_period: config.adx_period ?? 14,
       adx_threshold: config.adx_threshold ?? 25,
@@ -996,17 +1020,6 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             />
             <p className="text-xs text-muted-foreground">Trailing stop afstand fra peak (× ATR)</p>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="break_even_atr">Break-Even ATR Multiplier</Label>
-            <Input
-              id="break_even_atr"
-              type="number"
-              step="0.1"
-              value={formData.break_even_atr}
-              onChange={(e) => setFormData({ ...formData, break_even_atr: parseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Flyt SL til entry når profit = (× ATR)</p>
-          </div>
 
           <div className="flex items-center justify-between sm:col-span-3 border-t pt-4">
             <div className="space-y-1">
@@ -1034,6 +1047,160 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             />
             <p className="text-xs text-muted-foreground">Trailing stop aktiveres først når profit ≥ (× ATR). Standard: 1.0 ATR</p>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>🎯 Break-Even</CardTitle>
+          <CardDescription>
+            Flyt stop-loss til entry (eller over) når profit når threshold.<br/>
+            Vælg mellem ATR-baseret eller Profit %-baseret trigger.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          {/* Master toggle */}
+          <div className="flex items-center justify-between sm:col-span-2">
+            <div>
+              <Label htmlFor="break_even_enabled">Aktiver Break-Even</Label>
+              <p className="text-xs text-muted-foreground">Master toggle for hele break-even funktionaliteten</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.break_even_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="break_even_enabled"
+                checked={formData.break_even_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, break_even_enabled: checked })}
+              />
+            </div>
+          </div>
+
+          {formData.break_even_enabled && (
+            <>
+              {/* Ratchet only toggle */}
+              <div className="flex items-center justify-between sm:col-span-2 border-t pt-4">
+                <div>
+                  <Label htmlFor="break_even_ratchet_only">Ratchet Only</Label>
+                  <p className="text-xs text-muted-foreground">Kun flyt stop opad (LONG) / nedad (SHORT) - aldrig tilbage</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">{formData.break_even_ratchet_only ? "Tændt" : "Slukket"}</span>
+                  <Switch
+                    id="break_even_ratchet_only"
+                    checked={formData.break_even_ratchet_only}
+                    onCheckedChange={(checked) => setFormData({ ...formData, break_even_ratchet_only: checked })}
+                  />
+                </div>
+              </div>
+
+              {/* ATR-baseret Break-Even */}
+              <div className="sm:col-span-2 border-t pt-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h4 className="font-semibold">📐 ATR-baseret Break-Even</h4>
+                    <p className="text-xs text-muted-foreground">Trigger ved profit = X × ATR</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">{formData.break_even_atr_enabled ? "Tændt" : "Slukket"}</span>
+                    <Switch
+                      id="break_even_atr_enabled"
+                      checked={formData.break_even_atr_enabled}
+                      onCheckedChange={(checked) => setFormData({ ...formData, break_even_atr_enabled: checked })}
+                    />
+                  </div>
+                </div>
+                
+                {formData.break_even_atr_enabled && (
+                  <div className="grid gap-4 sm:grid-cols-2 pl-4 border-l-2 border-primary/20">
+                    <div className="space-y-2">
+                      <Label htmlFor="break_even_atr">Trigger ATR Multiplier</Label>
+                      <Input
+                        id="break_even_atr"
+                        type="number"
+                        step="0.1"
+                        value={formData.break_even_atr}
+                        onChange={(e) => setFormData({ ...formData, break_even_atr: parseFloat(e.target.value) || 0 })}
+                      />
+                      <p className="text-xs text-muted-foreground">Aktiver BE når profit ≥ X × ATR</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="break_even_atr_stop_offset">Stop Offset (× ATR)</Label>
+                      <Input
+                        id="break_even_atr_stop_offset"
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={formData.break_even_atr_stop_offset}
+                        onChange={(e) => setFormData({ ...formData, break_even_atr_stop_offset: parseFloat(e.target.value) || 0 })}
+                      />
+                      <p className="text-xs text-muted-foreground">Stop placeres entry ± (offset × ATR). 0 = præcis entry.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Profit %-baseret Break-Even */}
+              <div className="sm:col-span-2 border-t pt-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h4 className="font-semibold">📊 Profit %-baseret Break-Even</h4>
+                    <p className="text-xs text-muted-foreground">Trigger ved profit = X% af entry pris</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">{formData.break_even_profit_pct_enabled ? "Tændt" : "Slukket"}</span>
+                    <Switch
+                      id="break_even_profit_pct_enabled"
+                      checked={formData.break_even_profit_pct_enabled}
+                      onCheckedChange={(checked) => setFormData({ ...formData, break_even_profit_pct_enabled: checked })}
+                    />
+                  </div>
+                </div>
+                
+                {formData.break_even_profit_pct_enabled && (
+                  <div className="grid gap-4 sm:grid-cols-2 pl-4 border-l-2 border-primary/20">
+                    <div className="space-y-2">
+                      <Label htmlFor="break_even_profit_pct_trigger">Trigger Profit %</Label>
+                      <Input
+                        id="break_even_profit_pct_trigger"
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={formData.break_even_profit_pct_trigger}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value) || 0;
+                          setFormData({ ...formData, break_even_profit_pct_trigger: val });
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground">Aktiver BE når profit ≥ X% af entry</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="break_even_profit_pct_stop_over_entry">Stop Over Entry %</Label>
+                      <Input
+                        id="break_even_profit_pct_stop_over_entry"
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max={formData.break_even_profit_pct_trigger}
+                        value={formData.break_even_profit_pct_stop_over_entry}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value) || 0;
+                          // Validering: stop_over_entry_pct <= trigger_profit_pct
+                          const clampedVal = Math.min(val, formData.break_even_profit_pct_trigger);
+                          setFormData({ ...formData, break_even_profit_pct_stop_over_entry: clampedVal });
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Stop placeres X% over entry. Skal være ≤ Trigger %.
+                        {formData.break_even_profit_pct_stop_over_entry > formData.break_even_profit_pct_trigger && (
+                          <span className="text-destructive block">⚠️ Må ikke overstige Trigger %!</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
