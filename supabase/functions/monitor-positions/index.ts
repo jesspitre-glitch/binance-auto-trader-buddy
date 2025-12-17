@@ -279,9 +279,19 @@ serve(async (req) => {
         // Dette sikrer at synkroniserede Binance-positioner også får timeout og andre indstillinger
         const { data: configData } = await supabaseClient
           .from('indicator_config')
-          .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor')
+          .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry')
           .eq('user_id', position.user_id)
           .single();
+        
+        // Break-even config fra database
+        let breakEvenMasterEnabled = true;
+        let breakEvenRatchetOnly = false;
+        let breakEvenAtrModeEnabled = true;
+        let breakEvenAtrTrigger = 1.0;
+        let breakEvenAtrStopOffset = 0;
+        let breakEvenProfitPctEnabled = false;
+        let breakEvenProfitPctTrigger = 1.5;
+        let breakEvenProfitPctStopOverEntry = 0.1;
         
         if (configData) {
           trailingActivationEnabled = configData.trailing_stop_activation_enabled ?? true;
@@ -290,6 +300,16 @@ serve(async (req) => {
           maxPositionDurationMinutes = configData.max_position_duration_minutes;
           conditionalTimeExitEnabled = configData.conditional_time_exit_enabled ?? true;
           adxFloor = configData.adx_floor ?? 20;
+          
+          // Break-even config
+          breakEvenMasterEnabled = configData.break_even_enabled ?? true;
+          breakEvenRatchetOnly = configData.break_even_ratchet_only ?? false;
+          breakEvenAtrModeEnabled = configData.break_even_atr_enabled ?? true;
+          breakEvenAtrTrigger = configData.break_even_atr ?? 1.0;
+          breakEvenAtrStopOffset = configData.break_even_atr_stop_offset ?? 0;
+          breakEvenProfitPctEnabled = configData.break_even_profit_pct_enabled ?? false;
+          breakEvenProfitPctTrigger = configData.break_even_profit_pct_trigger ?? 1.5;
+          breakEvenProfitPctStopOverEntry = configData.break_even_profit_pct_stop_over_entry ?? 0.1;
           
           // Log for synkroniserede positioner uden strategy_hash
           if (!position.strategy_hash) {
@@ -382,8 +402,8 @@ serve(async (req) => {
         let stopLossAfterBE: number | null = position.indicators_snapshot?.stop_loss_after_be ?? null;
         let breakEvenActivatedState = position.break_even_activated || false;
         
-        // Break-even logic: Move SL to entry hvis profit er nået (DO THIS FIRST!)
-        if (!position.break_even_activated) {
+        // Break-even logic: Move SL til entry eller over når profit er nået (KUN hvis break_even_enabled === true)
+        if (!position.break_even_activated && breakEvenMasterEnabled) {
           if (isLegacyPosition) {
             // LEGACY: Brug 1% break-even threshold (hardcoded for legacy positioner)
             const legacyBreakEvenPercent = 1.0; // 1% profit for break-even
@@ -392,7 +412,6 @@ serve(async (req) => {
             console.log(`   LEGACY break-even check: profit=${profitPercent.toFixed(2)}% (need ${legacyBreakEvenPercent}%)`);
             
             if (breakEvenReached) {
-              // 🔴 FIX: Sæt lokale variabler så de overlever til trade-close
               breakEvenActivatedThisCycle = true;
               breakEvenActivatedState = true;
               breakEvenAtPrice = position.entry_price;
@@ -406,6 +425,7 @@ serve(async (req) => {
                 break_even_trigger_price: breakEvenTriggerPrice,
                 break_even_triggered_at: new Date().toISOString(),
                 stop_loss_after_be: stopLossAfterBE,
+                break_even_mode: 'LEGACY',
               };
               await supabaseClient
                 .from('positions')
@@ -416,107 +436,151 @@ serve(async (req) => {
                 })
                 .eq('id', position.id);
               
-              // 📊 BREAK-EVEN SUMMARY med assertion
-              const diff = Math.abs((stopLossAfterBE ?? 0) - (breakEvenAtPrice ?? 0));
-              const assertionPassed = diff < 1e-10;
-              
-              console.log(`\n📊 ═══════════════════════════════════════════════════════`);
-              console.log(`📊 BREAK-EVEN SUMMARY - ${position.symbol} ${position.side}`);
-              console.log(`📊 ═══════════════════════════════════════════════════════`);
+              console.log(`📊 BREAK-EVEN ACTIVATED - ${position.symbol} ${position.side}`);
               console.log(`   Type: LEGACY (1% threshold)`);
-              console.log(`   entry_price: ${position.entry_price}`);
-              console.log(`   break_even_trigger_price: ${breakEvenTriggerPrice}`);
               console.log(`   break_even_at_price: ${breakEvenAtPrice}`);
-              console.log(`   stop_loss_after_be: ${stopLossAfterBE}`);
-              console.log(`   ─────────────────────────────────────────────────────────`);
-              console.log(`   ASSERTION: stop_loss_after_be == break_even_at_price`);
-              console.log(`   diff: ${diff.toExponential(10)}`);
-              if (assertionPassed) {
-                console.log(`   ✅ ASSERTION PASSED (diff < 1e-10)`);
-              } else {
-                console.log(`   ❌ ASSERTION FAILED!`);
-                console.log(`   ÅRSAG: stop_loss_after_be (${stopLossAfterBE}) != break_even_at_price (${breakEvenAtPrice})`);
-                console.log(`   Mulige årsager:`);
-                console.log(`     1. Afrundingsfejl i beregning`);
-                console.log(`     2. Race condition mellem BE og trailing stop`);
-                console.log(`     3. Uventet manipulation af newStopLoss variabel`);
-              }
-              console.log(`📊 ═══════════════════════════════════════════════════════\n`);
             }
           } else {
-            // ATR-baseret break-even
-            const breakEvenAtrMultiplier = position.indicators_snapshot?.break_even_atr || 1.0;
-            const breakEvenDistance = breakEvenAtrMultiplier * snapshotAtr;
-            console.log(`   Break-even check (ATR): ${breakEvenAtrMultiplier} × ${snapshotAtr.toFixed(6)} = ${breakEvenDistance.toFixed(6)}`);
+            // UI-DRIVEN BREAK-EVEN: Evaluer begge modes og vælg mest beskyttende
+            console.log(`\n📐 Break-Even Check - ${position.symbol} ${position.side}`);
+            console.log(`   Config: masterEnabled=${breakEvenMasterEnabled}, atrEnabled=${breakEvenAtrModeEnabled}, profitPctEnabled=${breakEvenProfitPctEnabled}, ratchetOnly=${breakEvenRatchetOnly}`);
             
-            let breakEvenReached = false;
-            if (position.side === 'LONG') {
-              breakEvenReached = currentPrice >= (position.entry_price + breakEvenDistance);
-            } else {
-              breakEvenReached = currentPrice <= (position.entry_price - breakEvenDistance);
+            let candidateStops: { price: number, mode: string, triggerPrice: number }[] = [];
+            
+            // Mode 1: ATR-baseret BE
+            if (breakEvenAtrModeEnabled && snapshotAtr > 0) {
+              const atrTriggerDistance = breakEvenAtrTrigger * snapshotAtr;
+              const atrStopOffset = breakEvenAtrStopOffset * snapshotAtr;
+              
+              let atrTriggered = false;
+              let atrCandidateStop: number;
+              
+              if (position.side === 'LONG') {
+                atrTriggered = currentPrice >= (position.entry_price + atrTriggerDistance);
+                atrCandidateStop = position.entry_price + atrStopOffset;
+              } else {
+                atrTriggered = currentPrice <= (position.entry_price - atrTriggerDistance);
+                atrCandidateStop = position.entry_price - atrStopOffset;
+              }
+              
+              console.log(`   ATR Mode: trigger=${breakEvenAtrTrigger}×ATR (${atrTriggerDistance.toFixed(6)}), offset=${breakEvenAtrStopOffset}×ATR (${atrStopOffset.toFixed(6)})`);
+              console.log(`   ATR Triggered: ${atrTriggered} (profit distance needed: ${atrTriggerDistance.toFixed(6)})`);
+              
+              if (atrTriggered) {
+                candidateStops.push({ price: atrCandidateStop, mode: 'ATR', triggerPrice: currentPrice });
+              }
             }
             
-            if (breakEvenReached) {
-              // 🔴 FIX: Sæt lokale variabler så de overlever til trade-close
-              breakEvenActivatedThisCycle = true;
-              breakEvenActivatedState = true;
-              breakEvenAtPrice = position.entry_price;
-              breakEvenTriggerPrice = currentPrice;
-              newStopLoss = breakEvenAtPrice;
-              stopLossAfterBE = newStopLoss;
+            // Mode 2: Profit %-baseret BE
+            if (breakEvenProfitPctEnabled) {
+              let pctTriggered = false;
+              let pctCandidateStop: number;
               
-              const updatedSnapshot = {
-                ...position.indicators_snapshot,
-                break_even_at_price: breakEvenAtPrice,
-                break_even_trigger_price: breakEvenTriggerPrice,
-                break_even_triggered_at: new Date().toISOString(),
-                stop_loss_after_be: stopLossAfterBE,
-              };
-              await supabaseClient
-                .from('positions')
-                .update({ 
-                  stop_loss: newStopLoss, 
-                  break_even_activated: true,
-                  indicators_snapshot: updatedSnapshot
-                })
-                .eq('id', position.id);
-              
-              // 📊 BREAK-EVEN SUMMARY med assertion
-              const diff = Math.abs((stopLossAfterBE ?? 0) - (breakEvenAtPrice ?? 0));
-              const assertionPassed = diff < 1e-10;
-              
-              console.log(`\n📊 ═══════════════════════════════════════════════════════`);
-              console.log(`📊 BREAK-EVEN SUMMARY - ${position.symbol} ${position.side}`);
-              console.log(`📊 ═══════════════════════════════════════════════════════`);
-              console.log(`   Type: ATR-BASED (${breakEvenAtrMultiplier}x ATR)`);
-              console.log(`   entry_price: ${position.entry_price}`);
-              console.log(`   break_even_trigger_price: ${breakEvenTriggerPrice}`);
-              console.log(`   break_even_at_price: ${breakEvenAtPrice}`);
-              console.log(`   stop_loss_after_be: ${stopLossAfterBE}`);
-              console.log(`   ATR: ${snapshotAtr}, Threshold distance: ${breakEvenDistance.toFixed(6)}`);
-              console.log(`   ─────────────────────────────────────────────────────────`);
-              console.log(`   ASSERTION: stop_loss_after_be == break_even_at_price`);
-              console.log(`   diff: ${diff.toExponential(10)}`);
-              if (assertionPassed) {
-                console.log(`   ✅ ASSERTION PASSED (diff < 1e-10)`);
+              if (position.side === 'LONG') {
+                // LONG: Trigger når price >= entry * (1 + trigger_pct/100)
+                const triggerPrice = position.entry_price * (1 + breakEvenProfitPctTrigger / 100);
+                pctTriggered = currentPrice >= triggerPrice;
+                // Stop sættes til entry * (1 + stop_over_entry_pct/100)
+                pctCandidateStop = position.entry_price * (1 + breakEvenProfitPctStopOverEntry / 100);
               } else {
-                console.log(`   ❌ ASSERTION FAILED!`);
-                console.log(`   ÅRSAG: stop_loss_after_be (${stopLossAfterBE}) != break_even_at_price (${breakEvenAtPrice})`);
-                console.log(`   Mulige årsager:`);
-                console.log(`     1. Afrundingsfejl i beregning`);
-                console.log(`     2. Race condition mellem BE og trailing stop`);
-                console.log(`     3. Uventet manipulation af newStopLoss variabel`);
+                // SHORT: Trigger når price <= entry * (1 - trigger_pct/100)
+                const triggerPrice = position.entry_price * (1 - breakEvenProfitPctTrigger / 100);
+                pctTriggered = currentPrice <= triggerPrice;
+                // Stop sættes til entry * (1 - stop_over_entry_pct/100)
+                pctCandidateStop = position.entry_price * (1 - breakEvenProfitPctStopOverEntry / 100);
               }
-              console.log(`📊 ═══════════════════════════════════════════════════════\n`);
+              
+              console.log(`   Profit% Mode: trigger=${breakEvenProfitPctTrigger}%, stopOverEntry=${breakEvenProfitPctStopOverEntry}%`);
+              console.log(`   Profit% Triggered: ${pctTriggered} (current profit: ${profitPercent.toFixed(2)}%)`);
+              
+              if (pctTriggered) {
+                candidateStops.push({ price: pctCandidateStop, mode: 'PROFIT_PCT', triggerPrice: currentPrice });
+              }
+            }
+            
+            // Vælg mest beskyttende kandidat hvis nogen er triggered
+            if (candidateStops.length > 0) {
+              let bestCandidate: { price: number, mode: string, triggerPrice: number };
+              
+              if (position.side === 'LONG') {
+                // LONG: Højeste stop vinder (mest oppe = mest beskyttende)
+                bestCandidate = candidateStops.reduce((best, c) => c.price > best.price ? c : best);
+              } else {
+                // SHORT: Laveste stop vinder (mest nede = mest beskyttende)
+                bestCandidate = candidateStops.reduce((best, c) => c.price < best.price ? c : best);
+              }
+              
+              console.log(`   Kandidater: ${candidateStops.map(c => `${c.mode}@${c.price.toFixed(6)}`).join(', ')}`);
+              console.log(`   Valgt: ${bestCandidate.mode}@${bestCandidate.price.toFixed(6)} (mest beskyttende)`);
+              
+              // Ratchet check: Må nyt stop flyttes?
+              let finalStop = bestCandidate.price;
+              let ratchetBlocked = false;
+              
+              if (breakEvenRatchetOnly && newStopLoss) {
+                if (position.side === 'LONG') {
+                  // LONG: nyt stop må kun være >= nuværende stop
+                  if (finalStop < newStopLoss) {
+                    ratchetBlocked = true;
+                    console.log(`   ⚠️ RATCHET BLOCKED: Nyt stop ${finalStop.toFixed(6)} < nuværende ${newStopLoss.toFixed(6)}`);
+                    finalStop = newStopLoss;
+                  }
+                } else {
+                  // SHORT: nyt stop må kun være <= nuværende stop
+                  if (finalStop > newStopLoss) {
+                    ratchetBlocked = true;
+                    console.log(`   ⚠️ RATCHET BLOCKED: Nyt stop ${finalStop.toFixed(6)} > nuværende ${newStopLoss.toFixed(6)}`);
+                    finalStop = newStopLoss;
+                  }
+                }
+              }
+              
+              if (!ratchetBlocked) {
+                breakEvenActivatedThisCycle = true;
+                breakEvenActivatedState = true;
+                breakEvenAtPrice = finalStop;
+                breakEvenTriggerPrice = bestCandidate.triggerPrice;
+                newStopLoss = finalStop;
+                stopLossAfterBE = newStopLoss;
+                
+                const updatedSnapshot = {
+                  ...position.indicators_snapshot,
+                  break_even_at_price: breakEvenAtPrice,
+                  break_even_trigger_price: breakEvenTriggerPrice,
+                  break_even_triggered_at: new Date().toISOString(),
+                  stop_loss_after_be: stopLossAfterBE,
+                  break_even_mode: bestCandidate.mode,
+                  break_even_candidates: candidateStops.length,
+                };
+                await supabaseClient
+                  .from('positions')
+                  .update({ 
+                    stop_loss: newStopLoss, 
+                    break_even_activated: true,
+                    indicators_snapshot: updatedSnapshot
+                  })
+                  .eq('id', position.id);
+                
+                console.log(`\n📊 ═══════════════════════════════════════════════════════`);
+                console.log(`📊 BREAK-EVEN ACTIVATED - ${position.symbol} ${position.side}`);
+                console.log(`📊 ═══════════════════════════════════════════════════════`);
+                console.log(`   Mode: ${bestCandidate.mode}`);
+                console.log(`   entry_price: ${position.entry_price}`);
+                console.log(`   break_even_at_price: ${breakEvenAtPrice}`);
+                console.log(`   stop_loss_after_be: ${stopLossAfterBE}`);
+                console.log(`📊 ═══════════════════════════════════════════════════════\n`);
+              }
+            } else {
+              console.log(`   Ingen BE-mode triggered endnu`);
             }
           }
+        } else if (!breakEvenMasterEnabled) {
+          console.log(`   ⏭️ Break-even DISABLED (break_even_enabled=false)`);
         } else {
-          // 🔴 FIX: Break-even er ALLEREDE aktiveret - sørg for at newStopLoss reflekterer BE-prisen
-          // Dette er kritisk for at trailing_stop_exit_audit.stop_loss_at_exit er korrekt
+          // Break-even er ALLEREDE aktiveret - sørg for at newStopLoss reflekterer BE-prisen
           const existingBEPrice = position.indicators_snapshot?.break_even_at_price;
           
           if (existingBEPrice !== null && existingBEPrice !== undefined && isFinite(existingBEPrice)) {
-            // 🔴 Sæt alle lokale variabler konsistent med eksisterende BE-state
             newStopLoss = existingBEPrice;
             breakEvenAtPrice = existingBEPrice;
             breakEvenActivatedState = true;
@@ -526,20 +590,8 @@ serve(async (req) => {
             console.log(`   break_even_at_price: ${existingBEPrice}`);
             console.log(`   newStopLoss synkroniseret: ${newStopLoss}`);
           } else {
-            // 🔴 AUDIT WARNING: break_even_activated=true men break_even_at_price er null
-            console.log(`\n⚠️ ═══════════════════════════════════════════`);
-            console.log(`⚠️ BREAK-EVEN AUDIT WARNING - ${position.symbol} ${position.side}`);
-            console.log(`⚠️ ═══════════════════════════════════════════`);
-            console.log(`   ❌ break_even_activated: TRUE`);
-            console.log(`   ❌ break_even_at_price: NULL/UNDEFINED`);
-            console.log(`   Mulige årsager:`);
-            console.log(`     1. Position åbnet før break_even_at_price blev implementeret`);
-            console.log(`     2. Race condition ved BE aktivering`);
-            console.log(`     3. snapshot opdateret uden break_even_at_price felt`);
-            console.log(`   FIX: Sætter newStopLoss = entry_price retroaktivt`);
-            console.log(`⚠️ ═══════════════════════════════════════════\n`);
-            
             // Retroaktiv fix: Brug entry_price som BE-pris
+            console.log(`⚠️ BE activated men break_even_at_price er null - retroaktiv fix til entry_price`);
             newStopLoss = position.entry_price;
             breakEvenAtPrice = position.entry_price;
             breakEvenActivatedState = true;
@@ -555,7 +607,7 @@ serve(async (req) => {
               .from('positions')
               .update({ 
                 indicators_snapshot: fixedSnapshot,
-                stop_loss: position.entry_price // 🔴 Opdater også DB-felt
+                stop_loss: position.entry_price
               })
               .eq('id', position.id);
           }
