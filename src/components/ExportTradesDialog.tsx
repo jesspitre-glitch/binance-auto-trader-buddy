@@ -46,6 +46,51 @@ export const ExportTradesDialog = ({
     const schemaVersion = snap.schema_version ?? 1;
     const isLegacy = schemaVersion < 2;
 
+    // 🔴 V2 SCHEMA VALIDATION - Check guaranteed fields exist
+    const schemaErrors: string[] = [];
+    if (!isLegacy) {
+      // MACD guaranteed fields
+      if (snap.macd_signal_period === undefined) schemaErrors.push('macd_signal_period');
+      if (snap.macd_line === undefined) schemaErrors.push('macd_line');
+      if (snap.macd_signal_line === undefined) schemaErrors.push('macd_signal_line');
+      if (snap.macd_histogram === undefined) schemaErrors.push('macd_histogram');
+      
+      // ATR (required for exits)
+      if (snap.atr === undefined || snap.atr === null) schemaErrors.push('atr');
+      if (snap.atr_percent === undefined) schemaErrors.push('atr_percent');
+      
+      // Break-even: if triggered, at_price must exist
+      if (snap.break_even_activated === true && snap.break_even_at_price === null) {
+        schemaErrors.push('break_even_at_price (BE activated but price null)');
+      }
+      
+      // ADX audit (if ADX enabled)
+      if (snap.adx_enabled === true && !snap.adx_audit) {
+        schemaErrors.push('adx_audit (ADX enabled but audit missing)');
+      }
+      
+      // Trailing stop exit audit (if exit reason is trailing_stop)
+      const exitReason = t.close_reason?.toUpperCase() || '';
+      if (exitReason.includes('TRAILING') && !snap.trailing_stop_exit_audit) {
+        schemaErrors.push('trailing_stop_exit_audit (trailing exit but audit missing)');
+      }
+      
+      // StochRSI separate fields
+      if (snap.stochrsi_enabled === true) {
+        if (snap.stochRSI_k === undefined) schemaErrors.push('stochRSI_k');
+        if (snap.stochRSI_d === undefined) schemaErrors.push('stochRSI_d');
+      }
+      
+      // Soft conditions total
+      if (snap.soft_conditions_total === undefined) schemaErrors.push('soft_conditions_total');
+      
+      // Exit type flag
+      if (snap.exit_type === undefined) schemaErrors.push('exit_type');
+    }
+    
+    const hasSchemaError = schemaErrors.length > 0;
+    const schemaErrorReason = hasSchemaError ? schemaErrors.join(', ') : null;
+
     // Map close_reason to standardized exit_reason
     const exitReasonMap: Record<string, string> = {
       'TRAILING_STOP': 'trailing_stop',
@@ -169,9 +214,11 @@ export const ExportTradesDialog = ({
       : snap.trend_higher;
 
     return {
-      // 🔴 SCHEMA VERSION - For audit/debugging
+      // 🔴 SCHEMA VERSION & VALIDATION
       schema_version: schemaVersion,
       is_legacy: isLegacy,
+      schema_error: hasSchemaError,
+      schema_error_reason: schemaErrorReason,
 
       // Core trade data
       symbol: t.symbol,
