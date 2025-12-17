@@ -1282,6 +1282,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 <SelectValue placeholder="Vælg overordnet trend" />
               </SelectTrigger>
               <SelectContent className="bg-background">
+                <SelectItem value="5m">5 minutter</SelectItem>
+                <SelectItem value="10m">10 minutter</SelectItem>
                 <SelectItem value="15m">15 minutter</SelectItem>
                 <SelectItem value="30m">30 minutter</SelectItem>
                 <SelectItem value="1h">1 time</SelectItem>
