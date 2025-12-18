@@ -332,6 +332,26 @@ export const PnLOverview = () => {
 
   useEffect(() => {
     fetchPnLData(timeRange);
+    
+    // Realtime subscription for live updates when trades close
+    const channel = supabase
+      .channel("pnl-trade-history-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "trade_history",
+        },
+        () => {
+          fetchPnLData(timeRange);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [timeRange]);
 
   if (loading) {
