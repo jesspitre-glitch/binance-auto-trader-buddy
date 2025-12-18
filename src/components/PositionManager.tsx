@@ -164,27 +164,51 @@ export const PositionManager = () => {
                   ? Math.max(dbPeakPrice, livePrice)
                   : Math.min(dbPeakPrice, livePrice);
                 
-                // Live trailing stop calculation
-                const trailingPercent = position.trailing_stop_percent || 2.0;
-                const liveTrailingStop = position.side === "LONG"
-                  ? livePeakPrice * (1 - trailingPercent / 100)
-                  : livePeakPrice * (1 + trailingPercent / 100);
-                
-                // Calculate trailing progress (use database break_even_activated as source of truth)
+                // Get ATR-based configuration
                 const atr = position.indicators_snapshot?.atr || 0;
+                const trailingActivationAtr = position.indicators_snapshot?.trailing_stop_activation_atr || 1.5;
+                const breakEvenAtr = position.indicators_snapshot?.break_even_atr || 1.0;
+                
+                // Calculate profit distance in ATR
                 const profitDistance = position.side === 'LONG' 
                   ? livePrice - position.entry_price
                   : position.entry_price - livePrice;
-                const trailingActivationAtr = position.indicators_snapshot?.trailing_stop_activation_atr || 1.0;
-                const breakEvenAtr = position.indicators_snapshot?.break_even_atr || 1.0;
                 const profitInAtr = atr > 0 ? profitDistance / atr : 0;
-                const isTrailingActive = profitInAtr >= trailingActivationAtr;
                 
                 // Use database break_even_activated as source of truth (once activated, stays activated)
                 const isBreakEvenActivated = position.break_even_activated === true;
                 
-                // Live stop loss (with break-even if applicable)
-                const liveStopLoss = isBreakEvenActivated ? position.entry_price : position.stop_loss;
+                // Trailing stop can ONLY be active AFTER break-even is activated
+                // Sequence: SL → Break-Even → Trailing Stop
+                const isTrailingActive = isBreakEvenActivated && profitInAtr >= trailingActivationAtr;
+                
+                // Calculate trailing stop price (only meaningful when active)
+                const trailingPercent = position.trailing_stop_percent || 2.0;
+                const rawTrailingStop = position.side === "LONG"
+                  ? livePeakPrice * (1 - trailingPercent / 100)
+                  : livePeakPrice * (1 + trailingPercent / 100);
+                
+                // CRITICAL: Trailing stop must NEVER be worse than break-even (entry price)
+                // For LONG: trailing stop must be >= entry price (in profit zone)
+                // For SHORT: trailing stop must be <= entry price (in profit zone)
+                const clampedTrailingStop = position.side === "LONG"
+                  ? Math.max(rawTrailingStop, position.entry_price)
+                  : Math.min(rawTrailingStop, position.entry_price);
+                
+                // Effective stop loss hierarchy: SL < Break-Even < Trailing Stop
+                // Once break-even activates, SL moves to entry. Once trailing activates, it tracks from there.
+                const originalSL = position.stop_loss;
+                const breakEvenLevel = position.entry_price;
+                
+                // Live stop loss follows the hierarchy
+                let liveStopLoss = originalSL;
+                if (isBreakEvenActivated) {
+                  liveStopLoss = breakEvenLevel;
+                }
+                if (isTrailingActive) {
+                  // Trailing stop is always in profit zone (clamped to at least break-even)
+                  liveStopLoss = clampedTrailingStop;
+                }
                 
                 const openedTime = new Date(position.opened_at).getTime();
                 
@@ -244,26 +268,31 @@ export const PositionManager = () => {
                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-profit/10 text-profit border-profit/20">
                                   AKTIV
                                 </Badge>
+                              ) : isBreakEvenActivated ? (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
+                                  VENTER ({profitInAtr.toFixed(1)}/{trailingActivationAtr} ATR)
+                                </Badge>
                               ) : (
                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground">
-                                  STANDBY ({profitInAtr.toFixed(1)}/{trailingActivationAtr} ATR)
+                                  STANDBY (afventer BE)
                                 </Badge>
                               )}
                             </div>
-                            <div className="text-sm font-mono font-bold text-foreground">
-                              ${liveTrailingStop.toFixed(4)}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {trailingPercent.toFixed(1)}% fra peak
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              Peak: <span className="font-mono">${livePeakPrice.toFixed(4)}</span>
-                              {livePeakPrice !== dbPeakPrice && (
-                                <Badge variant="outline" className="ml-1 text-[9px] px-1 py-0 h-3 bg-profit/10 text-profit border-profit/20">
-                                  LIVE
-                                </Badge>
-                              )}
-                            </div>
+                            {isTrailingActive && (
+                              <>
+                                <div className="text-sm font-mono font-bold text-profit">
+                                  ${clampedTrailingStop.toFixed(4)}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  Peak: <span className="font-mono">${livePeakPrice.toFixed(4)}</span>
+                                  {livePeakPrice !== dbPeakPrice && (
+                                    <Badge variant="outline" className="ml-1 text-[9px] px-1 py-0 h-3 bg-profit/10 text-profit border-profit/20">
+                                      LIVE
+                                    </Badge>
+                                  )}
+                                </div>
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
