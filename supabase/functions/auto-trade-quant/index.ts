@@ -726,31 +726,75 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     }
     
     // KUN ATR% check - raw ATR check er FJERNET
-    if (config.min_atr_percent > 0) {
-      const atrPercent = (atr / currentPrice) * 100;
+    const atrPercent = (atr / currentPrice) * 100;
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // ATR FILTER VERIFICATION LOG - Alle UI værdier + computed værdier
+    // ═══════════════════════════════════════════════════════════════════
+    console.log(`\n   📋 ATR FILTER UI VALUES READ (råt fra config):`);
+    console.log(`      ui_min_atr_percent: ${config.min_atr_percent}`);
+    console.log(`      ui_adaptive_enabled: ${config.adaptive_atr_enabled}`);
+    console.log(`      ui_adaptive_floor_percent: ${config.atr_floor}`);
+    console.log(`      ui_adaptive_base_percent: ${config.atr_base_min}`);
+    console.log(`      ui_adaptive_ceiling_percent: ${config.atr_ceiling}`);
+    console.log(`      ui_atr_period: ${config.atr_period}`);
+    
+    // Beregn effective_min_atr_percent_used
+    let effective_min_atr_percent_used: number;
+    let atr_mode_used: string;
+    
+    if (config.adaptive_atr_enabled) {
+      // ADAPTIVE MODE: Floor er ABSOLUT minimum, uanset volume data
+      const adaptiveFloor = config.atr_floor ?? config.min_atr_percent ?? 0.06;
+      const adaptiveBase = config.atr_base_min ?? 0.15;
+      const adaptiveCeiling = config.atr_ceiling ?? 0.60;
       
-      // Beregn adaptive ATR threshold KUN hvis enabled
-      let dynamicMinATR = config.min_atr_percent; // Fallback til standard
+      // Start med floor som minimum
+      effective_min_atr_percent_used = adaptiveFloor;
+      atr_mode_used = 'ADAPTIVE_FLOOR_ONLY';
       
-      if (config.adaptive_atr_enabled && config.atr_base_min && config.atr_floor && config.atr_ceiling && currentVolume !== null && avgVolume !== null && avgVolume > 0) {
+      // Hvis volume data er tilgængelig, beregn dynamisk threshold
+      if (currentVolume !== null && avgVolume !== null && avgVolume > 0) {
         const volumeRatio = currentVolume / avgVolume;
-        dynamicMinATR = config.atr_base_min * volumeRatio;
+        let dynamicCalc = adaptiveBase * volumeRatio;
         
-        // Anvend floor og ceiling
-        if (dynamicMinATR < config.atr_floor) dynamicMinATR = config.atr_floor;
-        if (dynamicMinATR > config.atr_ceiling) dynamicMinATR = config.atr_ceiling;
+        // Clamp til floor/ceiling
+        if (dynamicCalc < adaptiveFloor) dynamicCalc = adaptiveFloor;
+        if (dynamicCalc > adaptiveCeiling) dynamicCalc = adaptiveCeiling;
         
-        console.log(`   🔄 Adaptive ATR%: Base=${config.atr_base_min}% × Volume(${volumeRatio.toFixed(2)}) = ${dynamicMinATR.toFixed(3)}% (floor=${config.atr_floor}%, ceiling=${config.atr_ceiling}%)`);
+        effective_min_atr_percent_used = dynamicCalc;
+        atr_mode_used = `ADAPTIVE_VOLUME (base=${adaptiveBase} × vol_ratio=${volumeRatio.toFixed(2)} = ${(adaptiveBase * volumeRatio).toFixed(3)}%, clamped to [${adaptiveFloor}, ${adaptiveCeiling}])`;
+        
+        console.log(`      volume_current: ${currentVolume}`);
+        console.log(`      volume_avg: ${avgVolume}`);
+        console.log(`      volume_ratio: ${volumeRatio.toFixed(4)}`);
+      } else {
+        console.log(`      volume_current: ${currentVolume} (MISSING - bruger floor som minimum)`);
+        console.log(`      volume_avg: ${avgVolume}`);
       }
-      
-      console.log(`   📊 ATR%: ${atrPercent.toFixed(3)}% (dynamisk min: ${dynamicMinATR.toFixed(3)}%)`);
-      
-      if (atrPercent < dynamicMinATR) {
-        filterStatus.hard.atr.passed = false;
-        filterStatus.hard.atr.reason = `ATR% ${atrPercent.toFixed(3)}% < ${dynamicMinATR.toFixed(3)}% (adaptive threshold)`;
-        console.log(`   ❌ ATR% blokerer: ${atrPercent.toFixed(3)}% < ${dynamicMinATR.toFixed(3)}%`);
-      }
+    } else {
+      // STATIC MODE: Brug kun min_atr_percent
+      effective_min_atr_percent_used = config.min_atr_percent ?? 0.06;
+      atr_mode_used = 'STATIC';
     }
+    
+    console.log(`   📊 ATR FILTER COMPUTED/USED:`);
+    console.log(`      atr_percent_raw: ${atrPercent.toFixed(4)}%`);
+    console.log(`      atr_mode_used: ${atr_mode_used}`);
+    console.log(`      effective_min_atr_percent_used: ${effective_min_atr_percent_used.toFixed(4)}%`);
+    
+    // Evaluer filter
+    const atrFilterPassed = atrPercent >= effective_min_atr_percent_used;
+    console.log(`      ATR_filter_passed: ${atrFilterPassed} (${atrPercent.toFixed(4)}% >= ${effective_min_atr_percent_used.toFixed(4)}% ? ${atrFilterPassed})`);
+    
+    if (!atrFilterPassed) {
+      filterStatus.hard.atr.passed = false;
+      filterStatus.hard.atr.reason = `ATR% ${atrPercent.toFixed(4)}% < ${effective_min_atr_percent_used.toFixed(4)}% (${atr_mode_used})`;
+      console.log(`   ❌ ATR% BLOKERER: ${atrPercent.toFixed(4)}% < ${effective_min_atr_percent_used.toFixed(4)}%`);
+    } else {
+      console.log(`   ✅ ATR% PASSERER: ${atrPercent.toFixed(4)}% >= ${effective_min_atr_percent_used.toFixed(4)}%`);
+    }
+    console.log(`   ═══════════════════════════════════════════════════════════════════\n`);
   }
   
   // 3️⃣ ADX (med min/max range og optional adaptive threshold)
