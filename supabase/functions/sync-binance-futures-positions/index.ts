@@ -554,7 +554,7 @@ serve(async (req) => {
         }
       }
 
-      // 🛡️ CRITICAL SAFETY: Validate ALL open positions have correct SL
+      // 🛡️ CRITICAL SAFETY: Validate positions have SL set (but respect break-even positions!)
       const { data: openPositions } = await supabaseClient
         .from('positions')
         .select('*')
@@ -566,27 +566,40 @@ serve(async (req) => {
           const entryPrice = Number(pos.entry_price);
           const currentSL = pos.stop_loss ? Number(pos.stop_loss) : null;
           const side = pos.side as 'LONG' | 'SHORT';
+          const breakEvenActivated = pos.break_even_activated === true;
           
           let needsFix = false;
           let fixReason = '';
           
-          // Check if SL is missing or invalid
+          // ONLY fix if SL is completely missing or invalid
+          // NEVER touch SL if break_even is activated (it's intentionally moved to profit side)
+          if (breakEvenActivated) {
+            // Break-even is active - SL should be at or better than entry
+            // Do NOT "correct" this - it's intentional!
+            continue;
+          }
+          
+          // Only fix completely missing/invalid stop losses
           if (!currentSL || isNaN(currentSL) || !isFinite(currentSL) || currentSL <= 0) {
             needsFix = true;
             fixReason = `missing/invalid (was: ${currentSL})`;
           }
-          // Check if SL is correctly placed for the side
-          else if (side === 'LONG' && currentSL >= entryPrice) {
+          // For positions WITHOUT break-even, check SL is on the correct (loss) side
+          // LONG: SL should be below entry (loss if price drops)
+          // SHORT: SL should be above entry (loss if price rises)
+          else if (side === 'LONG' && currentSL > entryPrice) {
+            // SL above entry for LONG is wrong (that's the profit side)
             needsFix = true;
-            fixReason = `incorrectly placed for LONG (SL ${currentSL.toFixed(4)} >= entry ${entryPrice.toFixed(4)})`;
+            fixReason = `incorrectly on profit side for LONG without BE (SL ${currentSL.toFixed(4)} > entry ${entryPrice.toFixed(4)})`;
           }
-          else if (side === 'SHORT' && currentSL <= entryPrice) {
+          else if (side === 'SHORT' && currentSL < entryPrice) {
+            // SL below entry for SHORT is wrong (that's the profit side) - unless BE is active
             needsFix = true;
-            fixReason = `incorrectly placed for SHORT (SL ${currentSL.toFixed(4)} <= entry ${entryPrice.toFixed(4)})`;
+            fixReason = `incorrectly on profit side for SHORT without BE (SL ${currentSL.toFixed(4)} < entry ${entryPrice.toFixed(4)})`;
           }
           
           if (needsFix) {
-            // Calculate correct SL using 3% safety margin
+            // Calculate correct SL using 3% safety margin on the LOSS side
             const defaultSlPercent = 3.0;
             let correctedSL: number;
             
@@ -598,11 +611,11 @@ serve(async (req) => {
             
             console.log(`🛡️ SAFETY FIX: ${pos.symbol} ${side} - SL was ${fixReason}, correcting to ${correctedSL.toFixed(6)}`);
             
+            // ONLY update stop_loss, NOT trailing_stop (let monitor-positions handle trailing)
             await supabaseClient
               .from('positions')
               .update({
                 stop_loss: correctedSL,
-                trailing_stop: correctedSL,
                 updated_at: new Date().toISOString(),
               })
               .eq('id', pos.id);
