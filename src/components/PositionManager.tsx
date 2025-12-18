@@ -181,10 +181,12 @@ export const PositionManager = () => {
 
                 const trailingStopDb = position.trailing_stop != null ? Number(position.trailing_stop) : null;
                 const trailingInProfitZone = trailingStopDb != null
-                  ? (position.side === 'LONG' ? trailingStopDb > position.entry_price : trailingStopDb < position.entry_price)
+                  ? (position.side === 'LONG' ? trailingStopDb >= position.entry_price : trailingStopDb <= position.entry_price)
                   : false;
 
-                const isTrailingActive = isBreakEvenActivated && trailingStopDb != null && trailingInProfitZone;
+                // KRITISK: Når trailing_stop er sat i DB og er i profit zone, er trailing ALTID aktiv
+                // Den må IKKE gå tilbage til VENTER bare fordi profit falder under threshold
+                const isTrailingActive = trailingStopDb != null && trailingInProfitZone;
 
                 // Aktivt stop efter prioritet: SL → BE → TS
                 const activeStopLevel = isTrailingActive
@@ -255,32 +257,35 @@ export const PositionManager = () => {
                            </div>
                          </div>
 
-                         <div className="border-t pt-2 mt-2 space-y-1">
-                           <div className="flex items-center gap-2">
-                             <span className="text-xs font-semibold">Trailing:</span>
-                             {isTrailingActive ? (
-                               <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-profit/10 text-profit border-profit/20">
-                                 AKTIV
-                               </Badge>
-                             ) : !isBreakEvenActivated ? (
-                               <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground">
-                                 STANDBY (afventer BE)
-                               </Badge>
-                             ) : profitDistance <= 0 ? (
-                               <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground">
-                                 BLOKERET (ikke i profit)
-                               </Badge>
-                             ) : (
-                               <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
-                                 VENTER ({profitInAtr.toFixed(1)}/{trailingActivationAtr} ATR)
-                               </Badge>
-                             )}
-                           </div>
+                          <div className="border-t pt-2 mt-2 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold">Trailing:</span>
+                              {isTrailingActive ? (
+                                <>
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-profit/10 text-profit border-profit/20">
+                                    AKTIV
+                                  </Badge>
+                                  <span className="text-xs text-muted-foreground">({profitInAtr.toFixed(1)} ATR)</span>
+                                </>
+                              ) : !isBreakEvenActivated ? (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground">
+                                  STANDBY (afventer BE)
+                                </Badge>
+                              ) : profitDistance <= 0 ? (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground">
+                                  BLOKERET (ikke i profit)
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
+                                  VENTER ({profitInAtr.toFixed(1)}/{trailingActivationAtr} ATR)
+                                </Badge>
+                              )}
+                            </div>
 
-                           {isTrailingActive && trailingStopDb != null && (
-                             <div className="text-sm font-mono font-bold text-profit">${trailingStopDb.toFixed(4)}</div>
-                           )}
-                         </div>
+                            {isTrailingActive && trailingStopDb != null && (
+                              <div className="text-sm font-mono font-bold text-profit">${trailingStopDb.toFixed(4)}</div>
+                            )}
+                          </div>
                        </div>
                     </div>
                     
