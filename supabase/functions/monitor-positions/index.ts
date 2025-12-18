@@ -363,32 +363,38 @@ serve(async (req) => {
         const profitInAtr = atr > 0 ? profitDistance / atr : 0;
         const profitPercent = (profitDistance / position.entry_price) * 100;
         
-        // For legacy positioner: brug procent-baseret profit threshold (1% ~ 1 ATR equivalent)
+        // For legacy positioner: brug procent-baseret profit threshold
         // For ATR positioner: brug ATR-baseret threshold
-        let trailingStopActive: boolean;
-        
+        const isInProfit = profitDistance > 0;
+
+        // Trailing skal først kunne blive aktiv EFTER break-even (gates senere).
+        // Her beregner vi kun om profit-thresholdet er opfyldt.
+        let trailingProfitThresholdPassed = false;
+        let trailingProfitThresholdLabel = '';
+
         if (isLegacyPosition) {
-          // Legacy: 1.8% trailing activation (hardcoded for legacy)
-          const legacyActivationPercent = 1.0; // 1% profit for activation
-          const profitMeetsThreshold = profitPercent >= legacyActivationPercent;
-          trailingStopActive = trailingAlreadyActivated || !trailingActivationEnabled || profitMeetsThreshold;
-          
+          const legacyActivationPercent = 1.0; // 1% profit for trailing activation
+          trailingProfitThresholdPassed = profitPercent >= legacyActivationPercent;
+          trailingProfitThresholdLabel = `${legacyActivationPercent}%`;
+
           if (trailingActivationEnabled) {
-            console.log(`   LEGACY trailing activation: profit=${profitPercent.toFixed(2)}% (need ${legacyActivationPercent}%) - Active: ${trailingStopActive}`);
+            console.log(
+              `   LEGACY trailing threshold: profit=${profitPercent.toFixed(2)}% (need ${legacyActivationPercent}%) - passed: ${trailingProfitThresholdPassed}`
+            );
           }
         } else {
-          // ATR-baseret
-          const profitMeetsThreshold = profitInAtr >= trailingActivationAtr;
-          trailingStopActive = trailingAlreadyActivated || !trailingActivationEnabled || profitMeetsThreshold;
-          
+          trailingProfitThresholdPassed = profitInAtr >= trailingActivationAtr;
+          trailingProfitThresholdLabel = `${trailingActivationAtr} ATR`;
+
           if (trailingActivationEnabled) {
-            if (trailingAlreadyActivated) {
-              console.log(`   ✅ Trailing stop FORBLIVER aktiv (profit=${profitInAtr.toFixed(2)} ATR, blev aktiveret tidligere)`);
-            } else {
-              console.log(`   Trailing activation check: profit=${profitInAtr.toFixed(2)} ATR (need ${trailingActivationAtr} ATR) - Active: ${trailingStopActive}`);
-            }
+            console.log(
+              `   Trailing threshold: profit=${profitInAtr.toFixed(2)} ATR (need ${trailingActivationAtr} ATR) - passed: ${trailingProfitThresholdPassed}`
+            );
           }
         }
+
+        // Bliver sat korrekt efter break-even evalueres (Stop-loss → Break-even → Trailing)
+        let trailingStopActive = false;
 
         let newStopLoss = position.stop_loss;
         let newPeakPrice = position.peak_price || position.entry_price;
@@ -401,6 +407,10 @@ serve(async (req) => {
         let breakEvenTriggerPrice: number | null = position.indicators_snapshot?.break_even_trigger_price ?? null;
         let stopLossAfterBE: number | null = position.indicators_snapshot?.stop_loss_after_be ?? null;
         let breakEvenActivatedState = position.break_even_activated || false;
+
+        // Audit/flow flags (bruges til korrekt exit-prioritet og logging)
+        let breakEvenProfitThresholdPassed = false;
+        let breakEvenTriggerMode: string | null = null;
         
         // Break-even logic: Move SL til entry eller over når profit er nået (KUN hvis break_even_enabled === true)
         if (!position.break_even_activated && breakEvenMasterEnabled) {
@@ -421,6 +431,8 @@ serve(async (req) => {
               
               const updatedSnapshot = {
                 ...position.indicators_snapshot,
+                // Bevar initial SL som “max loss”-anker
+                original_stop_loss: position.indicators_snapshot?.original_stop_loss ?? position.stop_loss,
                 break_even_at_price: breakEvenAtPrice,
                 break_even_trigger_price: breakEvenTriggerPrice,
                 break_even_triggered_at: new Date().toISOString(),
@@ -614,7 +626,49 @@ serve(async (req) => {
         }
         
         // NOW calculate trailing stop (using updated stop loss from break-even)
+        // NY EXIT-LOGIK: Stop-loss → Break-even → Trailing
+
+        // 1) Hard SL (max loss) – må aldrig overskrides
+        const hardStopLossRaw = position.indicators_snapshot?.original_stop_loss ?? position.stop_loss;
+        const hardStopLoss = (hardStopLossRaw !== null && hardStopLossRaw !== undefined && isFinite(hardStopLossRaw))
+          ? Number(hardStopLossRaw)
+          : null;
+
+        const clampToEntrySide = (level: number) => {
+          if (position.side === 'LONG') return Math.max(level, position.entry_price);
+          return Math.min(level, position.entry_price);
+        };
+
+        // 2) Break-even stop (kun hvis BE er aktiveret)
+        const breakEvenStop = breakEvenActivatedState
+          ? clampToEntrySide(Number(newStopLoss ?? position.entry_price))
+          : null;
+
+        // 3) Trailing må kun aktiveres efter BE + i profit + threshold
+        const trailingActivationCheckPassed =
+          trailingAlreadyActivated || !trailingActivationEnabled || trailingProfitThresholdPassed;
+
+        let trailingActivationReason = 'WAITING_FOR_BREAK_EVEN';
+        if (!breakEvenActivatedState) {
+          trailingActivationReason = 'BLOCKED_NO_BREAK_EVEN';
+        } else if (!isInProfit) {
+          trailingActivationReason = 'BLOCKED_NOT_IN_PROFIT';
+        } else if (trailingAlreadyActivated) {
+          trailingActivationReason = 'ACTIVE_ALREADY_IN_DB';
+        } else if (!trailingActivationEnabled) {
+          trailingActivationReason = 'ACTIVE_CONFIG_DISABLED';
+        } else if (trailingProfitThresholdPassed) {
+          trailingActivationReason = 'ACTIVE_THRESHOLD_MET';
+        } else {
+          trailingActivationReason = 'WAITING_FOR_TRAILING_THRESHOLD';
+        }
+
+        trailingStopActive = breakEvenActivatedState && isInProfit && trailingActivationCheckPassed;
+
+        let trailingValidThisCycle = false;
+
         if (trailingStopActive) {
+          // Opdater peak
           if (position.side === 'LONG' && currentPrice > newPeakPrice) {
             console.log(`Updating peak: ${newPeakPrice} → ${currentPrice} for ${position.symbol}`);
             newPeakPrice = currentPrice;
@@ -622,67 +676,59 @@ serve(async (req) => {
             console.log(`Updating peak: ${newPeakPrice} → ${currentPrice} for ${position.symbol}`);
             newPeakPrice = currentPrice;
           }
-          
+
+          // Beregn trailing
           if (isLegacyPosition) {
-            // LEGACY: Brug 1.8% trailing stop distance (hardcoded for legacy positioner)
             const legacyTrailingPercent = 1.8;
             const trailingDistance = position.entry_price * (legacyTrailingPercent / 100);
             console.log(`   LEGACY trailing stop beregning:`);
             console.log(`   Trailing %: ${legacyTrailingPercent}%`);
             console.log(`   Distance: ${trailingDistance.toFixed(6)}`);
-            
+
             if (position.side === 'LONG') {
               const calculatedTrailingStop = newPeakPrice - trailingDistance;
               newTrailingStop = newStopLoss ? Math.max(calculatedTrailingStop, newStopLoss) : calculatedTrailingStop;
-              console.log(`   LONG: peak=${newPeakPrice}, calculated=${calculatedTrailingStop.toFixed(4)}, final=${newTrailingStop.toFixed(4)}`);
+              console.log(
+                `   LONG: peak=${newPeakPrice}, calculated=${calculatedTrailingStop.toFixed(4)}, final=${newTrailingStop.toFixed(4)}`
+              );
             } else {
               const calculatedTrailingStop = newPeakPrice + trailingDistance;
               newTrailingStop = newStopLoss ? Math.min(calculatedTrailingStop, newStopLoss) : calculatedTrailingStop;
-              console.log(`   SHORT: peak=${newPeakPrice}, calculated=${calculatedTrailingStop.toFixed(4)}, final=${newTrailingStop.toFixed(4)}`);
+              console.log(
+                `   SHORT: peak=${newPeakPrice}, calculated=${calculatedTrailingStop.toFixed(4)}, final=${newTrailingStop.toFixed(4)}`
+              );
             }
           } else {
             // ATR-baseret trailing stop
-            // 🔴 BACKWARDS COMPATIBILITY: Læs fra begge mulige feltnavne
-            const rawMultiplier = position.indicators_snapshot?.atr_trailing_stop_multiplier 
-                               ?? position.indicators_snapshot?.trailing_stop_atr_multiplier;
+            const rawMultiplier = position.indicators_snapshot?.atr_trailing_stop_multiplier
+              ?? position.indicators_snapshot?.trailing_stop_atr_multiplier;
             const DEFAULT_TRAILING_MULTIPLIER = 1.8;
             const multiplierUsedFallback = rawMultiplier === null || rawMultiplier === undefined;
             const atrTrailingMultiplier = rawMultiplier ?? DEFAULT_TRAILING_MULTIPLIER;
-            
-            // 🔴 AUDIT WARNING: Trailing stop bruges men multiplier er null
+
             if (multiplierUsedFallback) {
               console.log(`\n⚠️ ═══════════════════════════════════════════════════════`);
               console.log(`⚠️ TRAILING STOP AUDIT WARNING - ${position.symbol} ${position.side}`);
               console.log(`⚠️ ═══════════════════════════════════════════════════════`);
               console.log(`   ❌ atr_trailing_stop_multiplier: ${position.indicators_snapshot?.atr_trailing_stop_multiplier ?? 'NULL'}`);
               console.log(`   ❌ trailing_stop_atr_multiplier: ${position.indicators_snapshot?.trailing_stop_atr_multiplier ?? 'NULL'}`);
-              console.log(`   📋 Position ID: ${position.id}`);
-              console.log(`   📋 Strategy Hash: ${position.strategy_hash || 'NULL'}`);
-              console.log(`   📋 is_synced_position: ${position.indicators_snapshot?.is_synced_position || false}`);
-              console.log(`   📋 exit_type: ${position.indicators_snapshot?.exit_type || 'UNKNOWN'}`);
               console.log(`   🔧 FALLBACK APPLIED: ${DEFAULT_TRAILING_MULTIPLIER}x`);
-              console.log(`   Mulige årsager:`);
-              console.log(`     1. Position åbnet før multiplier blev gemt i snapshot`);
-              console.log(`     2. Position synkroniseret fra Binance uden config`);
-              console.log(`     3. Config-felt mangler i indicator_config`);
               console.log(`⚠️ ═══════════════════════════════════════════════════════\n`);
             }
-            
+
             const trailingDistance = snapshotAtr * atrTrailingMultiplier;
             console.log(`   ATR trailing stop beregning:`);
             console.log(`   ATR: ${snapshotAtr.toFixed(6)}`);
             console.log(`   Multiplier: ${atrTrailingMultiplier}x${multiplierUsedFallback ? ' (FALLBACK!)' : ''}`);
             console.log(`   Distance: ${trailingDistance.toFixed(6)}`);
-            
-            // 🔴 CLAMP TRACKING: Beregn expected trailing og track clamp separat
+
             let calculatedTrailingStop: number;
             let clampApplied = false;
             let clampReason: string | null = null;
             let clampDelta = 0;
-            
+
             if (position.side === 'LONG') {
               calculatedTrailingStop = newPeakPrice - trailingDistance;
-              // Clamp: trailing må ikke gå under eksisterende SL (typisk BE eller initial SL)
               if (newStopLoss && calculatedTrailingStop < newStopLoss) {
                 clampApplied = true;
                 clampDelta = newStopLoss - calculatedTrailingStop;
@@ -691,10 +737,11 @@ serve(async (req) => {
               } else {
                 newTrailingStop = calculatedTrailingStop;
               }
-              console.log(`   LONG: peak=${newPeakPrice}, expected=${calculatedTrailingStop.toFixed(8)}, final=${newTrailingStop.toFixed(8)}${clampApplied ? ` (${clampReason}, delta=${clampDelta.toFixed(8)})` : ''}`);
+              console.log(
+                `   LONG: peak=${newPeakPrice}, expected=${calculatedTrailingStop.toFixed(8)}, final=${newTrailingStop.toFixed(8)}${clampApplied ? ` (${clampReason}, delta=${clampDelta.toFixed(8)})` : ''}`
+              );
             } else {
               calculatedTrailingStop = newPeakPrice + trailingDistance;
-              // Clamp: trailing må ikke gå over eksisterende SL (typisk BE eller initial SL)
               if (newStopLoss && calculatedTrailingStop > newStopLoss) {
                 clampApplied = true;
                 clampDelta = calculatedTrailingStop - newStopLoss;
@@ -703,10 +750,11 @@ serve(async (req) => {
               } else {
                 newTrailingStop = calculatedTrailingStop;
               }
-              console.log(`   SHORT: peak=${newPeakPrice}, expected=${calculatedTrailingStop.toFixed(8)}, final=${newTrailingStop.toFixed(8)}${clampApplied ? ` (${clampReason}, delta=${clampDelta.toFixed(8)})` : ''}`);
+              console.log(
+                `   SHORT: peak=${newPeakPrice}, expected=${calculatedTrailingStop.toFixed(8)}, final=${newTrailingStop.toFixed(8)}${clampApplied ? ` (${clampReason}, delta=${clampDelta.toFixed(8)})` : ''}`
+              );
             }
-            
-            // 🔴 GEM clamp info i position context for brug i trailing_stop_exit_audit
+
             // @ts-ignore - dynamisk tilføjet property
             position._trailingClampInfo = {
               expected_trailing_level: calculatedTrailingStop,
@@ -717,39 +765,94 @@ serve(async (req) => {
               clamp_protection_level: clampApplied ? newStopLoss : null,
             };
           }
-          
-          // Tjek om trailing stop er ramt (kun hvis aktiveret og beregnet)
-          if (newTrailingStop && newTrailingStop > 0) {
-            if (position.side === 'LONG' && currentPrice <= newTrailingStop) {
-              shouldClose = true;
-              closeReason = isLegacyPosition ? 'LEGACY_TRAILING_STOP_HIT' : 'TRAILING_STOP_HIT';
-              console.log(`TRAILING STOP HIT (LONG): price=${currentPrice} <= trailing=${newTrailingStop}`);
-            } else if (position.side === 'SHORT' && currentPrice >= newTrailingStop) {
-              shouldClose = true;
-              closeReason = isLegacyPosition ? 'LEGACY_TRAILING_STOP_HIT' : 'TRAILING_STOP_HIT';
-              console.log(`TRAILING STOP HIT (SHORT): price=${currentPrice} >= trailing=${newTrailingStop}`);
+
+          // KRAV: Trailing må aldrig ligge på tabssiden (LONG >= entry, SHORT <= entry)
+          if (newTrailingStop !== null && newTrailingStop !== undefined && isFinite(newTrailingStop)) {
+            newTrailingStop = clampToEntrySide(Number(newTrailingStop));
+
+            // KRAV: Trailing må aldrig være værre end hard SL (max loss)
+            const tsWorseThanSl = hardStopLoss !== null
+              ? (position.side === 'LONG'
+                ? newTrailingStop < hardStopLoss
+                : newTrailingStop > hardStopLoss)
+              : false;
+
+            if (tsWorseThanSl) {
+              trailingStopActive = false;
+              trailingActivationReason = 'BLOCKED_TS_WORSE_THAN_SL';
+              console.log(
+                `   ⛔ Trailing IGNORED (worse than SL): ts=${newTrailingStop} vs hardSL=${hardStopLoss}`
+              );
+            } else {
+              trailingValidThisCycle = true;
             }
+          } else {
+            trailingStopActive = false;
+            trailingActivationReason = 'BLOCKED_TS_INVALID_LEVEL';
           }
         } else {
-          if (isLegacyPosition) {
-            console.log(`   LEGACY trailing stop NOT active yet (need 1.0% profit, have ${profitPercent.toFixed(2)}%)`);
-          } else {
-            console.log(`   Trailing stop NOT active yet (need ${trailingActivationAtr} ATR profit, have ${profitInAtr.toFixed(2)} ATR)`);
-          }
+          // Ikke aktiv endnu (pga BE-gate eller threshold)
+          console.log(
+            `   Trailing status: ${trailingActivationReason} | threshold=${trailingProfitThresholdLabel} | inProfit=${isInProfit} | BE=${breakEvenActivatedState}`
+          );
         }
-        // (Break-even check er allerede håndteret ovenfor - ingen duplikering)
 
-        // Check stop loss (ALTID - trailing stop er kun en bonus beskyttelse)
-        if (!shouldClose && newStopLoss) {
-          if (position.side === 'LONG' && currentPrice <= newStopLoss) {
-            shouldClose = true;
-            closeReason = position.break_even_activated ? 'BREAK_EVEN_HIT' : 'STOP_LOSS_HIT';
-            console.log(`STOP LOSS HIT (LONG): price=${currentPrice} <= SL=${newStopLoss} for ${position.symbol}`);
-          } else if (position.side === 'SHORT' && currentPrice >= newStopLoss) {
-            shouldClose = true;
-            closeReason = position.break_even_activated ? 'BREAK_EVEN_HIT' : 'STOP_LOSS_HIT';
-            console.log(`STOP LOSS HIT (SHORT): price=${currentPrice} >= SL=${newStopLoss} for ${position.symbol}`);
+        const trailingStop = trailingStopActive && trailingValidThisCycle
+          ? Number(newTrailingStop)
+          : null;
+
+        // 4) Hit checks med korrekt prioritet
+        const slHit = hardStopLoss !== null && (
+          (position.side === 'LONG' && currentPrice <= hardStopLoss) ||
+          (position.side === 'SHORT' && currentPrice >= hardStopLoss)
+        );
+
+        const beHit = !slHit && breakEvenStop !== null && (
+          (position.side === 'LONG' && currentPrice <= breakEvenStop) ||
+          (position.side === 'SHORT' && currentPrice >= breakEvenStop)
+        );
+
+        const tsHit = !slHit && !beHit && trailingStop !== null && (
+          (position.side === 'LONG' && currentPrice <= trailingStop) ||
+          (position.side === 'SHORT' && currentPrice >= trailingStop)
+        );
+
+        const selectedExit = slHit ? 'STOP_LOSS' : beHit ? 'BREAK_EVEN' : tsHit ? 'TRAILING' : 'NONE';
+
+        const exitAudit = {
+          profit_threshold_passed: breakEvenProfitThresholdPassed,
+          ts_activated_reason: trailingActivationReason,
+          ts_above_or_below_entry: (() => {
+            if (trailingStop === null) return null;
+            if (position.side === 'LONG') return trailingStop >= position.entry_price ? 'OK>=ENTRY' : 'BAD<ENTRY';
+            return trailingStop <= position.entry_price ? 'OK<=ENTRY' : 'BAD>ENTRY';
+          })(),
+          sl_vs_ts_priority: {
+            slHit,
+            beHit,
+            tsHit,
+            selected: selectedExit,
+          },
+        };
+
+        // @ts-ignore - gem audit på position context så vi kan inkludere det i result payload
+        position._exitAudit = exitAudit;
+
+        if (slHit || beHit || tsHit) {
+          shouldClose = true;
+
+          if (slHit) {
+            closeReason = 'STOP_LOSS_HIT';
+            console.log(`STOP LOSS HIT (PRIORITY) | ${position.symbol} | price=${currentPrice} <= hardSL=${hardStopLoss}`);
+          } else if (beHit) {
+            closeReason = 'BREAK_EVEN_HIT';
+            console.log(`BREAK-EVEN HIT | ${position.symbol} | price=${currentPrice} <= be=${breakEvenStop}`);
+          } else {
+            closeReason = isLegacyPosition ? 'LEGACY_TRAILING_STOP_HIT' : 'TRAILING_STOP_HIT';
+            console.log(`TRAILING HIT | ${position.symbol} | price=${currentPrice} <= ts=${trailingStop}`);
           }
+
+          console.log(`EXIT AUDIT | ${position.symbol} | ${JSON.stringify(exitAudit)}`);
         }
 
         // Definer tidspunkt variabler (bruges til både timeout check og duration beregning)
@@ -843,10 +946,13 @@ serve(async (req) => {
           current_price: currentPrice,
         };
         
-        if (trailingStopActive) {
+        if (breakEvenActivatedState && newStopLoss) {
+          updateData.stop_loss = newStopLoss;
+        }
+
+        if (trailingStopActive && trailingValidThisCycle) {
           updateData.peak_price = newPeakPrice;
           updateData.trailing_stop = newTrailingStop;
-          updateData.stop_loss = newStopLoss; // Opdater også SL hvis break-even aktiveret
         }
         
         await supabaseClient
@@ -1395,6 +1501,9 @@ serve(async (req) => {
             // After closing, immediately sync with Binance (source of truth)
             await supabaseClient.functions.invoke('sync-binance-futures-positions');
 
+            // @ts-ignore
+            const exitAudit = position._exitAudit ?? null;
+
             results.push({
               symbol: position.symbol,
               action: 'CLOSED',
@@ -1403,6 +1512,7 @@ serve(async (req) => {
               pnlPercent: actualPnlPercent,
               entryPrice: position.entry_price,
               exitPrice: actualExitPrice,
+              exitAudit,
             });
           } catch (error) {
             console.error(`Failed to close position ${position.symbol}:`, error);
@@ -1413,11 +1523,15 @@ serve(async (req) => {
             });
           }
         } else {
+          // @ts-ignore
+          const exitAudit = position._exitAudit ?? null;
+
           results.push({
             symbol: position.symbol,
             action: 'MONITORED',
             currentPrice: currentPrice,
             unrealizedPnl: pnl,
+            exitAudit,
           });
         }
       } catch (error) {
