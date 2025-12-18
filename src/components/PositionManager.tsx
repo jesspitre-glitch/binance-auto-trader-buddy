@@ -170,19 +170,21 @@ export const PositionManager = () => {
                   ? livePeakPrice * (1 - trailingPercent / 100)
                   : livePeakPrice * (1 + trailingPercent / 100);
                 
-                // Calculate if trailing is active and if break-even should be activated
+                // Calculate trailing progress (use database break_even_activated as source of truth)
                 const atr = position.indicators_snapshot?.atr || 0;
                 const profitDistance = position.side === 'LONG' 
                   ? livePrice - position.entry_price
                   : position.entry_price - livePrice;
+                const trailingActivationAtr = position.indicators_snapshot?.trailing_stop_activation_atr || 1.0;
+                const breakEvenAtr = position.indicators_snapshot?.break_even_atr || 1.0;
                 const profitInAtr = atr > 0 ? profitDistance / atr : 0;
-                const trailingActivationAtr = 1.0;
-                const breakEvenAtr = 1.0;
                 const isTrailingActive = profitInAtr >= trailingActivationAtr;
-                const shouldBreakEven = profitInAtr >= breakEvenAtr;
+                
+                // Use database break_even_activated as source of truth (once activated, stays activated)
+                const isBreakEvenActivated = position.break_even_activated === true;
                 
                 // Live stop loss (with break-even if applicable)
-                const liveStopLoss = shouldBreakEven ? position.entry_price : position.stop_loss;
+                const liveStopLoss = isBreakEvenActivated ? position.entry_price : position.stop_loss;
                 
                 const openedTime = new Date(position.opened_at).getTime();
                 
@@ -228,7 +230,7 @@ export const PositionManager = () => {
                           <div className="flex items-center gap-2">
                           <span>SL:</span>
                           <span className="font-mono">${liveStopLoss?.toFixed(4) || position.stop_loss}</span>
-                          {shouldBreakEven && (
+                          {isBreakEvenActivated && (
                             <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-blue-500/10 text-blue-500 border-blue-500/20">
                               BREAK-EVEN
                             </Badge>
