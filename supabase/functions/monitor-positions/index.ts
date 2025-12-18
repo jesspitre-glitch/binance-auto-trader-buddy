@@ -1022,15 +1022,26 @@ serve(async (req) => {
           };
         }
 
-        if (breakEvenActivatedState && newStopLoss) {
-          updateData.stop_loss = newStopLoss;
+        // ALTID opdater stop_loss til BE-niveauet hvis BE er aktiveret
+        if (breakEvenActivatedState && breakEvenAtPrice !== null && breakEvenAtPrice !== undefined) {
+          updateData.stop_loss = breakEvenAtPrice;
         }
 
-        if (trailingStopActive && trailingValidThisCycle) {
+        // Opdater peak og trailing HVER gang trailing er valid (uanset om den allerede var aktiveret)
+        if (trailingStopActive && trailingValidThisCycle && newTrailingStop !== null && newTrailingStop !== undefined && isFinite(newTrailingStop)) {
           updateData.peak_price = newPeakPrice;
           updateData.trailing_stop = newTrailingStop;
+
+          console.log(`📈 TRAILING OPDATERET | ${position.symbol} | peak=${newPeakPrice} ts=${newTrailingStop}`);
+        } else if (trailingStopActive && !trailingValidThisCycle) {
+          console.log(`⚠️ TRAILING VALID=FALSE | ${position.symbol} | reason=${trailingActivationReason}`);
+        } else if (!trailingStopActive && breakEvenActivatedState && isInProfit && trailingProfitThresholdPassed) {
+          // Debug: Burde være aktiv men er det ikke
+          console.log(`⚠️ TRAILING BURDE VÆRE AKTIV | ${position.symbol} | BE=${breakEvenActivatedState} inProfit=${isInProfit} threshold=${trailingProfitThresholdPassed} activationCheck=${trailingActivationCheckPassed}`);
         }
-        
+
+        console.log(`📝 UPDATE DATA | ${position.symbol} | stop_loss=${updateData.stop_loss ?? 'unchanged'} | trailing_stop=${updateData.trailing_stop ?? 'unchanged'} | peak_price=${updateData.peak_price ?? 'unchanged'}`);
+
         await supabaseClient
           .from('positions')
           .update(updateData)
