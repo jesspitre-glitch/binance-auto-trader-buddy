@@ -1993,10 +1993,128 @@ serve(async (req) => {
         try {
           console.log(`\n🎯 Behandler signal ${selectedSignal.symbol} (styrke: ${selectedSignal.strength.toFixed(1)})`);
           
-          // 🛡️ KRITISK ATR CHECK: Blok trade hvis ATR mangler
+          // ═══════════════════════════════════════════════════════════════════
+          // 🚧 UNIFIED HARD FILTER GATE - ALL ENABLED FILTERS MUST BE TRUE
+          // ═══════════════════════════════════════════════════════════════════
+          // For hvert ENABLED filter: result SKAL være true. null/false = BLOCK
+          const fs = analysis.filterStatus;
+          let gateBlocked = false;
+          let blockReason = '';
+          
+          // 1. EMA Spread (if ema_enabled)
+          if (config.ema_enabled && fs?.hard?.emaSpread?.passed !== true) {
+            gateBlocked = true;
+            const val = fs?.hard?.emaSpread?.value;
+            blockReason = fs?.hard?.emaSpread?.passed === null 
+              ? `EMA_SPREAD_MISSING_OR_INVALID (value=${val})`
+              : `EMA_SPREAD_FAILED (${val?.toFixed(4)}% < ${config.min_ema_spread_percent}%)`;
+          }
+          
+          // 2. ATR filter (if atr_enabled) - Note: ATR data requirement is separate
+          if (!gateBlocked && config.atr_enabled && fs?.hard?.atr?.passed !== true) {
+            gateBlocked = true;
+            const val = fs?.hard?.atr?.value;
+            blockReason = fs?.hard?.atr?.passed === null
+              ? `ATR_FILTER_MISSING_OR_INVALID (value=${val})`
+              : `ATR_FILTER_FAILED (${(val * 100)?.toFixed(4)}% < ${config.min_atr_percent}%)`;
+          }
+          
+          // 3. ADX range (if adx_enabled)
+          if (!gateBlocked && config.adx_enabled && fs?.hard?.adx?.passed !== true) {
+            gateBlocked = true;
+            const val = fs?.hard?.adx?.value;
+            blockReason = fs?.hard?.adx?.passed === null
+              ? `ADX_MISSING_OR_INVALID (value=${val})`
+              : `ADX_OUT_OF_RANGE (${val?.toFixed(2)} not in [${config.adx_floor}, ${config.adx_ceiling}])`;
+          }
+          
+          // 4. Volume (if volume_enabled) - STRICT: null = BLOCK
+          if (!gateBlocked && config.volume_enabled === true) {
+            const volPassed = fs?.hard?.volume?.passed;
+            if (volPassed !== true) {
+              gateBlocked = true;
+              const volCurrent = analysis.indicators?.volume_current ?? fs?.hard?.volume?.current;
+              const volAvg = analysis.indicators?.volume_avg ?? fs?.hard?.volume?.avg;
+              blockReason = volPassed === null
+                ? `VOLUME_MISSING_OR_INVALID (current=${volCurrent}, avg=${volAvg})`
+                : `VOLUME_FILTER_FAILED (ratio=${volCurrent && volAvg ? (volCurrent/volAvg).toFixed(2) : 'N/A'}x < ${config.volume_multiplier}x required)`;
+            }
+          }
+          
+          // 5. RSI Momentum (if rsi_enabled)
+          if (!gateBlocked && config.rsi_enabled && fs?.hard?.rsiMomentum?.passed !== true) {
+            gateBlocked = true;
+            const val = fs?.hard?.rsiMomentum?.value;
+            blockReason = fs?.hard?.rsiMomentum?.passed === null
+              ? `RSI_MOMENTUM_MISSING_OR_INVALID (value=${val})`
+              : `RSI_MOMENTUM_FAILED (RSI=${val?.toFixed(2)})`;
+          }
+          
+          // 6. MACD Direction (if macd_direction_enabled)
+          if (!gateBlocked && config.macd_direction_enabled) {
+            const macdLine = analysis.indicators.macdLine;
+            const macdSignalLine = analysis.indicators.macdSignalLine ?? analysis.indicators.macdSignal;
+            if (macdLine === null || macdLine === undefined || macdSignalLine === null || macdSignalLine === undefined) {
+              gateBlocked = true;
+              blockReason = `MACD_DIRECTION_MISSING_OR_INVALID (line=${macdLine}, signal=${macdSignalLine})`;
+            } else if (signal === 'LONG' && !(macdLine > macdSignalLine)) {
+              gateBlocked = true;
+              blockReason = `MACD_DIRECTION_FAILED_LONG (${macdLine.toFixed(6)} <= ${macdSignalLine.toFixed(6)})`;
+            } else if (signal === 'SHORT' && !(macdLine < macdSignalLine)) {
+              gateBlocked = true;
+              blockReason = `MACD_DIRECTION_FAILED_SHORT (${macdLine.toFixed(6)} >= ${macdSignalLine.toFixed(6)})`;
+            }
+          }
+          
+          // 7. MACD Color Change Hard Filter (if macd_color_change_hard_filter)
+          if (!gateBlocked && config.macd_color_change_hard_filter) {
+            const colorChangePassed = signal === 'LONG' 
+              ? analysis.indicators?.conditionDetails?.macd?.long 
+              : analysis.indicators?.conditionDetails?.macd?.short;
+            if (colorChangePassed !== true) {
+              gateBlocked = true;
+              blockReason = `MACD_COLOR_CHANGE_FAILED (${signal} required histogram shift not detected)`;
+            }
+          }
+          
+          // 8. Higher Trend Filter (if higher_trend_enabled)
+          if (!gateBlocked && config.higher_trend_enabled) {
+            const higherTrend = selectedSignal.higherTrend;
+            if (signal === 'LONG' && higherTrend !== 'BULLISH') {
+              gateBlocked = true;
+              blockReason = `HIGHER_TREND_FAILED_LONG (${config.higher_trend_timeframe} trend=${higherTrend}, required=BULLISH)`;
+            } else if (signal === 'SHORT' && higherTrend !== 'BEARISH') {
+              gateBlocked = true;
+              blockReason = `HIGHER_TREND_FAILED_SHORT (${config.higher_trend_timeframe} trend=${higherTrend}, required=BEARISH)`;
+            }
+          }
+          
+          // 9. Medium Trend Filter (always required if EMA enabled)
+          if (!gateBlocked && config.ema_enabled) {
+            const mediumTrend = selectedSignal.trend;
+            if (signal === 'LONG' && mediumTrend !== 'BULLISH') {
+              gateBlocked = true;
+              blockReason = `MEDIUM_TREND_FAILED_LONG (${config.trend_timeframe} trend=${mediumTrend}, required=BULLISH)`;
+            } else if (signal === 'SHORT' && mediumTrend !== 'BEARISH') {
+              gateBlocked = true;
+              blockReason = `MEDIUM_TREND_FAILED_SHORT (${config.trend_timeframe} trend=${mediumTrend}, required=BEARISH)`;
+            }
+          }
+          
+          // LOG AND BLOCK IF GATE FAILED
+          if (gateBlocked) {
+            console.log(`\n🚨 TRADE_BLOCKED:${blockReason.split(' ')[0]}`);
+            console.log(`   Symbol: ${symbol}, Signal: ${signal}, Strength: ${selectedSignal.strength.toFixed(1)}`);
+            console.log(`   Full Reason: ${blockReason}`);
+            continue;
+          }
+          console.log(`✅ UNIFIED GATE PASSED for ${symbol} ${signal}`);
+          // ═══════════════════════════════════════════════════════════════════
+          
+          // 🛡️ KRITISK ATR DATA CHECK: Blok trade hvis ATR data mangler (for exit-beregninger)
           const atrForTrade = analysis.indicators.atr;
           if (!atrForTrade || atrForTrade <= 0 || !isFinite(atrForTrade)) {
-            console.log(`\n🚨 TRADE_BLOCKED: ATR_MISSING_OR_INVALID`);
+            console.log(`\n🚨 TRADE_BLOCKED:ATR_DATA_MISSING_FOR_EXITS`);
             console.log(`   Symbol: ${symbol}, Signal: ${signal}`);
             console.log(`   ATR_value: ${atrForTrade}`);
             console.log(`   ❌ Reason: ATR er PÅKRÆVET for exit-logik (SL, BE, Trailing). Ingen trade uden gyldig ATR.`);
@@ -2004,26 +2122,8 @@ serve(async (req) => {
           }
           console.log(`✅ ATR valideret for ${symbol}: ${atrForTrade.toFixed(6)} (${((atrForTrade / analysis.indicators.price) * 100).toFixed(2)}%)`);
           
-          // FINAL MACD RETNINGSCHECK FØR ORDER (ekstra sikkerhed)
-          // 🔴 KRITISK: Checker ALTID når macd_direction_enabled=true, uanset om MACD er aktiveret
-          if (config.macd_direction_enabled) {
-            const macdLine = analysis.indicators.macdLine;
-            if (macdLine !== null && macdLine !== undefined) {
-              if (signal === 'LONG' && macdLine <= 0) {
-                console.log(`🚨 BLOKERET: LONG for ${symbol} med MACD=${macdLine.toFixed(4)} ≤ 0`);
-                continue;
-              }
-              if (signal === 'SHORT' && macdLine >= 0) {
-                console.log(`🚨 BLOKERET: SHORT for ${symbol} med MACD=${macdLine.toFixed(4)} ≥ 0`);
-                continue;
-              }
-            } else if (config.macd_enabled) {
-              // MACD direction filter er aktiveret men MACD værdi mangler - bloker for sikkerhed
-              console.log(`🚨 BLOKERET: ${signal} for ${symbol} - MACD direction filter aktiveret men ingen MACD værdi`);
-              continue;
-            }
-          }
-          
+          // NOTE: MACD direction check er nu dækket af UNIFIED GATE ovenfor
+
           // Place order logic starts here
           // CRITICAL: Count open positions with FOR UPDATE lock to prevent race conditions
           const { data: currentPositions, error: posError } = await supabaseClient
