@@ -675,7 +675,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   const filterStatus = {
     hard: {
       emaSpread: { passed: true, value: '', reason: '' },
-      atr: { passed: true, value: '', reason: '' },
+      atr: { passed: true, value: '', reason: '', atr_floor_used: null as number | null, atr_floor_source: '', atr_floor_passed_boolean: false, effective_min_atr_percent_used: null as number | null },
       adx: { passed: true, value: '', reason: '' },
       // 🔴 FIX: Volume tri-state - passed: null=disabled/no-data, true/false=evaluated
       volume: { passed: null as boolean | null, value: '', reason: '' },
@@ -740,7 +740,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     console.log(`      ui_atr_period: ${config.atr_period}`);
     
     // ─────────────────────────────────────────
-    // ATR filter (ATR%) — UI-driven, no defaults
+    // ATR filter (ATR%) — UI-driven, STRICT ENFORCEMENT
     // ─────────────────────────────────────────
 
     const ui_min_atr_percent = config.min_atr_percent;
@@ -765,55 +765,74 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
 
     let adaptive_threshold_computed: number | null = null;
     let effective_min_atr_percent_used: number | null = null;
+    let atr_floor_used: number | null = null;
+    let atr_floor_source: string = 'none';
 
     if (ui_adaptive_enabled) {
-      // KRAV: floor er ALTID minimum, uanset volume.
+      // 🔴 KRAV: Floor er ALTID minimum uanset volume
       const floorOk = typeof ui_adaptive_floor_percent === 'number' && Number.isFinite(ui_adaptive_floor_percent);
       const ceilingOk = typeof ui_adaptive_ceiling_percent === 'number' && Number.isFinite(ui_adaptive_ceiling_percent);
 
       if (!floorOk) {
+        // Ingen gyldig floor → kan ikke evaluere
         adaptive_threshold_computed = null;
         effective_min_atr_percent_used = null;
+        atr_floor_source = 'adaptive_floor_invalid';
       } else {
-        // Brug samme adaptive beregning hvis mulig:
-        // - Hvis volume findes: base * (volume_current / volume_avg)
-        // - Hvis volume mangler: brug atr_percent som volatility-proxy
+        atr_floor_used = ui_adaptive_floor_percent;
+        atr_floor_source = 'adaptive';
+        
+        // 🔴 FIX: Når volume mangler, brug FLOOR direkte - IKKE atrPercent som proxy!
+        // Tidligere bug: atrPercent som proxy → self-referential check → ALTID pass
         if (
           volumeCurrentValid &&
           volumeAvgValid &&
           typeof ui_adaptive_base_percent === 'number' &&
           Number.isFinite(ui_adaptive_base_percent)
         ) {
+          // Volume tilgængelig: beregn adaptiv threshold
           adaptive_threshold_computed = ui_adaptive_base_percent * (currentVolume / avgVolume);
-        } else {
-          adaptive_threshold_computed = atrPercent;
-        }
-
-        if (ceilingOk) {
-          // Clamp til [floor, ceiling]
-          adaptive_threshold_computed = Math.min(
-            Math.max(adaptive_threshold_computed, ui_adaptive_floor_percent),
-            ui_adaptive_ceiling_percent
-          );
-
-          // effective = max(floor, clamped)
+          
+          if (ceilingOk) {
+            // Clamp til [floor, ceiling]
+            adaptive_threshold_computed = Math.min(
+              Math.max(adaptive_threshold_computed, ui_adaptive_floor_percent),
+              ui_adaptive_ceiling_percent
+            );
+          } else {
+            // Ingen ceiling → brug max af floor og computed
+            adaptive_threshold_computed = Math.max(adaptive_threshold_computed, ui_adaptive_floor_percent);
+          }
+          
+          // Effective = max(floor, adaptive_computed)
           effective_min_atr_percent_used = Math.max(ui_adaptive_floor_percent, adaptive_threshold_computed);
         } else {
-          // Hvis ceiling mangler, kan vi ikke clamp korrekt → brug kun floor (ingen fallback til min_atr_percent)
+          // 🔴 KRITISK FIX: Volume mangler → brug FLOOR direkte, IKKE atrPercent!
           adaptive_threshold_computed = ui_adaptive_floor_percent;
           effective_min_atr_percent_used = ui_adaptive_floor_percent;
+          atr_floor_source = 'adaptive_floor_no_volume';
         }
       }
     } else {
-      // STATIC MODE: Brug KUN min_atr_percent (ingen defaults)
+      // STATIC MODE: Brug KUN min_atr_percent (ingen adaptive)
       const minOk = typeof ui_min_atr_percent === 'number' && Number.isFinite(ui_min_atr_percent);
-      effective_min_atr_percent_used = minOk ? ui_min_atr_percent : null;
+      if (minOk) {
+        effective_min_atr_percent_used = ui_min_atr_percent;
+        atr_floor_used = ui_min_atr_percent;
+        atr_floor_source = 'manual';
+      } else {
+        effective_min_atr_percent_used = null;
+        atr_floor_source = 'manual_invalid';
+      }
     }
 
-    const atrFilterPassed =
+    // 🔴 STRICT ENFORCEMENT: ATR_filter_passed = (atr_percent >= floor) - INGEN "fallback-true"
+    const atr_floor_passed_boolean = 
       effective_min_atr_percent_used !== null &&
       Number.isFinite(atrPercent) &&
       atrPercent >= effective_min_atr_percent_used;
+
+    const atrFilterPassed = atr_floor_passed_boolean;
 
     console.log(`ATR FILTER EFFECTIVE`);
     console.log(`  atr_percent_raw: ${atrPercent.toFixed(4)}%`);
@@ -827,18 +846,27 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
         effective_min_atr_percent_used === null ? 'null' : `${effective_min_atr_percent_used.toFixed(4)}%`
       }`
     );
+    console.log(`  atr_floor_used: ${atr_floor_used === null ? 'null' : `${atr_floor_used.toFixed(4)}%`}`);
+    console.log(`  atr_floor_source: ${atr_floor_source}`);
+    console.log(`  atr_floor_passed_boolean: ${atr_floor_passed_boolean}`);
     console.log(`  ATR_filter_passed: ${atrFilterPassed}`);
     console.log(`  volume_current: ${volumeCurrentValid ? currentVolume : null}`);
     console.log(`  volume_avg: ${volumeAvgValid ? avgVolume : null}`);
 
+    // 🔴 Gem ATR floor audit data til filterStatus for snapshot
+    filterStatus.hard.atr.atr_floor_used = atr_floor_used;
+    filterStatus.hard.atr.atr_floor_source = atr_floor_source;
+    filterStatus.hard.atr.atr_floor_passed_boolean = atr_floor_passed_boolean;
+    filterStatus.hard.atr.effective_min_atr_percent_used = effective_min_atr_percent_used;
+
     if (effective_min_atr_percent_used === null) {
       filterStatus.hard.atr.passed = false;
-      filterStatus.hard.atr.reason = `ATR config missing/invalid (adaptive=${ui_adaptive_enabled})`;
-      console.log(`   ❌ ATR% BLOKERER: config missing/invalid`);
+      filterStatus.hard.atr.reason = `ATR config missing/invalid (adaptive=${ui_adaptive_enabled}, source=${atr_floor_source})`;
+      console.log(`   ❌ ATR% BLOKERER: config missing/invalid (source=${atr_floor_source})`);
     } else if (!atrFilterPassed) {
       filterStatus.hard.atr.passed = false;
-      filterStatus.hard.atr.reason = `ATR% ${atrPercent.toFixed(4)}% < ${effective_min_atr_percent_used.toFixed(4)}%`;
-      console.log(`   ❌ ATR% BLOKERER: ${atrPercent.toFixed(4)}% < ${effective_min_atr_percent_used.toFixed(4)}%`);
+      filterStatus.hard.atr.reason = `ATR% ${atrPercent.toFixed(4)}% < ${effective_min_atr_percent_used.toFixed(4)}% (floor_source=${atr_floor_source})`;
+      console.log(`   ❌ ATR% BLOKERER: ${atrPercent.toFixed(4)}% < ${effective_min_atr_percent_used.toFixed(4)}% (floor=${atr_floor_used?.toFixed(4)}%, source=${atr_floor_source})`);
     } else {
       console.log(`   ✅ ATR% PASSERER: ${atrPercent.toFixed(4)}% >= ${effective_min_atr_percent_used.toFixed(4)}%`);
     }
@@ -2480,7 +2508,7 @@ serve(async (req) => {
             // Explicit ATR percent
             atr_percent: atrPercent,
             
-            // 🔴 ATR AUDIT - Entydig dokumentation af ATR source
+            // 🔴 ATR AUDIT - Entydig dokumentation af ATR source + floor enforcement
             // Model A: Entry-ATR bruges som fast reference for alle exits
             atr_audit: {
               atr_value: analysis.indicators.atr,
@@ -2489,6 +2517,10 @@ serve(async (req) => {
               atr_timeframe: config.trend_timeframe || config.scan_interval || '5m',
               atr_source: 'entry', // ATR samplet ved signal-tidspunkt, bruges hele positionens levetid
               atr_captured_at: new Date().toISOString(),
+              // 🔴 ATR FLOOR AUDIT - Dokumenterer hvilken gulvværdi der blev brugt
+              atr_floor_used: analysis.filterStatus?.hard?.atr?.atr_floor_used ?? null,
+              atr_floor_source: analysis.filterStatus?.hard?.atr?.atr_floor_source ?? 'unknown',
+              atr_floor_passed_boolean: analysis.filterStatus?.hard?.atr?.passed === true,
             },
             
             // EMA spread percent (already in indicators but ensuring it's there)
@@ -2696,6 +2728,36 @@ serve(async (req) => {
           console.log(`📊 ═══════════════════════════════════════════`);
 
 
+          // 🔴 DUPLET-CHECK: Undgå at oprette samme position to gange
+          // Key: Symbol + Side + opened_at (timestamp afrundet til minut) + entry_price
+          const openedAtNow = new Date();
+          const openedAtMinute = new Date(openedAtNow);
+          openedAtMinute.setSeconds(0, 0); // Afrund til nærmeste minut
+          
+          // Tjek for eksisterende position med samme nøgle (inden for samme minut)
+          const { data: existingDuplicate } = await supabaseClient
+            .from('positions')
+            .select('id, symbol, side, entry_price, opened_at')
+            .eq('user_id', session.user_id)
+            .eq('symbol', symbol)
+            .eq('side', signal)
+            .gte('opened_at', openedAtMinute.toISOString())
+            .lt('opened_at', new Date(openedAtMinute.getTime() + 60000).toISOString())
+            .maybeSingle();
+          
+          if (existingDuplicate) {
+            // Tjek også entry_price (inden for 0.1% tolerance)
+            const priceDiff = Math.abs(existingDuplicate.entry_price - actualEntryPrice) / actualEntryPrice;
+            if (priceDiff < 0.001) {
+              console.log(`\n🚫 DUPLET BLOKERET: Position allerede oprettet`);
+              console.log(`   Eksisterende ID: ${existingDuplicate.id}`);
+              console.log(`   Symbol: ${symbol}, Side: ${signal}`);
+              console.log(`   Entry: ${existingDuplicate.entry_price} (ny: ${actualEntryPrice}, diff: ${(priceDiff * 100).toFixed(4)}%)`);
+              console.log(`   Opened_at: ${existingDuplicate.opened_at}`);
+              continue;
+            }
+          }
+
           // Save position to database with verified Binance data and indicators
           const { data: insertedPosition, error: insertError } = await supabaseClient
             .from('positions')
@@ -2715,6 +2777,7 @@ serve(async (req) => {
               status: 'OPEN',
               strategy_hash: strategyHash,
               open_reason: openReason,
+              opened_at: openedAtNow.toISOString(),
               indicators_snapshot: comprehensiveSnapshot,
             })
             .select()
