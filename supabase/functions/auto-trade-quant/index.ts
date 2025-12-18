@@ -658,10 +658,15 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   const adxResult = config.adx_enabled ? calculateADX(trendHighs, trendLows, trendCloses, config.adx_period) : null;
   const adx = adxResult?.adx ?? null; // Udtræk kun adx-værdien for kompatibilitet
   
-  const avgVolume = config.volume_enabled
+  // 🔴 FIX: Volume tri-state - eksplicit null/NaN håndtering
+  const rawAvgVolume = config.volume_enabled
     ? volumes.slice(-config.volume_avg_period).reduce((a, b) => a + b, 0) / config.volume_avg_period
     : null;
-  const currentVolume = config.volume_enabled ? volumes[volumes.length - 1] : null;
+  // Konvertér NaN/undefined/0 til null for konsistent tri-state logik
+  const avgVolume = (rawAvgVolume == null || !Number.isFinite(rawAvgVolume) || rawAvgVolume === 0) ? null : rawAvgVolume;
+  
+  const rawCurrentVolume = config.volume_enabled ? volumes[volumes.length - 1] : null;
+  const currentVolume = (rawCurrentVolume == null || !Number.isFinite(rawCurrentVolume)) ? null : rawCurrentVolume;
   
   // ════════════════════════════════════════════════════════════════
   // 📋 EVALUERING AF ALLE FILTRE (HÅRDE + BLØDE)
@@ -672,7 +677,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       emaSpread: { passed: true, value: '', reason: '' },
       atr: { passed: true, value: '', reason: '' },
       adx: { passed: true, value: '', reason: '' },
-      volume: { passed: true, value: '', reason: '' },
+      // 🔴 FIX: Volume tri-state - passed: null=disabled/no-data, true/false=evaluated
+      volume: { passed: null as boolean | null, value: '', reason: '' },
       // 🔴 FIX: long/short kan være null (disabled), true (passed), false (failed)
       macdDirection: { passed: true, long: null as boolean | null, short: null as boolean | null, reason: '', value: '' },
       macdColorChange: { passed: true, long: null as boolean | null, short: null as boolean | null, reason: '' },
@@ -681,6 +687,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     soft: {
       emaAlignment: { long: false, short: false },
       macd: { long: false, short: false },
+      // 🔴 FIX: Volume soft condition tri-state
+      volume: { long: null as boolean | null, short: null as boolean | null },
     }
   };
   
@@ -801,13 +809,30 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     }
   }
   
-  // 4️⃣ VOLUME
-  if (config.volume_enabled && currentVolume !== null && avgVolume !== null && avgVolume > 0) {
+  // 4️⃣ VOLUME - TRI-STATE LOGIK
+  // null = disabled eller manglende data (ikke evalueret)
+  // true = opfylder krav
+  // false = fejler krav
+  if (config.volume_enabled !== true) {
+    // Volume er slukket - ikke evalueret
+    filterStatus.hard.volume.passed = null;
+    filterStatus.hard.volume.reason = 'Volume disabled';
+    filterStatus.soft.volume.long = null;
+    filterStatus.soft.volume.short = null;
+    console.log(`   📊 Volume: ⚪ DISABLED (tri-state: null)`);
+  } else if (currentVolume === null || avgVolume === null) {
+    // Data mangler - ikke evalueret
+    filterStatus.hard.volume.passed = null;
+    filterStatus.hard.volume.reason = `Data mangler: current=${currentVolume}, avg=${avgVolume}`;
+    filterStatus.soft.volume.long = null;
+    filterStatus.soft.volume.short = null;
+    console.log(`   📊 Volume: ⚪ NULL DATA (tri-state: null) - current=${currentVolume}, avg=${avgVolume}`);
+  } else {
+    // Evaluer volume multiplier hard filter
     const volumeRatio = currentVolume / avgVolume;
     const requiredVolume = avgVolume * config.volume_multiplier;
     filterStatus.hard.volume.value = `${volumeRatio.toFixed(2)}x (${(volumeRatio * 100).toFixed(0)}%)`;
     
-    // Log volume check detaljeret
     console.log(`   📊 Volume Check:`);
     console.log(`      Current: ${currentVolume.toFixed(2)}`);
     console.log(`      Average: ${avgVolume.toFixed(2)}`);
@@ -820,8 +845,14 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       filterStatus.hard.volume.reason = `Ratio ${volumeRatio.toFixed(2)}x (${(volumeRatio * 100).toFixed(0)}%) < ${config.volume_multiplier}x required (current: ${currentVolume.toFixed(2)}, avg: ${avgVolume.toFixed(2)})`;
       console.log(`      ❌ BLOKERET: ${volumeRatio.toFixed(2)}x < ${config.volume_multiplier}x`);
     } else {
+      filterStatus.hard.volume.passed = true;
       console.log(`      ✅ OPFYLDT: ${volumeRatio.toFixed(2)}x >= ${config.volume_multiplier}x`);
     }
+    
+    // Soft volume condition (current > avg)
+    const highVolume = currentVolume > avgVolume;
+    filterStatus.soft.volume.long = highVolume;
+    filterStatus.soft.volume.short = highVolume;
   }
   
   // 5️⃣ MACD RETNINGS-FILTER (HÅRDT FILTER - blokerer trades mod MACD retning)
@@ -1117,13 +1148,15 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // ADX er nu et HÅRDT filter - checket sker tidligt i funktionen
   // Ingen condition push nødvendig her
   
-  // Volume (hvis enabled)
-  if (config.volume_enabled && currentVolume !== null && avgVolume !== null) {
-    const highVolume = currentVolume > avgVolume;
-    longConditions.push(highVolume);
-    shortConditions.push(highVolume);
-    conditionDetails.volume.long = highVolume;
-    conditionDetails.volume.short = highVolume;
+  // Volume soft condition - bruger tri-state fra filterStatus (sat i volume hard filter sektionen)
+  // Kun tilføj til conditions array hvis der er en faktisk boolean (ikke null)
+  if (filterStatus.soft.volume.long !== null) {
+    longConditions.push(filterStatus.soft.volume.long);
+    conditionDetails.volume.long = filterStatus.soft.volume.long;
+  }
+  if (filterStatus.soft.volume.short !== null) {
+    shortConditions.push(filterStatus.soft.volume.short);
+    conditionDetails.volume.short = filterStatus.soft.volume.short;
   }
   
   // Pivot Points - Blokerer trades nær key levels (hvis enabled)
@@ -1206,11 +1239,15 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // ═══════════════════════════════════════════════
   
   // Kun check enabled filters (MACD retning evalueres IKKE her - den er retnings-specifik)
+  // 🔴 FIX: Volume tri-state - null betyder "ikke evalueret", tæller som bestået
+  // (hvis volume er disabled eller data mangler, blokerer den IKKE trades)
+  const volumeHardPassed = filterStatus.hard.volume.passed === null || filterStatus.hard.volume.passed === true;
+  
   const hardFiltersPass = 
     (!config.ema_enabled || filterStatus.hard.emaSpread.passed) &&
     (!config.atr_enabled || filterStatus.hard.atr.passed) &&
     (!config.adx_enabled || filterStatus.hard.adx.passed) &&
-    (!config.volume_enabled || filterStatus.hard.volume.passed) &&
+    volumeHardPassed &&
     (!config.rsi_enabled || filterStatus.hard.rsiMomentum.passed);
   
   if (!hardFiltersPass) {
@@ -2208,14 +2245,27 @@ serve(async (req) => {
             : null;
 
           // 🔎 AUDIT: Volume multiplier tri-state (skal aldrig blive true når data mangler)
+          // 🔴 FIX: Bruger Number.isFinite for at fange NaN/Infinity/undefined
+          const volCurrent = analysis.indicators?.volume;
+          const volAvg = analysis.indicators?.avgVolume;
+          const volCurrentValid = volCurrent != null && Number.isFinite(volCurrent);
+          const volAvgValid = volAvg != null && Number.isFinite(volAvg) && volAvg > 0;
+          
           const volumeMultiplierFilterPassedTriState = config.volume_enabled !== true
             ? null
-            : (analysis.indicators?.volume == null || analysis.indicators?.avgVolume == null)
+            : (!volCurrentValid || !volAvgValid)
               ? null
-              : (analysis.indicators.volume >= analysis.indicators.avgVolume * config.volume_multiplier);
+              : (volCurrent >= volAvg * config.volume_multiplier);
+          
+          // Soft volume tri-state
+          const softVolumePassedTriState = config.volume_enabled !== true
+            ? null
+            : (!volCurrentValid || !volAvgValid)
+              ? null
+              : (volCurrent > volAvg);
 
           console.log(
-            `📊 VOLUME MULTIPLIER AUDIT | enabled=${config.volume_enabled} | current=${analysis.indicators?.volume ?? null} | avg=${analysis.indicators?.avgVolume ?? null} | multiplier=${config.volume_multiplier} | passed=${volumeMultiplierFilterPassedTriState}`
+            `📊 VOLUME TRI-STATE AUDIT | enabled=${config.volume_enabled} | current=${volCurrent ?? 'null'} (valid=${volCurrentValid}) | avg=${volAvg ?? 'null'} (valid=${volAvgValid}) | multiplier=${config.volume_multiplier} | hard_passed=${volumeMultiplierFilterPassedTriState} | soft_passed=${softVolumePassedTriState}`
           );
 
           
@@ -2285,8 +2335,9 @@ serve(async (req) => {
             volume_filter_passed: volumeMultiplierFilterPassedTriState,
             volume_multiplier_filter_passed: volumeMultiplierFilterPassedTriState,
 
-            // 🔴 FIX: Volume current value for debugging
-            volume_current: analysis.indicators?.volume ?? null,
+            // 🔴 FIX: Volume values for debugging - eksplicit null ved ugyldig data
+            volume_current: volCurrentValid ? volCurrent : null,
+            volume_avg: volAvgValid ? volAvg : null,
             
             macd_direction_passed: config.macd_direction_enabled 
               ? (signal === 'LONG' 
@@ -2318,9 +2369,8 @@ serve(async (req) => {
             soft_bb_passed: config.bb_enabled 
               ? (analysis.indicators.conditionDetails?.bb?.[signal.toLowerCase()] === true)
               : null,
-            soft_volume_passed: config.volume_enabled 
-              ? (analysis.indicators.conditionDetails?.volume?.[signal.toLowerCase()] === true)
-              : null,
+            // 🔴 FIX: soft_volume_passed - bruger tri-state fra snapshot beregningen
+            soft_volume_passed: softVolumePassedTriState,
             soft_pivot_passed: config.pivot_points_enabled 
               ? (analysis.indicators.conditionDetails?.pivotPoints?.[signal.toLowerCase()] === true)
               : null,
@@ -2334,7 +2384,8 @@ serve(async (req) => {
               if (config.macd_enabled && analysis.indicators.conditionDetails?.macd?.[signal.toLowerCase()] === true) total++;
               if (config.histogram_momentum_enabled && analysis.indicators.conditionDetails?.histogramMomentum?.[signal.toLowerCase()] === true) total++;
               if (config.bb_enabled && analysis.indicators.conditionDetails?.bb?.[signal.toLowerCase()] === true) total++;
-              if (config.volume_enabled && analysis.indicators.conditionDetails?.volume?.[signal.toLowerCase()] === true) total++;
+              // 🔴 FIX: Bruger tri-state soft volume
+              if (softVolumePassedTriState === true) total++;
               if (config.pivot_points_enabled && analysis.indicators.conditionDetails?.pivotPoints?.[signal.toLowerCase()] === true) total++;
               return total;
             })(),
