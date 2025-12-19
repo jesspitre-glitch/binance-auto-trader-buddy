@@ -650,8 +650,18 @@ serve(async (req) => {
           const existingBEPrice = position.indicators_snapshot?.break_even_at_price;
 
           const clampBeToEntrySide = (level: number) => {
-            if (position.side === 'LONG') return Math.max(level, position.entry_price);
-            return Math.min(level, position.entry_price);
+            const clamped = position.side === 'LONG'
+              ? Math.max(level, position.entry_price)
+              : Math.min(level, position.entry_price);
+
+            // Audit: BE må aldrig ligge på "forkert" side af entry
+            if (clamped !== level) {
+              console.error(
+                `🚨 BE_SIDE_VIOLATION | ${position.symbol} ${position.side} | entry=${position.entry_price} | be_raw=${level} | be_clamped=${clamped}`
+              );
+            }
+
+            return clamped;
           };
 
           if (existingBEPrice !== null && existingBEPrice !== undefined && isFinite(existingBEPrice)) {
