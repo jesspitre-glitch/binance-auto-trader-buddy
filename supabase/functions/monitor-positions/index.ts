@@ -432,7 +432,14 @@ serve(async (req) => {
               breakEvenActivatedThisCycle = true;
               breakEvenActivatedState = true;
               // LEGACY: BE på entry (ingen offset)
-              breakEvenAtPrice = position.entry_price;
+              // KRAV: LONG BE stop skal altid være >= entry, SHORT BE stop skal altid være <= entry
+              if (position.side === 'LONG') {
+                // LONG: BE stop på eller over entry (profit side er opad)
+                breakEvenAtPrice = position.entry_price; // Altid mindst entry
+              } else {
+                // SHORT: BE stop på eller under entry (profit side er nedad)
+                breakEvenAtPrice = position.entry_price; // Altid højst entry
+              }
               breakEvenTriggerPrice = currentPrice;
               newStopLoss = breakEvenAtPrice;
               stopLossAfterBE = newStopLoss;
@@ -556,13 +563,18 @@ serve(async (req) => {
                 }
               }
 
-              // KRAV: Break-even må aldrig ligge på tabssiden
-              // LONG: entry + offset (aldrig under entry)
-              // SHORT: entry - offset (aldrig over entry)
+              // KRAV: Break-even må ALDRIG ligge på tabssiden
+              // LONG: BE stop skal altid være >= entry (profit side er opad)
+              // SHORT: BE stop skal altid være <= entry (profit side er nedad)
+              // Dette sikrer at en BREAK_EVEN_HIT aldrig giver negativ PnL
               if (position.side === 'LONG') {
+                // LONG: Clamp til mindst entry (offset kan kun være positiv = opad)
                 finalStop = Math.max(finalStop, position.entry_price);
+                console.log(`   LONG BE clamp: ${bestCandidate.price.toFixed(6)} -> ${finalStop.toFixed(6)} (min = entry ${position.entry_price})`);
               } else {
+                // SHORT: Clamp til højst entry (offset kan kun være negativ = nedad)  
                 finalStop = Math.min(finalStop, position.entry_price);
+                console.log(`   SHORT BE clamp: ${bestCandidate.price.toFixed(6)} -> ${finalStop.toFixed(6)} (max = entry ${position.entry_price})`);
               }
 
               if (!ratchetBlocked) {
@@ -909,18 +921,38 @@ serve(async (req) => {
         if (slHit || beHit || tsHit) {
           shouldClose = true;
 
+          // KRAV 4: Beregn om PnL vil være negativ ved denne exit
+          // Bruges til at overstyre BREAK_EVEN_HIT -> STOP_LOSS_HIT hvis PnL er negativ
+          const exitAtPrice = slHit ? hardStopLoss : beHit ? breakEvenStop : trailingStop;
+          const estimatedPnl = position.side === 'LONG'
+            ? (exitAtPrice! - position.entry_price) * position.quantity
+            : (position.entry_price - exitAtPrice!) * position.quantity;
+          const pnlIsNegative = estimatedPnl < 0;
+
           if (slHit) {
             closeReason = 'STOP_LOSS_HIT';
             console.log(`STOP LOSS HIT (PRIORITY) | ${position.symbol} | price=${currentPrice} <= hardSL=${hardStopLoss}`);
           } else if (beHit) {
-            closeReason = 'BREAK_EVEN_HIT';
-            console.log(`BREAK-EVEN HIT | ${position.symbol} | price=${currentPrice} <= be=${breakEvenStop}`);
+            // KRAV: En handel må ALDRIG få exit_reason = 'BREAK_EVEN_HIT' hvis PnL er negativ
+            if (pnlIsNegative) {
+              closeReason = 'STOP_LOSS_HIT';
+              console.log(`BREAK-EVEN HIT → REKLASSIFICERET TIL STOP_LOSS_HIT (negativ PnL) | ${position.symbol} | price=${currentPrice} <= be=${breakEvenStop} | estimatedPnl=${estimatedPnl.toFixed(2)}`);
+            } else {
+              closeReason = 'BREAK_EVEN_HIT';
+              console.log(`BREAK-EVEN HIT | ${position.symbol} | price=${currentPrice} <= be=${breakEvenStop}`);
+            }
           } else {
-            closeReason = isLegacyPosition ? 'LEGACY_TRAILING_STOP_HIT' : 'TRAILING_STOP_HIT';
-            console.log(`TRAILING HIT | ${position.symbol} | price=${currentPrice} <= ts=${trailingStop}`);
+            // KRAV: Trailing stop må heller ikke give negativ PnL exit som TRAILING_STOP_HIT
+            if (pnlIsNegative) {
+              closeReason = 'STOP_LOSS_HIT';
+              console.log(`TRAILING HIT → REKLASSIFICERET TIL STOP_LOSS_HIT (negativ PnL) | ${position.symbol} | price=${currentPrice} <= ts=${trailingStop} | estimatedPnl=${estimatedPnl.toFixed(2)}`);
+            } else {
+              closeReason = isLegacyPosition ? 'LEGACY_TRAILING_STOP_HIT' : 'TRAILING_STOP_HIT';
+              console.log(`TRAILING HIT | ${position.symbol} | price=${currentPrice} <= ts=${trailingStop}`);
+            }
           }
 
-          console.log(`EXIT AUDIT | ${position.symbol} | ${JSON.stringify(exitAudit)}`);
+          console.log(`EXIT AUDIT | ${position.symbol} | estimatedPnl=${estimatedPnl.toFixed(2)} | pnlIsNegative=${pnlIsNegative} | ${JSON.stringify(exitAudit)}`);
         }
 
         // Definer tidspunkt variabler (bruges til både timeout check og duration beregning)
