@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.recalculate-strategy-hashes]
 verify_jwt = false
+
+[functions.sync-funding-fees]
+verify_jwt = false

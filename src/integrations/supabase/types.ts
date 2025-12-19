@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      funding_fees: {
+        Row: {
+          asset: string
+          binance_time: number
+          created_at: string
+          id: string
+          income: number
+          income_type: string
+          symbol: string
+          transaction_id: number | null
+          user_id: string
+        }
+        Insert: {
+          asset?: string
+          binance_time: number
+          created_at?: string
+          id?: string
+          income: number
+          income_type?: string
+          symbol: string
+          transaction_id?: number | null
+          user_id: string
+        }
+        Update: {
+          asset?: string
+          binance_time?: number
+          created_at?: string
+          id?: string
+          income?: number
+          income_type?: string
+          symbol?: string
+          transaction_id?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       indicator_config: {
         Row: {
           adaptive_adx_enabled: boolean | null
