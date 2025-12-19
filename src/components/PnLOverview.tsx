@@ -45,41 +45,44 @@ export const PnLOverview = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Calculate date range in UTC (Binance server time)
-      const now = new Date();
-      const startDate = new Date();
+      // Calculate rolling time window using exact hours (UTC/Binance server time)
+      const nowMs = Date.now();
+      let startMs: number;
+      
       switch (range) {
         case "24h":
-          startDate.setUTCHours(startDate.getUTCHours() - 24);
+          startMs = nowMs - (24 * 60 * 60 * 1000); // Exactly 24 hours
           break;
         case "7d":
-          startDate.setUTCDate(startDate.getUTCDate() - 7);
+          startMs = nowMs - (7 * 24 * 60 * 60 * 1000); // Exactly 7×24 hours = 168 hours
           break;
         case "30d":
-          startDate.setUTCDate(startDate.getUTCDate() - 30);
+          startMs = nowMs - (30 * 24 * 60 * 60 * 1000); // Exactly 30×24 hours
           break;
         case "90d":
-          startDate.setUTCDate(startDate.getUTCDate() - 90);
+          startMs = nowMs - (90 * 24 * 60 * 60 * 1000); // Exactly 90×24 hours
           break;
         case "1y":
-          startDate.setUTCFullYear(startDate.getUTCFullYear() - 1);
+          startMs = nowMs - (365 * 24 * 60 * 60 * 1000); // Exactly 365×24 hours
           break;
         case "all":
-          // Set to a very early date to get all trades
-          startDate.setUTCFullYear(2020, 0, 1);
+          startMs = new Date(2020, 0, 1).getTime(); // All time
           break;
       }
+      
+      const startDate = new Date(startMs);
+      const now = new Date(nowMs);
 
-      console.log(`Fetching trades from ${startDate.toISOString()} for range ${range}`);
+      console.log(`[PnL] Rolling window: ${range}, from ${startDate.toISOString()} to ${now.toISOString()}`);
       
       // Fetch portfolio balance
       const portfolioResult = await supabase
         .from("user_portfolio")
         .select("futures_capital")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
-      // Fetch ALL trades using pagination to bypass Supabase's 1000 row limit
+      // Fetch ALL trades using pagination
       const allTradesData: any[] = [];
       const pageSize = 1000;
       let page = 0;
@@ -109,17 +112,37 @@ export const PnLOverview = () => {
         }
       }
       
-      console.log(`Trades returned from database: ${allTradesData.length} (pages: ${page})`);
+      // Fetch funding fees for the period (using binance_time in ms)
+      const { data: fundingData, error: fundingError } = await supabase
+        .from("funding_fees")
+        .select("*")
+        .eq("user_id", user.id)
+        .gte("binance_time", startMs)
+        .lte("binance_time", nowMs)
+        .order("binance_time", { ascending: true });
       
-      // Sort trades ascending for cumulative chart (they were fetched descending)
+      if (fundingError) {
+        console.warn("[PnL] Failed to fetch funding fees:", fundingError);
+      }
+      
+      const fundingFees = fundingData || [];
+      const totalFundingFees = fundingFees.reduce((sum, f) => sum + Number(f.income), 0);
+      
+      console.log(`[PnL] Trades: ${allTradesData.length}, Funding fees: ${fundingFees.length} (total: ${totalFundingFees.toFixed(2)} USDT)`);
+      
+      // Sort trades ascending for cumulative chart
       const trades = allTradesData.sort((a, b) => 
         new Date(a.closed_at).getTime() - new Date(b.closed_at).getTime()
       );
-      const portfolioBalance = portfolioResult.data?.futures_capital || 0;
+      const portfolioBalance = portfolioResult?.data?.futures_capital || 0;
 
       setAllTrades(trades);
 
-      if (!trades || trades.length === 0) {
+      // Calculate total P&L including funding fees
+      const tradePnL = trades.reduce((sum, t) => sum + Number(t.pnl), 0);
+      const totalPnL = tradePnL + totalFundingFees;
+
+      if (trades.length === 0 && fundingFees.length === 0) {
         setStats({
           totalPnL: 0,
           totalPnLPercent: 0,
@@ -130,13 +153,14 @@ export const PnLOverview = () => {
           largestWin: 0,
           largestLoss: 0,
           profitFactor: 0,
+          fundingFees: 0,
         });
         setChartData([]);
+        setAggregatedData([]);
         return;
       }
 
-      // Calculate statistics
-      const totalPnL = trades.reduce((sum, t) => sum + Number(t.pnl), 0);
+      // Calculate statistics (totalPnL already includes funding fees from above)
       const totalPnLPercent = portfolioBalance > 0 ? (totalPnL / portfolioBalance) * 100 : 0;
       const winners = trades.filter(t => Number(t.pnl) > 0);
       const losers = trades.filter(t => Number(t.pnl) < 0);
@@ -165,6 +189,7 @@ export const PnLOverview = () => {
         largestWin,
         largestLoss,
         profitFactor,
+        fundingFees: totalFundingFees,
       });
 
       // Create cumulative P&L chart data (UTC/Binance time)
@@ -399,6 +424,11 @@ export const PnLOverview = () => {
                   <span className="text-lg ml-2">
                     ({isProfitable ? "+" : ""}{stats?.totalPnLPercent.toFixed(2)}%)
                   </span>
+                  {stats?.fundingFees !== 0 && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      inkl. funding: {stats?.fundingFees >= 0 ? "+" : ""}{stats?.fundingFees?.toFixed(2)} USDT
+                    </div>
+                  )}
                 </div>
               </div>
 

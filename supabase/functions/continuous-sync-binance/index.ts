@@ -8,6 +8,8 @@ const corsHeaders = {
 
 // Global flag to control sync loop
 let isSyncing = false;
+let lastFundingSyncTime = 0;
+const FUNDING_SYNC_INTERVAL = 5 * 60 * 1000; // Sync funding fees every 5 minutes
 
 async function syncLoop() {
   const supabaseClient = createClient(
@@ -25,6 +27,22 @@ async function syncLoop() {
         console.error('Sync error:', error);
       } else {
         console.log('Sync completed:', data?.userUpdates?.length || 0, 'users updated');
+      }
+
+      // Sync funding fees periodically (every 5 minutes)
+      const now = Date.now();
+      if (now - lastFundingSyncTime >= FUNDING_SYNC_INTERVAL) {
+        console.log(`[${new Date().toISOString()}] Syncing funding fees...`);
+        const { data: fundingData, error: fundingError } = await supabaseClient.functions.invoke('sync-funding-fees', {
+          body: { startTime: now - (24 * 60 * 60 * 1000) } // Last 24 hours
+        });
+        
+        if (fundingError) {
+          console.error('Funding sync error:', fundingError);
+        } else {
+          console.log('Funding sync completed:', fundingData?.total || 0, 'records');
+        }
+        lastFundingSyncTime = now;
       }
     } catch (error: any) {
       console.error('Unexpected sync error:', error.message);
