@@ -567,15 +567,40 @@ serve(async (req) => {
               // LONG: BE stop skal altid være >= entry (profit side er opad)
               // SHORT: BE stop skal altid være <= entry (profit side er nedad)
               // Dette sikrer at en BREAK_EVEN_HIT aldrig giver negativ PnL
+              const originalBECandidate = finalStop;
+              let beWrongSide = false;
+              
               if (position.side === 'LONG') {
                 // LONG: Clamp til mindst entry (offset kan kun være positiv = opad)
+                if (finalStop < position.entry_price) {
+                  beWrongSide = true;
+                  console.log(`\n🚨 ═══════════════════════════════════════════════════════`);
+                  console.log(`🚨 BREAK-EVEN FORKERT SIDE AUDIT - ${position.symbol} LONG`);
+                  console.log(`🚨 ═══════════════════════════════════════════════════════`);
+                  console.log(`   ❌ BE-stop beregnet: ${finalStop.toFixed(6)}`);
+                  console.log(`   ❌ Entry price: ${position.entry_price}`);
+                  console.log(`   ❌ PROBLEM: BE-stop UNDER entry for LONG = ville give tab!`);
+                  console.log(`   ✅ KORRIGERET: Clampes til entry ${position.entry_price}`);
+                  console.log(`🚨 ═══════════════════════════════════════════════════════\n`);
+                }
                 finalStop = Math.max(finalStop, position.entry_price);
-                console.log(`   LONG BE clamp: ${bestCandidate.price.toFixed(6)} -> ${finalStop.toFixed(6)} (min = entry ${position.entry_price})`);
               } else {
                 // SHORT: Clamp til højst entry (offset kan kun være negativ = nedad)  
+                if (finalStop > position.entry_price) {
+                  beWrongSide = true;
+                  console.log(`\n🚨 ═══════════════════════════════════════════════════════`);
+                  console.log(`🚨 BREAK-EVEN FORKERT SIDE AUDIT - ${position.symbol} SHORT`);
+                  console.log(`🚨 ═══════════════════════════════════════════════════════`);
+                  console.log(`   ❌ BE-stop beregnet: ${finalStop.toFixed(6)}`);
+                  console.log(`   ❌ Entry price: ${position.entry_price}`);
+                  console.log(`   ❌ PROBLEM: BE-stop OVER entry for SHORT = ville give tab!`);
+                  console.log(`   ✅ KORRIGERET: Clampes til entry ${position.entry_price}`);
+                  console.log(`🚨 ═══════════════════════════════════════════════════════\n`);
+                }
                 finalStop = Math.min(finalStop, position.entry_price);
-                console.log(`   SHORT BE clamp: ${bestCandidate.price.toFixed(6)} -> ${finalStop.toFixed(6)} (max = entry ${position.entry_price})`);
               }
+              
+              console.log(`   BE clamp: ${originalBECandidate.toFixed(6)} -> ${finalStop.toFixed(6)} (entry=${position.entry_price}, wrongSide=${beWrongSide})`);
 
               if (!ratchetBlocked) {
                 breakEvenActivatedThisCycle = true;
@@ -1104,7 +1129,34 @@ serve(async (req) => {
 
             console.log(`Position closed - Entry: ${position.entry_price}, Exit: ${actualExitPrice}, P&L: ${actualPnl.toFixed(2)} USDT`);
             
-            // Update position status with close reason
+            // 🚨 KRAV: BREAK_EVEN_HIT og TRAILING_STOP_HIT må ALDRIG give negativ PnL
+            // Reklassificer til STOP_LOSS_HIT baseret på FAKTISK PnL (ikke estimeret)
+            let finalCloseReason = closeReason;
+            if (actualPnl < 0) {
+              if (closeReason === 'BREAK_EVEN_HIT') {
+                finalCloseReason = 'STOP_LOSS_HIT';
+                console.log(`\n🚨 ═══════════════════════════════════════════════════════`);
+                console.log(`🚨 FAKTISK PnL REKLASSIFICERING - ${position.symbol} ${position.side}`);
+                console.log(`🚨 ═══════════════════════════════════════════════════════`);
+                console.log(`   ❌ Original close_reason: BREAK_EVEN_HIT`);
+                console.log(`   ❌ Faktisk PnL: ${actualPnl.toFixed(4)} USDT (NEGATIV)`);
+                console.log(`   ✅ Reklassificeret til: STOP_LOSS_HIT`);
+                console.log(`   📋 Entry: ${position.entry_price}, Exit: ${actualExitPrice}`);
+                console.log(`🚨 ═══════════════════════════════════════════════════════\n`);
+              } else if (closeReason === 'TRAILING_STOP_HIT' || closeReason === 'LEGACY_TRAILING_STOP_HIT') {
+                finalCloseReason = 'STOP_LOSS_HIT';
+                console.log(`\n🚨 ═══════════════════════════════════════════════════════`);
+                console.log(`🚨 FAKTISK PnL REKLASSIFICERING - ${position.symbol} ${position.side}`);
+                console.log(`🚨 ═══════════════════════════════════════════════════════`);
+                console.log(`   ❌ Original close_reason: ${closeReason}`);
+                console.log(`   ❌ Faktisk PnL: ${actualPnl.toFixed(4)} USDT (NEGATIV)`);
+                console.log(`   ✅ Reklassificeret til: STOP_LOSS_HIT`);
+                console.log(`   📋 Entry: ${position.entry_price}, Exit: ${actualExitPrice}`);
+                console.log(`🚨 ═══════════════════════════════════════════════════════\n`);
+              }
+            }
+            
+            // Update position status with final close reason
             await supabaseClient
               .from('positions')
               .update({ 
@@ -1112,7 +1164,7 @@ serve(async (req) => {
                 closed_at: new Date().toISOString(),
                 current_price: actualExitPrice,
                 unrealized_pnl: actualPnl,
-                close_reason: closeReason,
+                close_reason: finalCloseReason,
               })
               .eq('id', position.id);
 
@@ -1565,7 +1617,7 @@ serve(async (req) => {
               duration_minutes: Math.floor((now.getTime() - openedAt.getTime()) / (1000 * 60)),
               strategy_hash: position.strategy_hash,
               open_reason: position.open_reason,
-              close_reason: closeReason,
+              close_reason: finalCloseReason,
               indicators_snapshot: enhancedSnapshot,
             });
 
@@ -1626,7 +1678,7 @@ serve(async (req) => {
             results.push({
               symbol: position.symbol,
               action: 'CLOSED',
-              reason: closeReason,
+              reason: finalCloseReason,
               pnl: actualPnl,
               pnlPercent: actualPnlPercent,
               entryPrice: position.entry_price,
