@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, LineChart as LineChartIcon, Copy } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, LineChart as LineChartIcon, Copy, Download } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatTradeForExport, compressTradeData, formatWithLineBreaks } from "@/lib/tradeExportUtils";
 
 type TimeRange = "24h" | "7d" | "30d" | "90d" | "1y" | "all";
 
@@ -602,121 +603,162 @@ export const PnLOverview = () => {
           <DialogHeader>
             <div className="flex items-center justify-between">
               <DialogTitle>Trades i perioden</DialogTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const totalPnL = selectedPeriodTrades.reduce((sum, t) => sum + Number(t.pnl), 0);
-                  const winRate = selectedPeriodTrades.length > 0
-                    ? ((selectedPeriodTrades.filter(t => Number(t.pnl) > 0).length / selectedPeriodTrades.length) * 100).toFixed(1)
-                    : 0;
-                  
-                  // Formater indicators_snapshot til læsbar tekst
-                  const formatIndicatorsText = (snapshot: any) => {
-                    if (!snapshot) return "Ingen indikator data tilgængelig";
-                    
-                    const lines = [];
-                    
-                    // EMA værdier
-                    if (snapshot.ema_enabled) {
-                      lines.push(`EMA Fast (9): ${snapshot.emaFast?.toFixed(2)}`);
-                      lines.push(`EMA Medium (21): ${snapshot.emaMedium?.toFixed(2)}`);
-                      lines.push(`EMA Slow (50): ${snapshot.emaSlow?.toFixed(2)}`);
-                      if (snapshot.ema_medium_trend) lines.push(`EMA Trend (50): ${snapshot.ema_medium_trend.toFixed(2)}`);
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (selectedPeriodTrades.length === 0) {
+                      toast({
+                        title: "Ingen handler",
+                        description: "Ingen handler i denne periode",
+                        variant: "destructive",
+                      });
+                      return;
                     }
                     
-                    // RSI værdier
-                    if (snapshot.rsi_enabled) {
-                      lines.push(`RSI Værdi: ${snapshot.rsi?.toFixed(2)}`);
-                      lines.push(`RSI Min Long: ${snapshot.rsi_min_long || 30}`);
-                      lines.push(`RSI Max Short: ${snapshot.rsi_max_short || 70}`);
-                    }
+                    // Sort trades descending by closed_at for export
+                    const sortedTrades = [...selectedPeriodTrades].sort(
+                      (a, b) => new Date(b.closed_at).getTime() - new Date(a.closed_at).getTime()
+                    );
                     
-                    // MACD værdier
-                    if (snapshot.macd_enabled) {
-                      lines.push(`MACD Histogram: ${snapshot.macd?.toFixed(6)}`);
-                      lines.push(`MACD Fast: ${snapshot.macd_fast || 12}, Slow: ${snapshot.macd_slow || 26}, Signal: ${snapshot.macd_signal || 9}`);
-                    }
+                    const compressed = compressTradeData(sortedTrades);
+                    const jsonStr = formatWithLineBreaks(compressed);
                     
-                    // ATR værdier
-                    if (snapshot.atr_enabled) {
-                      lines.push(`ATR Værdi: ${snapshot.atr?.toFixed(2)}`);
-                      lines.push(`ATR Stop Loss: ${snapshot.atr_stop_loss_multiplier || 2.8}x, Trailing: ${snapshot.atr_trailing_stop_multiplier || 2.0}x, Break Even: ${snapshot.break_even_atr || 0.8}x`);
-                    }
-                    
-                    // ADX værdier
-                    if (snapshot.adx_enabled) {
-                      lines.push(`ADX Værdi: ${snapshot.adx?.toFixed(2)}`);
-                      lines.push(`ADX Threshold: ${snapshot.adx_threshold || 40}`);
-                    }
-                    
-                    // Volume
-                    if (snapshot.volume_enabled) {
-                      lines.push(`Volume: ${snapshot.volume?.toFixed(2)}`);
-                      lines.push(`Volume Average: ${snapshot.avgVolume?.toFixed(2)}`);
-                    }
-                    
-                    // Pivot Points
-                    if (snapshot.pivot_points_enabled && snapshot.pivotPoints) {
-                      lines.push(`Pivot Points - PP: ${snapshot.pivotPoints.pp?.toFixed(2)}, R1: ${snapshot.pivotPoints.r1?.toFixed(2)}, R2: ${snapshot.pivotPoints.r2?.toFixed(2)}, S1: ${snapshot.pivotPoints.s1?.toFixed(2)}, S2: ${snapshot.pivotPoints.s2?.toFixed(2)}`);
-                    }
-                    
-                    // Config
-                    lines.push(`Timeframes: Scan ${snapshot.scan_interval}, Trend ${snapshot.trend_timeframe}, Higher ${snapshot.higher_trend_timeframe}`);
-                    lines.push(`Risk: Leverage ${snapshot.leverage}x, Position ${snapshot.position_size_percent}%, Risk/Trade ${snapshot.risk_per_trade_percent}%`);
-                    lines.push(`Limits: Max Positions ${snapshot.max_open_positions}, Max Duration ${snapshot.max_position_duration_minutes}m`);
-                    
-                    return lines.join(", ");
-                  };
-                  
-                  // Byg TSV tabel med indikatorer i én kolonne som 'NAVN værdi'
-                  const header = `Symbol\tSide\tÅbnet\tLukket\tEntry\tExit\tP&L\tP&L%\tVarighed\tÅrsag\tIndikatorer\n`;
-
-                  const formatIndicatorLine = (s: any) => {
-                    if (!s) return "";
-                    const parts: string[] = [];
-                    const pushNum = (label: string, val?: number | null, digits = 2) => {
-                      if (val === undefined || val === null || isNaN(Number(val))) return;
-                      parts.push(`${label} ${Number(val).toFixed(digits)}`);
-                    };
-                    pushNum("ADX", s.adx, 2);
-                    pushNum("RSI", s.rsi, 2);
-                    pushNum("MACD", s.macd, 6);
-                    pushNum("ATR", s.atr, 2);
-                    pushNum("EMA9", s.emaFast, 2);
-                    pushNum("EMA21", s.emaMedium, 2);
-                    pushNum("EMA50", s.emaSlow, 2);
-                    pushNum("VOL", s.volume, 2);
-                    if (s.pivotPoints) pushNum("PP", s.pivotPoints.pp, 2);
-                    return parts.join(" ");
-                  };
-
-                  const rows = selectedPeriodTrades.map((t) => {
-                      const opened = new Date(t.opened_at).toLocaleString("da-DK", { timeZone: "UTC" }) + " UTC";
-                      const closed = new Date(t.closed_at).toLocaleString("da-DK", { timeZone: "UTC" }) + " UTC";
-                    const entry = String(t.entry_price);
-                    const exit = String(t.exit_price);
-                    const pnl = `${Number(t.pnl) >= 0 ? "" : "-"}$${Math.abs(Number(t.pnl)).toFixed(2)}`;
-                    const pnlPct = `${Number(t.pnl_percent).toFixed(2)}%`;
-                    const duration = `${t.duration_minutes}m`;
-                    const reason = t.close_reason || "";
-                    const ind = formatIndicatorLine(t.indicators_snapshot);
-                    return `${t.symbol}\t${t.side}\t${opened}\t${closed}\t${entry}\t${exit}\t${pnl}\t${pnlPct}\t${duration}\t${reason}\t${ind}`;
-                  }).join("\n");
-
-                  const text = header + rows;
-                  
-                  navigator.clipboard.writeText(text).then(() => {
-                    toast({
-                      title: "Kopieret!",
-                      description: `${selectedPeriodTrades.length} trades med indikatorer kopieret`,
+                    navigator.clipboard.writeText(jsonStr).then(() => {
+                      toast({
+                        title: "Eksporteret til clipboard! ✓",
+                        description: `${selectedPeriodTrades.length} handler kopieret i kompakt format`,
+                      });
+                    }).catch((err) => {
+                      console.error('Clipboard failed:', err);
+                      toast({
+                        title: "Fejl",
+                        description: "Kunne ikke kopiere til clipboard",
+                        variant: "destructive",
+                      });
                     });
-                  });
-                }}
-              >
-                <Copy className="h-4 w-4 mr-2" />
-                Kopier
-              </Button>
+                  }}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Eksporter til AI
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const totalPnL = selectedPeriodTrades.reduce((sum, t) => sum + Number(t.pnl), 0);
+                    const winRate = selectedPeriodTrades.length > 0
+                      ? ((selectedPeriodTrades.filter(t => Number(t.pnl) > 0).length / selectedPeriodTrades.length) * 100).toFixed(1)
+                      : 0;
+                    
+                    // Formater indicators_snapshot til læsbar tekst
+                    const formatIndicatorsText = (snapshot: any) => {
+                      if (!snapshot) return "Ingen indikator data tilgængelig";
+                      
+                      const lines = [];
+                      
+                      // EMA værdier
+                      if (snapshot.ema_enabled) {
+                        lines.push(`EMA Fast (9): ${snapshot.emaFast?.toFixed(2)}`);
+                        lines.push(`EMA Medium (21): ${snapshot.emaMedium?.toFixed(2)}`);
+                        lines.push(`EMA Slow (50): ${snapshot.emaSlow?.toFixed(2)}`);
+                        if (snapshot.ema_medium_trend) lines.push(`EMA Trend (50): ${snapshot.ema_medium_trend.toFixed(2)}`);
+                      }
+                      
+                      // RSI værdier
+                      if (snapshot.rsi_enabled) {
+                        lines.push(`RSI Værdi: ${snapshot.rsi?.toFixed(2)}`);
+                        lines.push(`RSI Min Long: ${snapshot.rsi_min_long || 30}`);
+                        lines.push(`RSI Max Short: ${snapshot.rsi_max_short || 70}`);
+                      }
+                      
+                      // MACD værdier
+                      if (snapshot.macd_enabled) {
+                        lines.push(`MACD Histogram: ${snapshot.macd?.toFixed(6)}`);
+                        lines.push(`MACD Fast: ${snapshot.macd_fast || 12}, Slow: ${snapshot.macd_slow || 26}, Signal: ${snapshot.macd_signal || 9}`);
+                      }
+                      
+                      // ATR værdier
+                      if (snapshot.atr_enabled) {
+                        lines.push(`ATR Værdi: ${snapshot.atr?.toFixed(2)}`);
+                        lines.push(`ATR Stop Loss: ${snapshot.atr_stop_loss_multiplier || 2.8}x, Trailing: ${snapshot.atr_trailing_stop_multiplier || 2.0}x, Break Even: ${snapshot.break_even_atr || 0.8}x`);
+                      }
+                      
+                      // ADX værdier
+                      if (snapshot.adx_enabled) {
+                        lines.push(`ADX Værdi: ${snapshot.adx?.toFixed(2)}`);
+                        lines.push(`ADX Threshold: ${snapshot.adx_threshold || 40}`);
+                      }
+                      
+                      // Volume
+                      if (snapshot.volume_enabled) {
+                        lines.push(`Volume: ${snapshot.volume?.toFixed(2)}`);
+                        lines.push(`Volume Average: ${snapshot.avgVolume?.toFixed(2)}`);
+                      }
+                      
+                      // Pivot Points
+                      if (snapshot.pivot_points_enabled && snapshot.pivotPoints) {
+                        lines.push(`Pivot Points - PP: ${snapshot.pivotPoints.pp?.toFixed(2)}, R1: ${snapshot.pivotPoints.r1?.toFixed(2)}, R2: ${snapshot.pivotPoints.r2?.toFixed(2)}, S1: ${snapshot.pivotPoints.s1?.toFixed(2)}, S2: ${snapshot.pivotPoints.s2?.toFixed(2)}`);
+                      }
+                      
+                      // Config
+                      lines.push(`Timeframes: Scan ${snapshot.scan_interval}, Trend ${snapshot.trend_timeframe}, Higher ${snapshot.higher_trend_timeframe}`);
+                      lines.push(`Risk: Leverage ${snapshot.leverage}x, Position ${snapshot.position_size_percent}%, Risk/Trade ${snapshot.risk_per_trade_percent}%`);
+                      lines.push(`Limits: Max Positions ${snapshot.max_open_positions}, Max Duration ${snapshot.max_position_duration_minutes}m`);
+                      
+                      return lines.join(", ");
+                    };
+                    
+                    // Byg TSV tabel med indikatorer i én kolonne som 'NAVN værdi'
+                    const header = `Symbol\tSide\tÅbnet\tLukket\tEntry\tExit\tP&L\tP&L%\tVarighed\tÅrsag\tIndikatorer\n`;
+
+                    const formatIndicatorLine = (s: any) => {
+                      if (!s) return "";
+                      const parts: string[] = [];
+                      const pushNum = (label: string, val?: number | null, digits = 2) => {
+                        if (val === undefined || val === null || isNaN(Number(val))) return;
+                        parts.push(`${label} ${Number(val).toFixed(digits)}`);
+                      };
+                      pushNum("ADX", s.adx, 2);
+                      pushNum("RSI", s.rsi, 2);
+                      pushNum("MACD", s.macd, 6);
+                      pushNum("ATR", s.atr, 2);
+                      pushNum("EMA9", s.emaFast, 2);
+                      pushNum("EMA21", s.emaMedium, 2);
+                      pushNum("EMA50", s.emaSlow, 2);
+                      pushNum("VOL", s.volume, 2);
+                      if (s.pivotPoints) pushNum("PP", s.pivotPoints.pp, 2);
+                      return parts.join(" ");
+                    };
+
+                    const rows = selectedPeriodTrades.map((t) => {
+                        const opened = new Date(t.opened_at).toLocaleString("da-DK", { timeZone: "UTC" }) + " UTC";
+                        const closed = new Date(t.closed_at).toLocaleString("da-DK", { timeZone: "UTC" }) + " UTC";
+                      const entry = String(t.entry_price);
+                      const exit = String(t.exit_price);
+                      const pnl = `${Number(t.pnl) >= 0 ? "" : "-"}$${Math.abs(Number(t.pnl)).toFixed(2)}`;
+                      const pnlPct = `${Number(t.pnl_percent).toFixed(2)}%`;
+                      const duration = `${t.duration_minutes}m`;
+                      const reason = t.close_reason || "";
+                      const ind = formatIndicatorLine(t.indicators_snapshot);
+                      return `${t.symbol}\t${t.side}\t${opened}\t${closed}\t${entry}\t${exit}\t${pnl}\t${pnlPct}\t${duration}\t${reason}\t${ind}`;
+                    }).join("\n");
+
+                    const text = header + rows;
+                    
+                    navigator.clipboard.writeText(text).then(() => {
+                      toast({
+                        title: "Kopieret!",
+                        description: `${selectedPeriodTrades.length} trades med indikatorer kopieret`,
+                      });
+                    });
+                  }}
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Kopier TSV
+                </Button>
+              </div>
             </div>
           </DialogHeader>
           <div className="space-y-4">
