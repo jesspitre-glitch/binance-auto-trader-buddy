@@ -405,23 +405,39 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                       <div className="flex justify-between border rounded p-2">
                         <span className="text-muted-foreground">Period:</span>
-                        <span className="font-mono">14</span>
+                        <span className="font-mono">{trade.indicators_snapshot.atr_period ?? 14}</span>
                       </div>
                       <div className="flex justify-between border rounded p-2">
-                        <span className="text-muted-foreground">Værdi:</span>
-                        <span className="font-mono font-semibold">{Number(trade.indicators_snapshot.atr).toFixed(2)}</span>
+                        <span className="text-muted-foreground">ATR%:</span>
+                        <span className="font-mono font-semibold text-primary">
+                          {trade.indicators_snapshot.atr_percent != null 
+                            ? `${Number(trade.indicators_snapshot.atr_percent).toFixed(4)}%`
+                            : trade.indicators_snapshot.price 
+                              ? `${((Number(trade.indicators_snapshot.atr) / Number(trade.indicators_snapshot.price)) * 100).toFixed(4)}%`
+                              : 'N/A'}
+                        </span>
                       </div>
                       <div className="flex justify-between border rounded p-2">
-                        <span className="text-muted-foreground">Stop Loss:</span>
-                        <span className="font-mono">2.80x ATR</span>
+                        <span className="text-muted-foreground">Raw ATR:</span>
+                        <span className="font-mono text-muted-foreground">{Number(trade.indicators_snapshot.atr).toFixed(8)}</span>
                       </div>
                       <div className="flex justify-between border rounded p-2">
-                        <span className="text-muted-foreground">Trailing:</span>
-                        <span className="font-mono">2.00x ATR</span>
+                        <span className="text-muted-foreground">Floor:</span>
+                        <span className="font-mono">
+                          {trade.indicators_snapshot.atr_audit?.atr_floor_used != null 
+                            ? `${Number(trade.indicators_snapshot.atr_audit.atr_floor_used).toFixed(2)}%`
+                            : trade.indicators_snapshot.min_atr_percent != null 
+                              ? `${Number(trade.indicators_snapshot.min_atr_percent).toFixed(2)}%`
+                              : 'N/A'}
+                        </span>
                       </div>
                       <div className="flex justify-between border rounded p-2">
-                        <span className="text-muted-foreground">Break-even:</span>
-                        <span className="font-mono">0.8x ATR</span>
+                        <span className="text-muted-foreground">SL Mult:</span>
+                        <span className="font-mono">{trade.indicators_snapshot.atr_stop_loss_multiplier ?? 2.0}x</span>
+                      </div>
+                      <div className="flex justify-between border rounded p-2">
+                        <span className="text-muted-foreground">TS Mult:</span>
+                        <span className="font-mono">{trade.indicators_snapshot.atr_trailing_stop_multiplier ?? 1.5}x</span>
                       </div>
                     </div>
                   </div>
