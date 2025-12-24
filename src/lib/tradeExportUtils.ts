@@ -156,13 +156,41 @@ export const formatTradeForExport = (t: any) => {
     ? (snap.soft_pivot_passed ?? snap.soft_pivot ?? snap.conditionDetails?.pivotPoints?.[side] ?? null)
     : snap.soft_pivot_passed;
 
-  // VWAP - Always export value even when not used as signal
+  // VWAP - Full audit fields for AI analysis
   const softVwap = isLegacy
     ? (snap.soft_vwap_passed ?? snap.conditionDetails?.vwap?.[side] ?? null)
     : snap.soft_vwap_passed;
   const vwapValue = snap.vwap ?? snap.conditionDetails?.vwap?.value ?? null;
-  const vwapEnabled = snap.conditionDetails?.vwap?.enabled ?? snap.vwap_enabled ?? null;
+  const vwapEnabled = snap.conditionDetails?.vwap?.enabled ?? snap.vwap_enabled ?? false;
   const vwapPeriod = snap.vwap_period ?? snap.conditionDetails?.vwap?.period ?? null;
+  const vwapTimeframe = snap.vwap_timeframe ?? snap.trend_timeframe ?? null;
+  const vwapCapturedAt = snap.vwap_captured_at ?? snap.captured_at ?? openedAt.toISOString();
+  
+  // VWAP filter calculations
+  const entryPrice = +t.entry_price;
+  let vwapFilterPassed: boolean | null = null;
+  let vwapRule: string | null = null;
+  let vwapDistancePct: number | null = null;
+  let vwapDistanceAbs: number | null = null;
+  
+  if (vwapEnabled && vwapValue != null) {
+    const vwapNum = +vwapValue;
+    vwapDistanceAbs = entryPrice - vwapNum;
+    vwapDistancePct = (vwapDistanceAbs / vwapNum) * 100;
+    
+    if (side === 'long') {
+      vwapFilterPassed = entryPrice > vwapNum;
+      vwapRule = 'LONG_above_VWAP';
+    } else {
+      vwapFilterPassed = entryPrice < vwapNum;
+      vwapRule = 'SHORT_below_VWAP';
+    }
+  } else if (vwapValue != null) {
+    // VWAP disabled but we still calculate distance for reference
+    const vwapNum = +vwapValue;
+    vwapDistanceAbs = entryPrice - vwapNum;
+    vwapDistancePct = (vwapDistanceAbs / vwapNum) * 100;
+  }
 
   // Volume multiplier tri-state
   const volumeCurrent = isLegacy 
@@ -320,6 +348,13 @@ export const formatTradeForExport = (t: any) => {
     VWAP_enabled: vwapEnabled,
     VWAP_value: vwapValue != null ? +Number(vwapValue).toFixed(8) : null,
     VWAP_period: vwapPeriod,
+    VWAP_filter_passed: vwapFilterPassed,
+    VWAP_rule: vwapRule,
+    VWAP_distance_pct: vwapDistancePct != null ? +Number(vwapDistancePct).toFixed(4) : null,
+    VWAP_distance_abs: vwapDistanceAbs != null ? +Number(vwapDistanceAbs).toFixed(8) : null,
+    VWAP_source: vwapValue != null ? 'entry' : null,
+    VWAP_timeframe: vwapTimeframe,
+    VWAP_captured_at: vwapCapturedAt,
     soft_conditions_total: softConditionsTotal,
 
     // Break-even (v2: break_even_at_price guaranteed if triggered)
