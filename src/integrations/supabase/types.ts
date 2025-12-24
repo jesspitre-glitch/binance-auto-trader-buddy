@@ -143,6 +143,8 @@ export type Database = {
           volume_avg_period: number | null
           volume_enabled: boolean | null
           volume_multiplier: number | null
+          vwap_enabled: boolean | null
+          vwap_period: number | null
         }
         Insert: {
           adaptive_adx_enabled?: boolean | null
@@ -236,6 +238,8 @@ export type Database = {
           volume_avg_period?: number | null
           volume_enabled?: boolean | null
           volume_multiplier?: number | null
+          vwap_enabled?: boolean | null
+          vwap_period?: number | null
         }
         Update: {
           adaptive_adx_enabled?: boolean | null
@@ -329,6 +333,8 @@ export type Database = {
           volume_avg_period?: number | null
           volume_enabled?: boolean | null
           volume_multiplier?: number | null
+          vwap_enabled?: boolean | null
+          vwap_period?: number | null
         }
         Relationships: []
       }
