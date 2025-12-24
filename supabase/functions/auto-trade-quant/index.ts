@@ -76,6 +76,9 @@ interface IndicatorConfig {
   higher_trend_enabled: boolean;
   higher_trend_timeframe: string;
   klines_limit: number;
+  // VWAP
+  vwap_enabled?: boolean;
+  vwap_period?: number;
 }
 
 // Calculate strategy identifier from ALL config parameters using SHA-256 hash
@@ -348,6 +351,35 @@ function calculateBollingerBands(prices: number[], period: number, stdDev: numbe
     middle: sma,
     lower: sma - (stdDev * std),
   };
+}
+
+// VWAP = Σ(Typical Price × Volume) / Σ(Volume)
+// Typical Price = (High + Low + Close) / 3
+function calculateVWAP(highs: number[], lows: number[], closes: number[], volumes: number[], period: number): number | null {
+  if (highs.length < period || volumes.length < period) {
+    return null;
+  }
+  
+  let sumTPV = 0; // Sum of (Typical Price × Volume)
+  let sumVolume = 0;
+  
+  const startIdx = Math.max(0, highs.length - period);
+  
+  for (let i = startIdx; i < highs.length; i++) {
+    const typicalPrice = (highs[i] + lows[i] + closes[i]) / 3;
+    const volume = volumes[i];
+    
+    if (volume > 0) {
+      sumTPV += typicalPrice * volume;
+      sumVolume += volume;
+    }
+  }
+  
+  if (sumVolume === 0) {
+    return null;
+  }
+  
+  return sumTPV / sumVolume;
 }
 
 function calculateADX(high: number[], low: number[], close: number[], period: number): { adx: number, plusDI: number, minusDI: number, dx: number } {
@@ -650,6 +682,17 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // atr_enabled kontrollerer kun om ATR bruges som HARD FILTER, ikke om den beregnes
   const atr = calculateATR(highs, lows, closes, config.atr_period);
   const bb = config.bb_enabled ? calculateBollingerBands(closes, config.bb_period, config.bb_std_dev) : null;
+  
+  // VWAP beregning (hvis enabled)
+  const vwapPeriod = config.vwap_period ?? 50;
+  const vwap = config.vwap_enabled ? calculateVWAP(highs, lows, closes, volumes, vwapPeriod) : null;
+  
+  if (config.vwap_enabled) {
+    console.log(`📊 VWAP: ${vwap !== null ? vwap.toFixed(6) : 'null'} (periode: ${vwapPeriod}), Price: ${currentPrice.toFixed(6)}`);
+    if (vwap !== null) {
+      console.log(`   Price ${currentPrice > vwap ? '>' : '<'} VWAP → ${currentPrice > vwap ? 'BULLISH bias (LONG favored)' : 'BEARISH bias (SHORT favored)'}`);
+    }
+  }
   
   // ADX beregnes på TREND timeframe, ikke scan interval
   const trendHighs = trendKlines.map(k => k.high);
@@ -1156,7 +1199,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     macd: { enabled: config.macd_enabled, long: null, short: null },
     bb: { enabled: config.bb_enabled, long: null, short: null },
     volume: { enabled: config.volume_enabled, long: null, short: null },
-    pivotPoints: { enabled: config.pivot_points_enabled, long: null, short: null }
+    pivotPoints: { enabled: config.pivot_points_enabled, long: null, short: null },
+    vwap: { enabled: config.vwap_enabled ?? false, long: null, short: null, value: vwap }
   };
   
   // EMA Trend (hvis enabled)
@@ -1301,6 +1345,23 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     const shortPivotOk = !nearSupport;
     shortConditions.push(shortPivotOk);
     conditionDetails.pivotPoints.short = shortPivotOk;
+  }
+  
+  // VWAP Soft Condition (hvis enabled)
+  // LONG: Price > VWAP (bullish bias)
+  // SHORT: Price < VWAP (bearish bias)
+  if (config.vwap_enabled && vwap !== null) {
+    const vwapLong = currentPrice > vwap;
+    const vwapShort = currentPrice < vwap;
+    
+    longConditions.push(vwapLong);
+    shortConditions.push(vwapShort);
+    
+    conditionDetails.vwap.long = vwapLong;
+    conditionDetails.vwap.short = vwapShort;
+    
+    console.log(`   📊 VWAP (1 point): Long: ${vwapLong ? '✅' : '❌'} Short: ${vwapShort ? '✅' : '❌'}`);
+    console.log(`      Price=${currentPrice.toFixed(6)}, VWAP=${vwap.toFixed(6)}`);
   }
   
   const requiredConditions = config.signal_conditions_required;
@@ -1578,6 +1639,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     avgVolume,
     volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
     pivotPoints,
+    vwap,
+    vwap_period: config.vwap_period ?? 50,
     conditionsMet,
     // Tilføj condition details for historisk analyse
     conditionDetails: {

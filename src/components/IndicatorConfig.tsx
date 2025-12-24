@@ -70,6 +70,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     bb_period: config?.bb_period || 20,
     bb_std_dev: config?.bb_std_dev || 2,
     
+    // VWAP
+    vwap_enabled: config?.vwap_enabled !== undefined ? config?.vwap_enabled : false,
+    vwap_period: config?.vwap_period ?? 50,
+    
     // ATR
     atr_enabled: config?.atr_enabled !== undefined ? config?.atr_enabled : true,
     atr_period: config?.atr_period || 14,
@@ -179,6 +183,9 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       bb_enabled: config.bb_enabled !== undefined ? config.bb_enabled : true,
       bb_period: config.bb_period ?? 20,
       bb_std_dev: config.bb_std_dev ?? 2,
+      // VWAP
+      vwap_enabled: config.vwap_enabled !== undefined ? config.vwap_enabled : false,
+      vwap_period: config.vwap_period ?? 50,
       // ATR
       atr_enabled: config.atr_enabled !== undefined ? config.atr_enabled : true,
       atr_period: config.atr_period ?? 14,
@@ -276,6 +283,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       bb_enabled: config.bb_enabled !== undefined ? config.bb_enabled : true,
       bb_period: config.bb_period ?? 20,
       bb_std_dev: config.bb_std_dev ?? 2,
+      vwap_enabled: config.vwap_enabled !== undefined ? config.vwap_enabled : false,
+      vwap_period: config.vwap_period ?? 50,
       atr_enabled: config.atr_enabled !== undefined ? config.atr_enabled : true,
       atr_period: config.atr_period ?? 14,
       min_atr: config.min_atr ?? 0,
@@ -894,6 +903,44 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       <Card>
         <CardHeader>
+          <CardTitle>VWAP (Volume Weighted Average Price)</CardTitle>
+          <CardDescription>
+            <strong>Soft Condition (1 point):</strong> LONG hvis Price &gt; VWAP, SHORT hvis Price &lt; VWAP<br/>
+            VWAP = Σ(Typisk Pris × Volume) / Σ(Volume)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="flex items-center justify-between sm:col-span-2">
+            <Label htmlFor="vwap_enabled">Aktiver VWAP</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.vwap_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="vwap_enabled"
+                checked={formData.vwap_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, vwap_enabled: checked })}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="vwap_period">VWAP Periode (antal candles)</Label>
+            <Input
+              id="vwap_period"
+              type="number"
+              min="10"
+              max="500"
+              value={formData.vwap_period}
+              onChange={(e) => setFormData({ ...formData, vwap_period: parseInt(e.target.value) })}
+              disabled={!formData.vwap_enabled}
+            />
+            <p className="text-xs text-muted-foreground">
+              Antal bars til VWAP beregning (standard 50, 288 ≈ 24h på 5m)
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>ATR (Average True Range) - ⚠️ HARD FILTER</CardTitle>
           <CardDescription>
             <strong className="text-warning">HARD FILTER:</strong> Blokerer trades hvis ATR = 0 (ingen volatilitet)<br/>
@@ -1362,7 +1409,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               • Bollinger Bands ({formData.bb_enabled ? '✅' : '❌'})<br/>
               • Volume Surge ({formData.volume_enabled ? '✅' : '❌'})<br/>
               • Pivot Points ({formData.pivot_points_enabled ? '✅' : '❌'})<br/>
-              <strong>Aktive: {[formData.ema_enabled, formData.stochrsi_enabled, formData.histogram_momentum_enabled && formData.macd_enabled, formData.bb_enabled, formData.volume_enabled, formData.pivot_points_enabled].filter(Boolean).length}/6</strong>
+              • VWAP ({formData.vwap_enabled ? '✅' : '❌'})<br/>
+              <strong>Aktive: {[formData.ema_enabled, formData.stochrsi_enabled, formData.histogram_momentum_enabled && formData.macd_enabled, formData.bb_enabled, formData.volume_enabled, formData.pivot_points_enabled, formData.vwap_enabled].filter(Boolean).length}/7</strong>
             </p>
           </div>
         </CardContent>
