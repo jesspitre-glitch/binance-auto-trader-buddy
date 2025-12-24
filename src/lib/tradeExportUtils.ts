@@ -156,6 +156,12 @@ export const formatTradeForExport = (t: any) => {
     ? (snap.soft_pivot_passed ?? snap.soft_pivot ?? snap.conditionDetails?.pivotPoints?.[side] ?? null)
     : snap.soft_pivot_passed;
 
+  // VWAP
+  const softVwap = isLegacy
+    ? (snap.soft_vwap_passed ?? snap.conditionDetails?.vwap?.[side] ?? null)
+    : snap.soft_vwap_passed;
+  const vwapValue = snap.conditionDetails?.vwap?.value ?? snap.vwap ?? null;
+
   // Volume multiplier tri-state
   const volumeCurrent = isLegacy 
     ? ((snap.volume ?? snap.volume_current) ?? null)
@@ -308,6 +314,9 @@ export const formatTradeForExport = (t: any) => {
     soft_bb_passed: softBb,
     soft_volume_passed: softVolume,
     soft_pivot_passed: softPivot,
+    soft_vwap_passed: softVwap,
+    VWAP_value: vwapValue != null ? +Number(vwapValue).toFixed(8) : null,
+    VWAP_period: snap.vwap_period ?? snap.conditionDetails?.vwap?.period ?? null,
     soft_conditions_total: softConditionsTotal,
 
     // Break-even (v2: break_even_at_price guaranteed if triggered)
