@@ -353,6 +353,71 @@ function calculateBollingerBands(prices: number[], period: number, stdDev: numbe
   };
 }
 
+// OBV (On Balance Volume) - Measures buying/selling pressure
+// OBV = previous OBV + volume (if close > previous close)
+// OBV = previous OBV - volume (if close < previous close)
+// OBV = previous OBV (if close = previous close)
+interface OBVResult {
+  current: number;
+  previous5: number;
+  trend: 'up' | 'down' | 'flat';
+  confirmation: boolean; // true if OBV direction matches signal direction
+}
+
+function calculateOBV(closes: number[], volumes: number[], side: 'LONG' | 'SHORT'): OBVResult | null {
+  if (closes.length < 7 || volumes.length < 7) {
+    return null;
+  }
+  
+  // Calculate OBV for all periods
+  const obvValues: number[] = [0]; // Start with 0
+  
+  for (let i = 1; i < closes.length; i++) {
+    const prevOBV = obvValues[i - 1];
+    const closeChange = closes[i] - closes[i - 1];
+    
+    if (closeChange > 0) {
+      obvValues.push(prevOBV + volumes[i]);
+    } else if (closeChange < 0) {
+      obvValues.push(prevOBV - volumes[i]);
+    } else {
+      obvValues.push(prevOBV);
+    }
+  }
+  
+  const current = obvValues[obvValues.length - 1];
+  const previous5 = obvValues[obvValues.length - 6]; // 5 periods ago
+  
+  // Determine trend
+  let trend: 'up' | 'down' | 'flat';
+  const obvChange = current - previous5;
+  const threshold = Math.abs(previous5) * 0.01; // 1% tolerance for flat
+  
+  if (obvChange > threshold) {
+    trend = 'up';
+  } else if (obvChange < -threshold) {
+    trend = 'down';
+  } else {
+    trend = 'flat';
+  }
+  
+  // Confirmation: LONG is true if OBV current > OBV previous 5
+  // SHORT is true if OBV current < OBV previous 5
+  let confirmation: boolean;
+  if (side === 'LONG') {
+    confirmation = current > previous5;
+  } else {
+    confirmation = current < previous5;
+  }
+  
+  return {
+    current,
+    previous5,
+    trend,
+    confirmation
+  };
+}
+
 // VWAP = Σ(Typical Price × Volume) / Σ(Volume)
 // Typical Price = (High + Low + Close) / 3
 function calculateVWAP(highs: number[], lows: number[], closes: number[], volumes: number[], period: number): number | null {
@@ -1648,7 +1713,16 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       longConditionsMet,
       shortConditionsMet,
       requiredConditions
-    }
+    },
+    // OBV (On Balance Volume) - beregnes altid for logging, ikke som filter
+    obv: (() => {
+      const finalSignalSide = longSignal ? 'LONG' : shortSignal ? 'SHORT' : 'LONG'; // Default til LONG for NONE signaler
+      const obvResult = calculateOBV(closes, volumes, finalSignalSide);
+      if (obvResult) {
+        console.log(`📊 OBV: current=${obvResult.current.toFixed(0)}, prev5=${obvResult.previous5.toFixed(0)}, trend=${obvResult.trend}, confirmation=${obvResult.confirmation}`);
+      }
+      return obvResult;
+    })()
   };
   
   console.log(`Indicators being saved: stochRSI_k=${indicators.stochRSI_k}, rsi=${indicators.rsi}, macd=${indicators.macd}, conditionsMet=${conditionsMet}`);

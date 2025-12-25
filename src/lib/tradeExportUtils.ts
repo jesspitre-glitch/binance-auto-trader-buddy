@@ -192,6 +192,25 @@ export const formatTradeForExport = (t: any) => {
     vwapDistancePct = (vwapDistanceAbs / vwapNum) * 100;
   }
 
+  // OBV (On Balance Volume) - Always export for analysis
+  const obvData = snap.obv ?? null;
+  const obvCurrent = obvData?.current ?? null;
+  const obvPrevious5 = obvData?.previous5 ?? null;
+  const obvTrend = obvData?.trend ?? null;
+  
+  // OBV confirmation calculation: LONG = OBV current > OBV prev5, SHORT = OBV current < OBV prev5
+  let obvConfirmation: boolean | null = null;
+  if (obvCurrent != null && obvPrevious5 != null) {
+    if (side === 'long') {
+      obvConfirmation = obvCurrent > obvPrevious5;
+    } else {
+      obvConfirmation = obvCurrent < obvPrevious5;
+    }
+  } else if (obvData?.confirmation !== undefined) {
+    // Use pre-computed value if available
+    obvConfirmation = obvData.confirmation;
+  }
+
   // Volume multiplier tri-state
   const volumeCurrent = isLegacy 
     ? ((snap.volume ?? snap.volume_current) ?? null)
@@ -356,6 +375,12 @@ export const formatTradeForExport = (t: any) => {
     VWAP_timeframe: vwapTimeframe,
     VWAP_captured_at: vwapCapturedAt,
     soft_conditions_total: softConditionsTotal,
+
+    // OBV (On Balance Volume) - logged for analysis, not used as filter
+    OBV_current: obvCurrent != null ? +Number(obvCurrent).toFixed(0) : null,
+    OBV_previous_5: obvPrevious5 != null ? +Number(obvPrevious5).toFixed(0) : null,
+    OBV_trend: obvTrend,
+    OBV_confirmation: obvConfirmation,
 
     // Break-even (v2: break_even_at_price guaranteed if triggered)
     break_even_triggered: breakEvenTriggered,
