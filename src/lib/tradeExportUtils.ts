@@ -284,19 +284,8 @@ export const formatTradeForExport = (t: any) => {
   const signalId = snap.signal_id || null;
 
   // 🔴 FILTER MODE SETTINGS - Eksporter om filtre er hard eller soft
-  const filterModeSettings = snap.filter_mode_settings || {
-    ema_hard_filter: snap.ema_hard_filter ?? true,
-    rsi_hard_filter: snap.rsi_hard_filter ?? true,
-    stochrsi_hard_filter: snap.stochrsi_hard_filter ?? false,
-    macd_hard_filter: snap.macd_hard_filter ?? false,
-    bb_hard_filter: snap.bb_hard_filter ?? false,
-    vwap_hard_filter: snap.vwap_hard_filter ?? false,
-    atr_hard_filter: snap.atr_hard_filter ?? true,
-    adx_hard_filter: snap.adx_hard_filter ?? true,
-    volume_hard_filter: snap.volume_hard_filter ?? true,
-    pivot_points_hard_filter: snap.pivot_points_hard_filter ?? false,
-    higher_trend_hard_filter: snap.higher_trend_hard_filter ?? true,
-  };
+  // VIGTIGT: Bruger direkte fra snapshot, ingen fallbacks der kan overskrive faktiske værdier
+  const filterModeSettings = snap.filter_mode_settings || {};
 
   return {
     // 🔴 SCHEMA VERSION & VALIDATION

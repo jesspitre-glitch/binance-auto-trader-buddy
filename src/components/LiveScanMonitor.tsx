@@ -455,20 +455,8 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
 
     console.log(`Updating ${result.symbol}: strength=${strength.toFixed(1)}%, trend=${trend}, conditions=${actualConditionsMet}/${conditionsRequired} (long:${longConditionsMet}, short:${shortConditionsMet}), hardFilters=${JSON.stringify(hardFilters)}`);
 
-    // Hent filter mode settings fra indicators
-    const filterModeSettings: Record<string, boolean> = indicators.filter_mode_settings || {
-      ema_hard_filter: config?.ema_hard_filter ?? true,
-      rsi_hard_filter: config?.rsi_hard_filter ?? true,
-      stochrsi_hard_filter: config?.stochrsi_hard_filter ?? false,
-      macd_hard_filter: config?.macd_hard_filter ?? false,
-      bb_hard_filter: config?.bb_hard_filter ?? false,
-      vwap_hard_filter: config?.vwap_hard_filter ?? false,
-      atr_hard_filter: config?.atr_hard_filter ?? true,
-      adx_hard_filter: config?.adx_hard_filter ?? true,
-      volume_hard_filter: config?.volume_hard_filter ?? true,
-      pivot_points_hard_filter: config?.pivot_points_hard_filter ?? false,
-      higher_trend_hard_filter: config?.higher_trend_hard_filter ?? true,
-    };
+    // Hent filter mode settings fra indicators - brug direkte fra snapshot, INGEN fallbacks
+    const filterModeSettings: Record<string, boolean | undefined> = indicators.filter_mode_settings || {};
 
     setCoins((prev) => {
       const newMap = new Map(prev);

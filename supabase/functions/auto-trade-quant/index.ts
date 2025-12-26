@@ -804,6 +804,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       macdDirection: { passed: true, long: null as boolean | null, short: null as boolean | null, reason: '', value: '' },
       macdColorChange: { passed: true, long: null as boolean | null, short: null as boolean | null, reason: '' },
       rsiMomentum: { passed: true, long: null as boolean | null, short: null as boolean | null, reason: '' },
+      // 🔴 StochRSI hard filter - kan konfigureres som hard/soft i UI
+      stochrsi: { passed: true, long: null as boolean | null, short: null as boolean | null, value: '', reason: '' },
     },
     soft: {
       emaAlignment: { long: false, short: false },
@@ -1305,17 +1307,38 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // RSI er nu en hård regel som filtrerer før evaluering
   // Ingen flexible conditions her længere
   
-  // StochRSI (hvis enabled)
+  // StochRSI (hvis enabled) - kan være HARD eller SOFT filter baseret på config
   if (config.stochrsi_enabled && stochRSI) {
     // LONG: StochRSI under oversold niveau
     const stochRSILong = stochRSI.k < config.stochrsi_oversold;
-    longConditions.push(stochRSILong);
-    conditionDetails.stochRSI.long = stochRSILong;
-    
     // SHORT: StochRSI over overbought niveau
     const stochRSIShort = stochRSI.k > config.stochrsi_overbought;
+    
+    // Gem i filterStatus.hard for hard filter evaluering
+    filterStatus.hard.stochrsi.long = stochRSILong;
+    filterStatus.hard.stochrsi.short = stochRSIShort;
+    filterStatus.hard.stochrsi.value = `K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)}`;
+    
+    // Hvis stochrsi_hard_filter=true, evaluér som hard filter
+    if (config.stochrsi_hard_filter === true) {
+      // For hard filter: mindst én retning skal passe
+      if (!stochRSILong && !stochRSIShort) {
+        filterStatus.hard.stochrsi.passed = false;
+        filterStatus.hard.stochrsi.reason = `K=${stochRSI.k.toFixed(2)} ikke i zone (oversold<${config.stochrsi_oversold}, overbought>${config.stochrsi_overbought})`;
+      }
+      console.log(`   📊 StochRSI (HARD): K=${stochRSI.k.toFixed(2)} - Long: ${stochRSILong ? '✅' : '❌'}, Short: ${stochRSIShort ? '✅' : '❌'}`);
+    } else {
+      console.log(`   📊 StochRSI (SOFT): K=${stochRSI.k.toFixed(2)} - Long: ${stochRSILong ? '✅' : '❌'}, Short: ${stochRSIShort ? '✅' : '❌'}`);
+    }
+    
+    // Tilføj altid til soft conditions (for scoring)
+    longConditions.push(stochRSILong);
     shortConditions.push(stochRSIShort);
+    conditionDetails.stochRSI.long = stochRSILong;
     conditionDetails.stochRSI.short = stochRSIShort;
+  } else if (config.stochrsi_enabled && !stochRSI) {
+    filterStatus.hard.stochrsi.passed = false;
+    filterStatus.hard.stochrsi.reason = 'StochRSI enabled men data mangler';
   }
   
   // 🟢 MACD SOFT CONDITIONS - SEPARATE POINTS (følger UI)
@@ -1511,11 +1534,15 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // (hvis volume er disabled eller data mangler, blokerer den IKKE trades)
   const volumeHardPassed = filterStatus.hard.volume.passed === null || filterStatus.hard.volume.passed === true;
   
+  // 🔴 StochRSI hard filter - kun hvis stochrsi_hard_filter=true
+  const stochrsiHardPassed = !config.stochrsi_enabled || config.stochrsi_hard_filter !== true || filterStatus.hard.stochrsi.passed;
+  
   const hardFiltersPass = 
     (!config.ema_enabled || filterStatus.hard.emaSpread.passed) &&
     (!config.atr_enabled || filterStatus.hard.atr.passed) &&
     (!config.adx_enabled || filterStatus.hard.adx.passed) &&
     volumeHardPassed &&
+    stochrsiHardPassed &&
     (!config.rsi_enabled || filterStatus.hard.rsiMomentum.passed);
   
   if (!hardFiltersPass) {
@@ -1735,19 +1762,19 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       shortConditionsMet,
       requiredConditions
     },
-    // 🔴 FILTER MODE SETTINGS - Gemmer om hvert filter er hard eller soft
+    // 🔴 FILTER MODE SETTINGS - Gemmer om hvert filter er hard eller soft (DIREKT fra config, ingen fallbacks)
     filter_mode_settings: {
-      ema_hard_filter: config.ema_hard_filter ?? true,
-      rsi_hard_filter: config.rsi_hard_filter ?? true,
-      stochrsi_hard_filter: config.stochrsi_hard_filter ?? false,
-      macd_hard_filter: config.macd_hard_filter ?? false,
-      bb_hard_filter: config.bb_hard_filter ?? false,
-      vwap_hard_filter: config.vwap_hard_filter ?? false,
-      atr_hard_filter: config.atr_hard_filter ?? true,
-      adx_hard_filter: config.adx_hard_filter ?? true,
-      volume_hard_filter: config.volume_hard_filter ?? true,
-      pivot_points_hard_filter: config.pivot_points_hard_filter ?? false,
-      higher_trend_hard_filter: config.higher_trend_hard_filter ?? true,
+      ema_hard_filter: config.ema_hard_filter,
+      rsi_hard_filter: config.rsi_hard_filter,
+      stochrsi_hard_filter: config.stochrsi_hard_filter,
+      macd_hard_filter: config.macd_hard_filter,
+      bb_hard_filter: config.bb_hard_filter,
+      vwap_hard_filter: config.vwap_hard_filter,
+      atr_hard_filter: config.atr_hard_filter,
+      adx_hard_filter: config.adx_hard_filter,
+      volume_hard_filter: config.volume_hard_filter,
+      pivot_points_hard_filter: config.pivot_points_hard_filter,
+      higher_trend_hard_filter: config.higher_trend_hard_filter,
     },
     // OBV (On Balance Volume) - beregnes altid for logging, ikke som filter
     obv: (() => {
@@ -2400,6 +2427,22 @@ serve(async (req) => {
             } else if (signal === 'SHORT' && mediumTrend !== 'BEARISH') {
               gateBlocked = true;
               blockReason = `MEDIUM_TREND_FAILED_SHORT (${config.trend_timeframe} trend=${mediumTrend}, required=BEARISH)`;
+            }
+          }
+          
+          // 10. StochRSI Hard Filter (if stochrsi_enabled AND stochrsi_hard_filter=true)
+          if (!gateBlocked && config.stochrsi_enabled && config.stochrsi_hard_filter === true) {
+            const fs = analysis.filterStatus;
+            const stochLong = fs?.hard?.stochrsi?.long;
+            const stochShort = fs?.hard?.stochrsi?.short;
+            const stochK = analysis.indicators?.stochRSI_k;
+            
+            if (signal === 'LONG' && stochLong !== true) {
+              gateBlocked = true;
+              blockReason = `REJECT: STOCHRSI_ZONE_FAILED_LONG → K=${stochK?.toFixed(2)} >= ${config.stochrsi_oversold} (ikke oversolgt)`;
+            } else if (signal === 'SHORT' && stochShort !== true) {
+              gateBlocked = true;
+              blockReason = `REJECT: STOCHRSI_ZONE_FAILED_SHORT → K=${stochK?.toFixed(2)} <= ${config.stochrsi_overbought} (ikke overkøbt)`;
             }
           }
           
