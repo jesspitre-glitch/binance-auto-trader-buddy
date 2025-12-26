@@ -445,6 +445,66 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     }
   };
 
+  // Soft rules list should ONLY include rules that are NOT configured as HARD filters.
+  const softRuleCandidates = [
+    {
+      key: "ema_trend",
+      label: "EMA Trend",
+      enabled: Boolean(formData.ema_enabled),
+      isHard: Boolean(formData.ema_trend_hard_filter),
+    },
+    {
+      key: "stochrsi",
+      label: "StochRSI Zone",
+      enabled: Boolean(formData.stochrsi_enabled),
+      isHard: Boolean(formData.stochrsi_hard_filter),
+    },
+    {
+      key: "macd_hist_momentum",
+      label: "MACD Histogram Momentum",
+      enabled: Boolean(formData.histogram_momentum_enabled && formData.macd_enabled),
+      isHard: false,
+    },
+    {
+      key: "bb",
+      label: "Bollinger Bands",
+      enabled: Boolean(formData.bb_enabled),
+      isHard: Boolean(formData.bb_hard_filter),
+    },
+    {
+      key: "volume",
+      label: "Volume Surge",
+      enabled: Boolean(formData.volume_enabled),
+      isHard: Boolean(formData.volume_hard_filter),
+    },
+    {
+      key: "pivot_points",
+      label: "Pivot Points",
+      enabled: Boolean(formData.pivot_points_enabled),
+      isHard: Boolean(formData.pivot_points_hard_filter),
+    },
+    {
+      key: "vwap",
+      label: "VWAP",
+      enabled: Boolean(formData.vwap_enabled),
+      isHard: Boolean(formData.vwap_hard_filter),
+    },
+  ] as const;
+
+  const visibleSoftRules = softRuleCandidates.filter((r) => !r.isHard);
+  const softRulesMax = visibleSoftRules.length;
+  const activeSoftRulesCount = visibleSoftRules.filter((r) => r.enabled).length;
+
+  // Clamp required soft conditions so it never exceeds number of available SOFT rules.
+  useEffect(() => {
+    setFormData((prev) => {
+      const current = Number(prev.signal_conditions_required ?? 0);
+      const clamped = Math.max(0, Math.min(current, softRulesMax));
+      if (clamped === current) return prev;
+      return { ...prev, signal_conditions_required: clamped };
+    });
+  }, [softRulesMax]);
+
   return (
     <div className="space-y-6">
       <Card>
@@ -1522,22 +1582,33 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             </div>
             <Slider
               id="signal_conditions_required"
-              min={1}
-              max={6}
+              min={0}
+              max={softRulesMax}
               step={1}
-              value={[formData.signal_conditions_required]}
+              disabled={softRulesMax === 0}
+              value={[Math.min(formData.signal_conditions_required, softRulesMax)]}
               onValueChange={(value) => setFormData({ ...formData, signal_conditions_required: value[0] })}
             />
             <p className="text-xs text-muted-foreground">
-              Kræver minimum X af følgende betingelser (1 point hver):<br/>
-              • EMA Trend ({formData.ema_enabled ? '✅' : '❌'})<br/>
-              • StochRSI Zone ({formData.stochrsi_enabled ? '✅' : '❌'})<br/>
-              • MACD Histogram Momentum ({formData.histogram_momentum_enabled && formData.macd_enabled ? '✅' : '❌'})<br/>
-              • Bollinger Bands ({formData.bb_enabled ? '✅' : '❌'})<br/>
-              • Volume Surge ({formData.volume_enabled ? '✅' : '❌'})<br/>
-              • Pivot Points ({formData.pivot_points_enabled ? '✅' : '❌'})<br/>
-              • VWAP ({formData.vwap_enabled ? '✅' : '❌'})<br/>
-              <strong>Aktive: {[formData.ema_enabled, formData.stochrsi_enabled, formData.histogram_momentum_enabled && formData.macd_enabled, formData.bb_enabled, formData.volume_enabled, formData.pivot_points_enabled, formData.vwap_enabled].filter(Boolean).length}/7</strong>
+              Kræver minimum X af følgende betingelser (1 point hver) <span className="opacity-80">(kun SOFT)</span>:
+              <br />
+              {visibleSoftRules.map((rule) => (
+                <span key={rule.key}>
+                  • {rule.label} ({rule.enabled ? "✅" : "❌"})
+                  <br />
+                </span>
+              ))}
+              <strong>
+                Aktive: {activeSoftRulesCount}/{softRulesMax}
+              </strong>
+              {softRulesMax === 0 && (
+                <>
+                  <br />
+                  <span>
+                    Alle relevante betingelser er sat som HARD filters — soft-kravet sættes derfor til 0.
+                  </span>
+                </>
+              )}
             </p>
           </div>
         </CardContent>
