@@ -385,9 +385,9 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           />
         )}
         
-        {/* Initial Stop Loss line - rød, oprindelig SL */}
+        {/* Initial Stop Loss line - rød, oprindelig SL (brug original_stop_loss fra snapshot, IKKE den opdaterede stop_loss) */}
         <ReferenceLine 
-          y={trade.stop_loss || trade.indicators_snapshot?.stop_loss} 
+          y={trade.indicators_snapshot?.original_stop_loss || trade.stop_loss} 
           stroke="#dc2626" 
           strokeWidth={2}
           strokeDasharray="6 3"
