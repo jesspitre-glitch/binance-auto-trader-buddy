@@ -2815,6 +2815,21 @@ serve(async (req) => {
             // Core indicators
             ...analysis.indicators,
             
+            // 🔴 FILTER MODE SETTINGS - EXPLICIT gemmes for eksport (fra config, IKKE spread overskrevet)
+            filter_mode_settings: {
+              ema_hard_filter: config.ema_hard_filter,
+              rsi_hard_filter: config.rsi_hard_filter,
+              stochrsi_hard_filter: config.stochrsi_hard_filter,
+              macd_hard_filter: config.macd_hard_filter,
+              bb_hard_filter: config.bb_hard_filter,
+              vwap_hard_filter: config.vwap_hard_filter,
+              atr_hard_filter: config.atr_hard_filter,
+              adx_hard_filter: config.adx_hard_filter,
+              volume_hard_filter: config.volume_hard_filter,
+              pivot_points_hard_filter: config.pivot_points_hard_filter,
+              higher_trend_hard_filter: config.higher_trend_hard_filter,
+            },
+            
             // Signal strength
             signalStrength: selectedSignal.strength,
             
