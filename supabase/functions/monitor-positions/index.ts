@@ -931,6 +931,18 @@ serve(async (req) => {
               ? trailingStop
               : null;
 
+        // 🔴 COMPREHENSIVE EXIT AUDIT - expected vs effective values
+        const snapshotAtrForAudit = position.indicators_snapshot?.atr ?? 0;
+        const snapshotExpectedSL = position.indicators_snapshot?.expected_stop_loss ?? null;
+        
+        // Calculate differences for audit
+        const effectiveStopAtExit = resultingStopLevel;
+        const expectedTrailingAtExit = position.side === 'LONG' && newPeakPrice && snapshotAtrForAudit
+          ? newPeakPrice - (snapshotAtrForAudit * (position.indicators_snapshot?.atr_trailing_stop_multiplier ?? 1.8))
+          : position.side === 'SHORT' && newPeakPrice && snapshotAtrForAudit
+            ? newPeakPrice + (snapshotAtrForAudit * (position.indicators_snapshot?.atr_trailing_stop_multiplier ?? 1.8))
+            : null;
+        
         const exitAudit = {
           original_stop_loss: hardStopLoss,
           break_even_active: breakEvenActivatedState,
@@ -943,12 +955,70 @@ serve(async (req) => {
                 ? (isLegacyPosition ? 'LEGACY_TRAILING_STOP_HIT' : 'TRAILING_STOP_HIT')
                 : null,
           resulting_stop_level: resultingStopLevel,
+          
+          // 🔴 EXPECTED vs EFFECTIVE audit
+          expected_stop_loss_price: snapshotExpectedSL,
+          expected_trailing_stop_price: expectedTrailingAtExit,
+          effective_stop_loss_at_exit: slHit ? hardStopLoss : null,
+          effective_trailing_at_exit: tsHit ? trailingStop : null,
+          effective_exit_level: effectiveStopAtExit,
+          exit_price: currentPrice,
+          
+          // 🔴 DIFFERENCE audit (expected vs effective)
+          stop_loss_diff_abs: snapshotExpectedSL && hardStopLoss 
+            ? Math.abs(hardStopLoss - snapshotExpectedSL) 
+            : null,
+          stop_loss_diff_pct: snapshotExpectedSL && hardStopLoss && snapshotExpectedSL !== 0
+            ? ((hardStopLoss - snapshotExpectedSL) / snapshotExpectedSL) * 100
+            : null,
+          trailing_diff_abs: expectedTrailingAtExit && trailingStop
+            ? Math.abs(trailingStop - expectedTrailingAtExit)
+            : null,
+          trailing_diff_pct: expectedTrailingAtExit && trailingStop && expectedTrailingAtExit !== 0
+            ? ((trailingStop - expectedTrailingAtExit) / expectedTrailingAtExit) * 100
+            : null,
+          
           // ekstra debug felter (hjælper ved audit)
           profit_threshold_passed: breakEvenProfitThresholdPassed,
           break_even_trigger_mode: breakEvenTriggerMode,
           ts_activated_reason: trailingActivationReason,
           sl_be_ts_priority: { slHit, beHit, tsHit, selected: selectedExit },
         };
+        
+        // 🔴 CLAMP INVARIANT VALIDATION - Log ERROR if clamp violates invariants
+        // @ts-ignore
+        const clampInfo = position._trailingClampInfo;
+        if (clampInfo?.was_clamped) {
+          const clampValid = position.side === 'LONG'
+            ? clampInfo.effective_trailing_level >= (breakEvenStop ?? position.entry_price)
+            : clampInfo.effective_trailing_level <= (breakEvenStop ?? position.entry_price);
+          
+          if (!clampValid) {
+            console.error(`\n🚨 ═══════════════════════════════════════════════════════`);
+            console.error(`🚨 CLAMP INVARIANT VIOLATION - ${position.symbol} ${position.side}`);
+            console.error(`🚨 ═══════════════════════════════════════════════════════`);
+            console.error(`   ❌ KRITISK: Clamp violation detected!`);
+            console.error(`   Side: ${position.side}`);
+            console.error(`   Expected trailing (before clamp): ${clampInfo.expected_trailing_level}`);
+            console.error(`   Effective trailing (after clamp): ${clampInfo.effective_trailing_level}`);
+            console.error(`   Break-even level: ${breakEvenStop}`);
+            console.error(`   Entry price: ${position.entry_price}`);
+            console.error(`   Clamp reason: ${clampInfo.clamp_reason}`);
+            console.error(`   ❌ For LONG: trailing MUST be >= break_even`);
+            console.error(`   ❌ For SHORT: trailing MUST be <= break_even`);
+            console.error(`🚨 ═══════════════════════════════════════════════════════\n`);
+          }
+          
+          // Log clamp details always
+          console.log(`\n📐 CLAMP AUDIT - ${position.symbol} ${position.side}`);
+          console.log(`   clamp_applied: true`);
+          console.log(`   clamp_reason: ${clampInfo.clamp_reason}`);
+          console.log(`   clamp_protection_level: ${clampInfo.clamp_protection_level}`);
+          console.log(`   before_clamp: ${clampInfo.expected_trailing_level?.toFixed(8)}`);
+          console.log(`   after_clamp: ${clampInfo.effective_trailing_level?.toFixed(8)}`);
+          console.log(`   clamp_delta: ${clampInfo.clamp_delta?.toFixed(8)}`);
+          console.log(`   clamp_applied_correctly: ${clampValid}`);
+        }
 
         // @ts-ignore - gem audit på position context så vi kan inkludere det i result payload
         position._exitAudit = exitAudit;
