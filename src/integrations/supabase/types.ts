@@ -58,18 +58,21 @@ export type Database = {
           adx_ceiling: number | null
           adx_enabled: boolean | null
           adx_floor: number | null
+          adx_hard_filter: boolean | null
           adx_period: number | null
           adx_threshold: number | null
           atr_base_min: number | null
           atr_ceiling: number | null
           atr_enabled: boolean | null
           atr_floor: number | null
+          atr_hard_filter: boolean | null
           atr_period: number | null
           atr_stop_loss_multiplier: number | null
           atr_take_profit_multiplier: number | null
           atr_trailing_stop_multiplier: number | null
           auto_exit_enabled: boolean | null
           bb_enabled: boolean | null
+          bb_hard_filter: boolean | null
           bb_period: number | null
           bb_std_dev: number | null
           break_even_atr: number | null
@@ -86,12 +89,14 @@ export type Database = {
           daily_loss_limit_percent: number | null
           ema_enabled: boolean | null
           ema_fast: number | null
+          ema_hard_filter: boolean | null
           ema_medium: number | null
           ema_medium_trend: number | null
           ema_slow: number | null
           ema_trend_hard_filter: boolean | null
           enabled: boolean | null
           higher_trend_enabled: boolean | null
+          higher_trend_hard_filter: boolean | null
           higher_trend_timeframe: string | null
           histogram_momentum_enabled: boolean | null
           histogram_momentum_periods: number | null
@@ -102,6 +107,7 @@ export type Database = {
           macd_direction_enabled: boolean | null
           macd_enabled: boolean | null
           macd_fast: number | null
+          macd_hard_filter: boolean | null
           macd_histogram_threshold: number | null
           macd_signal: number | null
           macd_slow: number | null
@@ -114,12 +120,14 @@ export type Database = {
           min_ema_spread_percent: number | null
           name: string
           pivot_points_enabled: boolean | null
+          pivot_points_hard_filter: boolean | null
           pivot_points_lookback: number | null
           pivot_points_near_threshold: number | null
           pivot_points_timeframe: string | null
           position_size_percent: number | null
           risk_per_trade_percent: number | null
           rsi_enabled: boolean | null
+          rsi_hard_filter: boolean | null
           rsi_max_short: number | null
           rsi_min_long: number | null
           rsi_momentum_periods: number | null
@@ -131,6 +139,7 @@ export type Database = {
           signal_conditions_required: number | null
           stochrsi_d_period: number | null
           stochrsi_enabled: boolean | null
+          stochrsi_hard_filter: boolean | null
           stochrsi_k_period: number | null
           stochrsi_overbought: number | null
           stochrsi_oversold: number | null
@@ -142,8 +151,10 @@ export type Database = {
           user_id: string
           volume_avg_period: number | null
           volume_enabled: boolean | null
+          volume_hard_filter: boolean | null
           volume_multiplier: number | null
           vwap_enabled: boolean | null
+          vwap_hard_filter: boolean | null
           vwap_period: number | null
         }
         Insert: {
@@ -153,18 +164,21 @@ export type Database = {
           adx_ceiling?: number | null
           adx_enabled?: boolean | null
           adx_floor?: number | null
+          adx_hard_filter?: boolean | null
           adx_period?: number | null
           adx_threshold?: number | null
           atr_base_min?: number | null
           atr_ceiling?: number | null
           atr_enabled?: boolean | null
           atr_floor?: number | null
+          atr_hard_filter?: boolean | null
           atr_period?: number | null
           atr_stop_loss_multiplier?: number | null
           atr_take_profit_multiplier?: number | null
           atr_trailing_stop_multiplier?: number | null
           auto_exit_enabled?: boolean | null
           bb_enabled?: boolean | null
+          bb_hard_filter?: boolean | null
           bb_period?: number | null
           bb_std_dev?: number | null
           break_even_atr?: number | null
@@ -181,12 +195,14 @@ export type Database = {
           daily_loss_limit_percent?: number | null
           ema_enabled?: boolean | null
           ema_fast?: number | null
+          ema_hard_filter?: boolean | null
           ema_medium?: number | null
           ema_medium_trend?: number | null
           ema_slow?: number | null
           ema_trend_hard_filter?: boolean | null
           enabled?: boolean | null
           higher_trend_enabled?: boolean | null
+          higher_trend_hard_filter?: boolean | null
           higher_trend_timeframe?: string | null
           histogram_momentum_enabled?: boolean | null
           histogram_momentum_periods?: number | null
@@ -197,6 +213,7 @@ export type Database = {
           macd_direction_enabled?: boolean | null
           macd_enabled?: boolean | null
           macd_fast?: number | null
+          macd_hard_filter?: boolean | null
           macd_histogram_threshold?: number | null
           macd_signal?: number | null
           macd_slow?: number | null
@@ -209,12 +226,14 @@ export type Database = {
           min_ema_spread_percent?: number | null
           name: string
           pivot_points_enabled?: boolean | null
+          pivot_points_hard_filter?: boolean | null
           pivot_points_lookback?: number | null
           pivot_points_near_threshold?: number | null
           pivot_points_timeframe?: string | null
           position_size_percent?: number | null
           risk_per_trade_percent?: number | null
           rsi_enabled?: boolean | null
+          rsi_hard_filter?: boolean | null
           rsi_max_short?: number | null
           rsi_min_long?: number | null
           rsi_momentum_periods?: number | null
@@ -226,6 +245,7 @@ export type Database = {
           signal_conditions_required?: number | null
           stochrsi_d_period?: number | null
           stochrsi_enabled?: boolean | null
+          stochrsi_hard_filter?: boolean | null
           stochrsi_k_period?: number | null
           stochrsi_overbought?: number | null
           stochrsi_oversold?: number | null
@@ -237,8 +257,10 @@ export type Database = {
           user_id: string
           volume_avg_period?: number | null
           volume_enabled?: boolean | null
+          volume_hard_filter?: boolean | null
           volume_multiplier?: number | null
           vwap_enabled?: boolean | null
+          vwap_hard_filter?: boolean | null
           vwap_period?: number | null
         }
         Update: {
@@ -248,18 +270,21 @@ export type Database = {
           adx_ceiling?: number | null
           adx_enabled?: boolean | null
           adx_floor?: number | null
+          adx_hard_filter?: boolean | null
           adx_period?: number | null
           adx_threshold?: number | null
           atr_base_min?: number | null
           atr_ceiling?: number | null
           atr_enabled?: boolean | null
           atr_floor?: number | null
+          atr_hard_filter?: boolean | null
           atr_period?: number | null
           atr_stop_loss_multiplier?: number | null
           atr_take_profit_multiplier?: number | null
           atr_trailing_stop_multiplier?: number | null
           auto_exit_enabled?: boolean | null
           bb_enabled?: boolean | null
+          bb_hard_filter?: boolean | null
           bb_period?: number | null
           bb_std_dev?: number | null
           break_even_atr?: number | null
@@ -276,12 +301,14 @@ export type Database = {
           daily_loss_limit_percent?: number | null
           ema_enabled?: boolean | null
           ema_fast?: number | null
+          ema_hard_filter?: boolean | null
           ema_medium?: number | null
           ema_medium_trend?: number | null
           ema_slow?: number | null
           ema_trend_hard_filter?: boolean | null
           enabled?: boolean | null
           higher_trend_enabled?: boolean | null
+          higher_trend_hard_filter?: boolean | null
           higher_trend_timeframe?: string | null
           histogram_momentum_enabled?: boolean | null
           histogram_momentum_periods?: number | null
@@ -292,6 +319,7 @@ export type Database = {
           macd_direction_enabled?: boolean | null
           macd_enabled?: boolean | null
           macd_fast?: number | null
+          macd_hard_filter?: boolean | null
           macd_histogram_threshold?: number | null
           macd_signal?: number | null
           macd_slow?: number | null
@@ -304,12 +332,14 @@ export type Database = {
           min_ema_spread_percent?: number | null
           name?: string
           pivot_points_enabled?: boolean | null
+          pivot_points_hard_filter?: boolean | null
           pivot_points_lookback?: number | null
           pivot_points_near_threshold?: number | null
           pivot_points_timeframe?: string | null
           position_size_percent?: number | null
           risk_per_trade_percent?: number | null
           rsi_enabled?: boolean | null
+          rsi_hard_filter?: boolean | null
           rsi_max_short?: number | null
           rsi_min_long?: number | null
           rsi_momentum_periods?: number | null
@@ -321,6 +351,7 @@ export type Database = {
           signal_conditions_required?: number | null
           stochrsi_d_period?: number | null
           stochrsi_enabled?: boolean | null
+          stochrsi_hard_filter?: boolean | null
           stochrsi_k_period?: number | null
           stochrsi_overbought?: number | null
           stochrsi_oversold?: number | null
@@ -332,8 +363,10 @@ export type Database = {
           user_id?: string
           volume_avg_period?: number | null
           volume_enabled?: boolean | null
+          volume_hard_filter?: boolean | null
           volume_multiplier?: number | null
           vwap_enabled?: boolean | null
+          vwap_hard_filter?: boolean | null
           vwap_period?: number | null
         }
         Relationships: []
