@@ -881,11 +881,35 @@ serve(async (req) => {
               if (tsWorseThanSl) {
                 trailingStopActive = false;
                 trailingActivationReason = 'BLOCKED_TS_WORSE_THAN_SL';
-                console.log(`   ⛔ Trailing IGNORED (worse than SL): ts=${newTrailingStop} vs hardSL=${hardStopLoss}`);
+                // 🚨 MECHANICAL EXIT CONFLICT: Trailing forsøger at sætte stop værre end hard SL
+                console.error(`\n🚨 ═══════════════════════════════════════════════════════`);
+                console.error(`🚨 MECHANICAL_EXIT_CONFLICT - ${position.symbol} ${position.side}`);
+                console.error(`🚨 ═══════════════════════════════════════════════════════`);
+                console.error(`   conflict_type: TRAILING_WORSE_THAN_HARD_SL`);
+                console.error(`   trailing_calculated: ${newTrailingStop}`);
+                console.error(`   hard_stop_loss: ${hardStopLoss}`);
+                console.error(`   break_even_stop: ${breakEvenStop}`);
+                console.error(`   entry_price: ${position.entry_price}`);
+                console.error(`   current_price: ${currentPrice}`);
+                console.error(`   action: TRAILING_PAUSED (hierarki respekteret)`);
+                console.error(`   hierarchy: Hard SL → Break-even → Trailing`);
+                console.error(`🚨 ═══════════════════════════════════════════════════════\n`);
               } else if (tsWorseThanBe) {
                 trailingStopActive = false;
                 trailingActivationReason = 'BLOCKED_TS_WORSE_THAN_BREAK_EVEN';
-                console.log(`   ⛔ Trailing IGNORED (worse than BE): ts=${newTrailingStop} vs BE=${breakEvenStop}`);
+                // 🚨 MECHANICAL EXIT CONFLICT: Trailing forsøger at sætte stop værre end break-even
+                console.error(`\n🚨 ═══════════════════════════════════════════════════════`);
+                console.error(`🚨 MECHANICAL_EXIT_CONFLICT - ${position.symbol} ${position.side}`);
+                console.error(`🚨 ═══════════════════════════════════════════════════════`);
+                console.error(`   conflict_type: TRAILING_WORSE_THAN_BREAK_EVEN`);
+                console.error(`   trailing_calculated: ${newTrailingStop}`);
+                console.error(`   break_even_stop: ${breakEvenStop}`);
+                console.error(`   hard_stop_loss: ${hardStopLoss}`);
+                console.error(`   entry_price: ${position.entry_price}`);
+                console.error(`   current_price: ${currentPrice}`);
+                console.error(`   action: TRAILING_PAUSED (hierarki respekteret)`);
+                console.error(`   hierarchy: Hard SL → Break-even → Trailing`);
+                console.error(`🚨 ═══════════════════════════════════════════════════════\n`);
               } else {
                 trailingValidThisCycle = true;
               }
@@ -904,6 +928,53 @@ serve(async (req) => {
         const trailingStop = trailingStopActive && trailingValidThisCycle
           ? Number(newTrailingStop)
           : null;
+
+        // 🔍 EXIT HIERARCHY AUDIT - Bekræft rækkefølgen Hard SL → Break-even → Trailing
+        console.log(`\n📊 EXIT HIERARCHY AUDIT - ${position.symbol} ${position.side}`);
+        console.log(`   ═══════════════════════════════════════════════════════`);
+        console.log(`   1️⃣ HARD SL (max loss): ${hardStopLoss !== null ? hardStopLoss.toFixed(8) : 'N/A'}`);
+        console.log(`   2️⃣ BREAK-EVEN: ${breakEvenStop !== null ? breakEvenStop.toFixed(8) : 'N/A'} (activated: ${breakEvenActivatedState})`);
+        console.log(`   3️⃣ TRAILING: ${trailingStop !== null ? trailingStop.toFixed(8) : 'N/A'} (valid: ${trailingValidThisCycle})`);
+        console.log(`   ───────────────────────────────────────────────────────`);
+        console.log(`   entry_price: ${position.entry_price}`);
+        console.log(`   current_price: ${currentPrice}`);
+        console.log(`   profit_distance: ${profitDistance.toFixed(8)}`);
+        console.log(`   is_in_profit: ${isInProfit}`);
+        
+        // Bekræft hierarki-invarianter
+        let hierarchyValid = true;
+        const hierarchyViolations: string[] = [];
+        
+        // INVARIANT 1: For LONG: Hard SL <= BE <= Trailing (alle skal være under entry i tab, over i profit)
+        // INVARIANT 2: For SHORT: Hard SL >= BE >= Trailing (omvendt)
+        if (position.side === 'LONG') {
+          if (breakEvenStop !== null && hardStopLoss !== null && breakEvenStop < hardStopLoss) {
+            hierarchyValid = false;
+            hierarchyViolations.push(`BE(${breakEvenStop}) < HardSL(${hardStopLoss})`);
+          }
+          if (trailingStop !== null && breakEvenStop !== null && trailingStop < breakEvenStop) {
+            hierarchyValid = false;
+            hierarchyViolations.push(`Trailing(${trailingStop}) < BE(${breakEvenStop})`);
+          }
+        } else {
+          if (breakEvenStop !== null && hardStopLoss !== null && breakEvenStop > hardStopLoss) {
+            hierarchyValid = false;
+            hierarchyViolations.push(`BE(${breakEvenStop}) > HardSL(${hardStopLoss})`);
+          }
+          if (trailingStop !== null && breakEvenStop !== null && trailingStop > breakEvenStop) {
+            hierarchyValid = false;
+            hierarchyViolations.push(`Trailing(${trailingStop}) > BE(${breakEvenStop})`);
+          }
+        }
+        
+        if (!hierarchyValid) {
+          console.error(`   🚨 MECHANICAL_EXIT_CONFLICT: HIERARCHY_VIOLATION`);
+          console.error(`   violations: ${hierarchyViolations.join(', ')}`);
+          console.error(`   action: Trailing will be paused if active`);
+        } else {
+          console.log(`   ✅ hierarchy_valid: true`);
+        }
+        console.log(`   ═══════════════════════════════════════════════════════\n`);
 
         // 4) Hit checks med korrekt prioritet
         const slHit = hardStopLoss !== null && (
