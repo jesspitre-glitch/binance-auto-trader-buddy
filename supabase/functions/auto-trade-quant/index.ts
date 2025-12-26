@@ -2259,8 +2259,8 @@ serve(async (req) => {
           let gateBlocked = false;
           let blockReason = '';
           
-          // 1. EMA Spread (if ema_enabled)
-          if (config.ema_enabled && fs?.hard?.emaSpread?.passed !== true) {
+          // 1. EMA Spread (if ema_enabled AND ema_hard_filter)
+          if (config.ema_enabled && config.ema_hard_filter !== false && fs?.hard?.emaSpread?.passed !== true) {
             gateBlocked = true;
             const val = fs?.hard?.emaSpread?.value;
             blockReason = fs?.hard?.emaSpread?.passed === null 
@@ -2268,8 +2268,8 @@ serve(async (req) => {
               : `EMA_SPREAD_FAILED (${val?.toFixed(4)}% < ${config.min_ema_spread_percent}%)`;
           }
           
-          // 2. ATR filter (if atr_enabled) - Note: ATR data requirement is separate
-          if (!gateBlocked && config.atr_enabled && fs?.hard?.atr?.passed !== true) {
+          // 2. ATR filter (if atr_enabled AND atr_hard_filter)
+          if (!gateBlocked && config.atr_enabled && config.atr_hard_filter !== false && fs?.hard?.atr?.passed !== true) {
             gateBlocked = true;
             const val = fs?.hard?.atr?.value;
             blockReason = fs?.hard?.atr?.passed === null
@@ -2277,8 +2277,8 @@ serve(async (req) => {
               : `ATR_FILTER_FAILED (${(val * 100)?.toFixed(4)}% < ${config.min_atr_percent}%)`;
           }
           
-          // 3. ADX range (if adx_enabled)
-          if (!gateBlocked && config.adx_enabled && fs?.hard?.adx?.passed !== true) {
+          // 3. ADX range (if adx_enabled AND adx_hard_filter)
+          if (!gateBlocked && config.adx_enabled && config.adx_hard_filter !== false && fs?.hard?.adx?.passed !== true) {
             gateBlocked = true;
             const val = fs?.hard?.adx?.value;
             blockReason = fs?.hard?.adx?.passed === null
@@ -2286,8 +2286,8 @@ serve(async (req) => {
               : `ADX_OUT_OF_RANGE (${val?.toFixed(2)} not in [${config.adx_floor}, ${config.adx_ceiling}])`;
           }
           
-          // 4. Volume (if volume_enabled) - STRICT: null = BLOCK
-          if (!gateBlocked && config.volume_enabled === true) {
+          // 4. Volume (if volume_enabled AND volume_hard_filter)
+          if (!gateBlocked && config.volume_enabled === true && config.volume_hard_filter !== false) {
             const volPassed = fs?.hard?.volume?.passed;
             if (volPassed !== true) {
               gateBlocked = true;
@@ -2299,8 +2299,8 @@ serve(async (req) => {
             }
           }
           
-          // 5. RSI Momentum (if rsi_enabled)
-          if (!gateBlocked && config.rsi_enabled && fs?.hard?.rsiMomentum?.passed !== true) {
+          // 5. RSI Momentum (if rsi_enabled AND rsi_hard_filter)
+          if (!gateBlocked && config.rsi_enabled && config.rsi_hard_filter !== false && fs?.hard?.rsiMomentum?.passed !== true) {
             gateBlocked = true;
             const val = fs?.hard?.rsiMomentum?.value;
             blockReason = fs?.hard?.rsiMomentum?.passed === null
@@ -2308,7 +2308,7 @@ serve(async (req) => {
               : `RSI_MOMENTUM_FAILED (RSI=${val?.toFixed(2)})`;
           }
           
-          // 6. MACD Direction (if macd_direction_enabled)
+          // 6. MACD Direction (if macd_direction_enabled - this is already a specific toggle)
           if (!gateBlocked && config.macd_direction_enabled) {
             const macdLine = analysis.indicators.macdLine;
             const macdSignalLine = analysis.indicators.macdSignalLine ?? analysis.indicators.macdSignal;
@@ -2335,8 +2335,8 @@ serve(async (req) => {
             }
           }
           
-          // 8. Higher Trend Filter (if higher_trend_enabled)
-          if (!gateBlocked && config.higher_trend_enabled) {
+          // 8. Higher Trend Filter (if higher_trend_enabled AND higher_trend_hard_filter)
+          if (!gateBlocked && config.higher_trend_enabled && config.higher_trend_hard_filter !== false) {
             const higherTrend = selectedSignal.higherTrend;
             if (signal === 'LONG' && higherTrend !== 'BULLISH') {
               gateBlocked = true;
@@ -2347,8 +2347,8 @@ serve(async (req) => {
             }
           }
           
-          // 9. Medium Trend Filter (always required if EMA enabled)
-          if (!gateBlocked && config.ema_enabled) {
+          // 9. Medium Trend Filter (always required if EMA enabled AND ema_hard_filter)
+          if (!gateBlocked && config.ema_enabled && config.ema_hard_filter !== false) {
             const mediumTrend = selectedSignal.trend;
             if (signal === 'LONG' && mediumTrend !== 'BULLISH') {
               gateBlocked = true;

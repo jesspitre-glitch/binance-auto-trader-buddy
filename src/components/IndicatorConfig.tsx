@@ -9,6 +9,7 @@ import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Copy, Check } from "lucide-react";
+import { FilterModeToggle } from "./FilterModeToggle";
 
 interface IndicatorConfigProps {
   config?: any;
@@ -132,6 +133,19 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     
     // Leverage
     leverage: config?.leverage || 10,
+    
+    // Hard filter toggles for each indicator
+    ema_hard_filter: config?.ema_hard_filter !== undefined ? config?.ema_hard_filter : true,
+    rsi_hard_filter: config?.rsi_hard_filter !== undefined ? config?.rsi_hard_filter : true,
+    stochrsi_hard_filter: config?.stochrsi_hard_filter !== undefined ? config?.stochrsi_hard_filter : false,
+    pivot_points_hard_filter: config?.pivot_points_hard_filter !== undefined ? config?.pivot_points_hard_filter : false,
+    macd_hard_filter: config?.macd_hard_filter !== undefined ? config?.macd_hard_filter : false,
+    bb_hard_filter: config?.bb_hard_filter !== undefined ? config?.bb_hard_filter : false,
+    vwap_hard_filter: config?.vwap_hard_filter !== undefined ? config?.vwap_hard_filter : false,
+    atr_hard_filter: config?.atr_hard_filter !== undefined ? config?.atr_hard_filter : true,
+    adx_hard_filter: config?.adx_hard_filter !== undefined ? config?.adx_hard_filter : true,
+    volume_hard_filter: config?.volume_hard_filter !== undefined ? config?.volume_hard_filter : true,
+    higher_trend_hard_filter: config?.higher_trend_hard_filter !== undefined ? config?.higher_trend_hard_filter : true,
   });
   
   // Sync form with incoming config changes - use config.id to detect actual config change
@@ -238,6 +252,18 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       conditional_time_exit_enabled: config.conditional_time_exit_enabled !== undefined ? config.conditional_time_exit_enabled : true,
       // Leverage
       leverage: config.leverage ?? 10,
+      // Hard filter toggles
+      ema_hard_filter: config.ema_hard_filter !== undefined ? config.ema_hard_filter : true,
+      rsi_hard_filter: config.rsi_hard_filter !== undefined ? config.rsi_hard_filter : true,
+      stochrsi_hard_filter: config.stochrsi_hard_filter !== undefined ? config.stochrsi_hard_filter : false,
+      pivot_points_hard_filter: config.pivot_points_hard_filter !== undefined ? config.pivot_points_hard_filter : false,
+      macd_hard_filter: config.macd_hard_filter !== undefined ? config.macd_hard_filter : false,
+      bb_hard_filter: config.bb_hard_filter !== undefined ? config.bb_hard_filter : false,
+      vwap_hard_filter: config.vwap_hard_filter !== undefined ? config.vwap_hard_filter : false,
+      atr_hard_filter: config.atr_hard_filter !== undefined ? config.atr_hard_filter : true,
+      adx_hard_filter: config.adx_hard_filter !== undefined ? config.adx_hard_filter : true,
+      volume_hard_filter: config.volume_hard_filter !== undefined ? config.volume_hard_filter : true,
+      higher_trend_hard_filter: config.higher_trend_hard_filter !== undefined ? config.higher_trend_hard_filter : true,
     });
   }, [config?.id, config?.updated_at]);
 
@@ -330,6 +356,18 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       auto_exit_enabled: config.auto_exit_enabled !== undefined ? config.auto_exit_enabled : true,
       conditional_time_exit_enabled: config.conditional_time_exit_enabled !== undefined ? config.conditional_time_exit_enabled : true,
       leverage: config.leverage ?? 10,
+      // Hard filter toggles
+      ema_hard_filter: config.ema_hard_filter !== undefined ? config.ema_hard_filter : true,
+      rsi_hard_filter: config.rsi_hard_filter !== undefined ? config.rsi_hard_filter : true,
+      stochrsi_hard_filter: config.stochrsi_hard_filter !== undefined ? config.stochrsi_hard_filter : false,
+      pivot_points_hard_filter: config.pivot_points_hard_filter !== undefined ? config.pivot_points_hard_filter : false,
+      macd_hard_filter: config.macd_hard_filter !== undefined ? config.macd_hard_filter : false,
+      bb_hard_filter: config.bb_hard_filter !== undefined ? config.bb_hard_filter : false,
+      vwap_hard_filter: config.vwap_hard_filter !== undefined ? config.vwap_hard_filter : false,
+      atr_hard_filter: config.atr_hard_filter !== undefined ? config.atr_hard_filter : true,
+      adx_hard_filter: config.adx_hard_filter !== undefined ? config.adx_hard_filter : true,
+      volume_hard_filter: config.volume_hard_filter !== undefined ? config.volume_hard_filter : true,
+      higher_trend_hard_filter: config.higher_trend_hard_filter !== undefined ? config.higher_trend_hard_filter : true,
     });
     
     toast({
@@ -443,11 +481,19 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       <Card>
         <CardHeader>
-          <CardTitle>EMA (Exponential Moving Average)</CardTitle>
-          <CardDescription>
-            <strong>EMA Trend:</strong> Soft Condition (1 point) - bruger Fast/Medium/Slow alignment<br/>
-            <strong>⚠️ EMA Spread:</strong> Hard Filter - blokerer hvis spread &lt; minimum
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>EMA (Exponential Moving Average)</CardTitle>
+              <CardDescription>
+                EMA Trend og Spread filter
+              </CardDescription>
+            </div>
+            <FilterModeToggle
+              isHard={formData.ema_hard_filter}
+              onChange={(isHard) => setFormData({ ...formData, ema_hard_filter: isHard })}
+              disabled={!formData.ema_enabled}
+            />
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
           <div className="flex items-center justify-between sm:col-span-3">
@@ -463,7 +509,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           </div>
 
           <div className="flex items-center justify-between sm:col-span-3">
-            <Label htmlFor="ema_trend_hard_filter">⚠️ EMA Retnings-Filter (HARD)</Label>
+            <Label htmlFor="ema_trend_hard_filter">EMA Retnings-Filter</Label>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">{formData.ema_trend_hard_filter ? "Tændt" : "Slukket"}</span>
               <Switch
@@ -531,11 +577,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       <Card>
         <CardHeader>
-          <CardTitle>RSI (Relative Strength Index) - ⚠️ HARD FILTER</CardTitle>
-          <CardDescription>
-            Blokerer trades UDEN for de tilladte zoner (evalueres FØR soft conditions)<br/>
-            <strong className="text-warning">Dette er IKKE en Soft Condition - det er en Hard Filter!</strong>
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>RSI (Relative Strength Index)</CardTitle>
+              <CardDescription>Momentum og zone filter</CardDescription>
+            </div>
+            <FilterModeToggle
+              isHard={formData.rsi_hard_filter}
+              onChange={(isHard) => setFormData({ ...formData, rsi_hard_filter: isHard })}
+              disabled={!formData.rsi_enabled}
+            />
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
           <div className="flex items-center justify-between sm:col-span-3">
@@ -616,8 +668,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       <Card>
         <CardHeader>
-          <CardTitle>StochRSI (Stochastic RSI)</CardTitle>
-          <CardDescription>Overkøbt/Oversolgt baseret på RSI</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>StochRSI (Stochastic RSI)</CardTitle>
+              <CardDescription>Overkøbt/Oversolgt baseret på RSI</CardDescription>
+            </div>
+            <FilterModeToggle
+              isHard={formData.stochrsi_hard_filter}
+              onChange={(isHard) => setFormData({ ...formData, stochrsi_hard_filter: isHard })}
+              disabled={!formData.stochrsi_enabled}
+            />
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-5">
           <div className="flex items-center justify-between sm:col-span-5">
@@ -689,8 +750,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       {/* Pivot Points */}
       <Card>
         <CardHeader>
-          <CardTitle>Pivot Points</CardTitle>
-          <CardDescription>Support og resistance niveauer</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Pivot Points</CardTitle>
+              <CardDescription>Support og resistance niveauer</CardDescription>
+            </div>
+            <FilterModeToggle
+              isHard={formData.pivot_points_hard_filter}
+              onChange={(isHard) => setFormData({ ...formData, pivot_points_hard_filter: isHard })}
+              disabled={!formData.pivot_points_enabled}
+            />
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="flex items-center justify-between sm:col-span-2">
@@ -747,8 +817,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       <Card>
         <CardHeader>
-          <CardTitle>MACD (Moving Average Convergence Divergence)</CardTitle>
-          <CardDescription>Momentum bekræftelse</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>MACD (Moving Average Convergence Divergence)</CardTitle>
+              <CardDescription>Momentum bekræftelse</CardDescription>
+            </div>
+            <FilterModeToggle
+              isHard={formData.macd_hard_filter}
+              onChange={(isHard) => setFormData({ ...formData, macd_hard_filter: isHard })}
+              disabled={!formData.macd_enabled}
+            />
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-4">
           <div className="flex items-center justify-between sm:col-span-4">
@@ -862,8 +941,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Bollinger Bands</CardTitle>
-          <CardDescription>Volatilitet og breakouts</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Bollinger Bands</CardTitle>
+              <CardDescription>Volatilitet og breakouts</CardDescription>
+            </div>
+            <FilterModeToggle
+              isHard={formData.bb_hard_filter}
+              onChange={(isHard) => setFormData({ ...formData, bb_hard_filter: isHard })}
+              disabled={!formData.bb_enabled}
+            />
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="flex items-center justify-between sm:col-span-2">
@@ -903,11 +991,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       <Card>
         <CardHeader>
-          <CardTitle>VWAP (Volume Weighted Average Price)</CardTitle>
-          <CardDescription>
-            <strong>Soft Condition (1 point):</strong> LONG hvis Price &gt; VWAP, SHORT hvis Price &lt; VWAP<br/>
-            VWAP = Σ(Typisk Pris × Volume) / Σ(Volume)
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>VWAP (Volume Weighted Average Price)</CardTitle>
+              <CardDescription>LONG hvis Price &gt; VWAP, SHORT hvis Price &lt; VWAP</CardDescription>
+            </div>
+            <FilterModeToggle
+              isHard={formData.vwap_hard_filter}
+              onChange={(isHard) => setFormData({ ...formData, vwap_hard_filter: isHard })}
+              disabled={!formData.vwap_enabled}
+            />
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="flex items-center justify-between sm:col-span-2">
@@ -941,11 +1035,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       <Card>
         <CardHeader>
-          <CardTitle>ATR (Average True Range) - ⚠️ HARD FILTER</CardTitle>
-          <CardDescription>
-            <strong className="text-warning">HARD FILTER:</strong> Blokerer trades hvis ATR = 0 (ingen volatilitet)<br/>
-            Bruges også til stop-loss og trailing stop beregning
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>ATR (Average True Range)</CardTitle>
+              <CardDescription>Volatilitet - bruges til stop-loss og trailing stop</CardDescription>
+            </div>
+            <FilterModeToggle
+              isHard={formData.atr_hard_filter}
+              onChange={(isHard) => setFormData({ ...formData, atr_hard_filter: isHard })}
+              disabled={!formData.atr_enabled}
+            />
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
           <div className="flex items-center justify-between sm:col-span-3">
@@ -1261,11 +1361,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       <Card>
         <CardHeader>
-          <CardTitle>ADX (Average Directional Index) - ⚠️ HARD FILTER</CardTitle>
-          <CardDescription>
-            Blokerer trades hvis trend-styrken er for lav (evalueres FØR soft conditions)<br/>
-            <strong className="text-warning">Dette er IKKE en Soft Condition - det er en Hard Filter!</strong>
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>ADX (Average Directional Index)</CardTitle>
+              <CardDescription>Trend-styrke filter</CardDescription>
+            </div>
+            <FilterModeToggle
+              isHard={formData.adx_hard_filter}
+              onChange={(isHard) => setFormData({ ...formData, adx_hard_filter: isHard })}
+              disabled={!formData.adx_enabled}
+            />
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="flex items-center justify-between sm:col-span-2">
@@ -1346,11 +1452,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Signal Settings (Soft Rules)</CardTitle>
-          <CardDescription>
-            Soft conditions evalueres KUN efter Hard Filters er godkendt<br/>
-            <strong className="text-warning">⚠️ Hard Filters (blokerer alle trades):</strong> EMA Spread, ATR &gt; 0, ADX ≥ threshold, Volume ≥ multiplier
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Volume & Signal Settings</CardTitle>
+              <CardDescription>Volume filter og signal betingelser</CardDescription>
+            </div>
+            <FilterModeToggle
+              isHard={formData.volume_hard_filter}
+              onChange={(isHard) => setFormData({ ...formData, volume_hard_filter: isHard })}
+              disabled={!formData.volume_enabled}
+            />
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="flex items-center justify-between sm:col-span-2">
@@ -1375,7 +1487,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <p className="text-xs text-muted-foreground">Antal bars for gennemsnit</p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="volume_multiplier">⚠️ Volumen Multiplier (HARD + SOFT)</Label>
+            <Label htmlFor="volume_multiplier">Volumen Multiplier</Label>
             <Input
               id="volume_multiplier"
               type="number"
@@ -1384,8 +1496,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               onChange={(e) => setFormData({ ...formData, volume_multiplier: parseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">
-              <strong className="text-warning">HARD FILTER:</strong> Blokerer hvis vol &lt; avg×multiplier<br/>
-              <strong>SOFT CONDITION:</strong> +1 point hvis vol &gt; avg (bruges kun hvis ikke blokeret)
+              Kræver vol &gt; avg×multiplier
             </p>
           </div>
           <div className="space-y-2 sm:col-span-2">
@@ -1478,21 +1589,28 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             </Select>
             <p className="text-xs text-muted-foreground">Højere TF for trend-retning</p>
           </div>
-          <div className="space-y-2 sm:col-span-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="higher_trend_enabled">Overordnet Trend Filter</Label>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">{formData.higher_trend_enabled ? "Tændt" : "Slukket"}</span>
-                <Switch
-                  id="higher_trend_enabled"
-                  checked={formData.higher_trend_enabled}
-                  onCheckedChange={(checked) => setFormData({ ...formData, higher_trend_enabled: checked })}
-                />
+          <div className="flex items-center justify-between sm:col-span-2">
+            <div className="flex items-center gap-4">
+              <div>
+                <Label htmlFor="higher_trend_enabled">Overordnet Trend Filter</Label>
+                <p className="text-xs text-muted-foreground">
+                  Blokerer LONG hvis trend er bearish, SHORT hvis bullish
+                </p>
               </div>
+              <FilterModeToggle
+                isHard={formData.higher_trend_hard_filter}
+                onChange={(isHard) => setFormData({ ...formData, higher_trend_hard_filter: isHard })}
+                disabled={!formData.higher_trend_enabled}
+              />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Blokerer LONG hvis trend er bearish, SHORT hvis bullish
-            </p>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.higher_trend_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="higher_trend_enabled"
+                checked={formData.higher_trend_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, higher_trend_enabled: checked })}
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="higher_trend_timeframe">Overordnet Trend Timeframe</Label>
