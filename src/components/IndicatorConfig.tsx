@@ -31,6 +31,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     ema_slow: config?.ema_slow || 50,
     ema_medium_trend: config?.ema_medium_trend || 50,
     min_ema_spread_percent: config?.min_ema_spread_percent ?? 0.2,
+    max_ema_spread_percent: config?.max_ema_spread_percent ?? 5.0,
     ema_trend_hard_filter: config?.ema_trend_hard_filter !== undefined ? config?.ema_trend_hard_filter : false,
     
     // RSI
@@ -163,6 +164,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       ema_slow: config.ema_slow ?? 50,
       ema_medium_trend: config.ema_medium_trend ?? 50,
       min_ema_spread_percent: config.min_ema_spread_percent ?? 0.2,
+      max_ema_spread_percent: config.max_ema_spread_percent ?? 5.0,
       ema_trend_hard_filter: config.ema_trend_hard_filter !== undefined ? config.ema_trend_hard_filter : false,
       // RSI
       rsi_enabled: config.rsi_enabled !== undefined ? config.rsi_enabled : true,
@@ -280,6 +282,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       ema_slow: config.ema_slow ?? 50,
       ema_medium_trend: config.ema_medium_trend ?? 50,
       min_ema_spread_percent: config.min_ema_spread_percent ?? 0.2,
+      max_ema_spread_percent: config.max_ema_spread_percent ?? 5.0,
       ema_trend_hard_filter: config.ema_trend_hard_filter !== undefined ? config.ema_trend_hard_filter : false,
       rsi_enabled: config.rsi_enabled !== undefined ? config.rsi_enabled : true,
       rsi_period: config.rsi_period ?? 14,
@@ -570,6 +573,19 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             />
             <p className="text-xs text-muted-foreground">
               <strong className="text-warning">HARD FILTER:</strong> Blokerer trades hvis (Fast-Slow)/Price &lt; dette % (sidelæns marked filter)
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="max_ema_spread_percent">⚠️ Maksimum EMA Spread (%) - HARD FILTER</Label>
+            <Input
+              id="max_ema_spread_percent"
+              type="number"
+              step="0.1"
+              value={formData.max_ema_spread_percent}
+              onChange={(e) => setFormData({ ...formData, max_ema_spread_percent: parseFloat(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">
+              <strong className="text-warning">HARD FILTER:</strong> Blokerer trades hvis (Fast-Slow)/Price &gt; dette % (forhindrer for sene entries i stærkt udvidede trends)
             </p>
           </div>
         </CardContent>

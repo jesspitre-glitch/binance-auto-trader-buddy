@@ -111,6 +111,7 @@ export type Database = {
           macd_histogram_threshold: number | null
           macd_signal: number | null
           macd_slow: number | null
+          max_ema_spread_percent: number | null
           max_exposure_percent: number | null
           max_open_positions: number | null
           max_position_duration_minutes: number | null
@@ -217,6 +218,7 @@ export type Database = {
           macd_histogram_threshold?: number | null
           macd_signal?: number | null
           macd_slow?: number | null
+          max_ema_spread_percent?: number | null
           max_exposure_percent?: number | null
           max_open_positions?: number | null
           max_position_duration_minutes?: number | null
@@ -323,6 +325,7 @@ export type Database = {
           macd_histogram_threshold?: number | null
           macd_signal?: number | null
           macd_slow?: number | null
+          max_ema_spread_percent?: number | null
           max_exposure_percent?: number | null
           max_open_positions?: number | null
           max_position_duration_minutes?: number | null

@@ -13,6 +13,7 @@ interface IndicatorConfig {
   ema_slow: number;
   ema_medium_trend: number;
   min_ema_spread_percent: number;
+  max_ema_spread_percent?: number;
   rsi_enabled: boolean;
   rsi_period: number;
   rsi_min_long: number;
@@ -94,6 +95,7 @@ async function getStrategyIdentifier(config: any): Promise<string> {
     ema_medium_trend: config.ema_medium_trend,
     ema_trend_hard_filter: config.ema_trend_hard_filter,
     min_ema_spread_percent: config.min_ema_spread_percent,
+    max_ema_spread_percent: config.max_ema_spread_percent,
     // RSI settings
     rsi_enabled: config.rsi_enabled,
     rsi_period: config.rsi_period,
@@ -813,9 +815,17 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     emaSpreadPercent = (emaSpread / currentPrice) * 100;
     filterStatus.hard.emaSpread.value = `${emaSpreadPercent.toFixed(3)}%`;
     
+    // Check minimum spread (sidelæns marked filter)
     if (emaSpreadPercent < config.min_ema_spread_percent) {
       filterStatus.hard.emaSpread.passed = false;
       filterStatus.hard.emaSpread.reason = `${emaSpreadPercent.toFixed(3)}% < ${config.min_ema_spread_percent}% (sidelæns marked)`;
+    }
+    
+    // Check maximum spread (overextended trend filter) - only if max is set and > 0
+    const maxSpread = config.max_ema_spread_percent ?? 0;
+    if (maxSpread > 0 && emaSpreadPercent > maxSpread) {
+      filterStatus.hard.emaSpread.passed = false;
+      filterStatus.hard.emaSpread.reason = `${emaSpreadPercent.toFixed(3)}% > ${maxSpread}% (overextended trend - for sen entry)`;
     }
   }
   
@@ -2263,9 +2273,18 @@ serve(async (req) => {
           if (config.ema_enabled && config.ema_hard_filter !== false && fs?.hard?.emaSpread?.passed !== true) {
             gateBlocked = true;
             const val = fs?.hard?.emaSpread?.value;
-            blockReason = fs?.hard?.emaSpread?.passed === null 
-              ? `EMA_SPREAD_MISSING_OR_INVALID (value=${val})`
-              : `EMA_SPREAD_FAILED (${val?.toFixed(4)}% < ${config.min_ema_spread_percent}%)`;
+            const reason = fs?.hard?.emaSpread?.reason ?? '';
+            const maxSpread = config.max_ema_spread_percent ?? 0;
+            
+            if (fs?.hard?.emaSpread?.passed === null) {
+              blockReason = `EMA_SPREAD_MISSING_OR_INVALID (value=${val})`;
+            } else if (reason.includes('overextended')) {
+              // Max spread exceeded - log specific rejection
+              blockReason = `REJECT: EMA_SPREAD_TOO_HIGH → spread = ${val}, max = ${maxSpread}%`;
+            } else {
+              // Min spread not met
+              blockReason = `EMA_SPREAD_FAILED (${val} < ${config.min_ema_spread_percent}%)`;
+            }
           }
           
           // 2. ATR filter (if atr_enabled AND atr_hard_filter)
