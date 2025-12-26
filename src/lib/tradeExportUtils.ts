@@ -287,6 +287,14 @@ export const formatTradeForExport = (t: any) => {
   // VIGTIGT: Bruger direkte fra snapshot, ingen fallbacks der kan overskrive faktiske værdier
   const filterModeSettings = snap.filter_mode_settings || {};
 
+  // StochRSI mode (gør eksport-output entydigt, så AI ikke “gætter” ud fra soft_* felter)
+  const stochRsiMode: "hard" | "soft" | null =
+    filterModeSettings.stochrsi_hard_filter === true
+      ? "hard"
+      : filterModeSettings.stochrsi_hard_filter === false
+        ? "soft"
+        : null;
+
   return {
     // 🔴 SCHEMA VERSION & VALIDATION
     schema_version: schemaVersion,
@@ -297,9 +305,14 @@ export const formatTradeForExport = (t: any) => {
     // 🔴 UNIQUE IDENTIFIERS
     trade_id: tradeId,
     signal_id: signalId,
-    
+
     // 🔴 FILTER MODE SETTINGS (hard=blokerer trades, soft=bidrager til score)
     filter_modes: filterModeSettings,
+
+    // 🔴 EXPLICIT MODE FLAGS (for at undgå misforståelser i eksport-teksten)
+    stoch_rsi_filter_mode: stochRsiMode,
+    stoch_rsi_is_hard_filter: filterModeSettings.stochrsi_hard_filter ?? null,
+
 
     // Core trade data
     symbol: t.symbol,
@@ -403,7 +416,7 @@ export const formatTradeForExport = (t: any) => {
 
     // Soft conditions
     soft_ema_trend_passed: softEmaTrend,
-    soft_stoch_passed: softStoch,
+    soft_stoch_passed: stochRsiMode === "soft" ? softStoch : null,
     soft_macd_histogram_passed: softMacdHistogram,
     soft_macd_momentum_passed: softMacdMomentum,
     soft_bb_passed: softBb,
