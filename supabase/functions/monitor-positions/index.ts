@@ -490,12 +490,19 @@ serve(async (req) => {
                 atrCandidateStop = position.entry_price - atrStopOffset;
               }
               
-              console.log(`   ATR Mode: trigger=${breakEvenAtrTrigger}×ATR (${atrTriggerDistance.toFixed(6)}), offset=${breakEvenAtrStopOffset}×ATR (${atrStopOffset.toFixed(6)})`);
-              console.log(`   ATR Triggered: ${atrTriggered} (profit distance needed: ${atrTriggerDistance.toFixed(6)})`);
+              // AUDIT: BE_ATR_TRIGGER log entry
+              console.log(`🔔 BE_ATR_TRIGGER: ${position.symbol} ${position.side} | trigger=${breakEvenAtrTrigger}xATR offset=${breakEvenAtrStopOffset}xATR | ATR=${snapshotAtr.toFixed(6)} | triggerDist=${atrTriggerDistance.toFixed(6)} | offsetDist=${atrStopOffset.toFixed(6)}`);
+              console.log(`   ATR Triggered: ${atrTriggered} (current profit: ${profitDistance.toFixed(6)}, needed: ${atrTriggerDistance.toFixed(6)})`);
               
               if (atrTriggered) {
                 candidateStops.push({ price: atrCandidateStop, mode: 'ATR', triggerPrice: currentPrice });
               }
+            } else if (!breakEvenAtrModeEnabled) {
+              // AUDIT: BE_ATR_SKIPPED - ATR-BE disabled
+              console.log(`⏭️ BE_ATR_SKIPPED: disabled | ${position.symbol} ${position.side}`);
+            } else if (snapshotAtr <= 0) {
+              // AUDIT: BE_ATR_SKIPPED - Invalid ATR
+              console.log(`⏭️ BE_ATR_SKIPPED: invalid ATR=${snapshotAtr} | ${position.symbol} ${position.side}`);
             }
             
             // Mode 2: Profit %-baseret BE
@@ -630,6 +637,11 @@ serve(async (req) => {
                   })
                   .eq('id', position.id);
 
+                // AUDIT: BE_ATR_SL_SET log entry when ATR mode is used
+                if (bestCandidate.mode === 'ATR') {
+                  console.log(`\n🎯 BE_ATR_SL_SET: ${position.symbol} ${position.side} | newSL=${breakEvenAtPrice?.toFixed(6)} | entry=${position.entry_price} | offset=${breakEvenAtrStopOffset}xATR | ATR=${snapshotAtr.toFixed(6)}`);
+                }
+                
                 console.log(`\n📊 ═══════════════════════════════════════════════════════`);
                 console.log(`📊 BREAK-EVEN ACTIVATED - ${position.symbol} ${position.side}`);
                 console.log(`📊 ═══════════════════════════════════════════════════════`);
