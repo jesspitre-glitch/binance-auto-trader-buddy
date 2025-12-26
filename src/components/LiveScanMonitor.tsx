@@ -403,6 +403,44 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
           hardFilters.rsiMomentum = false;
         }
       }
+      
+      // StochRSI Zone Check - 🔴 TILFØJET: Vises altid med HARD/SOFT badge
+      if (config.stochrsi_enabled) {
+        enabledFilters.push('stochRSI');
+        const stochK = indicators.stochRSI_k;
+        
+        if (stochK !== null && stochK !== undefined) {
+          // Check if filterStatus is available from edge function
+          if (indicators.filterStatus?.hard?.stochrsi) {
+            hardFilters.stochRSI = indicators.filterStatus.hard.stochrsi.passed;
+            hardFiltersProgress.stochRSI = hardFilters.stochRSI ? 100 : 0;
+          } else {
+            // Fallback: check K value against thresholds
+            const oversold = config.stochrsi_oversold || 20;
+            const overbought = config.stochrsi_overbought || 80;
+            
+            const inLongZone = stochK <= oversold;
+            const inShortZone = stochK >= overbought;
+            
+            if (trend === 'long') {
+              hardFilters.stochRSI = inLongZone;
+            } else if (trend === 'short') {
+              hardFilters.stochRSI = inShortZone;
+            } else {
+              hardFilters.stochRSI = inLongZone || inShortZone;
+            }
+            
+            // Progress: distance to zone
+            const distanceToLongZone = Math.max(0, stochK - oversold);
+            const distanceToShortZone = Math.max(0, overbought - stochK);
+            const minDistance = Math.min(distanceToLongZone, distanceToShortZone);
+            hardFiltersProgress.stochRSI = hardFilters.stochRSI ? 100 : Math.max(0, 100 - minDistance);
+          }
+        } else {
+          hardFilters.stochRSI = false;
+          hardFiltersProgress.stochRSI = 0;
+        }
+      }
     }
 
     const totalEnabledFilters = enabledFilters.length;
@@ -421,7 +459,9 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
       const isMetForTrend = trend ? conditionDetails.rsi[trend] === true : false;
       softConditions.rsi = isMetForTrend;
     }
-    if (conditionDetails.stochRSI?.enabled) {
+    // 🔴 StochRSI: Kun tæl som soft condition hvis det IKKE er hard filter
+    const filterModeSettingsPreview: Record<string, boolean | undefined> = indicators.filter_mode_settings || {};
+    if (conditionDetails.stochRSI?.enabled && !filterModeSettingsPreview.stochrsi_hard_filter) {
       totalEnabledSoftConditions++;
       const isMetForTrend = trend ? conditionDetails.stochRSI[trend] === true : false;
       softConditions.stochRSI = isMetForTrend;
@@ -643,7 +683,8 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                           </span>
                         </div>
                       )}
-                      {coin.softConditions.stochRSI === true && (
+                      {/* 🔴 StochRSI: Vis kun her hvis det IKKE er hard filter */}
+                      {coin.softConditions.stochRSI === true && !coin.filterModeSettings.stochrsi_hard_filter && (
                         <div className="flex items-center gap-1.5">
                           <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
                           <span className="text-green-500">
@@ -911,6 +952,31 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                             </div>
                             <span className="font-mono font-bold">
                               {coin.indicators.rsiMomentum || 'N/A'}
+                            </span>
+                          </div>
+                        )}
+                        {/* 🔴 StochRSI Zone - vises altid med HARD/SOFT badge */}
+                        {coin.hardFilters.stochRSI !== undefined && (
+                          <div className="flex items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <CircularProgress 
+                                value={coin.hardFiltersProgress.stochRSI || 0} 
+                                size={16}
+                                passed={coin.hardFilters.stochRSI}
+                              />
+                              <span className={coin.hardFilters.stochRSI ? 'text-green-500' : 'opacity-70'}>
+                                StochRSI Zone
+                              </span>
+                              <span className={`text-[7px] px-1 py-0.5 rounded font-semibold ${
+                                coin.filterModeSettings.stochrsi_hard_filter 
+                                  ? 'bg-destructive/20 text-destructive' 
+                                  : 'bg-yellow-500/20 text-yellow-600'
+                              }`}>
+                                {coin.filterModeSettings.stochrsi_hard_filter ? 'HARD' : 'SOFT'}
+                              </span>
+                            </div>
+                            <span className="font-mono font-bold">
+                              K={coin.indicators.stochRSI_k?.toFixed(1) || 'N/A'}
                             </span>
                           </div>
                         )}
