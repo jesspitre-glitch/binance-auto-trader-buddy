@@ -2626,12 +2626,101 @@ serve(async (req) => {
             `📊 VOLUME TRI-STATE AUDIT | enabled=${config.volume_enabled} | current=${volCurrent ?? 'null'} (valid=${volCurrentValid}) | avg=${volAvg ?? 'null'} (valid=${volAvgValid}) | multiplier=${config.volume_multiplier} | hard_passed=${volumeMultiplierFilterPassedTriState} | soft_passed=${softVolumePassedTriState}`
           );
 
+          // 🔴 AUDIT: Generate unique signal_id for dublet-afklaring
+          const signalId = `${symbol}_${signal}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+          
+          // 🔴 ATR FILTER AUDIT - Detaljeret reason string
+          const atrFilterAudit = (() => {
+            const fs = analysis.filterStatus?.hard?.atr;
+            if (!config.atr_enabled) {
+              return { passed: null, reason: 'ATR_FILTER_DISABLED' };
+            }
+            const atrPctRaw = (atrValue / analysis.indicators.price) * 100;
+            const floorUsed = fs?.effective_min_atr_percent_used ?? fs?.atr_floor_used ?? config.min_atr_percent;
+            if (fs?.passed === true) {
+              return { 
+                passed: true, 
+                reason: `ATR_OK: ${atrPctRaw.toFixed(6)}% >= ${floorUsed?.toFixed(4) ?? 'N/A'}% floor`,
+                atr_value_raw: atrValue,
+                atr_pct_raw: atrPctRaw,
+                atr_timeframe: config.scan_interval,
+                atr_period: config.atr_period,
+                atr_source: 'entry',
+                atr_adaptive_enabled: config.adaptive_atr_enabled,
+                atr_base_used: config.atr_base_min,
+                atr_floor_used: config.atr_floor,
+                atr_ceiling_used: config.atr_ceiling,
+                final_min_atr_used: floorUsed,
+              };
+            } else {
+              return { 
+                passed: false, 
+                reason: `ATR_FAILED: ${atrPctRaw.toFixed(6)}% < ${floorUsed?.toFixed(4) ?? 'N/A'}% floor`,
+                atr_value_raw: atrValue,
+                atr_pct_raw: atrPctRaw,
+                atr_timeframe: config.scan_interval,
+                atr_period: config.atr_period,
+                atr_source: 'entry',
+                atr_adaptive_enabled: config.adaptive_atr_enabled,
+                atr_base_used: config.atr_base_min,
+                atr_floor_used: config.atr_floor,
+                atr_ceiling_used: config.atr_ceiling,
+                final_min_atr_used: floorUsed,
+              };
+            }
+          })();
+          
+          // 🔴 ADX FILTER AUDIT - Detaljeret reason string med DI værdier
+          const adxFilterAudit = (() => {
+            if (!config.adx_enabled) {
+              return { passed: null, reason: 'ADX_FILTER_DISABLED' };
+            }
+            const adxVal = analysis.indicators.adx;
+            const adxAuditData = analysis.indicators.adx_audit;
+            const floorUsed = config.adx_floor ?? 20;
+            const ceilingUsed = config.adx_ceiling ?? 40;
+            
+            if (adxVal === null || adxVal === undefined) {
+              return { passed: null, reason: 'ADX_VALUE_MISSING' };
+            }
+            
+            const inRange = adxVal >= floorUsed && adxVal <= ceilingUsed;
+            const reason = inRange 
+              ? `ADX_OK: ${adxVal.toFixed(4)} in [${floorUsed}, ${ceilingUsed}]`
+              : adxVal < floorUsed
+                ? `ADX_BELOW_MIN: ${adxVal.toFixed(4)} < ${floorUsed}`
+                : `ADX_ABOVE_MAX: ${adxVal.toFixed(4)} > ${ceilingUsed}`;
+            
+            return {
+              passed: inRange,
+              reason,
+              adx_value_raw: adxVal,
+              adx_floor_used: floorUsed,
+              adx_ceiling_used: ceilingUsed,
+              adx_adaptive_enabled: config.adaptive_adx_enabled,
+              adx_base_used: config.adx_base_min,
+              plus_di: adxAuditData?.plus_di ?? null,
+              minus_di: adxAuditData?.minus_di ?? null,
+              dx_instant: adxAuditData?.dx_instant ?? null,
+              adx_timeframe: config.trend_timeframe,
+              adx_period: config.adx_period,
+            };
+          })();
+          
+          console.log(`\n📋 ENTRY AUDIT - ${symbol} ${signal}`);
+          console.log(`   signal_id: ${signalId}`);
+          console.log(`   expected_stop_loss_price: ${analysis.stopLoss.toFixed(8)}`);
+          console.log(`   ATR: ${atrFilterAudit.reason}`);
+          console.log(`   ADX: ${adxFilterAudit.reason}`);
           
           const comprehensiveSnapshot = {
             // 🔴 SCHEMA VERSION - Bruges til at skelne legacy vs nye snapshots
             // v1 = legacy trades før schema fixes (ingen garanti for felter)
             // v2 = nye trades med garanterede felter (MACD, BE, ADX audit, trailing audit, StochRSI)
             schema_version: 2,
+            
+            // 🔴 UNIQUE IDENTIFIERS for dublet-afklaring
+            signal_id: signalId,
             
             // Config values
             ...config,
@@ -2659,6 +2748,12 @@ serve(async (req) => {
               atr_floor_source: analysis.filterStatus?.hard?.atr?.atr_floor_source ?? 'unknown',
               atr_floor_passed_boolean: analysis.filterStatus?.hard?.atr?.passed === true,
             },
+            
+            // 🔴 EXTENDED ATR FILTER AUDIT - Fuld forklaring af filter-beslutning
+            atr_filter_audit: atrFilterAudit,
+            
+            // 🔴 EXTENDED ADX FILTER AUDIT - Fuld forklaring af filter-beslutning
+            adx_filter_audit: adxFilterAudit,
             
             // EMA spread percent (already in indicators but ensuring it's there)
             ema_spread_percent: analysis.indicators.emaSpreadPercent,

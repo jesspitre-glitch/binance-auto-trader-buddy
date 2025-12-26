@@ -279,6 +279,10 @@ export const formatTradeForExport = (t: any) => {
     ? (snap.trend_higher ?? (side === 'long' ? 'BULLISH' : 'BEARISH'))
     : snap.trend_higher;
 
+  // 🔴 UNIQUE IDENTIFIERS for dublet-afklaring
+  const tradeId = t.id || null;
+  const signalId = snap.signal_id || null;
+
   return {
     // 🔴 SCHEMA VERSION & VALIDATION
     schema_version: schemaVersion,
@@ -286,35 +290,55 @@ export const formatTradeForExport = (t: any) => {
     schema_error: hasSchemaError,
     schema_error_reason: schemaErrorReason,
 
+    // 🔴 UNIQUE IDENTIFIERS
+    trade_id: tradeId,
+    signal_id: signalId,
+
     // Core trade data
     symbol: t.symbol,
     side: t.side,
     entry_price: +t.entry_price,
     exit_price: +t.exit_price,
-    pnl_abs: +(t.pnl?.toFixed(4) || 0),
-    pnl_pct: +(t.pnl_percent?.toFixed(4) || 0),
+    pnl_abs: +(t.pnl?.toFixed(6) || 0),
+    pnl_pct: +(t.pnl_percent?.toFixed(6) || 0),
     duration_seconds: durationSec,
     exit_reason: exitReason,
 
-    // EMA
-    EMA_fast: snap.emaFast != null ? +Number(snap.emaFast).toFixed(4) : null,
-    EMA_medium: snap.emaMedium != null ? +Number(snap.emaMedium).toFixed(4) : null,
-    EMA_slow: snap.emaSlow != null ? +Number(snap.emaSlow).toFixed(4) : null,
-    EMA_spread_pct: emaSpread != null ? +Number(emaSpread).toFixed(4) : null,
+    // EMA - higher precision for analysis
+    EMA_fast: snap.emaFast != null ? +Number(snap.emaFast).toFixed(8) : null,
+    EMA_medium: snap.emaMedium != null ? +Number(snap.emaMedium).toFixed(8) : null,
+    EMA_slow: snap.emaSlow != null ? +Number(snap.emaSlow).toFixed(8) : null,
+    EMA_spread_pct: emaSpread != null ? +Number(emaSpread).toFixed(8) : null,
 
-    // MACD (entydigt schema)
+    // MACD (entydigt schema) - full precision
     macd_signal_period: macdSignalPeriod,
-    macd_line: macdLine != null ? +Number(macdLine).toFixed(12) : null,
-    macd_signal_line: macdSignalLine != null ? +Number(macdSignalLine).toFixed(12) : null,
-    macd_histogram: macdHistogram != null ? +Number(macdHistogram).toFixed(12) : null,
+    macd_line: macdLine != null ? +Number(macdLine).toFixed(14) : null,
+    macd_signal_line: macdSignalLine != null ? +Number(macdSignalLine).toFixed(14) : null,
+    macd_histogram: macdHistogram != null ? +Number(macdHistogram).toFixed(14) : null,
     MACD_direction_filter_passed: macdDirPassed,
     MACD_histogram_soft_passed: softMacdHistogram,
     MACD_momentum_soft_passed: softMacdMomentum,
 
-    // ATR
-    ATR_value: snap.atr != null ? +Number(snap.atr).toFixed(6) : null,
-    ATR_pct: atrPct != null ? +Number(atrPct).toFixed(4) : null,
+    // ATR - higher precision (MUST NOT be 0.00 if value exists)
+    ATR_value: snap.atr != null ? +Number(snap.atr).toFixed(10) : null,
+    ATR_pct: atrPct != null ? +Number(atrPct).toFixed(8) : null,
     ATR_filter_passed: atrFilterPassed,
+    
+    // 🔴 ATR FILTER AUDIT - Fuld forklaring af filter-beslutning
+    ATR_filter_audit: snap.atr_filter_audit ? {
+      passed: snap.atr_filter_audit.passed,
+      reason: snap.atr_filter_audit.reason,
+      atr_value_raw: snap.atr_filter_audit.atr_value_raw != null ? +Number(snap.atr_filter_audit.atr_value_raw).toFixed(10) : null,
+      atr_pct_raw: snap.atr_filter_audit.atr_pct_raw != null ? +Number(snap.atr_filter_audit.atr_pct_raw).toFixed(8) : null,
+      atr_timeframe: snap.atr_filter_audit.atr_timeframe,
+      atr_period: snap.atr_filter_audit.atr_period,
+      atr_source: snap.atr_filter_audit.atr_source,
+      atr_adaptive_enabled: snap.atr_filter_audit.atr_adaptive_enabled,
+      atr_base_used: snap.atr_filter_audit.atr_base_used,
+      atr_floor_used: snap.atr_filter_audit.atr_floor_used,
+      atr_ceiling_used: snap.atr_filter_audit.atr_ceiling_used,
+      final_min_atr_used: snap.atr_filter_audit.final_min_atr_used,
+    } : null,
     // 🔴 ATR AUDIT - Entydigt dokumentation af ATR source (v2 garanti)
     ATR_audit: snap.atr_audit ? {
       atr_value: snap.atr_audit.atr_value,
@@ -326,17 +350,32 @@ export const formatTradeForExport = (t: any) => {
     } : null,
 
     // ADX - med audit felter (v2 garanterer adx_audit hvis ADX enabled)
-    ADX_value: snap.adx != null ? +Number(snap.adx).toFixed(2) : null,
+    ADX_value: snap.adx != null ? +Number(snap.adx).toFixed(4) : null,
     ADX_filter_passed: adxFilterPassed,
     ADX_audit: snap.adx_audit ? {
-      adx_value: snap.adx_audit.adx_value,
+      adx_value: snap.adx_audit.adx_value != null ? +Number(snap.adx_audit.adx_value).toFixed(4) : null,
       adx_period: snap.adx_audit.adx_period,
       adx_timeframe: snap.adx_audit.adx_timeframe,
       adx_floor_used: snap.adx_audit.adx_floor_used,
       adx_ceiling_used: snap.adx_audit.adx_ceiling_used,
-      plus_di: snap.adx_audit.plus_di != null ? +Number(snap.adx_audit.plus_di).toFixed(2) : null,
-      minus_di: snap.adx_audit.minus_di != null ? +Number(snap.adx_audit.minus_di).toFixed(2) : null,
-      dx_instant: snap.adx_audit.dx_instant != null ? +Number(snap.adx_audit.dx_instant).toFixed(2) : null,
+      plus_di: snap.adx_audit.plus_di != null ? +Number(snap.adx_audit.plus_di).toFixed(4) : null,
+      minus_di: snap.adx_audit.minus_di != null ? +Number(snap.adx_audit.minus_di).toFixed(4) : null,
+      dx_instant: snap.adx_audit.dx_instant != null ? +Number(snap.adx_audit.dx_instant).toFixed(4) : null,
+    } : null,
+    
+    // 🔴 ADX FILTER AUDIT - Fuld forklaring af filter-beslutning
+    ADX_filter_audit: snap.adx_filter_audit ? {
+      passed: snap.adx_filter_audit.passed,
+      reason: snap.adx_filter_audit.reason,
+      adx_value_raw: snap.adx_filter_audit.adx_value_raw != null ? +Number(snap.adx_filter_audit.adx_value_raw).toFixed(4) : null,
+      adx_floor_used: snap.adx_filter_audit.adx_floor_used,
+      adx_ceiling_used: snap.adx_filter_audit.adx_ceiling_used,
+      adx_adaptive_enabled: snap.adx_filter_audit.adx_adaptive_enabled,
+      adx_base_used: snap.adx_filter_audit.adx_base_used,
+      plus_di: snap.adx_filter_audit.plus_di != null ? +Number(snap.adx_filter_audit.plus_di).toFixed(4) : null,
+      minus_di: snap.adx_filter_audit.minus_di != null ? +Number(snap.adx_filter_audit.minus_di).toFixed(4) : null,
+      adx_timeframe: snap.adx_filter_audit.adx_timeframe,
+      adx_period: snap.adx_filter_audit.adx_period,
     } : null,
 
     // Volume
