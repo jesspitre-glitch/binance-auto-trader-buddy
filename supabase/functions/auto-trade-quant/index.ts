@@ -14,22 +14,26 @@ interface IndicatorConfig {
   ema_medium_trend: number;
   min_ema_spread_percent: number;
   max_ema_spread_percent?: number;
+  ema_hard_filter?: boolean;
   rsi_enabled: boolean;
   rsi_period: number;
   rsi_min_long: number;
   rsi_max_short: number;
   rsi_zone_width: number;
   rsi_momentum_periods: number;
+  rsi_hard_filter?: boolean;
   stochrsi_enabled: boolean;
   stochrsi_period: number;
   stochrsi_k_period: number;
   stochrsi_d_period: number;
   stochrsi_overbought: number;
   stochrsi_oversold: number;
+  stochrsi_hard_filter?: boolean;
   pivot_points_enabled: boolean;
   pivot_points_timeframe: string;
   pivot_points_lookback: number;
   pivot_points_near_threshold: number;
+  pivot_points_hard_filter?: boolean;
   macd_enabled: boolean;
   macd_fast: number;
   macd_slow: number;
@@ -37,11 +41,13 @@ interface IndicatorConfig {
   macd_histogram_threshold: number;
   macd_direction_enabled: boolean;
   macd_color_change_hard_filter: boolean;
+  macd_hard_filter?: boolean;
   histogram_momentum_enabled: boolean;
   histogram_momentum_periods: number;
   bb_enabled: boolean;
   bb_period: number;
   bb_std_dev: number;
+  bb_hard_filter?: boolean;
   atr_enabled: boolean;
   atr_period: number;
   min_atr: number;
@@ -54,6 +60,7 @@ interface IndicatorConfig {
   atr_take_profit_multiplier: number;
   atr_trailing_stop_multiplier: number;
   break_even_atr: number;
+  atr_hard_filter?: boolean;
   adx_enabled: boolean;
   adx_period: number;
   adx_threshold: number;
@@ -61,9 +68,11 @@ interface IndicatorConfig {
   adx_base_min?: number;
   adx_floor?: number;
   adx_ceiling?: number;
+  adx_hard_filter?: boolean;
   volume_enabled: boolean;
   volume_avg_period: number;
   volume_multiplier: number;
+  volume_hard_filter?: boolean;
   signal_conditions_required: number;
   position_size_percent: number;
   risk_per_trade_percent: number;
@@ -76,10 +85,12 @@ interface IndicatorConfig {
   trend_timeframe: string;
   higher_trend_enabled: boolean;
   higher_trend_timeframe: string;
+  higher_trend_hard_filter?: boolean;
   klines_limit: number;
   // VWAP
   vwap_enabled?: boolean;
   vwap_period?: number;
+  vwap_hard_filter?: boolean;
 }
 
 // Calculate strategy identifier from ALL config parameters using SHA-256 hash
@@ -1723,6 +1734,20 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       longConditionsMet,
       shortConditionsMet,
       requiredConditions
+    },
+    // 🔴 FILTER MODE SETTINGS - Gemmer om hvert filter er hard eller soft
+    filter_mode_settings: {
+      ema_hard_filter: config.ema_hard_filter ?? true,
+      rsi_hard_filter: config.rsi_hard_filter ?? true,
+      stochrsi_hard_filter: config.stochrsi_hard_filter ?? false,
+      macd_hard_filter: config.macd_hard_filter ?? false,
+      bb_hard_filter: config.bb_hard_filter ?? false,
+      vwap_hard_filter: config.vwap_hard_filter ?? false,
+      atr_hard_filter: config.atr_hard_filter ?? true,
+      adx_hard_filter: config.adx_hard_filter ?? true,
+      volume_hard_filter: config.volume_hard_filter ?? true,
+      pivot_points_hard_filter: config.pivot_points_hard_filter ?? false,
+      higher_trend_hard_filter: config.higher_trend_hard_filter ?? true,
     },
     // OBV (On Balance Volume) - beregnes altid for logging, ikke som filter
     obv: (() => {

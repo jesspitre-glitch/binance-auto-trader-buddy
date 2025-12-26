@@ -28,6 +28,7 @@ interface CoinSignalStrength {
   totalEnabledFilters: number;
   softConditions: Record<string, boolean>; // Hvilke bløde conditions er opfyldt
   totalEnabledSoftConditions: number;
+  filterModeSettings: Record<string, boolean>; // Om hvert filter er hard (true) eller soft (false)
 }
 
 export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) => {
@@ -454,6 +455,21 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
 
     console.log(`Updating ${result.symbol}: strength=${strength.toFixed(1)}%, trend=${trend}, conditions=${actualConditionsMet}/${conditionsRequired} (long:${longConditionsMet}, short:${shortConditionsMet}), hardFilters=${JSON.stringify(hardFilters)}`);
 
+    // Hent filter mode settings fra indicators
+    const filterModeSettings: Record<string, boolean> = indicators.filter_mode_settings || {
+      ema_hard_filter: config?.ema_hard_filter ?? true,
+      rsi_hard_filter: config?.rsi_hard_filter ?? true,
+      stochrsi_hard_filter: config?.stochrsi_hard_filter ?? false,
+      macd_hard_filter: config?.macd_hard_filter ?? false,
+      bb_hard_filter: config?.bb_hard_filter ?? false,
+      vwap_hard_filter: config?.vwap_hard_filter ?? false,
+      atr_hard_filter: config?.atr_hard_filter ?? true,
+      adx_hard_filter: config?.adx_hard_filter ?? true,
+      volume_hard_filter: config?.volume_hard_filter ?? true,
+      pivot_points_hard_filter: config?.pivot_points_hard_filter ?? false,
+      higher_trend_hard_filter: config?.higher_trend_hard_filter ?? true,
+    };
+
     setCoins((prev) => {
       const newMap = new Map(prev);
       newMap.set(result.symbol, {
@@ -471,6 +487,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
         totalEnabledFilters,
         softConditions,
         totalEnabledSoftConditions,
+        filterModeSettings,
       });
       return newMap;
     });
@@ -700,6 +717,9 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                               <span className={coin.hardFilters.emaSpread ? 'text-green-500' : 'opacity-70'}>
                                 EMA Spread
                               </span>
+                              <span className="text-[7px] px-1 py-0.5 rounded bg-destructive/20 text-destructive font-semibold">
+                                HARD
+                              </span>
                             </div>
                             <span className="font-mono font-bold">
                               {coin.indicators.emaSpreadPercent?.toFixed(2)}%
@@ -716,6 +736,13 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                               />
                               <span className={coin.hardFilters.atr ? 'text-green-500' : 'opacity-70'}>
                                 ATR
+                              </span>
+                              <span className={`text-[7px] px-1 py-0.5 rounded font-semibold ${
+                                coin.filterModeSettings.atr_hard_filter 
+                                  ? 'bg-destructive/20 text-destructive' 
+                                  : 'bg-yellow-500/20 text-yellow-600'
+                              }`}>
+                                {coin.filterModeSettings.atr_hard_filter ? 'HARD' : 'SOFT'}
                               </span>
                             </div>
                             <span className="font-mono font-bold">
@@ -736,6 +763,13 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                               <span className={coin.hardFilters.adx ? 'text-green-500' : 'opacity-70'}>
                                 ADX
                               </span>
+                              <span className={`text-[7px] px-1 py-0.5 rounded font-semibold ${
+                                coin.filterModeSettings.adx_hard_filter 
+                                  ? 'bg-destructive/20 text-destructive' 
+                                  : 'bg-yellow-500/20 text-yellow-600'
+                              }`}>
+                                {coin.filterModeSettings.adx_hard_filter ? 'HARD' : 'SOFT'}
+                              </span>
                             </div>
                             <span className="font-mono font-bold">
                               {coin.indicators.adx?.toFixed(1) || 'N/A'}
@@ -752,6 +786,13 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                               />
                               <span className={coin.hardFilters.volume ? 'text-green-500' : 'opacity-70'}>
                                 Volume
+                              </span>
+                              <span className={`text-[7px] px-1 py-0.5 rounded font-semibold ${
+                                coin.filterModeSettings.volume_hard_filter 
+                                  ? 'bg-destructive/20 text-destructive' 
+                                  : 'bg-yellow-500/20 text-yellow-600'
+                              }`}>
+                                {coin.filterModeSettings.volume_hard_filter ? 'HARD' : 'SOFT'}
                               </span>
                             </div>
                             <span className="font-mono font-bold">
@@ -772,6 +813,13 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                               <span className={coin.hardFilters.macdColorChange ? 'text-green-500' : 'opacity-70'}>
                                 MACD Farveskift
                               </span>
+                              <span className={`text-[7px] px-1 py-0.5 rounded font-semibold ${
+                                coin.filterModeSettings.macd_hard_filter 
+                                  ? 'bg-destructive/20 text-destructive' 
+                                  : 'bg-yellow-500/20 text-yellow-600'
+                              }`}>
+                                {coin.filterModeSettings.macd_hard_filter ? 'HARD' : 'SOFT'}
+                              </span>
                             </div>
                             <span className="font-mono font-bold">
                               {coin.hardFilters.macdColorChange ? '✓' : '✗'}
@@ -788,6 +836,13 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                               />
                               <span className={coin.hardFilters.macdDirection ? 'text-green-500' : 'opacity-70'}>
                                 MACD Retning
+                              </span>
+                              <span className={`text-[7px] px-1 py-0.5 rounded font-semibold ${
+                                coin.filterModeSettings.macd_hard_filter 
+                                  ? 'bg-destructive/20 text-destructive' 
+                                  : 'bg-yellow-500/20 text-yellow-600'
+                              }`}>
+                                {coin.filterModeSettings.macd_hard_filter ? 'HARD' : 'SOFT'}
                               </span>
                             </div>
                             <span className="font-mono font-bold text-[8px]">
@@ -810,6 +865,13 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                               <span className={coin.hardFilters.higherTrend ? 'text-green-500' : 'opacity-70'}>
                                 Higher Trend
                               </span>
+                              <span className={`text-[7px] px-1 py-0.5 rounded font-semibold ${
+                                coin.filterModeSettings.higher_trend_hard_filter 
+                                  ? 'bg-destructive/20 text-destructive' 
+                                  : 'bg-yellow-500/20 text-yellow-600'
+                              }`}>
+                                {coin.filterModeSettings.higher_trend_hard_filter ? 'HARD' : 'SOFT'}
+                              </span>
                             </div>
                             <span className="font-mono font-bold text-[8px]">
                               {coin.indicators.higherTrend || coin.indicators.trend_higher || 'N/A'}
@@ -827,6 +889,13 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                               <span className={coin.hardFilters.emaTrend ? 'text-green-500' : 'opacity-70'}>
                                 EMA Trend
                               </span>
+                              <span className={`text-[7px] px-1 py-0.5 rounded font-semibold ${
+                                coin.filterModeSettings.ema_hard_filter 
+                                  ? 'bg-destructive/20 text-destructive' 
+                                  : 'bg-yellow-500/20 text-yellow-600'
+                              }`}>
+                                {coin.filterModeSettings.ema_hard_filter ? 'HARD' : 'SOFT'}
+                              </span>
                             </div>
                             <span className="font-mono font-bold text-[8px]">
                               {coin.hardFilters.emaTrend ? '✓' : '✗'}
@@ -843,6 +912,13 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                               />
                               <span className={coin.hardFilters.rsiMomentum ? 'text-green-500' : 'opacity-70'}>
                                 RSI Momentum
+                              </span>
+                              <span className={`text-[7px] px-1 py-0.5 rounded font-semibold ${
+                                coin.filterModeSettings.rsi_hard_filter 
+                                  ? 'bg-destructive/20 text-destructive' 
+                                  : 'bg-yellow-500/20 text-yellow-600'
+                              }`}>
+                                {coin.filterModeSettings.rsi_hard_filter ? 'HARD' : 'SOFT'}
                               </span>
                             </div>
                             <span className="font-mono font-bold">
