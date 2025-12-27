@@ -409,34 +409,51 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
       // StochRSI Zone Check - 🔴 TILFØJET: Vises altid med HARD/SOFT badge
       if (config.stochrsi_enabled) {
         enabledFilters.push('stochRSI');
-        const stochK = indicators.stochRSI_k;
-        
-        if (stochK !== null && stochK !== undefined) {
-          // Check if filterStatus is available from edge function
-          if (indicators.filterStatus?.hard?.stochrsi) {
-            hardFilters.stochRSI = indicators.filterStatus.hard.stochrsi.passed;
-            hardFiltersProgress.stochRSI = hardFilters.stochRSI ? 100 : 0;
-          } else {
-            // Fallback: check K value against thresholds
-            const oversold = config.stochrsi_oversold || 20;
-            const overbought = config.stochrsi_overbought || 80;
-            
-            const inLongZone = stochK <= oversold;
-            const inShortZone = stochK >= overbought;
-            
-            if (trend === 'long') {
-              hardFilters.stochRSI = inLongZone;
-            } else if (trend === 'short') {
-              hardFilters.stochRSI = inShortZone;
+        const stochKRaw = indicators.stochRSI_k;
+        const stochDRaw = indicators.stochRSI_d;
+
+        if (stochKRaw !== null && stochKRaw !== undefined) {
+          const oversold = config.stochrsi_oversold ?? 20;
+          const overbought = config.stochrsi_overbought ?? 80;
+
+          const k = Number(stochKRaw);
+          const d = stochDRaw !== null && stochDRaw !== undefined ? Number(stochDRaw) : k;
+
+          const edgeEval = indicators.filterStatus?.hard?.stochrsi;
+          const edgePassed =
+            edgeEval && typeof edgeEval === "object" && (edgeEval as any).passed !== undefined
+              ? (edgeEval as any).passed === true
+              : undefined;
+
+          const longPassed = Number.isFinite(k) && Number.isFinite(d) && k <= oversold && d <= oversold;
+          const shortPassed = Number.isFinite(k) && Number.isFinite(d) && k >= overbought && d >= overbought;
+
+          if (trend === 'long') {
+            // LONG kræver oversolgt zone (K og D under oversold)
+            hardFilters.stochRSI = edgePassed ?? longPassed;
+
+            if (hardFilters.stochRSI) {
+              hardFiltersProgress.stochRSI = 100;
             } else {
-              hardFilters.stochRSI = inLongZone || inShortZone;
+              const limiting = Math.max(k, d);
+              const pct = Math.max(0, Math.min(((100 - limiting) / (100 - oversold)) * 99, 99));
+              hardFiltersProgress.stochRSI = pct;
             }
-            
-            // Progress: distance to zone
-            const distanceToLongZone = Math.max(0, stochK - oversold);
-            const distanceToShortZone = Math.max(0, overbought - stochK);
-            const minDistance = Math.min(distanceToLongZone, distanceToShortZone);
-            hardFiltersProgress.stochRSI = hardFilters.stochRSI ? 100 : Math.max(0, 100 - minDistance);
+          } else if (trend === 'short') {
+            // SHORT kræver overkøbt zone (K og D over overbought)
+            hardFilters.stochRSI = edgePassed ?? shortPassed;
+
+            if (hardFilters.stochRSI) {
+              hardFiltersProgress.stochRSI = 100;
+            } else {
+              const limiting = Math.min(k, d);
+              const pct = Math.max(0, Math.min((limiting / overbought) * 99, 99));
+              hardFiltersProgress.stochRSI = pct;
+            }
+          } else {
+            // Ingen klar retning: vis kun fuld hvis en af zonerne er HELT opfyldt
+            hardFilters.stochRSI = edgePassed ?? (longPassed || shortPassed);
+            hardFiltersProgress.stochRSI = hardFilters.stochRSI ? 100 : 0;
           }
         } else {
           hardFilters.stochRSI = false;
