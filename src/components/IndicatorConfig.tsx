@@ -495,15 +495,15 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
   const softRulesMax = visibleSoftRules.length;
   const activeSoftRulesCount = visibleSoftRules.filter((r) => r.enabled).length;
 
-  // Clamp required soft conditions so it never exceeds number of available SOFT rules.
+  // Clamp required soft conditions so it never exceeds number of ACTIVE SOFT rules.
   useEffect(() => {
     setFormData((prev) => {
       const current = Number(prev.signal_conditions_required ?? 0);
-      const clamped = Math.max(0, Math.min(current, softRulesMax));
+      const clamped = Math.max(0, Math.min(current, activeSoftRulesCount));
       if (clamped === current) return prev;
       return { ...prev, signal_conditions_required: clamped };
     });
-  }, [softRulesMax]);
+  }, [activeSoftRulesCount]);
 
   return (
     <div className="space-y-6">
@@ -1583,10 +1583,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <Slider
               id="signal_conditions_required"
               min={0}
-              max={softRulesMax}
+              max={activeSoftRulesCount}
               step={1}
-              disabled={softRulesMax === 0}
-              value={[Math.min(formData.signal_conditions_required, softRulesMax)]}
+              disabled={activeSoftRulesCount === 0}
+              value={[Math.min(formData.signal_conditions_required, activeSoftRulesCount)]}
               onValueChange={(value) => setFormData({ ...formData, signal_conditions_required: value[0] })}
             />
             <p className="text-xs text-muted-foreground">
@@ -1601,11 +1601,13 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               <strong>
                 Aktive: {activeSoftRulesCount}/{softRulesMax}
               </strong>
-              {softRulesMax === 0 && (
+              {activeSoftRulesCount === 0 && (
                 <>
                   <br />
                   <span>
-                    Alle relevante betingelser er sat som HARD filters — soft-kravet sættes derfor til 0.
+                    {softRulesMax === 0 
+                      ? "Alle relevante betingelser er sat som HARD filters — soft-kravet sættes derfor til 0."
+                      : "Ingen soft betingelser er aktiveret — soft-kravet sættes derfor til 0."}
                   </span>
                 </>
               )}
