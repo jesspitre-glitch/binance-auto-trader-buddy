@@ -254,14 +254,16 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
         enabledFilters.push('volume');
         if (indicators.volumeRatio !== null && indicators.volumeRatio !== undefined) {
           // Check if filterStatus is available (from edge function)
-          if (indicators.filterStatus?.hard?.volume) {
-            // Use edge function's evaluation
-            hardFilters.volume = indicators.filterStatus.hard.volume.passed;
-            hardFiltersProgress.volume = hardFilters.volume ? 100 : Math.min((indicators.volumeRatio / config.volume_multiplier) * 100, 99);
+          if (indicators.filterStatus?.hard?.volume && indicators.filterStatus.hard.volume.passed !== undefined) {
+            // Use edge function's evaluation - ONLY true if passed === true (not null or false)
+            hardFilters.volume = indicators.filterStatus.hard.volume.passed === true;
+            const progressRatio = Math.min((indicators.volumeRatio / config.volume_multiplier) * 100, 100);
+            hardFiltersProgress.volume = hardFilters.volume ? 100 : Math.min(progressRatio, 99);
           } else {
             // Fallback to local calculation
-            hardFiltersProgress.volume = Math.min((indicators.volumeRatio / config.volume_multiplier) * 100, 100);
             hardFilters.volume = indicators.volumeRatio >= config.volume_multiplier;
+            const progressRatio = Math.min((indicators.volumeRatio / config.volume_multiplier) * 100, 100);
+            hardFiltersProgress.volume = hardFilters.volume ? 100 : Math.min(progressRatio, 99);
           }
         } else {
           hardFiltersProgress.volume = 0;
@@ -825,8 +827,8 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                               </span>
                             </div>
                             <span className="font-mono font-bold">
-                              {coin.indicators.volumeRatio ? 
-                                (coin.indicators.volumeRatio / 100).toFixed(2) + 'x' : 
+                              {coin.indicators.volumeRatio != null ? 
+                                coin.indicators.volumeRatio.toFixed(2) + 'x' : 
                                 'N/A'}
                             </span>
                           </div>
