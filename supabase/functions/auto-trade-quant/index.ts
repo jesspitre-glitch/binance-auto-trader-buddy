@@ -1329,11 +1329,14 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       console.log(`   📊 StochRSI (HARD): K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)} - Long: ${stochRSILong ? '✅' : '❌'} (K<${config.stochrsi_oversold} AND D<${config.stochrsi_oversold}), Short: ${stochRSIShort ? '✅' : '❌'} (K>${config.stochrsi_overbought} AND D>${config.stochrsi_overbought})`);
     } else {
       console.log(`   📊 StochRSI (SOFT): K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)} - Long: ${stochRSILong ? '✅' : '❌'}, Short: ${stochRSIShort ? '✅' : '❌'}`);
+      
+      // 🔴 FIX: Kun tilføj til soft conditions hvis det IKKE er hard filter
+      // Ellers tælles det dobbelt (som hard OG soft)
+      longConditions.push(stochRSILong);
+      shortConditions.push(stochRSIShort);
     }
     
-    // Tilføj altid til soft conditions (for scoring)
-    longConditions.push(stochRSILong);
-    shortConditions.push(stochRSIShort);
+    // Gem altid i conditionDetails til visning
     conditionDetails.stochRSI.long = stochRSILong;
     conditionDetails.stochRSI.short = stochRSIShort;
   } else if (config.stochrsi_enabled && !stochRSI) {
