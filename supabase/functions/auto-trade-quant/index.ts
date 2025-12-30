@@ -1537,8 +1537,28 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // (hvis volume er disabled eller data mangler, blokerer den IKKE trades)
   const volumeHardPassed = filterStatus.hard.volume.passed === null || filterStatus.hard.volume.passed === true;
   
-  // 🔴 StochRSI hard filter - kun hvis stochrsi_hard_filter=true
-  const stochrsiHardPassed = !config.stochrsi_enabled || config.stochrsi_hard_filter !== true || filterStatus.hard.stochrsi.passed;
+  // 🔴 StochRSI hard filter - RETNINGSSPECIFIK! 
+  // LONG kræver K og D i oversold zone (<15), SHORT kræver K og D i overbought zone (>85)
+  // Den gamle logik tillod trades hvis bare én zone var opfyldt - FORKERT!
+  let stochrsiHardPassed = true;
+  if (config.stochrsi_enabled && config.stochrsi_hard_filter === true) {
+    // Tjek retningsspecifikt: LONG skal have oversold, SHORT skal have overbought
+    if (finalSide === 'LONG') {
+      stochrsiHardPassed = filterStatus.hard.stochrsi.long === true;
+      if (!stochrsiHardPassed) {
+        console.log(`   🚫 StochRSI HARD BLOKERER LONG: K=${filterStatus.hard.stochrsi.value} - kræver K<${config.stochrsi_oversold} AND D<${config.stochrsi_oversold}`);
+      }
+    } else if (finalSide === 'SHORT') {
+      stochrsiHardPassed = filterStatus.hard.stochrsi.short === true;
+      if (!stochrsiHardPassed) {
+        console.log(`   🚫 StochRSI HARD BLOKERER SHORT: K=${filterStatus.hard.stochrsi.value} - kræver K>${config.stochrsi_overbought} AND D>${config.stochrsi_overbought}`);
+      }
+    }
+    // For NONE signal (ingen retning bestemt endnu), tjek om mindst én retning er mulig
+    else {
+      stochrsiHardPassed = filterStatus.hard.stochrsi.long === true || filterStatus.hard.stochrsi.short === true;
+    }
+  }
   
   const hardFiltersPass = 
     (!config.ema_enabled || filterStatus.hard.emaSpread.passed) &&
