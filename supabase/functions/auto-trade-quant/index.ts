@@ -2934,6 +2934,16 @@ serve(async (req) => {
               ? (analysis.indicators.conditionDetails?.pivotPoints?.[signal.toLowerCase()] === true)
               : null,
             
+            // 🔴 VWAP - Full export for AI analysis
+            soft_vwap_passed: config.vwap_enabled 
+              ? (analysis.indicators.conditionDetails?.vwap?.[signal.toLowerCase()] === true)
+              : null,
+            vwap: analysis.indicators.conditionDetails?.vwap?.value ?? null,
+            vwap_enabled: config.vwap_enabled ?? false,
+            vwap_period: config.vwap_period ?? 50,
+            vwap_timeframe: config.trend_timeframe ?? config.scan_interval ?? '5m',
+            vwap_captured_at: new Date().toISOString(),
+            
             // 🔴 FIX: soft_conditions_total - beregn DIREKTE fra de explicitte booleans ovenfor
             // Tæller kun true (ikke false eller null)
             soft_conditions_total: (() => {
@@ -2946,6 +2956,8 @@ serve(async (req) => {
               // 🔴 FIX: Bruger tri-state soft volume
               if (softVolumePassedTriState === true) total++;
               if (config.pivot_points_enabled && analysis.indicators.conditionDetails?.pivotPoints?.[signal.toLowerCase()] === true) total++;
+              // 🔴 VWAP soft condition
+              if (config.vwap_enabled && analysis.indicators.conditionDetails?.vwap?.[signal.toLowerCase()] === true) total++;
               return total;
             })(),
             
