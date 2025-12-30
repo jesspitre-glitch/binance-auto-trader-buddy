@@ -275,13 +275,37 @@ serve(async (req) => {
         // Tjek om trailing stop ALLEREDE er aktiveret (fra database)
         let trailingAlreadyActivated = position.trailing_stop != null && position.trailing_stop > 0;
         
-        // Hent ALTID konfiguration fra database - ikke kun for auto-trade positioner
-        // Dette sikrer at synkroniserede Binance-positioner også får timeout og andre indstillinger
-        const { data: configData } = await supabaseClient
-          .from('indicator_config')
-          .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry')
+        // 🔴 FIX: Hent den AKTIVE strategi fra trading_session - ikke bare en tilfældig config!
+        // Dette sikrer at timeout og andre indstillinger følger den valgte strategi i UI
+        const { data: sessionData } = await supabaseClient
+          .from('trading_session')
+          .select('active_config_id')
           .eq('user_id', position.user_id)
           .single();
+        
+        let configData: any = null;
+        
+        if (sessionData?.active_config_id) {
+          // Hent den AKTIVE strategi
+          const { data: activeConfig } = await supabaseClient
+            .from('indicator_config')
+            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry')
+            .eq('id', sessionData.active_config_id)
+            .single();
+          configData = activeConfig;
+          console.log(`📋 Bruger AKTIV strategi (${sessionData.active_config_id}): timeout=${configData?.max_position_duration_minutes}min`);
+        } else {
+          // Fallback til første config hvis ingen session
+          const { data: fallbackConfig } = await supabaseClient
+            .from('indicator_config')
+            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry')
+            .eq('user_id', position.user_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+          configData = fallbackConfig;
+          console.warn(`⚠️ Ingen aktiv session fundet - bruger seneste config: timeout=${configData?.max_position_duration_minutes}min`);
+        }
         
         // Break-even config fra database
         let breakEvenMasterEnabled = true;
