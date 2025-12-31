@@ -1012,31 +1012,57 @@ serve(async (req) => {
         }
         console.log(`   ═══════════════════════════════════════════════════════\n`);
 
-        // 4) Hit checks med korrekt prioritet
-        const slHit = hardStopLoss !== null && (
+        // 4) Hit checks - vælg det HØJESTE stop level for LONG (laveste for SHORT)
+        // Da monitor kører periodisk, kan prisen falde under flere levels på én gang.
+        // Vi skal vælge det level der BURDE have lukket først (højeste for LONG).
+        
+        const slTriggered = hardStopLoss !== null && (
           (position.side === 'LONG' && currentPrice <= hardStopLoss) ||
           (position.side === 'SHORT' && currentPrice >= hardStopLoss)
         );
 
-        const beHit = !slHit && breakEvenStop !== null && (
+        const beTriggered = breakEvenStop !== null && (
           (position.side === 'LONG' && currentPrice <= breakEvenStop) ||
           (position.side === 'SHORT' && currentPrice >= breakEvenStop)
         );
 
-        const tsHit = !slHit && !beHit && trailingStop !== null && (
+        const tsTriggered = trailingStop !== null && (
           (position.side === 'LONG' && currentPrice <= trailingStop) ||
           (position.side === 'SHORT' && currentPrice >= trailingStop)
         );
 
-        const selectedExit = slHit ? 'STOP_LOSS' : beHit ? 'BREAK_EVEN' : tsHit ? 'TRAILING' : 'NONE';
+        // Find alle triggered levels og vælg det bedste (højeste for LONG, laveste for SHORT)
+        const triggeredLevels: { type: string; level: number }[] = [];
+        if (slTriggered && hardStopLoss !== null) triggeredLevels.push({ type: 'STOP_LOSS', level: hardStopLoss });
+        if (beTriggered && breakEvenStop !== null) triggeredLevels.push({ type: 'BREAK_EVEN', level: breakEvenStop });
+        if (tsTriggered && trailingStop !== null) triggeredLevels.push({ type: 'TRAILING', level: trailingStop });
 
-        const resultingStopLevel = slHit
-          ? hardStopLoss
-          : beHit
-            ? breakEvenStop
-            : tsHit
-              ? trailingStop
-              : null;
+        let selectedExit = 'NONE';
+        let resultingStopLevel: number | null = null;
+        let slHit = false;
+        let beHit = false;
+        let tsHit = false;
+
+        if (triggeredLevels.length > 0) {
+          // Sortér: For LONG vælg højeste level (det der burde have lukket først)
+          // For SHORT vælg laveste level
+          triggeredLevels.sort((a, b) => 
+            position.side === 'LONG' ? b.level - a.level : a.level - b.level
+          );
+          
+          const bestExit = triggeredLevels[0];
+          selectedExit = bestExit.type;
+          resultingStopLevel = bestExit.level;
+          
+          slHit = bestExit.type === 'STOP_LOSS';
+          beHit = bestExit.type === 'BREAK_EVEN';
+          tsHit = bestExit.type === 'TRAILING';
+          
+          console.log(`\n🎯 EXIT SELECTION - ${position.symbol} ${position.side}`);
+          console.log(`   triggered_levels: ${triggeredLevels.map(l => `${l.type}@${l.level.toFixed(6)}`).join(', ')}`);
+          console.log(`   selected: ${selectedExit} @ ${resultingStopLevel?.toFixed(6)}`);
+          console.log(`   reason: ${position.side === 'LONG' ? 'highest' : 'lowest'} level = first to trigger`);
+        }
 
         // 🔴 COMPREHENSIVE EXIT AUDIT - expected vs effective values
         const snapshotAtrForAudit = position.indicators_snapshot?.atr ?? 0;
