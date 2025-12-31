@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -356,29 +356,44 @@ export const PnLOverview = () => {
     }
   };
 
+  // Ref to track current timeRange for use in subscription callback
+  const timeRangeRef = useRef(timeRange);
+  
+  useEffect(() => {
+    timeRangeRef.current = timeRange;
+  }, [timeRange]);
+
   useEffect(() => {
     fetchPnLData(timeRange);
+  }, [timeRange]);
+
+  // Separate effect for realtime subscription - only set up once
+  useEffect(() => {
+    console.log("[PnL] Setting up realtime subscription for trade_history");
     
-    // Realtime subscription for live updates when trades close
     const channel = supabase
       .channel("pnl-trade-history-changes")
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "INSERT",
           schema: "public",
           table: "trade_history",
         },
-        () => {
-          fetchPnLData(timeRange);
+        (payload) => {
+          console.log("[PnL] Realtime: New trade detected, refetching data", payload);
+          fetchPnLData(timeRangeRef.current);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("[PnL] Realtime subscription status:", status);
+      });
 
     return () => {
+      console.log("[PnL] Cleaning up realtime subscription");
       supabase.removeChannel(channel);
     };
-  }, [timeRange]);
+  }, []);
 
   if (loading) {
     return (
