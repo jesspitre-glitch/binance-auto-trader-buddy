@@ -1197,17 +1197,54 @@ serve(async (req) => {
         const openedAt = new Date(position.opened_at);
         const now = new Date();
 
-        // Check timeout (HARD CAP - luk ALTID når max varighed er overskredet)
-        // KRAV: "Max tid pr handel" fra UI skal respekteres uden undtagelser.
+        // Check timeout (SIKKERHEDSNET - kun luk hvis IKKE i profit over break-even)
+        // KRAV: Timeout må kun lukke handler der ikke har udviklet sig positivt.
+        // Handler i profit over break-even skal blive åbne og styres af trailing stop.
         if (!shouldClose && maxPositionDurationMinutes && maxPositionDurationMinutes > 0) {
           const minutesSinceOpen = (now.getTime() - openedAt.getTime()) / (1000 * 60);
 
           if (minutesSinceOpen >= maxPositionDurationMinutes) {
-            shouldClose = true;
-            closeReason = 'TIMEOUT';
-            console.log(
-              `⏱️ HARD TIMEOUT | ${position.symbol} overskred max varighed (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min) - lukker (ingen undtagelser).`
-            );
+            // Tjek om positionen er i profit OG break-even er aktiveret
+            const positionIsInProfit = profitDistance > 0;
+            const isAboveBreakEven = breakEvenActivatedState; // BE aktiveret = positionen har været i tilstrækkelig profit
+            
+            if (positionIsInProfit && isAboveBreakEven) {
+              // Position er i profit over break-even -> INGEN timeout, lad trailing stop styre
+              console.log(
+                `⏱️ TIMEOUT SKIPPED | ${position.symbol} | ${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min | I PROFIT (${profitPercent.toFixed(2)}%) + BE aktiveret -> fortsætter med trailing stop`
+              );
+              
+              // Hvis BE ikke allerede er sat, sæt det nu som sikkerhedsnet
+              if (!breakEvenActivatedState && !position.break_even_activated) {
+                console.log(`   🔧 Aktiverer break-even som sikkerhedsnet for timeout-overskridelse`);
+                breakEvenActivatedState = true;
+                breakEvenAtPrice = position.entry_price;
+                newStopLoss = position.entry_price;
+                
+                await supabaseClient
+                  .from('positions')
+                  .update({
+                    stop_loss: position.entry_price,
+                    break_even_activated: true,
+                    indicators_snapshot: {
+                      ...position.indicators_snapshot,
+                      original_stop_loss: position.indicators_snapshot?.original_stop_loss ?? position.stop_loss,
+                      break_even_at_price: position.entry_price,
+                      break_even_trigger_price: currentPrice,
+                      break_even_triggered_at: new Date().toISOString(),
+                      break_even_mode: 'TIMEOUT_SAFETY_NET',
+                    },
+                  })
+                  .eq('id', position.id);
+              }
+            } else {
+              // Position er IKKE i profit ELLER break-even er ikke aktiveret -> timeout luk
+              shouldClose = true;
+              closeReason = 'TIMEOUT';
+              console.log(
+                `⏱️ TIMEOUT | ${position.symbol} overskred max varighed (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min) | profit=${profitPercent.toFixed(2)}% | BE_active=${isAboveBreakEven} -> LUKKES`
+              );
+            }
           }
         } else if (!shouldClose && (!maxPositionDurationMinutes || maxPositionDurationMinutes === 0)) {
           console.log(`⏱️ Position ${position.symbol} - max duration disabled (set to ${maxPositionDurationMinutes}), will only close on stop loss or trailing stop`);
