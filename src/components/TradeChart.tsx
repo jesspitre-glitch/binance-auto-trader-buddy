@@ -121,17 +121,27 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
             if (trailingStopActive) {
               if (side === 'LONG') {
                 const calculatedTrailing = peakPrice * (1 - trailingPercent / 100);
+                // Trailing må kun ratchete OP for LONG (aldrig ned)
                 trailingStop = currentStopLoss ? Math.max(calculatedTrailing, currentStopLoss) : calculatedTrailing;
               } else {
                 const calculatedTrailing = peakPrice * (1 + trailingPercent / 100);
+                // Trailing må kun ratchete NED for SHORT (aldrig op)
                 trailingStop = currentStopLoss ? Math.min(calculatedTrailing, currentStopLoss) : calculatedTrailing;
               }
 
               // KRAV: trailing skal være i profit-zonen (strikt)
               const tsInProfitZone = side === 'LONG' ? trailingStop > entryPrice : trailingStop < entryPrice;
               if (tsInProfitZone) {
-                currentStopLoss = trailingStop;
-                effectiveStop = trailingStop;
+                // RATCHET: For LONG, opdater kun hvis trailingStop er HØJERE end currentStopLoss
+                // For SHORT, opdater kun hvis trailingStop er LAVERE end currentStopLoss
+                const shouldRatchet = side === 'LONG'
+                  ? trailingStop > currentStopLoss
+                  : trailingStop < currentStopLoss;
+                
+                if (shouldRatchet) {
+                  currentStopLoss = trailingStop;
+                }
+                effectiveStop = currentStopLoss; // Altid vis det aktuelle (ratcheted) stop
               } else {
                 trailingStop = null;
                 effectiveStop = currentStopLoss;
