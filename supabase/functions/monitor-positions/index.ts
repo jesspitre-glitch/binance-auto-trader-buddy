@@ -1171,75 +1171,17 @@ serve(async (req) => {
         const openedAt = new Date(position.opened_at);
         const now = new Date();
 
-        // Check timeout (only if enabled - max_position_duration_minutes > 0)
+        // Check timeout (HARD CAP - luk ALTID når max varighed er overskredet)
+        // KRAV: "Max tid pr handel" fra UI skal respekteres uden undtagelser.
         if (!shouldClose && maxPositionDurationMinutes && maxPositionDurationMinutes > 0) {
           const minutesSinceOpen = (now.getTime() - openedAt.getTime()) / (1000 * 60);
-          
+
           if (minutesSinceOpen >= maxPositionDurationMinutes) {
-            // Betinget Tids-Exit (Anti-Sour Exit) logik
-            if (conditionalTimeExitEnabled) {
-              // Hent indikatorer fra snapshot
-              const snapshot = position.indicators_snapshot || {};
-              const openingADX = snapshot.adx || 0;
-              const currentADX = snapshot.adx || 0; // Ville kræve live ADX beregning
-              const histogramMomentum = snapshot.histogram_momentum_met || false;
-              const atr = snapshot.atr || 0;
-              
-              // Beregn prisbevægelse siden åbning
-              const priceMovement = Math.abs(currentPrice - position.entry_price);
-              const priceMovementInAtr = atr > 0 ? priceMovement / atr : 0;
-              
-              // Tjek om pris har lavet nye favorable ekstremer (peak opdateret for nylig)
-              const oldPeak = position.peak_price || position.entry_price;
-              const peakImproved = position.side === 'LONG' 
-                ? currentPrice > oldPeak 
-                : currentPrice < oldPeak;
-              
-              // Position er AKTIV og må IKKE lukkes hvis:
-              // 1. ADX > ADX Min (stærk trend)
-              // 2. Trailing Stop er aktiveret
-              // 3. Pris laver nye favorable ekstremer
-              const isActivePosition = 
-                currentADX > adxFloor || // Stærk trend
-                trailingAlreadyActivated || // Trailing stop aktiveret
-                peakImproved; // Pris forbedres stadig
-              
-              if (isActivePosition) {
-                console.log(`🚫 Position ${position.symbol} HOLDES ÅBEN trods timeout (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min) - AKTIV POSITION:`);
-                console.log(`   ADX: ${currentADX.toFixed(1)} (floor: ${adxFloor}), Trailing: ${trailingAlreadyActivated}, Peak improved: ${peakImproved}`);
-              } else {
-                // Position er DØD - tjek alle betingelser for tids-exit
-                // Alle disse skal være opfyldt for at lukke:
-                const deadConditions = {
-                  durationExceeded: minutesSinceOpen >= maxPositionDurationMinutes,
-                  lowADX: currentADX <= adxFloor,
-                  noHistogramMomentum: !histogramMomentum,
-                  lowPriceMovement: priceMovementInAtr < 0.3,
-                  noTrailingStop: !trailingAlreadyActivated
-                };
-                
-                const allDeadConditionsMet = Object.values(deadConditions).every(v => v);
-                
-                if (allDeadConditionsMet) {
-                  shouldClose = true;
-                  closeReason = 'TIMEOUT_NO_MOMENTUM';
-                  console.log(`⏱️💀 Position ${position.symbol} LUKKES - INGEN MOMENTUM:`);
-                  console.log(`   Duration: ${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min`);
-                  console.log(`   ADX: ${currentADX.toFixed(1)} (floor: ${adxFloor})`);
-                  console.log(`   Histogram momentum: ${histogramMomentum}`);
-                  console.log(`   Price movement: ${priceMovementInAtr.toFixed(2)} ATR (need < 0.3)`);
-                  console.log(`   Trailing stop: ${trailingAlreadyActivated}`);
-                } else {
-                  console.log(`⏱️⚠️ Position ${position.symbol} over max duration men HOLDES ÅBEN - ikke alle dead conditions opfyldt:`);
-                  console.log(`   Conditions: ${JSON.stringify(deadConditions)}`);
-                }
-              }
-            } else {
-              // Klassisk timeout uden betingelser
-              shouldClose = true;
-              closeReason = 'TIMEOUT';
-              console.log(`⏱️ Position ${position.symbol} exceeded max duration (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min), closing...`);
-            }
+            shouldClose = true;
+            closeReason = 'TIMEOUT';
+            console.log(
+              `⏱️ HARD TIMEOUT | ${position.symbol} overskred max varighed (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min) - lukker (ingen undtagelser).`
+            );
           }
         } else if (!shouldClose && (!maxPositionDurationMinutes || maxPositionDurationMinutes === 0)) {
           console.log(`⏱️ Position ${position.symbol} - max duration disabled (set to ${maxPositionDurationMinutes}), will only close on stop loss or trailing stop`);
