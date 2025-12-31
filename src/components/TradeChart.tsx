@@ -330,7 +330,19 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           name="💰 Pris"
         />
         
-        {/* Effective Stop line - orange, meget synlig */}
+        {/* Trailing Stop line - pink/magenta, kun når trailing er aktiv */}
+        <Line 
+          type="stepAfter" 
+          dataKey="trailingStop" 
+          stroke="#ec4899" 
+          strokeWidth={4}
+          strokeDasharray="6 3"
+          dot={false}
+          name="🎯 Trailing Stop"
+          connectNulls={false}
+        />
+        
+        {/* Effective Stop line - orange, viser det aktive stop level */}
         <Line 
           type="stepAfter" 
           dataKey="effectiveStop" 
@@ -338,7 +350,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           strokeWidth={5}
           strokeDasharray="8 4"
           dot={false}
-          name="🛑 Stop Loss"
+          name="🛑 Aktiv Stop"
           connectNulls={false}
         />
         
