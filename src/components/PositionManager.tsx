@@ -184,20 +184,12 @@ export const PositionManager = () => {
                   ? (position.side === 'LONG' ? trailingStopDb >= position.entry_price : trailingStopDb <= position.entry_price)
                   : false;
 
-                // Trailing er kun "armed" når den er gyldig ift. backend-regler:
-                // - kræver break-even
-                // - kræver at vi er i profit
-                // - trailing-stop skal ligge på den rigtige side af prisen (LONG <= current, SHORT >= current)
-                const isInProfitNow = profitDistance > 0;
-                const trailingIsArmed =
-                  trailingStopDb != null &&
-                  isBreakEvenActivated &&
-                  trailingInProfitZone &&
-                  isInProfitNow &&
-                  (position.side === 'LONG' ? trailingStopDb <= livePrice : trailingStopDb >= livePrice);
+                // Trailing er AKTIV når backend har sat en trailing_stop og den er i profit-zonen
+                // Dette er den korrekte source-of-truth fra backend
+                const trailingIsActive = trailingStopDb != null && trailingInProfitZone;
 
-                // Aktivt stop (til visning): TS (kun når armed) → BE → SL(max tab)
-                const activeStopLevel = trailingIsArmed
+                // Aktivt stop (til visning): TS (når aktiv) → BE → SL(max tab)
+                const activeStopLevel = trailingIsActive
                   ? trailingStopDb!
                   : isBreakEvenActivated
                     ? breakEvenLevel
@@ -253,7 +245,7 @@ export const PositionManager = () => {
                            <div className="flex items-center gap-2">
                              <span className="text-xs font-semibold">Aktivt stop:</span>
                              <span className="font-mono">${Number.isFinite(activeStopLevel) ? activeStopLevel.toFixed(4) : '-'}</span>
-                              {trailingIsArmed ? (
+                              {trailingIsActive ? (
                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-profit/10 text-profit border-profit/20">
                                   TRAILING
                                 </Badge>
@@ -268,7 +260,8 @@ export const PositionManager = () => {
                           <div className="border-t pt-2 mt-2 space-y-1">
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-semibold">Trailing:</span>
-                               {trailingIsArmed ? (
+                               {/* Trailing er AKTIV når backend har sat en trailing_stop i DB og den er i profit-zonen */}
+                               {trailingStopDb != null && trailingInProfitZone ? (
                                  <>
                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-profit/10 text-profit border-profit/20">
                                      AKTIV
@@ -283,14 +276,18 @@ export const PositionManager = () => {
                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground">
                                    BLOKERET (ikke i profit)
                                  </Badge>
-                               ) : (
+                               ) : trailingStopDb == null ? (
                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
                                    VENTER ({profitInAtr.toFixed(1)}/{trailingActivationAtr} ATR)
+                                 </Badge>
+                               ) : (
+                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-profit/10 text-profit border-profit/20">
+                                   AKTIV
                                  </Badge>
                                )}
                              </div>
  
-                             {trailingIsArmed && trailingStopDb != null && (
+                             {trailingIsActive && trailingStopDb != null && (
                                <div className="text-sm font-mono font-bold text-profit">${trailingStopDb.toFixed(4)}</div>
                              )}
                           </div>
