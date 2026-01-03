@@ -7,44 +7,47 @@ const corsHeaders = {
 };
 
 async function getCurrentPrice(symbol: string, supabaseClient: any): Promise<number> {
-  // Try to get price from cache first (much faster, no rate limits)
+  // 🔴 KRITISK FIX: For monitor-positions skal vi ALTID have live priser
+  // Stale prices kan betyde at SL ikke rammes, selvom prisen reelt er under SL
+  
+  // Forsøg først at hente live pris fra Binance API
+  try {
+    const response = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
+    if (response.ok) {
+      const data = await response.json();
+      const price = parseFloat(data.price);
+      
+      // Update cache for andre services der bruger det
+      await supabaseClient
+        .from('price_cache')
+        .upsert({ symbol, price, updated_at: new Date().toISOString() });
+      
+      return price;
+    }
+  } catch (error) {
+    console.warn(`Live API failed for ${symbol}, trying cache fallback`);
+  }
+  
+  // Fallback til cache KUN hvis API fejler - men log en advarsel
   const { data: cached, error: cacheError } = await supabaseClient
     .from('price_cache')
     .select('price, updated_at')
     .eq('symbol', symbol)
     .single();
-  
-  // Use cached price if it's less than 5 seconds old
+    
   if (cached && !cacheError) {
     const age = Date.now() - new Date(cached.updated_at).getTime();
-    if (age < 5000) {
-      return parseFloat(cached.price);
+    console.warn(`⚠️ Using CACHED price for ${symbol} (age: ${(age / 1000).toFixed(1)}s) - API fallback`);
+    
+    // Hvis cache er mere end 30 sekunder gammel, log KRITISK advarsel
+    if (age > 30000) {
+      console.error(`🚨 KRITISK: Price cache for ${symbol} er ${(age / 1000).toFixed(0)}s gammel! SL/TP check kan være unøjagtig!`);
     }
+    
+    return parseFloat(cached.price);
   }
   
-  // Fallback to API if cache miss or stale
-  try {
-    const response = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch price for ${symbol}`);
-    }
-    const data = await response.json();
-    const price = parseFloat(data.price);
-    
-    // Update cache for next time
-    await supabaseClient
-      .from('price_cache')
-      .upsert({ symbol, price, updated_at: new Date().toISOString() });
-    
-    return price;
-  } catch (error) {
-    // If API fails but we have cached data, use it even if stale
-    if (cached) {
-      console.warn(`API failed for ${symbol}, using stale cache (age: ${Date.now() - new Date(cached.updated_at).getTime()}ms)`);
-      return parseFloat(cached.price);
-    }
-    throw error;
-  }
+  throw new Error(`Failed to get price for ${symbol} - both API and cache failed`);
 }
 
 async function createSignature(queryString: string, apiSecret: string): Promise<string> {
