@@ -431,6 +431,17 @@ serve(async (req) => {
         let newPeakPrice = position.peak_price || position.entry_price;
         let newTrailingStop = position.trailing_stop;
         
+        // 🔴 KRITISK FIX: Opdater peak price ALTID når prisen bevæger sig i vores favor
+        // Dette skal ske UAFHÆNGIGT af om trailing stop er aktivt endnu
+        // Ellers mister vi den faktiske peak når trailing aktiveres senere
+        if (position.side === 'LONG' && currentPrice > newPeakPrice) {
+          console.log(`📈 Peak price opdateret (pre-trailing): ${newPeakPrice} → ${currentPrice} for ${position.symbol}`);
+          newPeakPrice = currentPrice;
+        } else if (position.side === 'SHORT' && currentPrice < newPeakPrice) {
+          console.log(`📉 Peak price opdateret (pre-trailing): ${newPeakPrice} → ${currentPrice} for ${position.symbol}`);
+          newPeakPrice = currentPrice;
+        }
+        
         // 🔴 FIX: Track break-even state LOKALT for at undgå at miste data ved trade-close
         // Disse værdier bruges i enhancedSnapshot ved close
         let breakEvenActivatedThisCycle = false;
