@@ -1309,10 +1309,12 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   
   // StochRSI (hvis enabled) - kan være HARD eller SOFT filter baseret på config
   if (config.stochrsi_enabled && stochRSI) {
-    // LONG: BÅDE K og D skal være under oversold niveau
-    const stochRSILong = stochRSI.k < config.stochrsi_oversold && stochRSI.d < config.stochrsi_oversold;
-    // SHORT: BÅDE K og D skal være over overbought niveau
-    const stochRSIShort = stochRSI.k > config.stochrsi_overbought && stochRSI.d > config.stochrsi_overbought;
+    // 🔴 FIX: Ændret fra K AND D til kun K for mere realistisk filtrering
+    // D er en smoothed version af K og følger altid efter - at kræve begge skaber bias
+    // LONG: K skal være under oversold niveau (D bruges ikke til hard filter)
+    const stochRSILong = stochRSI.k < config.stochrsi_oversold;
+    // SHORT: K skal være over overbought niveau
+    const stochRSIShort = stochRSI.k > config.stochrsi_overbought;
     
     // Gem i filterStatus.hard for hard filter evaluering
     filterStatus.hard.stochrsi.long = stochRSILong;
@@ -1321,12 +1323,12 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     
     // Hvis stochrsi_hard_filter=true, evaluér som hard filter
     if (config.stochrsi_hard_filter === true) {
-      // For hard filter: mindst én retning skal passe (K AND D begge i zone)
+      // For hard filter: mindst én retning skal passe (kun K bruges)
       if (!stochRSILong && !stochRSIShort) {
         filterStatus.hard.stochrsi.passed = false;
-        filterStatus.hard.stochrsi.reason = `K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)} - kræver K AND D begge <${config.stochrsi_oversold} (LONG) eller >${config.stochrsi_overbought} (SHORT)`;
+        filterStatus.hard.stochrsi.reason = `K=${stochRSI.k.toFixed(2)} - kræver K<${config.stochrsi_oversold} (LONG) eller K>${config.stochrsi_overbought} (SHORT)`;
       }
-      console.log(`   📊 StochRSI (HARD): K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)} - Long: ${stochRSILong ? '✅' : '❌'} (K<${config.stochrsi_oversold} AND D<${config.stochrsi_oversold}), Short: ${stochRSIShort ? '✅' : '❌'} (K>${config.stochrsi_overbought} AND D>${config.stochrsi_overbought})`);
+      console.log(`   📊 StochRSI (HARD): K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)} - Long: ${stochRSILong ? '✅' : '❌'} (K<${config.stochrsi_oversold}), Short: ${stochRSIShort ? '✅' : '❌'} (K>${config.stochrsi_overbought})`);
     } else {
       console.log(`   📊 StochRSI (SOFT): K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)} - Long: ${stochRSILong ? '✅' : '❌'}, Short: ${stochRSIShort ? '✅' : '❌'}`);
       
