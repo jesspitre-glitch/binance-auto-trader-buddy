@@ -783,10 +783,11 @@ serve(async (req) => {
         const trailingActivationCheckPassed =
           trailingAlreadyActivated || !trailingActivationEnabled || trailingProfitThresholdPassed;
 
-        let trailingActivationReason = 'WAITING_FOR_BREAK_EVEN';
-        if (!breakEvenActivatedState) {
-          trailingActivationReason = 'BLOCKED_NO_BREAK_EVEN';
-        } else if (!isInProfit) {
+        // 🔴 FIX: Trailing stop kan aktiveres UAFHÆNGIGT af break-even
+        // Hvis trailing threshold (f.eks. 2×ATR) er lavere end BE threshold (f.eks. 3×ATR),
+        // så skal trailing stop stadig kunne aktivere når den når sin egen threshold
+        let trailingActivationReason = 'WAITING_FOR_THRESHOLD';
+        if (!isInProfit) {
           trailingActivationReason = 'BLOCKED_NOT_IN_PROFIT';
         } else if (trailingAlreadyActivated) {
           trailingActivationReason = 'ACTIVE_ALREADY_IN_DB';
@@ -798,7 +799,11 @@ serve(async (req) => {
           trailingActivationReason = 'WAITING_FOR_TRAILING_THRESHOLD';
         }
 
-        trailingStopActive = breakEvenActivatedState && isInProfit && trailingActivationCheckPassed;
+        // 🔴 FIX: Trailing kan aktiveres når enten:
+        // 1) Break-even ER aktiveret OG i profit OG trailing threshold passed, ELLER
+        // 2) Trailing threshold passed OG i profit (uanset BE status)
+        // Dette tillader trailing at aktivere når 2×ATR er nået selv hvis BE kræver 3×ATR
+        trailingStopActive = isInProfit && trailingActivationCheckPassed;
 
         let trailingValidThisCycle = false;
 
