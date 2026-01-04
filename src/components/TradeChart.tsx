@@ -50,17 +50,27 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         const atrValue = Number(trade.indicators_snapshot?.atr) || (entryPrice * 0.01);
         const breakEvenAtr = Number(trade.indicators_snapshot?.break_even_atr) || 1.5;
         
+        // Peak-Lock konfiguration
+        const peakLockEnabled = trade.indicators_snapshot?.peak_lock_enabled ?? false;
+        const peakLockActivateProfitPct = Number(trade.indicators_snapshot?.peak_lock_activate_profit_pct) || 0.6;
+        const peakLockDistancePct = Number(trade.indicators_snapshot?.peak_lock_distance_pct) || 0.35;
+        const peakLockMinProfitFloorPct = Number(trade.indicators_snapshot?.peak_lock_min_profit_floor_pct) || 0.15;
+        const peakLockRatchetOnly = trade.indicators_snapshot?.peak_lock_ratchet_only ?? true;
+        
         console.log('Trailing Stop Activation Config:', {
           enabled: trailingStopActivationEnabled,
           activationAtr: trailingStopActivationAtr,
           breakEvenAtr: breakEvenAtr,
           atr: atrValue,
+          peakLockEnabled,
         });
         
         // Start altid fra entry price for at vise trailing stop evolution korrekt
         let peakPrice = entryPrice;
         let currentStopLoss = stopLoss;
         let breakEvenActivated = false;
+        let peakLockActivated = false;
+        let peakLockStopValue: number | null = null;
         
         const data = klines.map((k: any, index: number) => {
           const timestamp = k[0];
@@ -147,6 +157,54 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
                 effectiveStop = currentStopLoss;
               }
             }
+            
+            // 🔒 Peak-Lock Trailing logik
+            if (peakLockEnabled && breakEvenActivated) {
+              const profitPct = side === 'LONG'
+                ? ((price - entryPrice) / entryPrice) * 100
+                : ((entryPrice - price) / entryPrice) * 100;
+              
+              if (profitPct >= peakLockActivateProfitPct) {
+                peakLockActivated = true;
+                
+                // Beregn peak-lock stop
+                const peakLockStop = side === 'LONG'
+                  ? peakPrice * (1 - peakLockDistancePct / 100)
+                  : peakPrice * (1 + peakLockDistancePct / 100);
+                
+                // Profit floor stop
+                const profitFloorStop = side === 'LONG'
+                  ? entryPrice * (1 + peakLockMinProfitFloorPct / 100)
+                  : entryPrice * (1 - peakLockMinProfitFloorPct / 100);
+                
+                // Kandidat stop = max af peak-lock og floor
+                const candidateStop = side === 'LONG'
+                  ? Math.max(peakLockStop, profitFloorStop)
+                  : Math.min(peakLockStop, profitFloorStop);
+                
+                // Gem peak-lock stop til visning
+                peakLockStopValue = candidateStop;
+                
+                // Kombinér med eksisterende stop
+                const newStop = side === 'LONG'
+                  ? Math.max(currentStopLoss, candidateStop)
+                  : Math.min(currentStopLoss, candidateStop);
+                
+                // Ratchet only
+                if (peakLockRatchetOnly) {
+                  const shouldRatchet = side === 'LONG'
+                    ? newStop > currentStopLoss
+                    : newStop < currentStopLoss;
+                  if (shouldRatchet) {
+                    currentStopLoss = newStop;
+                  }
+                } else {
+                  currentStopLoss = newStop;
+                }
+                
+                effectiveStop = currentStopLoss;
+              }
+            }
             // Hvis trailing ikke er aktiv, brug currentStopLoss (SL eller BE)
           }
           
@@ -159,6 +217,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
             trailingStop,
             effectiveStop,
             breakEven: breakEvenActivated ? entryPrice : null,
+            peakLockStop: peakLockActivated ? peakLockStopValue : null,
           };
         });
         
@@ -364,6 +423,18 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           strokeOpacity={0.9}
           dot={false}
           name="⚖️ Break-Even"
+          connectNulls={false}
+        />
+        
+        {/* Peak-Lock Stop line - cyan/turkis, kun når peak-lock er aktiv */}
+        <Line 
+          type="stepAfter" 
+          dataKey="peakLockStop" 
+          stroke="#06b6d4" 
+          strokeWidth={3}
+          strokeDasharray="3 2"
+          dot={false}
+          name="🔒 Peak-Lock"
           connectNulls={false}
         />
         
