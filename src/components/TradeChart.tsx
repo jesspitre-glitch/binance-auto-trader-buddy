@@ -14,6 +14,13 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
     trailingAt: number | null;
     peakLockAt: number | null;
   }>({ breakEvenAt: null, trailingAt: null, peakLockAt: null });
+  
+  // Trigger-niveauer (priser hvor triggers aktiveres)
+  const [triggerLevels, setTriggerLevels] = useState<{
+    breakEvenTrigger: number | null;
+    trailingTrigger: number | null;
+    peakLockTrigger: number | null;
+  }>({ breakEvenTrigger: null, trailingTrigger: null, peakLockTrigger: null });
 
   useEffect(() => {
     const fetchKlines = async () => {
@@ -279,6 +286,32 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           peakLockAt: peakLockActivatedAt,
         });
         
+        // Beregn trigger-niveauer (priser hvor triggers aktiveres)
+        // Break-Even trigger: entry + breakEvenAtr * ATR (LONG) eller entry - breakEvenAtr * ATR (SHORT)
+        const breakEvenTriggerPrice = side === 'LONG'
+          ? entryPrice + (breakEvenAtr * atrValue)
+          : entryPrice - (breakEvenAtr * atrValue);
+        
+        // Trailing Stop trigger: entry + trailingStopActivationAtr * ATR (LONG) eller entry - trailingStopActivationAtr * ATR (SHORT)
+        const trailingTriggerPrice = trailingStopActivationEnabled
+          ? (side === 'LONG'
+              ? entryPrice + (trailingStopActivationAtr * atrValue)
+              : entryPrice - (trailingStopActivationAtr * atrValue))
+          : null;
+        
+        // Peak-Lock trigger: entry * (1 + peakLockActivateProfitPct%) (LONG) eller entry * (1 - peakLockActivateProfitPct%) (SHORT)
+        const peakLockTriggerPrice = peakLockEnabled
+          ? (side === 'LONG'
+              ? entryPrice * (1 + peakLockActivateProfitPct / 100)
+              : entryPrice * (1 - peakLockActivateProfitPct / 100))
+          : null;
+        
+        setTriggerLevels({
+          breakEvenTrigger: breakEvenTriggerPrice,
+          trailingTrigger: trailingTriggerPrice,
+          peakLockTrigger: peakLockTriggerPrice,
+        });
+        
         setChartData(dataWithMarkers);
       } catch (error) {
         console.error('Error fetching chart data:', error);
@@ -530,6 +563,42 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           strokeOpacity={0.6}
           label={{ value: "INITIAL SL", fill: "#dc2626", fontSize: 12, fontWeight: "bold", position: "insideBottomRight" }}
         />
+        
+        {/* Break-Even Trigger niveau - lilla, prikket linje der viser hvor BE aktiveres */}
+        {triggerLevels.breakEvenTrigger != null && (
+          <ReferenceLine 
+            y={triggerLevels.breakEvenTrigger} 
+            stroke="#a855f7" 
+            strokeWidth={1.5}
+            strokeDasharray="2 4"
+            strokeOpacity={0.5}
+            label={{ value: "BE TRIGGER", fill: "#a855f7", fontSize: 9, fontWeight: "normal", position: "insideTopLeft" }}
+          />
+        )}
+        
+        {/* Trailing Stop Trigger niveau - pink, prikket linje der viser hvor TS aktiveres */}
+        {triggerLevels.trailingTrigger != null && (
+          <ReferenceLine 
+            y={triggerLevels.trailingTrigger} 
+            stroke="#ec4899" 
+            strokeWidth={1.5}
+            strokeDasharray="2 4"
+            strokeOpacity={0.5}
+            label={{ value: "TS TRIGGER", fill: "#ec4899", fontSize: 9, fontWeight: "normal", position: "insideTopLeft" }}
+          />
+        )}
+        
+        {/* Peak-Lock Trigger niveau - cyan, prikket linje der viser hvor PL aktiveres */}
+        {triggerLevels.peakLockTrigger != null && (
+          <ReferenceLine 
+            y={triggerLevels.peakLockTrigger} 
+            stroke="#06b6d4" 
+            strokeWidth={1.5}
+            strokeDasharray="2 4"
+            strokeOpacity={0.5}
+            label={{ value: "PL TRIGGER", fill: "#06b6d4", fontSize: 9, fontWeight: "normal", position: "insideTopLeft" }}
+          />
+        )}
         
         {/* Exit price line - kun hvis lukket */}
         {isPositionClosed && trade.exit_price != null && (
