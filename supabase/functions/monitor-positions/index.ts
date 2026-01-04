@@ -231,6 +231,15 @@ serve(async (req) => {
   }
 
   try {
+    // Parse debug flag from request body
+    let debug = false;
+    try {
+      const body = await req.json();
+      debug = body?.debug === true;
+    } catch {
+      // No body or invalid JSON - debug defaults to false
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -445,16 +454,21 @@ serve(async (req) => {
         let newPeakPrice = position.peak_price || position.entry_price;
         let newTrailingStop = position.trailing_stop;
         
-        // 🔴 PEAK-TRACKING: Opdater peak ALTID når position er åben (hvis Peak-Lock er aktivt i UI)
+        // 🔴 PEAK-TRACKING: Opdater peak ALTID når position er åben (hvis Peak-Lock eller Trailing er aktivt i UI)
         // Peak må kun bevæge sig i gunstig retning (ratchet)
         // LONG: peak = højeste pris set, SHORT: peak = laveste pris set
         // Dette sker UAFHÆNGIGT af om trailing/BE er aktivt, så peak-lock kan stramme korrekt senere
-        if (peakLockEnabled || trailingActivationEnabled) {
+        let peakWasUpdated = false;
+        const peakTrackingEnabled = peakLockEnabled || trailingActivationEnabled;
+        
+        if (peakTrackingEnabled) {
           if (position.side === 'LONG' && currentPrice > newPeakPrice) {
             console.log(`📈 Peak price opdateret: ${newPeakPrice.toFixed(6)} → ${currentPrice.toFixed(6)} for ${position.symbol}`);
+            peakWasUpdated = true;
             newPeakPrice = currentPrice;
           } else if (position.side === 'SHORT' && currentPrice < newPeakPrice) {
             console.log(`📉 Peak price opdateret: ${newPeakPrice.toFixed(6)} → ${currentPrice.toFixed(6)} for ${position.symbol}`);
+            peakWasUpdated = true;
             newPeakPrice = currentPrice;
           }
         }
@@ -1072,6 +1086,54 @@ serve(async (req) => {
         const trailingStop = trailingStopActive && trailingValidThisCycle
           ? Number(newTrailingStop)
           : null;
+
+        // 🔍 DEBUG LOG: Kompakt oversigt over stop-kandidater og winner (kun når debug=true)
+        if (debug) {
+          // Beregn hvilken stop-kandidat der vinder (mest beskyttende)
+          const candidates: { name: string; value: number | null; active: boolean }[] = [
+            { name: 'HARD_SL', value: hardStopLoss, active: hardStopLoss !== null },
+            { name: 'BREAK_EVEN', value: breakEvenStop, active: breakEvenActivatedState && breakEvenStop !== null },
+            { name: 'ATR_TRAILING', value: trailingValidThisCycle && !peakLockActive ? trailingStop : null, active: trailingValidThisCycle && !peakLockActive },
+            { name: 'PEAK_LOCK', value: peakLockActive ? trailingStop : null, active: peakLockActive },
+          ];
+
+          // Find winner: For LONG = højeste, for SHORT = laveste
+          const activeCandidates = candidates.filter(c => c.active && c.value !== null);
+          let winner = 'NONE';
+          let finalStop: number | null = null;
+
+          if (activeCandidates.length > 0) {
+            if (position.side === 'LONG') {
+              const best = activeCandidates.reduce((a, b) => (b.value! > a.value! ? b : a));
+              winner = best.name;
+              finalStop = best.value;
+            } else {
+              const best = activeCandidates.reduce((a, b) => (b.value! < a.value! ? b : a));
+              winner = best.name;
+              finalStop = best.value;
+            }
+          }
+
+          console.log(`\n🔧 ═══════════════════════════════════════════════════════`);
+          console.log(`🔧 DEBUG: ${position.symbol} ${position.side}`);
+          console.log(`🔧 ═══════════════════════════════════════════════════════`);
+          console.log(`   UI Settings:`);
+          console.log(`     peakLockEnabled: ${peakLockEnabled}`);
+          console.log(`     trailingActivationEnabled: ${trailingActivationEnabled}`);
+          console.log(`     breakEvenMasterEnabled: ${breakEvenMasterEnabled}`);
+          console.log(`   Peak Tracking:`);
+          console.log(`     peakTrackingEnabled: ${peakTrackingEnabled}`);
+          console.log(`     peakWasUpdated: ${peakWasUpdated}`);
+          console.log(`     peak_price: ${newPeakPrice.toFixed(6)}`);
+          console.log(`   Stop Candidates:`);
+          console.log(`     HARD_SL: ${hardStopLoss !== null ? hardStopLoss.toFixed(6) : 'N/A'}`);
+          console.log(`     BREAK_EVEN: ${breakEvenStop !== null ? breakEvenStop.toFixed(6) : 'N/A'} (active: ${breakEvenActivatedState})`);
+          console.log(`     ATR_TRAILING: ${trailingValidThisCycle && !peakLockActive ? trailingStop?.toFixed(6) : 'N/A'} (active: ${trailingValidThisCycle && !peakLockActive})`);
+          console.log(`     PEAK_LOCK: ${peakLockActive ? trailingStop?.toFixed(6) : 'N/A'} (active: ${peakLockActive})`);
+          console.log(`   Winner:`);
+          console.log(`     🏆 ${winner} @ ${finalStop !== null ? finalStop.toFixed(6) : 'N/A'}`);
+          console.log(`🔧 ═══════════════════════════════════════════════════════\n`);
+        }
 
         // 🔍 EXIT HIERARCHY AUDIT - Bekræft rækkefølgen Hard SL → Break-even → Trailing
         console.log(`\n📊 EXIT HIERARCHY AUDIT - ${position.symbol} ${position.side}`);
