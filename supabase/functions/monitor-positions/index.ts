@@ -1284,6 +1284,14 @@ serve(async (req) => {
             original_stop_loss: position.stop_loss,
           };
         }
+        
+        // 🔴 KRITISK: Opdater peak_price ALTID når prisen bevæger sig i vores favor
+        // Dette skal ske UAFHÆNGIGT af om trailing stop er aktivt
+        // Så når trailing aktiveres senere, har vi den korrekte peak
+        if (newPeakPrice !== position.peak_price) {
+          updateData.peak_price = newPeakPrice;
+          console.log(`📈 PEAK GEMT | ${position.symbol} | ${position.peak_price || 'null'} → ${newPeakPrice}`);
+        }
 
         // ALTID opdater stop_loss til BE-niveauet hvis BE er aktiveret
         if (breakEvenActivatedState && breakEvenAtPrice !== null && breakEvenAtPrice !== undefined) {
