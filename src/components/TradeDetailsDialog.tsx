@@ -197,6 +197,21 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
               </div>
             )}
 
+            {/* Break-Even Level - vis når BE er aktiveret */}
+            {trade.break_even_activated && (
+              <div className="border rounded-lg p-3 border-blue-500/50 bg-blue-500/5">
+                <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                  🛡️ Break-Even Niveau
+                  <Badge variant="outline" className="ml-1 text-xs bg-blue-500/20 text-blue-400 border-blue-500/40">
+                    AKTIV
+                  </Badge>
+                </div>
+                <div className="font-mono font-semibold text-blue-400">
+                  ${Number(trade.indicators_snapshot?.break_even_at_price ?? trade.entry_price).toFixed(4)}
+                </div>
+              </div>
+            )}
+
             {/* Trailing Stop - use position data for live, snapshot for closed */}
             {(trade.trailing_stop || trade.indicators_snapshot?.trailing_stop) && (
               <div className="border rounded-lg p-3 border-warning/50 bg-warning/5">
