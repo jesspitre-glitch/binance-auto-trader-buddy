@@ -53,12 +53,20 @@ All colors MUST be HSL.
     --sidebar-border: 220 13% 91%;
 
     --sidebar-ring: 217.2 91.2% 59.8%;
-    
+
     --success: 142 76% 36%;
     --success-foreground: 0 0% 100%;
-    
+
     --profit: 142 76% 36%;
     --loss: 0 84.2% 60.2%;
+
+    /* Chart colors */
+    --chart-price: 217 91% 60%;
+    --chart-trailing: 330 81% 60%;
+    --chart-active-stop: 24 95% 53%;
+    --chart-break-even: 270 90% 68%;
+    --chart-peak-lock: 190 94% 40%;
+    --chart-take-profit: 84 80% 45%;
   }
 
   .dark {
