@@ -72,6 +72,11 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         let peakLockActivated = false;
         let peakLockStopValue: number | null = null;
         
+        // Aktiverings-tidspunkter til vertikale markører
+        let trailingStopActivatedTime: string | null = null;
+        let peakLockActivatedTime: string | null = null;
+        let breakEvenActivatedTime: string | null = null;
+        
         const data = klines.map((k: any, index: number) => {
           const timestamp = k[0];
           const price = parseFloat(k[4]); // Close price
@@ -114,6 +119,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
 
                 currentStopLoss = beStop;
                 breakEvenActivated = true;
+                breakEvenActivatedTime = new Date(timestamp).toLocaleTimeString("da-DK", { hour: '2-digit', minute: '2-digit' });
                 effectiveStop = currentStopLoss;
               }
             }
@@ -127,8 +133,14 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
 
             // Trailing må kun aktiveres efter BE + i profit + threshold
             const trailingStopActive = breakEvenActivated && isInProfit && (!trailingStopActivationEnabled || (profitInAtr >= trailingStopActivationAtr));
+            const wasTrailingStopActiveBeforeThisCandle = trailingStopActivatedTime !== null;
 
             if (trailingStopActive) {
+              // Registrer aktiveringstidspunkt første gang trailing stop aktiveres
+              if (!wasTrailingStopActiveBeforeThisCandle) {
+                trailingStopActivatedTime = new Date(timestamp).toLocaleTimeString("da-DK", { hour: '2-digit', minute: '2-digit' });
+              }
+              
               if (side === 'LONG') {
                 const calculatedTrailing = peakPrice * (1 - trailingPercent / 100);
                 // Trailing må kun ratchete OP for LONG (aldrig ned)
@@ -159,12 +171,17 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
             }
             
             // 🔒 Peak-Lock Trailing logik
+            const wasPeakLockActiveBeforeThisCandle = peakLockActivatedTime !== null;
             if (peakLockEnabled && breakEvenActivated) {
               const profitPct = side === 'LONG'
                 ? ((price - entryPrice) / entryPrice) * 100
                 : ((entryPrice - price) / entryPrice) * 100;
               
               if (profitPct >= peakLockActivateProfitPct) {
+                // Registrer aktiveringstidspunkt første gang peak-lock aktiveres
+                if (!wasPeakLockActiveBeforeThisCandle) {
+                  peakLockActivatedTime = new Date(timestamp).toLocaleTimeString("da-DK", { hour: '2-digit', minute: '2-digit' });
+                }
                 peakLockActivated = true;
                 
                 // Beregn peak-lock stop
@@ -223,6 +240,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         
         console.log('First 5 data points:', data.slice(0, 5));
         console.log('Last 5 data points:', data.slice(-5));
+        console.log('Activation times:', { trailingStopActivatedTime, peakLockActivatedTime, breakEvenActivatedTime });
         
         // Find closest data point to entry time
         const entryPoint = data.reduce((closest, current) => {
@@ -248,6 +266,10 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           ...d,
           entryMarker: d.timestamp === entryPoint.timestamp ? trade.entry_price : null,
           exitMarker: isPositionClosed && exitPoint && d.timestamp === exitPoint.timestamp ? trade.exit_price : null,
+          // Aktiveringsmarkører - vis kun på det tidspunkt de aktiveres
+          trailingActivationMarker: d.time === trailingStopActivatedTime ? 'trailing' : null,
+          peakLockActivationMarker: d.time === peakLockActivatedTime ? 'peakLock' : null,
+          breakEvenActivationMarker: d.time === breakEvenActivatedTime ? 'breakEven' : null,
         }));
         
         setChartData(dataWithMarkers);
@@ -497,6 +519,43 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
             strokeDasharray="3 3"
             strokeOpacity={0.5}
             label={{ value: "EXIT", fill: "#dc2626", fontSize: 12, fontWeight: "bold", position: "insideTopRight" }}
+          />
+        )}
+        
+        {/* Vertikale aktiveringsmarkører */}
+        {/* Break-Even aktiveret - lilla vertikal linje */}
+        {chartData.find(d => d.breakEvenActivationMarker) && (
+          <ReferenceLine 
+            x={chartData.find(d => d.breakEvenActivationMarker)?.time}
+            stroke="#a855f7"
+            strokeWidth={2}
+            strokeDasharray="4 2"
+            strokeOpacity={0.8}
+            label={{ value: "⚖️ BE", fill: "#a855f7", fontSize: 10, fontWeight: "bold", position: "insideTop" }}
+          />
+        )}
+        
+        {/* Trailing Stop aktiveret - pink/magenta vertikal linje */}
+        {chartData.find(d => d.trailingActivationMarker) && (
+          <ReferenceLine 
+            x={chartData.find(d => d.trailingActivationMarker)?.time}
+            stroke="#ec4899"
+            strokeWidth={2}
+            strokeDasharray="4 2"
+            strokeOpacity={0.8}
+            label={{ value: "🎯 TS", fill: "#ec4899", fontSize: 10, fontWeight: "bold", position: "insideTop" }}
+          />
+        )}
+        
+        {/* Peak-Lock aktiveret - cyan vertikal linje */}
+        {chartData.find(d => d.peakLockActivationMarker) && (
+          <ReferenceLine 
+            x={chartData.find(d => d.peakLockActivationMarker)?.time}
+            stroke="#06b6d4"
+            strokeWidth={2}
+            strokeDasharray="4 2"
+            strokeOpacity={0.8}
+            label={{ value: "🔒 PL", fill: "#06b6d4", fontSize: 10, fontWeight: "bold", position: "insideTop" }}
           />
         )}
       </ComposedChart>
