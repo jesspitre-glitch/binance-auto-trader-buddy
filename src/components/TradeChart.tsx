@@ -402,6 +402,17 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
     allRelevantValues.push(Number(trade.exit_price));
   }
   
+  // Tilføj trigger-niveauer så de altid er synlige på grafen
+  if (triggerLevels.breakEvenTrigger != null && isFinite(triggerLevels.breakEvenTrigger)) {
+    allRelevantValues.push(triggerLevels.breakEvenTrigger);
+  }
+  if (triggerLevels.trailingTrigger != null && isFinite(triggerLevels.trailingTrigger)) {
+    allRelevantValues.push(triggerLevels.trailingTrigger);
+  }
+  if (triggerLevels.peakLockTrigger != null && isFinite(triggerLevels.peakLockTrigger)) {
+    allRelevantValues.push(triggerLevels.peakLockTrigger);
+  }
+  
   const minPrice = Math.min(...allRelevantValues);
   const maxPrice = Math.max(...allRelevantValues);
   const priceRangeFinal = maxPrice - minPrice;
