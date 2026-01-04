@@ -120,6 +120,11 @@ export type Database = {
           min_candle_body_percent: number | null
           min_ema_spread_percent: number | null
           name: string
+          peak_lock_activate_profit_pct: number | null
+          peak_lock_distance_pct: number | null
+          peak_lock_enabled: boolean | null
+          peak_lock_min_profit_floor_pct: number | null
+          peak_lock_ratchet_only: boolean | null
           pivot_points_enabled: boolean | null
           pivot_points_hard_filter: boolean | null
           pivot_points_lookback: number | null
@@ -227,6 +232,11 @@ export type Database = {
           min_candle_body_percent?: number | null
           min_ema_spread_percent?: number | null
           name: string
+          peak_lock_activate_profit_pct?: number | null
+          peak_lock_distance_pct?: number | null
+          peak_lock_enabled?: boolean | null
+          peak_lock_min_profit_floor_pct?: number | null
+          peak_lock_ratchet_only?: boolean | null
           pivot_points_enabled?: boolean | null
           pivot_points_hard_filter?: boolean | null
           pivot_points_lookback?: number | null
@@ -334,6 +344,11 @@ export type Database = {
           min_candle_body_percent?: number | null
           min_ema_spread_percent?: number | null
           name?: string
+          peak_lock_activate_profit_pct?: number | null
+          peak_lock_distance_pct?: number | null
+          peak_lock_enabled?: boolean | null
+          peak_lock_min_profit_floor_pct?: number | null
+          peak_lock_ratchet_only?: boolean | null
           pivot_points_enabled?: boolean | null
           pivot_points_hard_filter?: boolean | null
           pivot_points_lookback?: number | null

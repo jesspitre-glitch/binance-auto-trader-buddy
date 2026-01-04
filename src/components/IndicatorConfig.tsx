@@ -100,6 +100,13 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     break_even_profit_pct_trigger: config?.break_even_profit_pct_trigger ?? 1.5,
     break_even_profit_pct_stop_over_entry: config?.break_even_profit_pct_stop_over_entry ?? 0.1,
     
+    // Peak-Lock Trailing (procent-baseret)
+    peak_lock_enabled: config?.peak_lock_enabled !== undefined ? config?.peak_lock_enabled : false,
+    peak_lock_activate_profit_pct: config?.peak_lock_activate_profit_pct ?? 0.60,
+    peak_lock_distance_pct: config?.peak_lock_distance_pct ?? 0.35,
+    peak_lock_min_profit_floor_pct: config?.peak_lock_min_profit_floor_pct ?? 0.15,
+    peak_lock_ratchet_only: config?.peak_lock_ratchet_only !== undefined ? config?.peak_lock_ratchet_only : true,
+    
     // ADX
     adx_enabled: config?.adx_enabled !== undefined ? config?.adx_enabled : true,
     adx_period: config?.adx_period || 14,
@@ -224,6 +231,12 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       break_even_profit_pct_enabled: config.break_even_profit_pct_enabled !== undefined ? config.break_even_profit_pct_enabled : false,
       break_even_profit_pct_trigger: config.break_even_profit_pct_trigger ?? 1.5,
       break_even_profit_pct_stop_over_entry: config.break_even_profit_pct_stop_over_entry ?? 0.1,
+      // Peak-Lock Trailing
+      peak_lock_enabled: config.peak_lock_enabled !== undefined ? config.peak_lock_enabled : false,
+      peak_lock_activate_profit_pct: config.peak_lock_activate_profit_pct ?? 0.60,
+      peak_lock_distance_pct: config.peak_lock_distance_pct ?? 0.35,
+      peak_lock_min_profit_floor_pct: config.peak_lock_min_profit_floor_pct ?? 0.15,
+      peak_lock_ratchet_only: config.peak_lock_ratchet_only !== undefined ? config.peak_lock_ratchet_only : true,
       // ADX
       adx_enabled: config.adx_enabled !== undefined ? config.adx_enabled : true,
       adx_period: config.adx_period ?? 14,
@@ -334,6 +347,12 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       break_even_profit_pct_enabled: config.break_even_profit_pct_enabled !== undefined ? config.break_even_profit_pct_enabled : false,
       break_even_profit_pct_trigger: config.break_even_profit_pct_trigger ?? 1.5,
       break_even_profit_pct_stop_over_entry: config.break_even_profit_pct_stop_over_entry ?? 0.1,
+      // Peak-Lock Trailing
+      peak_lock_enabled: config.peak_lock_enabled !== undefined ? config.peak_lock_enabled : false,
+      peak_lock_activate_profit_pct: config.peak_lock_activate_profit_pct ?? 0.60,
+      peak_lock_distance_pct: config.peak_lock_distance_pct ?? 0.35,
+      peak_lock_min_profit_floor_pct: config.peak_lock_min_profit_floor_pct ?? 0.15,
+      peak_lock_ratchet_only: config.peak_lock_ratchet_only !== undefined ? config.peak_lock_ratchet_only : true,
       adx_enabled: config.adx_enabled !== undefined ? config.adx_enabled : true,
       adx_period: config.adx_period ?? 14,
       adx_threshold: config.adx_threshold ?? 25,
@@ -1429,6 +1448,108 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                     )}
                   </div>
                 )}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>🔒 Peak-Lock Trailing</CardTitle>
+          <CardDescription>
+            Procent-baseret trailing stop der låser profit tættere på peak end ATR-trailing.<br/>
+            Når trade har momentum, flyttes stop tættere på peak så du ikke giver profit tilbage.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          {/* Master toggle */}
+          <div className="flex items-center justify-between sm:col-span-2">
+            <div>
+              <Label htmlFor="peak_lock_enabled">Aktiver Peak-Lock Trailing</Label>
+              <p className="text-xs text-muted-foreground">Slår procent-baseret peak-lock trailing til</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.peak_lock_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="peak_lock_enabled"
+                checked={formData.peak_lock_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, peak_lock_enabled: checked })}
+              />
+            </div>
+          </div>
+
+          {formData.peak_lock_enabled && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="peak_lock_activate_profit_pct">Aktivér ved Profit %</Label>
+                <Input
+                  id="peak_lock_activate_profit_pct"
+                  type="number"
+                  step="0.05"
+                  min="0"
+                  value={formData.peak_lock_activate_profit_pct}
+                  onChange={(e) => setFormData({ ...formData, peak_lock_activate_profit_pct: parseFloat(e.target.value) || 0 })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Peak-lock aktiveres når profit ≥ X% fra entry. Eks: 0.60 = 0.6% profit
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="peak_lock_distance_pct">Afstand fra Peak %</Label>
+                <Input
+                  id="peak_lock_distance_pct"
+                  type="number"
+                  step="0.05"
+                  min="0"
+                  value={formData.peak_lock_distance_pct}
+                  onChange={(e) => setFormData({ ...formData, peak_lock_distance_pct: parseFloat(e.target.value) || 0 })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Stop placeres X% under peak (LONG) / over peak (SHORT). Eks: 0.35 = 0.35% fra peak
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="peak_lock_min_profit_floor_pct">Min Profit Floor %</Label>
+                <Input
+                  id="peak_lock_min_profit_floor_pct"
+                  type="number"
+                  step="0.05"
+                  min="0"
+                  value={formData.peak_lock_min_profit_floor_pct}
+                  onChange={(e) => setFormData({ ...formData, peak_lock_min_profit_floor_pct: parseFloat(e.target.value) || 0 })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Stop må aldrig være under minimumsgevinst. Eks: 0.15 = stop altid ≥ 0.15% over entry
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="peak_lock_ratchet_only">Ratchet Only</Label>
+                  <p className="text-xs text-muted-foreground">Stop må kun strammes, aldrig løsnes</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">{formData.peak_lock_ratchet_only ? "Tændt" : "Slukket"}</span>
+                  <Switch
+                    id="peak_lock_ratchet_only"
+                    checked={formData.peak_lock_ratchet_only}
+                    onCheckedChange={(checked) => setFormData({ ...formData, peak_lock_ratchet_only: checked })}
+                  />
+                </div>
+              </div>
+
+              {/* Info box */}
+              <div className="sm:col-span-2 p-3 bg-muted/50 rounded-md">
+                <p className="text-xs text-muted-foreground">
+                  <strong>📊 Logik:</strong> Når profit når {formData.peak_lock_activate_profit_pct}%, beregnes:<br/>
+                  • <strong>Peak-lock stop</strong> = peak × (1 - {formData.peak_lock_distance_pct}%) for LONG<br/>
+                  • <strong>Profit floor</strong> = entry × (1 + {formData.peak_lock_min_profit_floor_pct}%) for LONG<br/>
+                  • <strong>Kandidat stop</strong> = max(peak-lock, profit-floor)<br/>
+                  • <strong>Endelig stop</strong> = max(eksisterende ATR/BE stop, kandidat){formData.peak_lock_ratchet_only && ' + ratchet'}
+                </p>
               </div>
             </>
           )}
