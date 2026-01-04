@@ -292,7 +292,7 @@ serve(async (req) => {
           // Hent den AKTIVE strategi
           const { data: activeConfig } = await supabaseClient
             .from('indicator_config')
-            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry')
+            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only')
             .eq('id', sessionData.active_config_id)
             .single();
           configData = activeConfig;
@@ -301,7 +301,7 @@ serve(async (req) => {
           // Fallback til første config hvis ingen session
           const { data: fallbackConfig } = await supabaseClient
             .from('indicator_config')
-            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry')
+            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only')
             .eq('user_id', position.user_id)
             .order('created_at', { ascending: false })
             .limit(1)
@@ -319,6 +319,13 @@ serve(async (req) => {
         let breakEvenProfitPctEnabled = false;
         let breakEvenProfitPctTrigger = 1.5;
         let breakEvenProfitPctStopOverEntry = 0.1;
+
+        // Peak-Lock config fra database
+        let peakLockEnabled = false;
+        let peakLockActivateProfitPct = 0.60;
+        let peakLockDistancePct = 0.35;
+        let peakLockMinProfitFloorPct = 0.15;
+        let peakLockRatchetOnly = true;
 
         // Trailing multiplier fra UI (indicator_config)
         let atrTrailingStopMultiplierFromUi: number | null = null;
@@ -342,9 +349,16 @@ serve(async (req) => {
           breakEvenProfitPctTrigger = configData.break_even_profit_pct_trigger ?? 1.5;
           breakEvenProfitPctStopOverEntry = configData.break_even_profit_pct_stop_over_entry ?? 0.1;
 
+          // Peak-Lock config
+          peakLockEnabled = configData.peak_lock_enabled ?? false;
+          peakLockActivateProfitPct = configData.peak_lock_activate_profit_pct ?? 0.60;
+          peakLockDistancePct = configData.peak_lock_distance_pct ?? 0.35;
+          peakLockMinProfitFloorPct = configData.peak_lock_min_profit_floor_pct ?? 0.15;
+          peakLockRatchetOnly = configData.peak_lock_ratchet_only ?? true;
+
           // Log for synkroniserede positioner uden strategy_hash
           if (!position.strategy_hash) {
-            console.log(`📋 Synkroniseret position ${position.symbol} bruger aktuel config: timeout=${maxPositionDurationMinutes}min, autoExit=${autoExitEnabled}, conditionalTimeExit=${conditionalTimeExitEnabled}`);
+            console.log(`📋 Synkroniseret position ${position.symbol} bruger aktuel config: timeout=${maxPositionDurationMinutes}min, autoExit=${autoExitEnabled}, conditionalTimeExit=${conditionalTimeExitEnabled}, peakLock=${peakLockEnabled}`);
           }
         }
 
@@ -978,6 +992,85 @@ serve(async (req) => {
           console.log(
             `   Trailing status: ${trailingActivationReason} | threshold=${trailingProfitThresholdLabel} | inProfit=${isInProfit} | BE=${breakEvenActivatedState}`
           );
+        }
+
+        // 🔒 PEAK-LOCK TRAILING (procent-baseret)
+        // Kombinerer med eksisterende trailing stop - vælger det strammeste
+        let peakLockStop: number | null = null;
+        let peakLockActive = false;
+
+        if (peakLockEnabled && isInProfit) {
+          const profitPctFromEntry = Math.abs(profitPercent);
+
+          if (profitPctFromEntry >= peakLockActivateProfitPct) {
+            peakLockActive = true;
+
+            // Beregn peak-lock stop og profit floor
+            let peakLockStopFromPeak: number;
+            let profitFloorStop: number;
+
+            if (position.side === 'LONG') {
+              // LONG: stop under peak, floor over entry
+              peakLockStopFromPeak = newPeakPrice * (1 - peakLockDistancePct / 100);
+              profitFloorStop = position.entry_price * (1 + peakLockMinProfitFloorPct / 100);
+              // Kandidat stop = max(peak-lock, floor)
+              peakLockStop = Math.max(peakLockStopFromPeak, profitFloorStop);
+            } else {
+              // SHORT: stop over peak, floor under entry
+              peakLockStopFromPeak = newPeakPrice * (1 + peakLockDistancePct / 100);
+              profitFloorStop = position.entry_price * (1 - peakLockMinProfitFloorPct / 100);
+              // Kandidat stop = min(peak-lock, floor)
+              peakLockStop = Math.min(peakLockStopFromPeak, profitFloorStop);
+            }
+
+            console.log(`\n🔒 PEAK-LOCK TRAILING AKTIV - ${position.symbol} ${position.side}`);
+            console.log(`   profit_pct: ${profitPctFromEntry.toFixed(4)}% (threshold: ${peakLockActivateProfitPct}%)`);
+            console.log(`   peak_price: ${newPeakPrice}`);
+            console.log(`   peak_lock_stop_from_peak: ${peakLockStopFromPeak.toFixed(8)}`);
+            console.log(`   profit_floor_stop: ${profitFloorStop.toFixed(8)}`);
+            console.log(`   peak_lock_candidate: ${peakLockStop.toFixed(8)}`);
+
+            // Kombinér med eksisterende stop (ATR/BE trailing)
+            if (newTrailingStop !== null && newTrailingStop !== undefined && isFinite(newTrailingStop)) {
+              const existingStop = Number(newTrailingStop);
+              const beforeCombine = newTrailingStop;
+
+              if (position.side === 'LONG') {
+                // LONG: vælg højeste (strammeste)
+                newTrailingStop = Math.max(existingStop, peakLockStop);
+              } else {
+                // SHORT: vælg laveste (strammeste)
+                newTrailingStop = Math.min(existingStop, peakLockStop);
+              }
+
+              console.log(`   existing_trailing: ${beforeCombine.toFixed(8)}`);
+              console.log(`   final_trailing: ${newTrailingStop.toFixed(8)} (${newTrailingStop === beforeCombine ? 'ATR' : 'PEAK-LOCK'})`);
+            } else {
+              // Ingen eksisterende trailing - brug peak-lock direkte
+              newTrailingStop = peakLockStop;
+              trailingStopActive = true;
+              trailingValidThisCycle = true;
+              console.log(`   No existing trailing - using peak-lock as trailing: ${newTrailingStop.toFixed(8)}`);
+            }
+
+            // Ratchet: stop må kun strammes
+            if (peakLockRatchetOnly && position.trailing_stop != null) {
+              const dbTrailingStop = Number(position.trailing_stop);
+              const beforeRatchet = newTrailingStop;
+
+              if (position.side === 'LONG') {
+                newTrailingStop = Math.max(newTrailingStop, dbTrailingStop);
+              } else {
+                newTrailingStop = Math.min(newTrailingStop, dbTrailingStop);
+              }
+
+              if (newTrailingStop !== beforeRatchet) {
+                console.log(`   🔧 RATCHET: ${beforeRatchet.toFixed(8)} → ${newTrailingStop.toFixed(8)} (kept DB value)`);
+              }
+            }
+          } else {
+            console.log(`   🔒 Peak-lock waiting: profit=${profitPctFromEntry.toFixed(4)}% < threshold=${peakLockActivateProfitPct}%`);
+          }
         }
 
         const trailingStop = trailingStopActive && trailingValidThisCycle
