@@ -445,15 +445,18 @@ serve(async (req) => {
         let newPeakPrice = position.peak_price || position.entry_price;
         let newTrailingStop = position.trailing_stop;
         
-        // 🔴 KRITISK FIX: Opdater peak price ALTID når prisen bevæger sig i vores favor
-        // Dette skal ske UAFHÆNGIGT af om trailing stop er aktivt endnu
-        // Ellers mister vi den faktiske peak når trailing aktiveres senere
-        if (position.side === 'LONG' && currentPrice > newPeakPrice) {
-          console.log(`📈 Peak price opdateret (pre-trailing): ${newPeakPrice} → ${currentPrice} for ${position.symbol}`);
-          newPeakPrice = currentPrice;
-        } else if (position.side === 'SHORT' && currentPrice < newPeakPrice) {
-          console.log(`📉 Peak price opdateret (pre-trailing): ${newPeakPrice} → ${currentPrice} for ${position.symbol}`);
-          newPeakPrice = currentPrice;
+        // 🔴 PEAK-TRACKING: Opdater peak ALTID når position er åben (hvis Peak-Lock er aktivt i UI)
+        // Peak må kun bevæge sig i gunstig retning (ratchet)
+        // LONG: peak = højeste pris set, SHORT: peak = laveste pris set
+        // Dette sker UAFHÆNGIGT af om trailing/BE er aktivt, så peak-lock kan stramme korrekt senere
+        if (peakLockEnabled || trailingActivationEnabled) {
+          if (position.side === 'LONG' && currentPrice > newPeakPrice) {
+            console.log(`📈 Peak price opdateret: ${newPeakPrice.toFixed(6)} → ${currentPrice.toFixed(6)} for ${position.symbol}`);
+            newPeakPrice = currentPrice;
+          } else if (position.side === 'SHORT' && currentPrice < newPeakPrice) {
+            console.log(`📉 Peak price opdateret: ${newPeakPrice.toFixed(6)} → ${currentPrice.toFixed(6)} for ${position.symbol}`);
+            newPeakPrice = currentPrice;
+          }
         }
         
         // 🔴 FIX: Track break-even state LOKALT for at undgå at miste data ved trade-close
@@ -822,14 +825,7 @@ serve(async (req) => {
         let trailingValidThisCycle = false;
 
         if (trailingStopActive) {
-          // Opdater peak
-          if (position.side === 'LONG' && currentPrice > newPeakPrice) {
-            console.log(`Updating peak: ${newPeakPrice} → ${currentPrice} for ${position.symbol}`);
-            newPeakPrice = currentPrice;
-          } else if (position.side === 'SHORT' && currentPrice < newPeakPrice) {
-            console.log(`Updating peak: ${newPeakPrice} → ${currentPrice} for ${position.symbol}`);
-            newPeakPrice = currentPrice;
-          }
+          // Peak opdateres nu tidligere i flowet (linje ~448) så den er korrekt her
 
           // Beregn trailing
           if (isLegacyPosition) {
