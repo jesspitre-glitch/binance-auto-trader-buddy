@@ -255,6 +255,13 @@ export const PositionManager = () => {
                                 </Badge>
                               ) : null}
                            </div>
+
+                           {isBreakEvenActivated && (
+                             <div className="flex items-center gap-2">
+                               <span className="text-xs font-semibold">BE niveau:</span>
+                               <span className="font-mono text-blue-500">${breakEvenLevel.toFixed(4)}</span>
+                             </div>
+                           )}
                          </div>
 
                           <div className="border-t pt-2 mt-2 space-y-1">
