@@ -9,6 +9,11 @@ interface TradeChartProps {
 export const TradeChart = ({ trade }: TradeChartProps) => {
   const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [markers, setMarkers] = useState<{
+    breakEvenAt: number | null;
+    trailingAt: number | null;
+    peakLockAt: number | null;
+  }>({ breakEvenAt: null, trailingAt: null, peakLockAt: null });
 
   useEffect(() => {
     const fetchKlines = async () => {
@@ -72,11 +77,11 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         let peakLockActivated = false;
         let peakLockStopValue: number | null = null;
         
-        // Aktiverings-tidspunkter til vertikale markører
-        let trailingStopActivatedTime: string | null = null;
-        let peakLockActivatedTime: string | null = null;
-        let breakEvenActivatedTime: string | null = null;
-        
+        // Aktiverings-tidspunkter (ms) til vertikale markører
+        let trailingStopActivatedAt: number | null = null;
+        let peakLockActivatedAt: number | null = null;
+        let breakEvenActivatedAt: number | null = null;
+
         const data = klines.map((k: any, index: number) => {
           const timestamp = k[0];
           const price = parseFloat(k[4]); // Close price
@@ -133,14 +138,14 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
 
             // Trailing må kun aktiveres efter BE + i profit + threshold
             const trailingStopActive = breakEvenActivated && isInProfit && (!trailingStopActivationEnabled || (profitInAtr >= trailingStopActivationAtr));
-            const wasTrailingStopActiveBeforeThisCandle = trailingStopActivatedTime !== null;
+            const wasTrailingStopActiveBeforeThisCandle = trailingStopActivatedAt !== null;
 
             if (trailingStopActive) {
               // Registrer aktiveringstidspunkt første gang trailing stop aktiveres
               if (!wasTrailingStopActiveBeforeThisCandle) {
-                trailingStopActivatedTime = new Date(timestamp).toLocaleTimeString("da-DK", { hour: '2-digit', minute: '2-digit' });
+                trailingStopActivatedAt = timestamp;
               }
-              
+
               if (side === 'LONG') {
                 const calculatedTrailing = peakPrice * (1 - trailingPercent / 100);
                 // Trailing må kun ratchete OP for LONG (aldrig ned)
@@ -240,8 +245,8 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         
         console.log('First 5 data points:', data.slice(0, 5));
         console.log('Last 5 data points:', data.slice(-5));
-        console.log('Activation times:', { trailingStopActivatedTime, peakLockActivatedTime, breakEvenActivatedTime });
-        
+        console.log('Activation times (ms):', { trailingStopActivatedAt, peakLockActivatedAt, breakEvenActivatedAt });
+
         // Find closest data point to entry time
         const entryPoint = data.reduce((closest, current) => {
           const closestDiff = Math.abs(closest.timestamp - openTime);
@@ -371,36 +376,50 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
     <ResponsiveContainer width="100%" height={300}>
       <ComposedChart data={chartData}>
         <CartesianGrid strokeDasharray="3 3" />
-        <XAxis 
-          dataKey="time" 
+        <XAxis
+          dataKey="timestamp"
+          type="number"
+          scale="time"
+          domain={["dataMin", "dataMax"]}
           tick={{ fontSize: 10 }}
-          interval="preserveStartEnd"
+          tickFormatter={(value) =>
+            new Date(value).toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" })
+          }
         />
-        <YAxis 
+        <YAxis
           domain={[minPrice - padding, maxPrice + padding]}
           tick={{ fontSize: 11 }}
           tickFormatter={(value) => value.toFixed(entryPrice > 100 ? 2 : 4)}
           width={65}
         />
-        <Tooltip 
-          contentStyle={{ 
-            backgroundColor: 'rgba(0,0,0,0.95)', 
-            border: '1px solid rgba(255,255,255,0.2)', 
-            borderRadius: '8px',
-            padding: '12px'
+        <Tooltip
+          labelFormatter={(value) =>
+            typeof value === "number"
+              ? new Date(value).toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" })
+              : String(value)
+          }
+          contentStyle={{
+            backgroundColor: "hsl(var(--popover))",
+            border: "1px solid hsl(var(--border))",
+            borderRadius: "8px",
+            padding: "12px",
           }}
-          labelStyle={{ color: '#fff', fontWeight: 'bold', marginBottom: '8px' }}
-          itemStyle={{ color: '#fff', padding: '4px 0' }}
+          labelStyle={{
+            color: "hsl(var(--popover-foreground))",
+            fontWeight: "bold",
+            marginBottom: "8px",
+          }}
+          itemStyle={{ color: "hsl(var(--popover-foreground))", padding: "4px 0" }}
         />
-        <Legend 
-          wrapperStyle={{ 
-            paddingTop: '20px',
-            fontSize: '14px',
-            fontWeight: '600'
+        <Legend
+          wrapperStyle={{
+            paddingTop: "20px",
+            fontSize: "14px",
+            fontWeight: "600",
           }}
           iconType="line"
         />
-        
+
         {/* Price line - blå, tykkere */}
         <Line 
           type="monotone" 
