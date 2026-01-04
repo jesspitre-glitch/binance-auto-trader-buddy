@@ -207,7 +207,7 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
                   </Badge>
                 </div>
                 <div className="font-mono font-semibold text-blue-400">
-                  ${Number(trade.indicators_snapshot?.break_even_at_price ?? trade.entry_price).toFixed(4)}
+                  ${Number(trade.indicators_snapshot?.break_even_at_price ?? trade.stop_loss ?? trade.entry_price).toFixed(4)}
                 </div>
               </div>
             )}
