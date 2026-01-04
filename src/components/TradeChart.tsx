@@ -124,7 +124,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
 
                 currentStopLoss = beStop;
                 breakEvenActivated = true;
-                breakEvenActivatedTime = new Date(timestamp).toLocaleTimeString("da-DK", { hour: '2-digit', minute: '2-digit' });
+                breakEvenActivatedAt = timestamp;
                 effectiveStop = currentStopLoss;
               }
             }
@@ -176,7 +176,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
             }
             
             // 🔒 Peak-Lock Trailing logik
-            const wasPeakLockActiveBeforeThisCandle = peakLockActivatedTime !== null;
+            const wasPeakLockActiveBeforeThisCandle = peakLockActivatedAt !== null;
             if (peakLockEnabled && breakEvenActivated) {
               const profitPct = side === 'LONG'
                 ? ((price - entryPrice) / entryPrice) * 100
@@ -185,7 +185,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
               if (profitPct >= peakLockActivateProfitPct) {
                 // Registrer aktiveringstidspunkt første gang peak-lock aktiveres
                 if (!wasPeakLockActiveBeforeThisCandle) {
-                  peakLockActivatedTime = new Date(timestamp).toLocaleTimeString("da-DK", { hour: '2-digit', minute: '2-digit' });
+                  peakLockActivatedAt = timestamp;
                 }
                 peakLockActivated = true;
                 
@@ -271,11 +271,13 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           ...d,
           entryMarker: d.timestamp === entryPoint.timestamp ? trade.entry_price : null,
           exitMarker: isPositionClosed && exitPoint && d.timestamp === exitPoint.timestamp ? trade.exit_price : null,
-          // Aktiveringsmarkører - vis kun på det tidspunkt de aktiveres
-          trailingActivationMarker: d.time === trailingStopActivatedTime ? 'trailing' : null,
-          peakLockActivationMarker: d.time === peakLockActivatedTime ? 'peakLock' : null,
-          breakEvenActivationMarker: d.time === breakEvenActivatedTime ? 'breakEven' : null,
         }));
+        
+        setMarkers({
+          breakEvenAt: breakEvenActivatedAt,
+          trailingAt: trailingStopActivatedAt,
+          peakLockAt: peakLockActivatedAt,
+        });
         
         setChartData(dataWithMarkers);
       } catch (error) {
@@ -542,38 +544,35 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         )}
         
         {/* Vertikale aktiveringsmarkører */}
-        {/* Break-Even aktiveret - lilla vertikal linje */}
-        {chartData.find(d => d.breakEvenActivationMarker) && (
+        {markers.breakEvenAt != null && (
           <ReferenceLine 
-            x={chartData.find(d => d.breakEvenActivationMarker)?.time}
+            x={markers.breakEvenAt}
             stroke="#a855f7"
             strokeWidth={2}
             strokeDasharray="4 2"
-            strokeOpacity={0.8}
+            strokeOpacity={0.85}
             label={{ value: "⚖️ BE", fill: "#a855f7", fontSize: 10, fontWeight: "bold", position: "insideTop" }}
           />
         )}
         
-        {/* Trailing Stop aktiveret - pink/magenta vertikal linje */}
-        {chartData.find(d => d.trailingActivationMarker) && (
+        {markers.trailingAt != null && (
           <ReferenceLine 
-            x={chartData.find(d => d.trailingActivationMarker)?.time}
+            x={markers.trailingAt}
             stroke="#ec4899"
             strokeWidth={2}
             strokeDasharray="4 2"
-            strokeOpacity={0.8}
+            strokeOpacity={0.85}
             label={{ value: "🎯 TS", fill: "#ec4899", fontSize: 10, fontWeight: "bold", position: "insideTop" }}
           />
         )}
         
-        {/* Peak-Lock aktiveret - cyan vertikal linje */}
-        {chartData.find(d => d.peakLockActivationMarker) && (
+        {markers.peakLockAt != null && (
           <ReferenceLine 
-            x={chartData.find(d => d.peakLockActivationMarker)?.time}
+            x={markers.peakLockAt}
             stroke="#06b6d4"
             strokeWidth={2}
             strokeDasharray="4 2"
-            strokeOpacity={0.8}
+            strokeOpacity={0.85}
             label={{ value: "🔒 PL", fill: "#06b6d4", fontSize: 10, fontWeight: "bold", position: "insideTop" }}
           />
         )}
