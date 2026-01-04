@@ -212,6 +212,33 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
               </div>
             )}
 
+            {/* Peak-Lock Status */}
+            {(trade.indicators_snapshot?.peak_lock_enabled || trade.indicators_snapshot?.peak_lock_activated) && (
+              <div className="border rounded-lg p-3 border-cyan-500/50 bg-cyan-500/5">
+                <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                  🔒 Peak-Lock Trailing
+                  {trade.indicators_snapshot?.peak_lock_activated && (
+                    <Badge variant="outline" className="ml-1 text-xs bg-cyan-500/20 text-cyan-400 border-cyan-500/40">
+                      AKTIV
+                    </Badge>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  {trade.indicators_snapshot?.peak_lock_stop_price && (
+                    <div className="font-mono font-semibold text-cyan-400">
+                      Stop: ${Number(trade.indicators_snapshot.peak_lock_stop_price).toFixed(4)}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground grid grid-cols-2 gap-1">
+                    <span>Aktivering: {trade.indicators_snapshot?.peak_lock_activate_profit_pct ?? 0.6}%</span>
+                    <span>Distance: {trade.indicators_snapshot?.peak_lock_distance_pct ?? 0.35}%</span>
+                    <span>Min floor: {trade.indicators_snapshot?.peak_lock_min_profit_floor_pct ?? 0.15}%</span>
+                    <span>Ratchet: {trade.indicators_snapshot?.peak_lock_ratchet_only ? 'Ja' : 'Nej'}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Peak Price - use position data for live */}
             {(trade.peak_price || trade.indicators_snapshot?.peak_price) && (
               <div className="border rounded-lg p-3">

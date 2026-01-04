@@ -445,6 +445,16 @@ export const formatTradeForExport = (t: any) => {
     break_even_triggered: breakEvenTriggered,
     break_even_at_price: breakEvenAtPrice != null ? +Number(breakEvenAtPrice).toFixed(8) : null,
     
+    // 🔒 Peak-Lock Trailing Config & Status
+    peak_lock_enabled: snap.peak_lock_enabled ?? false,
+    peak_lock_activate_profit_pct: snap.peak_lock_activate_profit_pct ?? null,
+    peak_lock_distance_pct: snap.peak_lock_distance_pct ?? null,
+    peak_lock_min_profit_floor_pct: snap.peak_lock_min_profit_floor_pct ?? null,
+    peak_lock_ratchet_only: snap.peak_lock_ratchet_only ?? null,
+    peak_lock_activated: snap.peak_lock_activated ?? false,
+    peak_lock_stop_price: snap.peak_lock_stop_price != null ? +Number(snap.peak_lock_stop_price).toFixed(8) : null,
+    peak_price: snap.peak_price != null ? +Number(snap.peak_price).toFixed(8) : null,
+    
     // Trailing stop config
     trailing_stop_initial_price: snap.trailing_stop_initial_price != null 
       ? +Number(snap.trailing_stop_initial_price).toFixed(8) 
