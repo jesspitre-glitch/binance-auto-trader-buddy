@@ -1285,17 +1285,49 @@ serve(async (req) => {
           (position.side === 'SHORT' && currentPrice >= trailingStop)
         );
 
+        // ═══════════════════════════════════════════════════════════════════════
+        // MAX SL AFTER MFE EXIT CHECK
+        // ═══════════════════════════════════════════════════════════════════════
+        // Beregn det effektive Max SL cap niveau og tjek om det er ramt
+        let maxSlAfterMfeCap: number | null = null;
+        let maxSlAfterMfeTriggered = false;
+        
+        if (maxSlAfterMfeEnabled && !breakEvenActivatedState) {
+          const mfePctForExit = position.side === 'LONG'
+            ? ((newPeakPrice - position.entry_price) / position.entry_price) * 100
+            : ((position.entry_price - newPeakPrice) / position.entry_price) * 100;
+          
+          if (mfePctForExit >= maxSlAfterMfeActivatePct) {
+            if (position.side === 'LONG') {
+              maxSlAfterMfeCap = position.entry_price * (1 - maxSlAfterMfeMaxDistPct / 100);
+              maxSlAfterMfeTriggered = currentPrice <= maxSlAfterMfeCap;
+            } else {
+              maxSlAfterMfeCap = position.entry_price * (1 + maxSlAfterMfeMaxDistPct / 100);
+              maxSlAfterMfeTriggered = currentPrice >= maxSlAfterMfeCap;
+            }
+            
+            if (maxSlAfterMfeTriggered) {
+              console.log(`\n🎯 MAX_SL_AFTER_MFE EXIT TRIGGERED - ${position.symbol} ${position.side}`);
+              console.log(`   MFE%: ${mfePctForExit.toFixed(4)}% >= ${maxSlAfterMfeActivatePct}%`);
+              console.log(`   Max SL Cap: ${maxSlAfterMfeCap.toFixed(6)}`);
+              console.log(`   Current Price: ${currentPrice} ${position.side === 'LONG' ? '<=' : '>='} ${maxSlAfterMfeCap.toFixed(6)}`);
+            }
+          }
+        }
+
         // Find alle triggered levels og vælg det bedste (højeste for LONG, laveste for SHORT)
         const triggeredLevels: { type: string; level: number }[] = [];
         if (slTriggered && hardStopLoss !== null) triggeredLevels.push({ type: 'STOP_LOSS', level: hardStopLoss });
         if (beTriggered && breakEvenStop !== null) triggeredLevels.push({ type: 'BREAK_EVEN', level: breakEvenStop });
         if (tsTriggered && trailingStop !== null) triggeredLevels.push({ type: 'TRAILING', level: trailingStop });
+        if (maxSlAfterMfeTriggered && maxSlAfterMfeCap !== null) triggeredLevels.push({ type: 'MAX_SL_AFTER_MFE', level: maxSlAfterMfeCap });
 
         let selectedExit = 'NONE';
         let resultingStopLevel: number | null = null;
         let slHit = false;
         let beHit = false;
         let tsHit = false;
+        let maxSlAfterMfeHit = false;
 
         if (triggeredLevels.length > 0) {
           // Sortér: For LONG vælg højeste level (det der burde have lukket først)
@@ -1311,6 +1343,7 @@ serve(async (req) => {
           slHit = bestExit.type === 'STOP_LOSS';
           beHit = bestExit.type === 'BREAK_EVEN';
           tsHit = bestExit.type === 'TRAILING';
+          maxSlAfterMfeHit = bestExit.type === 'MAX_SL_AFTER_MFE';
           
           console.log(`\n🎯 EXIT SELECTION - ${position.symbol} ${position.side}`);
           console.log(`   triggered_levels: ${triggeredLevels.map(l => `${l.type}@${l.level.toFixed(6)}`).join(', ')}`);
@@ -1340,7 +1373,9 @@ serve(async (req) => {
               ? 'BREAK_EVEN_HIT'
               : tsHit
                 ? (isLegacyPosition ? 'LEGACY_TRAILING_STOP_HIT' : 'TRAILING_STOP_HIT')
-                : null,
+                : maxSlAfterMfeHit
+                  ? 'MAX_SL_AFTER_MFE_HIT'
+                  : null,
           resulting_stop_level: resultingStopLevel,
           
           // 🔴 EXPECTED vs EFFECTIVE audit
@@ -1348,6 +1383,7 @@ serve(async (req) => {
           expected_trailing_stop_price: expectedTrailingAtExit,
           effective_stop_loss_at_exit: slHit ? hardStopLoss : null,
           effective_trailing_at_exit: tsHit ? trailingStop : null,
+          effective_max_sl_after_mfe_cap: maxSlAfterMfeHit ? maxSlAfterMfeCap : null,
           effective_exit_level: effectiveStopAtExit,
           exit_price: currentPrice,
           
@@ -1369,7 +1405,7 @@ serve(async (req) => {
           profit_threshold_passed: breakEvenProfitThresholdPassed,
           break_even_trigger_mode: breakEvenTriggerMode,
           ts_activated_reason: trailingActivationReason,
-          sl_be_ts_priority: { slHit, beHit, tsHit, selected: selectedExit },
+          sl_be_ts_priority: { slHit, beHit, tsHit, maxSlAfterMfeHit, selected: selectedExit },
         };
         
         // 🔴 CLAMP INVARIANT VALIDATION - Log ERROR if clamp violates invariants
@@ -1410,12 +1446,12 @@ serve(async (req) => {
         // @ts-ignore - gem audit på position context så vi kan inkludere det i result payload
         position._exitAudit = exitAudit;
 
-        if (slHit || beHit || tsHit) {
+        if (slHit || beHit || tsHit || maxSlAfterMfeHit) {
           shouldClose = true;
 
           // KRAV 4: Beregn om PnL vil være negativ ved denne exit
           // Bruges til at overstyre BREAK_EVEN_HIT -> STOP_LOSS_HIT hvis PnL er negativ
-          const exitAtPrice = slHit ? hardStopLoss : beHit ? breakEvenStop : trailingStop;
+          const exitAtPrice = slHit ? hardStopLoss : beHit ? breakEvenStop : tsHit ? trailingStop : maxSlAfterMfeCap;
           const estimatedPnl = position.side === 'LONG'
             ? (exitAtPrice! - position.entry_price) * position.quantity
             : (position.entry_price - exitAtPrice!) * position.quantity;
@@ -1424,6 +1460,10 @@ serve(async (req) => {
           if (slHit) {
             closeReason = 'STOP_LOSS_HIT';
             console.log(`STOP LOSS HIT (PRIORITY) | ${position.symbol} | price=${currentPrice} <= hardSL=${hardStopLoss}`);
+          } else if (maxSlAfterMfeHit) {
+            // MAX SL AFTER MFE - altid negativ PnL da det er en cap på tabet
+            closeReason = 'MAX_SL_AFTER_MFE_HIT';
+            console.log(`MAX SL AFTER MFE HIT | ${position.symbol} | price=${currentPrice} ${position.side === 'LONG' ? '<=' : '>='} cap=${maxSlAfterMfeCap} | entry=${position.entry_price} | max_dist=${maxSlAfterMfeMaxDistPct}%`);
           } else if (beHit) {
             // KRAV: En handel må ALDRIG få exit_reason = 'BREAK_EVEN_HIT' hvis PnL er negativ
             if (pnlIsNegative) {
