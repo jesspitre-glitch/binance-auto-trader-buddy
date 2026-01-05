@@ -726,7 +726,7 @@ export const PnLOverview = () => {
                     };
                     
                     // Byg TSV tabel med indikatorer i én kolonne som 'NAVN værdi'
-                    const header = `Symbol\tSide\tÅbnet\tLukket\tEntry\tExit\tP&L\tP&L%\tVarighed\tÅrsag\tIndikatorer\n`;
+                    const header = `Symbol\tSide\tÅbnet\tLukket\tEntry\tExit\tP&L\tP&L%\tVarighed\tÅrsag\tScan TF\tTrend TF\tHigher TF\tMFE%\tIndikatorer\n`;
 
                     const formatIndicatorLine = (s: any) => {
                       if (!s) return "";
@@ -748,16 +748,21 @@ export const PnLOverview = () => {
                     };
 
                     const rows = selectedPeriodTrades.map((t) => {
-                        const opened = new Date(t.opened_at).toLocaleString("da-DK", { timeZone: "UTC" }) + " UTC";
-                        const closed = new Date(t.closed_at).toLocaleString("da-DK", { timeZone: "UTC" }) + " UTC";
+                      const s = t.indicators_snapshot || {};
+                      const opened = new Date(t.opened_at).toLocaleString("da-DK", { timeZone: "UTC" }) + " UTC";
+                      const closed = new Date(t.closed_at).toLocaleString("da-DK", { timeZone: "UTC" }) + " UTC";
                       const entry = String(t.entry_price);
                       const exit = String(t.exit_price);
                       const pnl = `${Number(t.pnl) >= 0 ? "" : "-"}$${Math.abs(Number(t.pnl)).toFixed(2)}`;
                       const pnlPct = `${Number(t.pnl_percent).toFixed(2)}%`;
                       const duration = `${t.duration_minutes}m`;
                       const reason = t.close_reason || "";
-                      const ind = formatIndicatorLine(t.indicators_snapshot);
-                      return `${t.symbol}\t${t.side}\t${opened}\t${closed}\t${entry}\t${exit}\t${pnl}\t${pnlPct}\t${duration}\t${reason}\t${ind}`;
+                      const scanTf = s.scan_interval || "";
+                      const trendTf = s.trend_timeframe || "";
+                      const higherTf = s.higher_trend_timeframe || "";
+                      const mfePct = s.mfe_percent != null ? `${Number(s.mfe_percent).toFixed(2)}%` : "";
+                      const ind = formatIndicatorLine(s);
+                      return `${t.symbol}\t${t.side}\t${opened}\t${closed}\t${entry}\t${exit}\t${pnl}\t${pnlPct}\t${duration}\t${reason}\t${scanTf}\t${trendTf}\t${higherTf}\t${mfePct}\t${ind}`;
                     }).join("\n");
 
                     const text = header + rows;
