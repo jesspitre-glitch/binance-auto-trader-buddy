@@ -1,8 +1,12 @@
+import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, Clock, DollarSign, Target, AlertTriangle, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { TrendingUp, TrendingDown, Clock, DollarSign, Target, AlertTriangle, X, Download, Copy, Check } from "lucide-react";
 import { getBinanceTimeAgo, formatBinanceDate } from "@/lib/timeUtils";
 import { TradeChart } from "./TradeChart";
+import { formatTradeForExport } from "@/lib/tradeExportUtils";
+import { useToast } from "@/hooks/use-toast";
 
 interface TradeDetailsDialogProps {
   trade: any;
@@ -11,6 +15,9 @@ interface TradeDetailsDialogProps {
 }
 
 export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialogProps) => {
+  const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
+  
   const isProfitable = trade.pnl >= 0;
   const durationMinutes = trade.duration_minutes || 0;
   const hours = Math.floor(durationMinutes / 60);
@@ -35,31 +42,64 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
   }
   
   const isLiveProfitable = livePnl >= 0;
+  
+  const handleExportTrade = async () => {
+    try {
+      const formatted = formatTradeForExport(trade);
+      const jsonStr = JSON.stringify(formatted, null, 2);
+      
+      await navigator.clipboard.writeText(jsonStr);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      
+      toast({
+        title: "Kopieret til clipboard",
+        description: "Handelsdata klar til AI analyse",
+      });
+    } catch (err) {
+      toast({
+        title: "Kunne ikke kopiere",
+        description: "Prøv igen",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {trade.side === "LONG" ? (
-              <TrendingUp className="h-5 w-5 text-profit" />
-            ) : (
-              <TrendingDown className="h-5 w-5 text-loss" />
-            )}
-            <span>{trade.symbol}</span>
-            <Badge variant={trade.side === "LONG" ? "default" : "secondary"}>
-              {trade.side}
-            </Badge>
-            {isPositionOpen ? (
-              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-                LIVE
+          <div className="flex items-center justify-between">
+            <DialogTitle className="flex items-center gap-2">
+              {trade.side === "LONG" ? (
+                <TrendingUp className="h-5 w-5 text-profit" />
+              ) : (
+                <TrendingDown className="h-5 w-5 text-loss" />
+              )}
+              <span>{trade.symbol}</span>
+              <Badge variant={trade.side === "LONG" ? "default" : "secondary"}>
+                {trade.side}
               </Badge>
-            ) : (
-              <div className="flex items-center justify-center h-6 w-6 rounded-full bg-loss/20 border border-loss/40">
-                <X className="h-3.5 w-3.5 text-loss" />
-              </div>
-            )}
-          </DialogTitle>
+              {isPositionOpen ? (
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                  LIVE
+                </Badge>
+              ) : (
+                <div className="flex items-center justify-center h-6 w-6 rounded-full bg-loss/20 border border-loss/40">
+                  <X className="h-3.5 w-3.5 text-loss" />
+                </div>
+              )}
+            </DialogTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportTrade}
+              className="flex items-center gap-2"
+            >
+              {copied ? <Check className="h-4 w-4 text-profit" /> : <Copy className="h-4 w-4" />}
+              {copied ? "Kopieret" : "Eksporter til AI"}
+            </Button>
+          </div>
         </DialogHeader>
 
         <div className="space-y-6">
