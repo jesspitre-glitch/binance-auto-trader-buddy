@@ -314,6 +314,13 @@ export const formatTradeForExport = (t: any) => {
     stoch_rsi_is_hard_filter: filterModeSettings.stochrsi_hard_filter ?? null,
 
 
+    // 🔴 TIMEFRAME & STRATEGY CONFIG (required for optimization)
+    scan_timeframe: snap.scan_interval ?? null,
+    trend_timeframe: snap.trend_timeframe ?? null,
+    higher_trend_timeframe: snap.higher_trend_timeframe ?? null,
+    strategy_version: snap.strategy_version ?? null,
+    config_timestamp: snap.config_updated_at ?? snap.config_timestamp ?? null,
+
     // Core trade data
     symbol: t.symbol,
     side: t.side,
@@ -323,6 +330,16 @@ export const formatTradeForExport = (t: any) => {
     pnl_pct: +(t.pnl_percent?.toFixed(6) || 0),
     duration_seconds: durationSec,
     exit_reason: exitReason,
+    exit_winner: t.pnl > 0,
+
+    // 🔴 MFE & MAE (Maximum Favorable/Adverse Excursion)
+    mfe_pct: snap.mfe_percent != null ? +Number(snap.mfe_percent).toFixed(4) : 
+      (snap.peak_price != null && side === 'long' 
+        ? +((+snap.peak_price - +t.entry_price) / +t.entry_price * 100).toFixed(4)
+        : snap.peak_price != null && side === 'short'
+          ? +(( +t.entry_price - +snap.peak_price) / +t.entry_price * 100).toFixed(4)
+          : null),
+    mae_pct: snap.mae_percent != null ? +Number(snap.mae_percent).toFixed(4) : null,
 
     // EMA - higher precision for analysis
     EMA_fast: snap.emaFast != null ? +Number(snap.emaFast).toFixed(8) : null,
