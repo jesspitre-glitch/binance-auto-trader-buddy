@@ -108,7 +108,9 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     peak_lock_ratchet_only: config?.peak_lock_ratchet_only !== undefined ? config?.peak_lock_ratchet_only : true,
     
     // Max SL after MFE (stramning af SL når MFE er nået, før BE trigger)
-    max_sl_after_mfe_pct: config?.max_sl_after_mfe_pct ?? 0,
+    max_sl_after_mfe_enabled: config?.max_sl_after_mfe_enabled !== undefined ? config?.max_sl_after_mfe_enabled : false,
+    max_sl_after_mfe_activate_pct: config?.max_sl_after_mfe_activate_pct ?? 0.60,
+    max_sl_after_mfe_max_dist_pct: config?.max_sl_after_mfe_max_dist_pct ?? 1.0,
     
     // ADX
     adx_enabled: config?.adx_enabled !== undefined ? config?.adx_enabled : true,
@@ -241,7 +243,9 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       peak_lock_min_profit_floor_pct: config.peak_lock_min_profit_floor_pct ?? 0.15,
       peak_lock_ratchet_only: config.peak_lock_ratchet_only !== undefined ? config.peak_lock_ratchet_only : true,
       // Max SL after MFE
-      max_sl_after_mfe_pct: config.max_sl_after_mfe_pct ?? 0,
+      max_sl_after_mfe_enabled: config.max_sl_after_mfe_enabled !== undefined ? config.max_sl_after_mfe_enabled : false,
+      max_sl_after_mfe_activate_pct: config.max_sl_after_mfe_activate_pct ?? 0.60,
+      max_sl_after_mfe_max_dist_pct: config.max_sl_after_mfe_max_dist_pct ?? 1.0,
       // ADX
       adx_enabled: config.adx_enabled !== undefined ? config.adx_enabled : true,
       adx_period: config.adx_period ?? 14,
@@ -359,7 +363,9 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       peak_lock_min_profit_floor_pct: config.peak_lock_min_profit_floor_pct ?? 0.15,
       peak_lock_ratchet_only: config.peak_lock_ratchet_only !== undefined ? config.peak_lock_ratchet_only : true,
       // Max SL after MFE
-      max_sl_after_mfe_pct: config.max_sl_after_mfe_pct ?? 0,
+      max_sl_after_mfe_enabled: config.max_sl_after_mfe_enabled !== undefined ? config.max_sl_after_mfe_enabled : false,
+      max_sl_after_mfe_activate_pct: config.max_sl_after_mfe_activate_pct ?? 0.60,
+      max_sl_after_mfe_max_dist_pct: config.max_sl_after_mfe_max_dist_pct ?? 1.0,
       adx_enabled: config.adx_enabled !== undefined ? config.adx_enabled : true,
       adx_period: config.adx_period ?? 14,
       adx_threshold: config.adx_threshold ?? 25,
@@ -1565,46 +1571,71 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       <Card>
         <CardHeader>
-          <CardTitle>🎯 Max SL efter MFE</CardTitle>
-          <CardDescription>
-            Stram stop-loss automatisk når trade har været i profit (MFE).<br/>
-            Gælder KUN før Break-Even aktiveres.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="max_sl_after_mfe_pct">Max SL efter MFE (%)</Label>
-                <Input
-                  id="max_sl_after_mfe_pct"
-                  type="number"
-                  step="0.05"
-                  min="0"
-                  max="5"
-                  value={formData.max_sl_after_mfe_pct}
-                  onChange={(e) => setFormData({ ...formData, max_sl_after_mfe_pct: parseFloat(e.target.value) || 0 })}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Når MFE når denne værdi, må SL ikke ligge længere væk end dette % fra entry.<br/>
-                  0 = slukket. Eksempel: 1.0 = når trade har været 1% i profit, cap SL til max 1% fra entry.
-                </p>
-              </div>
-              
-              {formData.max_sl_after_mfe_pct > 0 && (
-                <div className="p-3 bg-muted/50 rounded-md">
-                  <p className="text-xs text-muted-foreground">
-                    <strong>📊 Logik:</strong><br/>
-                    • <strong>Aktivering:</strong> Når MFE% ≥ {formData.max_sl_after_mfe_pct}% OG BE ikke er aktiveret<br/>
-                    • <strong>LONG:</strong> SL må ikke være under entry × (1 - {formData.max_sl_after_mfe_pct}%)<br/>
-                    • <strong>SHORT:</strong> SL må ikke være over entry × (1 + {formData.max_sl_after_mfe_pct}%)<br/>
-                    • <strong>Efter BE:</strong> Denne regel stopper - BE/Trailing styrer<br/>
-                    • <strong>Ratchet:</strong> SL flyttes kun indad (strammes), aldrig udad
-                  </p>
-                </div>
-              )}
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>🎯 Max SL efter MFE</CardTitle>
+              <CardDescription>
+                Stram stop-loss automatisk når trade har været i profit (MFE).<br/>
+                Gælder KUN før Break-Even aktiveres.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.max_sl_after_mfe_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="max_sl_after_mfe_enabled"
+                checked={formData.max_sl_after_mfe_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, max_sl_after_mfe_enabled: checked })}
+              />
             </div>
           </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="max_sl_after_mfe_activate_pct">Aktivér ved MFE (%)</Label>
+            <Input
+              id="max_sl_after_mfe_activate_pct"
+              type="number"
+              step="0.05"
+              min="0"
+              max="5"
+              value={formData.max_sl_after_mfe_activate_pct}
+              onChange={(e) => setFormData({ ...formData, max_sl_after_mfe_activate_pct: parseFloat(e.target.value) || 0 })}
+              disabled={!formData.max_sl_after_mfe_enabled}
+            />
+            <p className="text-xs text-muted-foreground">
+              Reglen aktiveres når MFE har nået denne % (fx 0.60 = 0.6% profit)
+            </p>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="max_sl_after_mfe_max_dist_pct">Max SL afstand fra entry (%)</Label>
+            <Input
+              id="max_sl_after_mfe_max_dist_pct"
+              type="number"
+              step="0.05"
+              min="0"
+              max="5"
+              value={formData.max_sl_after_mfe_max_dist_pct}
+              onChange={(e) => setFormData({ ...formData, max_sl_after_mfe_max_dist_pct: parseFloat(e.target.value) || 0 })}
+              disabled={!formData.max_sl_after_mfe_enabled}
+            />
+            <p className="text-xs text-muted-foreground">
+              Når aktiv må SL ikke ligge længere væk end dette % fra entry (fx 1.0 = max 1% tab)
+            </p>
+          </div>
+          
+          {formData.max_sl_after_mfe_enabled && (
+            <div className="sm:col-span-2 p-3 bg-muted/50 rounded-md">
+              <p className="text-xs text-muted-foreground">
+                <strong>📊 Logik:</strong><br/>
+                • <strong>Aktivering:</strong> Når MFE% ≥ {formData.max_sl_after_mfe_activate_pct}% OG BE ikke er aktiveret<br/>
+                • <strong>LONG:</strong> SL må ikke være under entry × (1 - {formData.max_sl_after_mfe_max_dist_pct}%)<br/>
+                • <strong>SHORT:</strong> SL må ikke være over entry × (1 + {formData.max_sl_after_mfe_max_dist_pct}%)<br/>
+                • <strong>Efter BE:</strong> Denne regel stopper - BE/Trailing styrer<br/>
+                • <strong>Ratchet:</strong> SL flyttes kun indad (strammes), aldrig udad
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

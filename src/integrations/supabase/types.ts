@@ -115,6 +115,9 @@ export type Database = {
           max_exposure_percent: number | null
           max_open_positions: number | null
           max_position_duration_minutes: number | null
+          max_sl_after_mfe_activate_pct: number | null
+          max_sl_after_mfe_enabled: boolean | null
+          max_sl_after_mfe_max_dist_pct: number | null
           max_sl_after_mfe_pct: number | null
           min_atr: number | null
           min_atr_percent: number | null
@@ -228,6 +231,9 @@ export type Database = {
           max_exposure_percent?: number | null
           max_open_positions?: number | null
           max_position_duration_minutes?: number | null
+          max_sl_after_mfe_activate_pct?: number | null
+          max_sl_after_mfe_enabled?: boolean | null
+          max_sl_after_mfe_max_dist_pct?: number | null
           max_sl_after_mfe_pct?: number | null
           min_atr?: number | null
           min_atr_percent?: number | null
@@ -341,6 +347,9 @@ export type Database = {
           max_exposure_percent?: number | null
           max_open_positions?: number | null
           max_position_duration_minutes?: number | null
+          max_sl_after_mfe_activate_pct?: number | null
+          max_sl_after_mfe_enabled?: boolean | null
+          max_sl_after_mfe_max_dist_pct?: number | null
           max_sl_after_mfe_pct?: number | null
           min_atr?: number | null
           min_atr_percent?: number | null
