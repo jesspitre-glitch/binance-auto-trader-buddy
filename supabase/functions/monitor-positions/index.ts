@@ -301,7 +301,7 @@ serve(async (req) => {
           // Hent den AKTIVE strategi
           const { data: activeConfig } = await supabaseClient
             .from('indicator_config')
-            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_pct')
+            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct')
             .eq('id', sessionData.active_config_id)
             .single();
           configData = activeConfig;
@@ -310,7 +310,7 @@ serve(async (req) => {
           // Fallback til første config hvis ingen session
           const { data: fallbackConfig } = await supabaseClient
             .from('indicator_config')
-            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_pct')
+            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct')
             .eq('user_id', position.user_id)
             .order('created_at', { ascending: false })
             .limit(1)
@@ -337,7 +337,9 @@ serve(async (req) => {
         let peakLockRatchetOnly = true;
 
         // Max SL after MFE config (stramning af SL når MFE er nået, før BE trigger)
-        let maxSlAfterMfePct = 0;
+        let maxSlAfterMfeEnabled = false;
+        let maxSlAfterMfeActivatePct = 0.60;
+        let maxSlAfterMfeMaxDistPct = 1.0;
 
         // Trailing multiplier fra UI (indicator_config)
         let atrTrailingStopMultiplierFromUi: number | null = null;
@@ -369,11 +371,13 @@ serve(async (req) => {
           peakLockRatchetOnly = configData.peak_lock_ratchet_only ?? true;
 
           // Max SL after MFE
-          maxSlAfterMfePct = configData.max_sl_after_mfe_pct ?? 0;
+          maxSlAfterMfeEnabled = configData.max_sl_after_mfe_enabled ?? false;
+          maxSlAfterMfeActivatePct = configData.max_sl_after_mfe_activate_pct ?? 0.60;
+          maxSlAfterMfeMaxDistPct = configData.max_sl_after_mfe_max_dist_pct ?? 1.0;
 
           // Log for synkroniserede positioner uden strategy_hash
           if (!position.strategy_hash) {
-            console.log(`📋 Synkroniseret position ${position.symbol} bruger aktuel config: timeout=${maxPositionDurationMinutes}min, autoExit=${autoExitEnabled}, conditionalTimeExit=${conditionalTimeExitEnabled}, peakLock=${peakLockEnabled}, maxSlAfterMfe=${maxSlAfterMfePct}%`);
+            console.log(`📋 Synkroniseret position ${position.symbol} bruger aktuel config: timeout=${maxPositionDurationMinutes}min, autoExit=${autoExitEnabled}, conditionalTimeExit=${conditionalTimeExitEnabled}, peakLock=${peakLockEnabled}, maxSlAfterMfe=${maxSlAfterMfeEnabled ? `${maxSlAfterMfeActivatePct}%→${maxSlAfterMfeMaxDistPct}%` : 'off'}`);
           }
         }
 
@@ -800,14 +804,14 @@ serve(async (req) => {
         // ═══════════════════════════════════════════════════════════════════════
         // MAX SL AFTER MFE - Cap SL når MFE er nået, men KUN før BE trigger
         // ═══════════════════════════════════════════════════════════════════════
-        // Regel: Når trade har været i profit (MFE >= threshold), stram SL så den
-        // ikke kan ligge længere væk end threshold% fra entry. Gælder kun før BE.
+        // Regel: Når trade har været i profit (MFE >= aktiveringsthreshold), stram 
+        // SL så den ikke kan ligge længere væk end max_dist% fra entry. Gælder kun før BE.
         // 
-        // LONG: SL må ikke være under entry * (1 - threshold/100)
-        // SHORT: SL må ikke være over entry * (1 + threshold/100)
+        // LONG: SL må ikke være under entry * (1 - max_dist/100)
+        // SHORT: SL må ikke være over entry * (1 + max_dist/100)
         // ═══════════════════════════════════════════════════════════════════════
         
-        if (maxSlAfterMfePct > 0 && !breakEvenActivatedState) {
+        if (maxSlAfterMfeEnabled && !breakEvenActivatedState) {
           // Beregn MFE% (Maximum Favorable Excursion)
           // Dette er hvor langt prisen har været i gunstig retning
           const mfePct = position.side === 'LONG'
@@ -815,18 +819,17 @@ serve(async (req) => {
             : ((position.entry_price - newPeakPrice) / position.entry_price) * 100;
           
           console.log(`\n🎯 MAX_SL_AFTER_MFE Check - ${position.symbol} ${position.side}`);
-          console.log(`   Config: maxSlAfterMfePct=${maxSlAfterMfePct}%`);
+          console.log(`   Config: aktivér ved MFE=${maxSlAfterMfeActivatePct}%, max dist=${maxSlAfterMfeMaxDistPct}%`);
           console.log(`   MFE%: ${mfePct.toFixed(4)}% (peak=${newPeakPrice}, entry=${position.entry_price})`);
           console.log(`   BE aktiveret: ${breakEvenActivatedState}`);
           
-          // Reglen gælder kun når MFE >= threshold
-          if (mfePct >= maxSlAfterMfePct) {
-            let minAllowedSl: number;
+          // Reglen gælder kun når MFE >= aktiverings-threshold
+          if (mfePct >= maxSlAfterMfeActivatePct) {
             let maxSlCapApplied = false;
             
             if (position.side === 'LONG') {
-              // LONG: SL må ikke være under entry * (1 - threshold/100)
-              minAllowedSl = position.entry_price * (1 - maxSlAfterMfePct / 100);
+              // LONG: SL må ikke være under entry * (1 - max_dist/100)
+              const minAllowedSl = position.entry_price * (1 - maxSlAfterMfeMaxDistPct / 100);
               
               if (newStopLoss !== null && newStopLoss !== undefined && newStopLoss < minAllowedSl) {
                 console.log(`   ✅ CAP APPLIED: SL strammes fra ${newStopLoss.toFixed(6)} → ${minAllowedSl.toFixed(6)}`);
@@ -836,8 +839,8 @@ serve(async (req) => {
                 console.log(`   ⏭️ Ingen ændring: SL (${newStopLoss?.toFixed(6) ?? 'null'}) er allerede ≥ min (${minAllowedSl.toFixed(6)})`);
               }
             } else {
-              // SHORT: SL må ikke være over entry * (1 + threshold/100)
-              const maxAllowedSl = position.entry_price * (1 + maxSlAfterMfePct / 100);
+              // SHORT: SL må ikke være over entry * (1 + max_dist/100)
+              const maxAllowedSl = position.entry_price * (1 + maxSlAfterMfeMaxDistPct / 100);
               
               if (newStopLoss !== null && newStopLoss !== undefined && newStopLoss > maxAllowedSl) {
                 console.log(`   ✅ CAP APPLIED: SL strammes fra ${newStopLoss.toFixed(6)} → ${maxAllowedSl.toFixed(6)}`);
@@ -858,7 +861,8 @@ serve(async (req) => {
                     ...position.indicators_snapshot,
                     max_sl_after_mfe_applied: true,
                     max_sl_after_mfe_at: new Date().toISOString(),
-                    max_sl_after_mfe_pct: maxSlAfterMfePct,
+                    max_sl_after_mfe_activate_pct: maxSlAfterMfeActivatePct,
+                    max_sl_after_mfe_max_dist_pct: maxSlAfterMfeMaxDistPct,
                     max_sl_after_mfe_mfe_pct: mfePct,
                   }
                 })
@@ -867,7 +871,7 @@ serve(async (req) => {
               console.log(`   💾 Database opdateret med ny SL: ${newStopLoss}`);
             }
           } else {
-            console.log(`   ⏭️ MFE (${mfePct.toFixed(4)}%) < threshold (${maxSlAfterMfePct}%) - afventer`);
+            console.log(`   ⏭️ MFE (${mfePct.toFixed(4)}%) < aktiveringsthreshold (${maxSlAfterMfeActivatePct}%) - afventer`);
           }
         }
         
