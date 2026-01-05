@@ -107,6 +107,9 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     peak_lock_min_profit_floor_pct: config?.peak_lock_min_profit_floor_pct ?? 0.15,
     peak_lock_ratchet_only: config?.peak_lock_ratchet_only !== undefined ? config?.peak_lock_ratchet_only : true,
     
+    // Max SL after MFE (stramning af SL når MFE er nået, før BE trigger)
+    max_sl_after_mfe_pct: config?.max_sl_after_mfe_pct ?? 0,
+    
     // ADX
     adx_enabled: config?.adx_enabled !== undefined ? config?.adx_enabled : true,
     adx_period: config?.adx_period || 14,
@@ -237,6 +240,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       peak_lock_distance_pct: config.peak_lock_distance_pct ?? 0.35,
       peak_lock_min_profit_floor_pct: config.peak_lock_min_profit_floor_pct ?? 0.15,
       peak_lock_ratchet_only: config.peak_lock_ratchet_only !== undefined ? config.peak_lock_ratchet_only : true,
+      // Max SL after MFE
+      max_sl_after_mfe_pct: config.max_sl_after_mfe_pct ?? 0,
       // ADX
       adx_enabled: config.adx_enabled !== undefined ? config.adx_enabled : true,
       adx_period: config.adx_period ?? 14,
@@ -353,6 +358,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       peak_lock_distance_pct: config.peak_lock_distance_pct ?? 0.35,
       peak_lock_min_profit_floor_pct: config.peak_lock_min_profit_floor_pct ?? 0.15,
       peak_lock_ratchet_only: config.peak_lock_ratchet_only !== undefined ? config.peak_lock_ratchet_only : true,
+      // Max SL after MFE
+      max_sl_after_mfe_pct: config.max_sl_after_mfe_pct ?? 0,
       adx_enabled: config.adx_enabled !== undefined ? config.adx_enabled : true,
       adx_period: config.adx_period ?? 14,
       adx_threshold: config.adx_threshold ?? 25,
@@ -1553,6 +1560,51 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               </div>
             </>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>🎯 Max SL efter MFE</CardTitle>
+          <CardDescription>
+            Stram stop-loss automatisk når trade har været i profit (MFE).<br/>
+            Gælder KUN før Break-Even aktiveres.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="max_sl_after_mfe_pct">Max SL efter MFE (%)</Label>
+                <Input
+                  id="max_sl_after_mfe_pct"
+                  type="number"
+                  step="0.05"
+                  min="0"
+                  max="5"
+                  value={formData.max_sl_after_mfe_pct}
+                  onChange={(e) => setFormData({ ...formData, max_sl_after_mfe_pct: parseFloat(e.target.value) || 0 })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Når MFE når denne værdi, må SL ikke ligge længere væk end dette % fra entry.<br/>
+                  0 = slukket. Eksempel: 1.0 = når trade har været 1% i profit, cap SL til max 1% fra entry.
+                </p>
+              </div>
+              
+              {formData.max_sl_after_mfe_pct > 0 && (
+                <div className="p-3 bg-muted/50 rounded-md">
+                  <p className="text-xs text-muted-foreground">
+                    <strong>📊 Logik:</strong><br/>
+                    • <strong>Aktivering:</strong> Når MFE% ≥ {formData.max_sl_after_mfe_pct}% OG BE ikke er aktiveret<br/>
+                    • <strong>LONG:</strong> SL må ikke være under entry × (1 - {formData.max_sl_after_mfe_pct}%)<br/>
+                    • <strong>SHORT:</strong> SL må ikke være over entry × (1 + {formData.max_sl_after_mfe_pct}%)<br/>
+                    • <strong>Efter BE:</strong> Denne regel stopper - BE/Trailing styrer<br/>
+                    • <strong>Ratchet:</strong> SL flyttes kun indad (strammes), aldrig udad
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 

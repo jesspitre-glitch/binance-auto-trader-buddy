@@ -115,6 +115,7 @@ export type Database = {
           max_exposure_percent: number | null
           max_open_positions: number | null
           max_position_duration_minutes: number | null
+          max_sl_after_mfe_pct: number | null
           min_atr: number | null
           min_atr_percent: number | null
           min_candle_body_percent: number | null
@@ -227,6 +228,7 @@ export type Database = {
           max_exposure_percent?: number | null
           max_open_positions?: number | null
           max_position_duration_minutes?: number | null
+          max_sl_after_mfe_pct?: number | null
           min_atr?: number | null
           min_atr_percent?: number | null
           min_candle_body_percent?: number | null
@@ -339,6 +341,7 @@ export type Database = {
           max_exposure_percent?: number | null
           max_open_positions?: number | null
           max_position_duration_minutes?: number | null
+          max_sl_after_mfe_pct?: number | null
           min_atr?: number | null
           min_atr_percent?: number | null
           min_candle_body_percent?: number | null
