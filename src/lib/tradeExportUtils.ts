@@ -472,6 +472,14 @@ export const formatTradeForExport = (t: any) => {
     peak_lock_stop_price: snap.peak_lock_stop_price != null ? +Number(snap.peak_lock_stop_price).toFixed(8) : null,
     peak_price: snap.peak_price != null ? +Number(snap.peak_price).toFixed(8) : null,
     
+    // 🔒 Max SL after MFE Config & Status (early loss-cap before BE)
+    max_sl_after_mfe_enabled: snap.max_sl_after_mfe_enabled ?? false,
+    max_sl_after_mfe_activate_pct: snap.max_sl_after_mfe_activate_pct ?? null,
+    max_sl_after_mfe_max_dist_pct: snap.max_sl_after_mfe_max_dist_pct ?? null,
+    max_sl_after_mfe_applied: snap.max_sl_after_mfe_applied ?? false,
+    max_sl_after_mfe_at: snap.max_sl_after_mfe_at ?? null,
+    max_sl_after_mfe_mfe_pct: snap.max_sl_after_mfe_mfe_pct != null ? +Number(snap.max_sl_after_mfe_mfe_pct).toFixed(4) : null,
+    
     // Trailing stop config
     trailing_stop_initial_price: snap.trailing_stop_initial_price != null 
       ? +Number(snap.trailing_stop_initial_price).toFixed(8) 
