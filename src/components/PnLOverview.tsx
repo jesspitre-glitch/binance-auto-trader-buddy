@@ -207,21 +207,24 @@ export const PnLOverview = () => {
         return netPnl > 0;
       }).length;
 
-      // Leverage breakdown
-      const leverageGroups = new Map<number, { count: number; netPnl: number; fees: number; notional: number }>();
+      // Leverage breakdown - only include trades with complete fee data
+      const leverageGroups = new Map<number, { count: number; grossPnl: number; netPnl: number; fees: number; funding: number; notional: number }>();
       trades.forEach(t => {
-        // Only use leverage if explicitly stored or available in indicators_snapshot
+        // Skip trades without known leverage
         const storedLeverage = t.leverage_used != null ? Number(t.leverage_used) : null;
         const snapshotLeverage = (t.indicators_snapshot as any)?.leverage != null ? Number((t.indicators_snapshot as any).leverage) : null;
         const leverage = storedLeverage ?? snapshotLeverage;
-        
-        // Skip trades without known leverage
         if (leverage == null) return;
         
-        const group = leverageGroups.get(leverage) || { count: 0, netPnl: 0, fees: 0, notional: 0 };
+        // Skip trades with missing fee data for accurate comparison
+        if (t.fees_data_missing === true) return;
+        
+        const group = leverageGroups.get(leverage) || { count: 0, grossPnl: 0, netPnl: 0, fees: 0, funding: 0, notional: 0 };
         group.count++;
-        group.netPnl += Number(t.net_pnl ?? (Number(t.pnl) - Number(t.total_fee || 0) + Number(t.funding_fee || 0)));
+        group.grossPnl += Number(t.pnl);
         group.fees += Number(t.total_fee || 0);
+        group.funding += Number(t.funding_fee || 0);
+        group.netPnl += Number(t.net_pnl ?? (Number(t.pnl) - Number(t.total_fee || 0) + Number(t.funding_fee || 0)));
         group.notional += Number(t.notional ?? (Number(t.entry_price) * Number(t.quantity)));
         leverageGroups.set(leverage, group);
       });
@@ -230,10 +233,13 @@ export const PnLOverview = () => {
         .map(([leverage, data]) => ({
           leverage,
           count: data.count,
-          netPnl: data.netPnl,
+          grossPnl: data.grossPnl,
           fees: data.fees,
+          funding: data.funding,
+          netPnl: data.netPnl,
           avgNet: data.count > 0 ? data.netPnl / data.count : 0,
           feesPct: data.notional > 0 ? (data.fees / data.notional) * 100 : 0,
+          lowSample: data.count < 10,
         }))
         .sort((a, b) => a.leverage - b.leverage);
 
@@ -559,30 +565,50 @@ export const PnLOverview = () => {
             {/* Leverage Breakdown */}
             {stats?.leverageBreakdown && stats.leverageBreakdown.length > 0 && (
               <div className="border rounded-lg p-4">
-                <h3 className="text-sm font-medium mb-3">Breakdown pr. Leverage</h3>
-                <div className="grid gap-2">
-                  <div className="grid grid-cols-6 gap-2 text-xs text-muted-foreground font-medium pb-1 border-b">
-                    <span>Leverage</span>
-                    <span>Trades</span>
-                    <span>Net P&L</span>
-                    <span>Fees</span>
-                    <span>Avg Net</span>
-                    <span>Fees %</span>
-                  </div>
-                  {stats.leverageBreakdown.map((row: any) => (
-                    <div key={row.leverage} className="grid grid-cols-6 gap-2 text-sm">
-                      <span className="font-medium">{row.leverage}x</span>
-                      <span>{row.count}</span>
-                      <span className={row.netPnl >= 0 ? "text-profit" : "text-loss"}>
-                        {row.netPnl >= 0 ? "+" : ""}{row.netPnl.toFixed(2)}
-                      </span>
-                      <span className="text-muted-foreground">{row.fees.toFixed(2)}</span>
-                      <span className={row.avgNet >= 0 ? "text-profit" : "text-loss"}>
-                        {row.avgNet >= 0 ? "+" : ""}{row.avgNet.toFixed(2)}
-                      </span>
-                      <span className="text-muted-foreground">{row.feesPct.toFixed(3)}%</span>
-                    </div>
-                  ))}
+                <h3 className="text-sm font-medium mb-1">Breakdown pr. Leverage</h3>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Kun trades med komplet fee-data inkluderet. 
+                  {stats.leverageBreakdown.some((r: any) => r.lowSample) && (
+                    <span className="text-yellow-500 ml-1">⚠️ = &lt;10 trades (lav sample size)</span>
+                  )}
+                </p>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Leverage</TableHead>
+                        <TableHead className="text-xs">Trades</TableHead>
+                        <TableHead className="text-xs">Gross P&L</TableHead>
+                        <TableHead className="text-xs">Fees</TableHead>
+                        <TableHead className="text-xs">Funding</TableHead>
+                        <TableHead className="text-xs">Net P&L</TableHead>
+                        <TableHead className="text-xs">Avg Net</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {stats.leverageBreakdown.map((row: any) => (
+                        <TableRow key={row.leverage} className={row.lowSample ? "opacity-60" : ""}>
+                          <TableCell className="font-medium">
+                            {row.leverage}x {row.lowSample && <span className="text-yellow-500">⚠️</span>}
+                          </TableCell>
+                          <TableCell>{row.count}</TableCell>
+                          <TableCell className={row.grossPnl >= 0 ? "text-profit" : "text-loss"}>
+                            {row.grossPnl >= 0 ? "+" : ""}{row.grossPnl.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{row.fees.toFixed(2)}</TableCell>
+                          <TableCell className={row.funding >= 0 ? "text-profit" : "text-loss"}>
+                            {row.funding >= 0 ? "+" : ""}{row.funding.toFixed(2)}
+                          </TableCell>
+                          <TableCell className={row.netPnl >= 0 ? "text-profit" : "text-loss"}>
+                            {row.netPnl >= 0 ? "+" : ""}{row.netPnl.toFixed(2)}
+                          </TableCell>
+                          <TableCell className={row.avgNet >= 0 ? "text-profit" : "text-loss"}>
+                            {row.avgNet >= 0 ? "+" : ""}{row.avgNet.toFixed(2)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             )}
