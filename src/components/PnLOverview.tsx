@@ -207,8 +207,37 @@ export const PnLOverview = () => {
         return netPnl > 0;
       }).length;
 
+      // Calculate total hours in period for per-hour metrics
+      const periodHours = (nowMs - startMs) / (1000 * 60 * 60);
+      const totalDurationMinutes = trades.reduce((sum, t) => sum + Number(t.duration_minutes || 0), 0);
+      const totalHoldHours = totalDurationMinutes / 60;
+
+      // Impact calculations
+      const absNetPnl = Math.abs(totalPnLNet);
+      const absGrossPnl = Math.abs(tradePnL);
+      const absFunding = Math.abs(totalFunding);
+      const absFees = Math.abs(totalFees);
+
+      // Funding impact
+      const fundingPctOfNetPnl = absNetPnl > 0 ? (absFunding / absNetPnl) * 100 : 0;
+      const fundingPerHour = periodHours > 0 ? totalFunding / periodHours : 0;
+      const fundingHelpsStrategy = totalFunding > 0;
+
+      // Fee impact  
+      const feesPctOfGrossPnl = absGrossPnl > 0 ? (absFees / absGrossPnl) * 100 : 0;
+      const feesPerTrade = trades.length > 0 ? totalFees / trades.length : 0;
+      const feesPerHour = periodHours > 0 ? totalFees / periodHours : 0;
+
       // Leverage breakdown - only include trades with complete fee data
-      const leverageGroups = new Map<number, { count: number; grossPnl: number; netPnl: number; fees: number; funding: number; notional: number }>();
+      const leverageGroups = new Map<number, { 
+        count: number; 
+        grossPnl: number; 
+        netPnl: number; 
+        fees: number; 
+        funding: number; 
+        notional: number;
+        durationMinutes: number;
+      }>();
       trades.forEach(t => {
         // Skip trades without known leverage
         const storedLeverage = t.leverage_used != null ? Number(t.leverage_used) : null;
@@ -219,29 +248,50 @@ export const PnLOverview = () => {
         // Skip trades with missing fee data for accurate comparison
         if (t.fees_data_missing === true) return;
         
-        const group = leverageGroups.get(leverage) || { count: 0, grossPnl: 0, netPnl: 0, fees: 0, funding: 0, notional: 0 };
+        const group = leverageGroups.get(leverage) || { 
+          count: 0, grossPnl: 0, netPnl: 0, fees: 0, funding: 0, notional: 0, durationMinutes: 0 
+        };
         group.count++;
         group.grossPnl += Number(t.pnl);
         group.fees += Number(t.total_fee || 0);
         group.funding += Number(t.funding_fee || 0);
         group.netPnl += Number(t.net_pnl ?? (Number(t.pnl) - Number(t.total_fee || 0) + Number(t.funding_fee || 0)));
         group.notional += Number(t.notional ?? (Number(t.entry_price) * Number(t.quantity)));
+        group.durationMinutes += Number(t.duration_minutes || 0);
         leverageGroups.set(leverage, group);
       });
 
       const leverageBreakdown = Array.from(leverageGroups.entries())
-        .map(([leverage, data]) => ({
-          leverage,
-          count: data.count,
-          grossPnl: data.grossPnl,
-          fees: data.fees,
-          funding: data.funding,
-          netPnl: data.netPnl,
-          avgNet: data.count > 0 ? data.netPnl / data.count : 0,
-          feesPct: data.notional > 0 ? (data.fees / data.notional) * 100 : 0,
-          lowSample: data.count < 10,
-        }))
+        .map(([leverage, data]) => {
+          const absGroupNet = Math.abs(data.netPnl);
+          const absGroupGross = Math.abs(data.grossPnl);
+          const groupHours = data.durationMinutes / 60;
+          return {
+            leverage,
+            count: data.count,
+            grossPnl: data.grossPnl,
+            fees: data.fees,
+            funding: data.funding,
+            netPnl: data.netPnl,
+            avgNet: data.count > 0 ? data.netPnl / data.count : 0,
+            feesPctOfGross: absGroupGross > 0 ? (Math.abs(data.fees) / absGroupGross) * 100 : 0,
+            fundingPctOfNet: absGroupNet > 0 ? (Math.abs(data.funding) / absGroupNet) * 100 : 0,
+            netPnlPerHour: groupHours > 0 ? data.netPnl / groupHours : 0,
+            lowSample: data.count < 10,
+            fundingHelps: data.funding > 0,
+            leverageReducesEdge: data.grossPnl > 0 && data.netPnl < data.grossPnl * 0.5, // fees+funding eat >50% of gross
+          };
+        })
         .sort((a, b) => a.leverage - b.leverage);
+
+      // Determine optimal leverage (highest net P&L per hour with sufficient sample)
+      const significantLeverages = leverageBreakdown.filter(l => !l.lowSample);
+      const optimalLeverage = significantLeverages.length > 0
+        ? significantLeverages.reduce((best, curr) => curr.netPnlPerHour > best.netPnlPerHour ? curr : best)
+        : null;
+
+      // Overall indicators
+      const leverageReducesEdge = leverageBreakdown.some(l => l.leverageReducesEdge && !l.lowSample);
 
       setStats({
         totalPnL,
@@ -264,6 +314,17 @@ export const PnLOverview = () => {
         winsAfterFees,
         winsNet,
         leverageBreakdown,
+        // Impact metrics
+        fundingPctOfNetPnl,
+        fundingPerHour,
+        fundingHelpsStrategy,
+        feesPctOfGrossPnl,
+        feesPerTrade,
+        feesPerHour,
+        totalHoldHours,
+        periodHours,
+        optimalLeverage,
+        leverageReducesEdge,
       });
 
       // Create cumulative P&L chart data (UTC/Binance time)
@@ -562,6 +623,95 @@ export const PnLOverview = () => {
               </div>
             </div>
 
+            {/* Impact Analysis Section */}
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Funding Impact */}
+              <div className="border rounded-lg p-4 space-y-3">
+                <h3 className="text-sm font-medium flex items-center gap-2">
+                  Funding Impact
+                  {stats?.fundingHelpsStrategy && (
+                    <span className="text-xs bg-profit/20 text-profit px-2 py-0.5 rounded">Hjælper ✓</span>
+                  )}
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Funding % af Net P&L</div>
+                    <div className={`text-lg font-semibold ${stats?.fundingHelpsStrategy ? "text-profit" : "text-loss"}`}>
+                      {stats?.fundingPctOfNetPnl?.toFixed(1) || "0.0"}%
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Funding pr. time</div>
+                    <div className={`text-lg font-semibold ${stats?.fundingPerHour >= 0 ? "text-profit" : "text-loss"}`}>
+                      {stats?.fundingPerHour >= 0 ? "+" : ""}{stats?.fundingPerHour?.toFixed(4) || "0.00"} USD
+                    </div>
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Total funding: {stats?.totalFunding >= 0 ? "+" : ""}{stats?.totalFunding?.toFixed(2)} USD over {stats?.periodHours?.toFixed(0)}t
+                </div>
+              </div>
+
+              {/* Fee Impact */}
+              <div className="border rounded-lg p-4 space-y-3">
+                <h3 className="text-sm font-medium">Fee Impact</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Fees % af Gross</div>
+                    <div className="text-lg font-semibold text-muted-foreground">
+                      {stats?.feesPctOfGrossPnl?.toFixed(1) || "0.0"}%
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Fees pr. trade</div>
+                    <div className="text-lg font-semibold text-muted-foreground">
+                      {stats?.feesPerTrade?.toFixed(2) || "0.00"} USD
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Fees pr. time</div>
+                    <div className="text-lg font-semibold text-muted-foreground">
+                      {stats?.feesPerHour?.toFixed(4) || "0.00"} USD
+                    </div>
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Total fees: {stats?.totalFees?.toFixed(2)} USD | Hold-tid: {stats?.totalHoldHours?.toFixed(1)}t
+                </div>
+              </div>
+            </div>
+
+            {/* Overall Indicators */}
+            {(stats?.optimalLeverage || stats?.leverageReducesEdge) && (
+              <div className="border rounded-lg p-4 bg-muted/30">
+                <h3 className="text-sm font-medium mb-2">Samlet Vurdering</h3>
+                <div className="flex flex-wrap gap-3">
+                  {stats?.fundingHelpsStrategy && (
+                    <div className="flex items-center gap-2 text-sm bg-profit/10 text-profit px-3 py-1.5 rounded-lg">
+                      <TrendingUp className="h-4 w-4" />
+                      Funding hjælper strategien
+                    </div>
+                  )}
+                  {!stats?.fundingHelpsStrategy && stats?.totalFunding < 0 && (
+                    <div className="flex items-center gap-2 text-sm bg-loss/10 text-loss px-3 py-1.5 rounded-lg">
+                      <TrendingDown className="h-4 w-4" />
+                      Funding koster {Math.abs(stats?.totalFunding).toFixed(2)} USD
+                    </div>
+                  )}
+                  {stats?.leverageReducesEdge && (
+                    <div className="flex items-center gap-2 text-sm bg-yellow-500/10 text-yellow-600 px-3 py-1.5 rounded-lg">
+                      ⚠️ Høj leverage reducerer edge ({">"}50% af gross tabt til fees/funding)
+                    </div>
+                  )}
+                  {stats?.optimalLeverage && (
+                    <div className="flex items-center gap-2 text-sm bg-primary/10 text-primary px-3 py-1.5 rounded-lg">
+                      🎯 Bedste leverage: {stats.optimalLeverage.leverage}x ({stats.optimalLeverage.netPnlPerHour.toFixed(2)} USD/time)
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Leverage Breakdown */}
             {stats?.leverageBreakdown && stats.leverageBreakdown.length > 0 && (
               <div className="border rounded-lg p-4">
@@ -580,8 +730,11 @@ export const PnLOverview = () => {
                         <TableHead className="text-xs">Trades</TableHead>
                         <TableHead className="text-xs">Gross P&L</TableHead>
                         <TableHead className="text-xs">Fees</TableHead>
+                        <TableHead className="text-xs">Fees %</TableHead>
                         <TableHead className="text-xs">Funding</TableHead>
+                        <TableHead className="text-xs">Fund %</TableHead>
                         <TableHead className="text-xs">Net P&L</TableHead>
+                        <TableHead className="text-xs">Net/time</TableHead>
                         <TableHead className="text-xs">Avg Net</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -590,17 +743,25 @@ export const PnLOverview = () => {
                         <TableRow key={row.leverage} className={row.lowSample ? "opacity-60" : ""}>
                           <TableCell className="font-medium">
                             {row.leverage}x {row.lowSample && <span className="text-yellow-500">⚠️</span>}
+                            {row.leverageReducesEdge && !row.lowSample && <span className="text-yellow-500 ml-1">📉</span>}
                           </TableCell>
                           <TableCell>{row.count}</TableCell>
                           <TableCell className={row.grossPnl >= 0 ? "text-profit" : "text-loss"}>
                             {row.grossPnl >= 0 ? "+" : ""}{row.grossPnl.toFixed(2)}
                           </TableCell>
                           <TableCell className="text-muted-foreground">{row.fees.toFixed(2)}</TableCell>
+                          <TableCell className="text-muted-foreground">{row.feesPctOfGross.toFixed(1)}%</TableCell>
                           <TableCell className={row.funding >= 0 ? "text-profit" : "text-loss"}>
                             {row.funding >= 0 ? "+" : ""}{row.funding.toFixed(2)}
                           </TableCell>
+                          <TableCell className={row.fundingHelps ? "text-profit" : "text-muted-foreground"}>
+                            {row.fundingPctOfNet.toFixed(1)}%
+                          </TableCell>
                           <TableCell className={row.netPnl >= 0 ? "text-profit" : "text-loss"}>
                             {row.netPnl >= 0 ? "+" : ""}{row.netPnl.toFixed(2)}
+                          </TableCell>
+                          <TableCell className={row.netPnlPerHour >= 0 ? "text-profit" : "text-loss"}>
+                            {row.netPnlPerHour >= 0 ? "+" : ""}{row.netPnlPerHour.toFixed(2)}
                           </TableCell>
                           <TableCell className={row.avgNet >= 0 ? "text-profit" : "text-loss"}>
                             {row.avgNet >= 0 ? "+" : ""}{row.avgNet.toFixed(2)}
