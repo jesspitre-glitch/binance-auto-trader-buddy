@@ -336,8 +336,12 @@ export const formatTradeForExport = (t: any) => {
     entry_fee: t.entry_fee != null ? +Number(t.entry_fee).toFixed(6) : null,
     exit_fee: t.exit_fee != null ? +Number(t.exit_fee).toFixed(6) : null,
     total_fee: t.total_fee != null ? +Number(t.total_fee).toFixed(6) : null,
+    fees_pct_of_notional: t.fees_pct_of_notional != null ? +Number(t.fees_pct_of_notional).toFixed(4) : null,
     funding_fee: t.funding_fee != null ? +Number(t.funding_fee).toFixed(6) : null,
+    pnl_after_fees: t.pnl_after_fees != null ? +Number(t.pnl_after_fees).toFixed(6) : null,
     net_pnl: t.net_pnl != null ? +Number(t.net_pnl).toFixed(6) : null,
+    notional: t.notional != null ? +Number(t.notional).toFixed(2) : null,
+    leverage_used: t.leverage_used ?? (snap.leverage || null),
 
     // 🔴 MFE & MAE (Maximum Favorable/Adverse Excursion)
     mfe_pct: snap.mfe_percent != null ? +Number(snap.mfe_percent).toFixed(4) : 

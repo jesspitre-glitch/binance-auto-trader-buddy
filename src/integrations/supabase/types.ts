@@ -561,16 +561,20 @@ export type Database = {
           entry_price: number
           exit_fee: number | null
           exit_price: number
+          fees_pct_of_notional: number | null
           funding_fee: number | null
           id: string
           indicators_snapshot: Json | null
+          leverage_used: number | null
           low_price: number | null
           mae: number | null
           mae_percent: number | null
           net_pnl: number | null
+          notional: number | null
           open_reason: string | null
           opened_at: string
           pnl: number
+          pnl_after_fees: number | null
           pnl_percent: number
           quantity: number
           side: string
@@ -588,16 +592,20 @@ export type Database = {
           entry_price: number
           exit_fee?: number | null
           exit_price: number
+          fees_pct_of_notional?: number | null
           funding_fee?: number | null
           id?: string
           indicators_snapshot?: Json | null
+          leverage_used?: number | null
           low_price?: number | null
           mae?: number | null
           mae_percent?: number | null
           net_pnl?: number | null
+          notional?: number | null
           open_reason?: string | null
           opened_at: string
           pnl: number
+          pnl_after_fees?: number | null
           pnl_percent: number
           quantity: number
           side: string
@@ -615,16 +623,20 @@ export type Database = {
           entry_price?: number
           exit_fee?: number | null
           exit_price?: number
+          fees_pct_of_notional?: number | null
           funding_fee?: number | null
           id?: string
           indicators_snapshot?: Json | null
+          leverage_used?: number | null
           low_price?: number | null
           mae?: number | null
           mae_percent?: number | null
           net_pnl?: number | null
+          notional?: number | null
           open_reason?: string | null
           opened_at?: string
           pnl?: number
+          pnl_after_fees?: number | null
           pnl_percent?: number
           quantity?: number
           side?: string

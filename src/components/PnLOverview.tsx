@@ -139,9 +139,15 @@ export const PnLOverview = () => {
 
       setAllTrades(trades);
 
-      // Calculate total P&L including funding fees
+      // Calculate P&L totals
       const tradePnL = trades.reduce((sum, t) => sum + Number(t.pnl), 0);
-      const totalPnL = tradePnL + totalFundingFees;
+      const totalFees = trades.reduce((sum, t) => sum + Number(t.total_fee || 0), 0);
+      const totalFunding = trades.reduce((sum, t) => sum + Number(t.funding_fee || 0), 0);
+      const totalPnLAfterFees = tradePnL - totalFees;
+      const totalPnLNet = totalPnLAfterFees + totalFunding; // funding can be + or -
+      
+      // Overall total P&L (same as net for display purposes)
+      const totalPnL = totalPnLNet;
 
       if (trades.length === 0 && fundingFees.length === 0) {
         setStats({
@@ -155,13 +161,23 @@ export const PnLOverview = () => {
           largestLoss: 0,
           profitFactor: 0,
           fundingFees: 0,
+          // New fee stats
+          totalPnLGross: 0,
+          totalPnLAfterFees: 0,
+          totalPnLNet: 0,
+          totalFees: 0,
+          totalFunding: 0,
+          winsGross: 0,
+          winsAfterFees: 0,
+          winsNet: 0,
+          leverageBreakdown: [],
         });
         setChartData([]);
         setAggregatedData([]);
         return;
       }
 
-      // Calculate statistics (totalPnL already includes funding fees from above)
+      // Calculate statistics
       const totalPnLPercent = portfolioBalance > 0 ? (totalPnL / portfolioBalance) * 100 : 0;
       const winners = trades.filter(t => Number(t.pnl) > 0);
       const losers = trades.filter(t => Number(t.pnl) < 0);
@@ -180,6 +196,40 @@ export const PnLOverview = () => {
         ? Math.min(...losers.map(t => Number(t.pnl))) 
         : 0;
 
+      // Win counts for different P&L types
+      const winsGross = trades.filter(t => Number(t.pnl) > 0).length;
+      const winsAfterFees = trades.filter(t => {
+        const pnlAfterFees = Number(t.pnl_after_fees ?? (Number(t.pnl) - Number(t.total_fee || 0)));
+        return pnlAfterFees > 0;
+      }).length;
+      const winsNet = trades.filter(t => {
+        const netPnl = Number(t.net_pnl ?? (Number(t.pnl) - Number(t.total_fee || 0) + Number(t.funding_fee || 0)));
+        return netPnl > 0;
+      }).length;
+
+      // Leverage breakdown
+      const leverageGroups = new Map<number, { count: number; netPnl: number; fees: number; notional: number }>();
+      trades.forEach(t => {
+        const leverage = Number(t.leverage_used) || (t.indicators_snapshot as any)?.leverage || 10;
+        const group = leverageGroups.get(leverage) || { count: 0, netPnl: 0, fees: 0, notional: 0 };
+        group.count++;
+        group.netPnl += Number(t.net_pnl ?? (Number(t.pnl) - Number(t.total_fee || 0) + Number(t.funding_fee || 0)));
+        group.fees += Number(t.total_fee || 0);
+        group.notional += Number(t.notional ?? (Number(t.entry_price) * Number(t.quantity)));
+        leverageGroups.set(leverage, group);
+      });
+
+      const leverageBreakdown = Array.from(leverageGroups.entries())
+        .map(([leverage, data]) => ({
+          leverage,
+          count: data.count,
+          netPnl: data.netPnl,
+          fees: data.fees,
+          avgNet: data.count > 0 ? data.netPnl / data.count : 0,
+          feesPct: data.notional > 0 ? (data.fees / data.notional) * 100 : 0,
+        }))
+        .sort((a, b) => a.leverage - b.leverage);
+
       setStats({
         totalPnL,
         totalPnLPercent,
@@ -190,7 +240,17 @@ export const PnLOverview = () => {
         largestWin,
         largestLoss,
         profitFactor,
-        fundingFees: totalFundingFees,
+        fundingFees: totalFunding,
+        // New fee stats
+        totalPnLGross: tradePnL,
+        totalPnLAfterFees,
+        totalPnLNet,
+        totalFees,
+        totalFunding,
+        winsGross,
+        winsAfterFees,
+        winsNet,
+        leverageBreakdown,
       });
 
       // Create cumulative P&L chart data (UTC/Binance time)
@@ -429,45 +489,96 @@ export const PnLOverview = () => {
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <DollarSign className="h-4 w-4" />
-                  <span>Total P&L</span>
+                  <span>P&L (Gross)</span>
                 </div>
                 <div
-                  className={`text-2xl font-bold ${
-                    isProfitable ? "text-profit" : "text-loss"
+                  className={`text-xl font-bold ${
+                    stats?.totalPnLGross >= 0 ? "text-profit" : "text-loss"
                   }`}
                 >
-                  {isProfitable ? "+" : ""}${stats?.totalPnL.toFixed(2)}
-                  <span className="text-lg ml-2">
-                    ({isProfitable ? "+" : ""}{stats?.totalPnLPercent.toFixed(2)}%)
-                  </span>
-                  {stats?.fundingFees !== 0 && (
-                    <div className="text-xs text-muted-foreground mt-1">
-                      inkl. funding: {stats?.fundingFees >= 0 ? "+" : ""}{stats?.fundingFees?.toFixed(2)} USDT
-                    </div>
-                  )}
+                  {stats?.totalPnLGross >= 0 ? "+" : ""}${stats?.totalPnLGross?.toFixed(2) || "0.00"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Wins: {stats?.winsGross || 0}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <DollarSign className="h-4 w-4" />
+                  <span>P&L (Efter fees)</span>
+                </div>
+                <div
+                  className={`text-xl font-bold ${
+                    stats?.totalPnLAfterFees >= 0 ? "text-profit" : "text-loss"
+                  }`}
+                >
+                  {stats?.totalPnLAfterFees >= 0 ? "+" : ""}${stats?.totalPnLAfterFees?.toFixed(2) || "0.00"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Wins: {stats?.winsAfterFees || 0} | Fees: ${stats?.totalFees?.toFixed(2) || "0.00"}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <DollarSign className="h-4 w-4" />
+                  <span>P&L (Efter fees + funding)</span>
+                </div>
+                <div
+                  className={`text-xl font-bold ${
+                    stats?.totalPnLNet >= 0 ? "text-profit" : "text-loss"
+                  }`}
+                >
+                  {stats?.totalPnLNet >= 0 ? "+" : ""}${stats?.totalPnLNet?.toFixed(2) || "0.00"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Wins: {stats?.winsNet || 0} | Funding: {stats?.totalFunding >= 0 ? "+" : ""}{stats?.totalFunding?.toFixed(2) || "0.00"}
                 </div>
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Percent className="h-4 w-4" />
-                  <span>Win Rate</span>
+                  <span>Win Rate / Profit Factor</span>
                 </div>
-                <div className="text-2xl font-bold">{stats?.winRate.toFixed(1)}%</div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="text-sm text-muted-foreground">Total Trades</div>
-                <div className="text-2xl font-bold">{stats?.totalTrades}</div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="text-sm text-muted-foreground">Profit Factor</div>
-                <div className="text-2xl font-bold">
-                  {stats?.profitFactor === Infinity ? "∞" : stats?.profitFactor.toFixed(2)}
+                <div className="text-xl font-bold">{stats?.winRate?.toFixed(1) || 0}%</div>
+                <div className="text-xs text-muted-foreground">
+                  PF: {stats?.profitFactor === Infinity ? "∞" : stats?.profitFactor?.toFixed(2) || "0"} | Trades: {stats?.totalTrades || 0}
                 </div>
               </div>
             </div>
+
+            {/* Leverage Breakdown */}
+            {stats?.leverageBreakdown && stats.leverageBreakdown.length > 0 && (
+              <div className="border rounded-lg p-4">
+                <h3 className="text-sm font-medium mb-3">Breakdown pr. Leverage</h3>
+                <div className="grid gap-2">
+                  <div className="grid grid-cols-6 gap-2 text-xs text-muted-foreground font-medium pb-1 border-b">
+                    <span>Leverage</span>
+                    <span>Trades</span>
+                    <span>Net P&L</span>
+                    <span>Fees</span>
+                    <span>Avg Net</span>
+                    <span>Fees %</span>
+                  </div>
+                  {stats.leverageBreakdown.map((row: any) => (
+                    <div key={row.leverage} className="grid grid-cols-6 gap-2 text-sm">
+                      <span className="font-medium">{row.leverage}x</span>
+                      <span>{row.count}</span>
+                      <span className={row.netPnl >= 0 ? "text-profit" : "text-loss"}>
+                        {row.netPnl >= 0 ? "+" : ""}{row.netPnl.toFixed(2)}
+                      </span>
+                      <span className="text-muted-foreground">{row.fees.toFixed(2)}</span>
+                      <span className={row.avgNet >= 0 ? "text-profit" : "text-loss"}>
+                        {row.avgNet >= 0 ? "+" : ""}{row.avgNet.toFixed(2)}
+                      </span>
+                      <span className="text-muted-foreground">{row.feesPct.toFixed(3)}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Cumulative P&L Chart */}
             {chartData.length > 0 && (

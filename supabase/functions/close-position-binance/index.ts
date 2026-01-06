@@ -265,9 +265,16 @@ serve(async (req) => {
 
       const pnl = side === 'LONG' ? (exitPrice - entry) * qty : (entry - exitPrice) * qty;
       const pnlPercent = ((exitPrice - entry) / (entry || 1)) * 100 * (side === 'LONG' ? 1 : -1);
-      const netPnl = pnl - totalFee + fundingFee; // fundingFee can be negative (paid) or positive (received)
+      const pnlAfterFees = pnl - totalFee;
+      const netPnl = pnlAfterFees + fundingFee; // fundingFee can be negative (paid) or positive (received)
+      
+      // Calculate notional value and leverage
+      const notional = entry * qty;
+      const feesPctOfNotional = notional > 0 ? (totalFee / notional) * 100 : 0;
+      // Try to get leverage from indicators_snapshot or default to 10
+      const leverageUsed = position.indicators_snapshot?.leverage || 10;
 
-      console.log(`📊 Fee logging for ${symbol}: entry=${entryFee.toFixed(4)}, exit=${exitFee.toFixed(4)}, total=${totalFee.toFixed(4)}, funding=${fundingFee.toFixed(4)}, gross=${pnl.toFixed(4)}, net=${netPnl.toFixed(4)}`);
+      console.log(`📊 Fee logging for ${symbol}: entry=${entryFee.toFixed(4)}, exit=${exitFee.toFixed(4)}, total=${totalFee.toFixed(4)} (${feesPctOfNotional.toFixed(4)}% of notional), funding=${fundingFee.toFixed(4)}, gross=${pnl.toFixed(4)}, afterFees=${pnlAfterFees.toFixed(4)}, net=${netPnl.toFixed(4)}, notional=${notional.toFixed(2)}, leverage=${leverageUsed}`);
 
       await supabaseClient
         .from('positions')
@@ -300,6 +307,10 @@ serve(async (req) => {
         total_fee: totalFee,
         funding_fee: fundingFee,
         net_pnl: netPnl,
+        pnl_after_fees: pnlAfterFees,
+        notional: notional,
+        leverage_used: leverageUsed,
+        fees_pct_of_notional: feesPctOfNotional,
       });
 
       historyInserted = !histError;
