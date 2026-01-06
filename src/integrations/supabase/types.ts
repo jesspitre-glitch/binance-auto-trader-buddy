@@ -561,6 +561,7 @@ export type Database = {
           entry_price: number
           exit_fee: number | null
           exit_price: number
+          fees_data_missing: boolean | null
           fees_pct_of_notional: number | null
           funding_fee: number | null
           id: string
@@ -592,6 +593,7 @@ export type Database = {
           entry_price: number
           exit_fee?: number | null
           exit_price: number
+          fees_data_missing?: boolean | null
           fees_pct_of_notional?: number | null
           funding_fee?: number | null
           id?: string
@@ -623,6 +625,7 @@ export type Database = {
           entry_price?: number
           exit_fee?: number | null
           exit_price?: number
+          fees_data_missing?: boolean | null
           fees_pct_of_notional?: number | null
           funding_fee?: number | null
           id?: string
