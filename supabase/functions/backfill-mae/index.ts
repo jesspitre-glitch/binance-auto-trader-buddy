@@ -97,22 +97,25 @@ function calculateMAE(trade: Trade, klines: Kline[]): { mae: number; mae_percent
     }
   }
   
-  // Calculate MAE
+  // Calculate MAE as ABSOLUTE positive values
+  // MAE = Maximum Adverse Excursion = biggest movement against entry
+  // LONG: entry - worstPrice (how far price dropped below entry)
+  // SHORT: worstPrice - entry (how far price rose above entry)
+  let mae_abs: number;
   let mae_percent: number;
+  
   if (isLong) {
-    mae_percent = ((worstPrice - entryPrice) / entryPrice) * 100;
+    mae_abs = Math.max(0, entryPrice - worstPrice);
   } else {
-    mae_percent = ((entryPrice - worstPrice) / entryPrice) * 100;
+    mae_abs = Math.max(0, worstPrice - entryPrice);
   }
   
-  // MAE should be negative or zero (represents adverse movement)
-  mae_percent = Math.min(0, mae_percent);
-  
-  const mae = (mae_percent / 100) * entryPrice * trade.quantity;
+  // MAE% is always positive (absolute percentage from entry)
+  mae_percent = (mae_abs / entryPrice) * 100;
   
   return {
-    mae: mae,
-    mae_percent: mae_percent,
+    mae: mae_abs,  // Absolute price difference (always positive)
+    mae_percent: mae_percent,  // Absolute percentage (always positive)
     low_price: worstPrice,
   };
 }
