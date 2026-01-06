@@ -88,6 +88,81 @@ async function getCurrentPrice(symbol: string, supabaseClient: any): Promise<num
   }
 }
 
+// Fetch commission/fee from recent trades for a symbol
+async function getRecentTradeFees(symbol: string, apiKey: string, apiSecret: string, startTime: number): Promise<{ entryFee: number, exitFee: number }> {
+  try {
+    const serverTime = await getBinanceServerTime();
+    const queryString = `symbol=${symbol}&startTime=${startTime}&timestamp=${serverTime}&recvWindow=10000`;
+    const signature = await createSignature(queryString, apiSecret);
+    const url = `https://fapi.binance.com/fapi/v1/userTrades?${queryString}&signature=${signature}`;
+    
+    const res = await fetch(url, { headers: { 'X-MBX-APIKEY': apiKey } });
+    if (!res.ok) {
+      console.warn(`Failed to fetch trades for fee calculation: ${await res.text()}`);
+      return { entryFee: 0, exitFee: 0 };
+    }
+    
+    const trades = await res.json();
+    if (!Array.isArray(trades) || trades.length === 0) {
+      return { entryFee: 0, exitFee: 0 };
+    }
+    
+    // Sort by time to separate entry and exit trades
+    trades.sort((a: any, b: any) => a.time - b.time);
+    
+    // First trade(s) are entry, last trade(s) are exit
+    // Sum up commissions - entry is first half, exit is second half
+    let entryFee = 0;
+    let exitFee = 0;
+    const midpoint = Math.floor(trades.length / 2);
+    
+    for (let i = 0; i < trades.length; i++) {
+      const fee = Math.abs(parseFloat(trades[i].commission || 0));
+      if (i < midpoint || trades.length === 1) {
+        entryFee += fee;
+      } else {
+        exitFee += fee;
+      }
+    }
+    
+    // If only 2 trades, first is entry, second is exit
+    if (trades.length === 2) {
+      entryFee = Math.abs(parseFloat(trades[0].commission || 0));
+      exitFee = Math.abs(parseFloat(trades[1].commission || 0));
+    }
+    
+    return { entryFee, exitFee };
+  } catch (e) {
+    console.error('Error fetching trade fees:', e);
+    return { entryFee: 0, exitFee: 0 };
+  }
+}
+
+// Fetch accumulated funding fees for a symbol during position lifetime
+async function getPositionFundingFees(symbol: string, apiKey: string, apiSecret: string, startTime: number, endTime: number): Promise<number> {
+  try {
+    const serverTime = await getBinanceServerTime();
+    const queryString = `symbol=${symbol}&incomeType=FUNDING_FEE&startTime=${startTime}&endTime=${endTime}&timestamp=${serverTime}&recvWindow=10000`;
+    const signature = await createSignature(queryString, apiSecret);
+    const url = `https://fapi.binance.com/fapi/v1/income?${queryString}&signature=${signature}`;
+    
+    const res = await fetch(url, { headers: { 'X-MBX-APIKEY': apiKey } });
+    if (!res.ok) {
+      console.warn(`Failed to fetch funding fees: ${await res.text()}`);
+      return 0;
+    }
+    
+    const incomes = await res.json();
+    if (!Array.isArray(incomes)) return 0;
+    
+    // Sum all funding fee incomes (can be positive or negative)
+    return incomes.reduce((sum: number, inc: any) => sum + parseFloat(inc.income || 0), 0);
+  } catch (e) {
+    console.error('Error fetching funding fees:', e);
+    return 0;
+  }
+}
+
 async function closeOnBinance(symbol: string, apiKey: string, apiSecret: string) {
   // Fetch current position amount
   const pos = await getPositionRisk(symbol, apiKey, apiSecret);
@@ -180,9 +255,19 @@ serve(async (req) => {
       const entry = Number(position.entry_price) || 0;
       const qty = executedQty || Number(position.quantity) || 0;
       const nowIso = new Date().toISOString();
+      const openedAtTime = position.opened_at ? new Date(position.opened_at).getTime() : Date.now() - 3600000;
+      const closedAtTime = Date.now();
+
+      // Fetch fees and funding for this trade
+      const { entryFee, exitFee } = await getRecentTradeFees(symbol, apiKey, apiSecret, openedAtTime);
+      const fundingFee = await getPositionFundingFees(symbol, apiKey, apiSecret, openedAtTime, closedAtTime);
+      const totalFee = entryFee + exitFee;
 
       const pnl = side === 'LONG' ? (exitPrice - entry) * qty : (entry - exitPrice) * qty;
       const pnlPercent = ((exitPrice - entry) / (entry || 1)) * 100 * (side === 'LONG' ? 1 : -1);
+      const netPnl = pnl - totalFee + fundingFee; // fundingFee can be negative (paid) or positive (received)
+
+      console.log(`📊 Fee logging for ${symbol}: entry=${entryFee.toFixed(4)}, exit=${exitFee.toFixed(4)}, total=${totalFee.toFixed(4)}, funding=${fundingFee.toFixed(4)}, gross=${pnl.toFixed(4)}, net=${netPnl.toFixed(4)}`);
 
       await supabaseClient
         .from('positions')
@@ -210,6 +295,11 @@ serve(async (req) => {
         strategy_hash: position.strategy_hash,
         open_reason: position.open_reason,
         close_reason: 'MANUAL',
+        entry_fee: entryFee,
+        exit_fee: exitFee,
+        total_fee: totalFee,
+        funding_fee: fundingFee,
+        net_pnl: netPnl,
       });
 
       historyInserted = !histError;

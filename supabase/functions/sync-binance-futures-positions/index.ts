@@ -544,6 +544,12 @@ serve(async (req) => {
                   strategy_hash: dbPos.strategy_hash,
                   open_reason: dbPos.open_reason,
                   close_reason: inferredReason,
+                  // Fee fields left null for sync-closed positions (no API call to get historical fees)
+                  entry_fee: null,
+                  exit_fee: null,
+                  total_fee: null,
+                  funding_fee: null,
+                  net_pnl: null,
                 });
 
               updates.push({ symbol: dbPos.symbol, action: 'closed', id: dbPos.id });

@@ -332,6 +332,13 @@ export const formatTradeForExport = (t: any) => {
     exit_reason: exitReason,
     exit_winner: t.pnl > 0,
 
+    // 🔴 FEE & FUNDING LOGGING (for leverage/edge analysis)
+    entry_fee: t.entry_fee != null ? +Number(t.entry_fee).toFixed(6) : null,
+    exit_fee: t.exit_fee != null ? +Number(t.exit_fee).toFixed(6) : null,
+    total_fee: t.total_fee != null ? +Number(t.total_fee).toFixed(6) : null,
+    funding_fee: t.funding_fee != null ? +Number(t.funding_fee).toFixed(6) : null,
+    net_pnl: t.net_pnl != null ? +Number(t.net_pnl).toFixed(6) : null,
+
     // 🔴 MFE & MAE (Maximum Favorable/Adverse Excursion)
     mfe_pct: snap.mfe_percent != null ? +Number(snap.mfe_percent).toFixed(4) : 
       (snap.peak_price != null && side === 'long' 
