@@ -96,6 +96,7 @@ export type Database = {
           ema_trend_hard_filter: boolean | null
           enabled: boolean | null
           hard_sl_pct: number | null
+          hard_sl_pct_enabled: boolean | null
           higher_trend_enabled: boolean | null
           higher_trend_hard_filter: boolean | null
           higher_trend_timeframe: string | null
@@ -213,6 +214,7 @@ export type Database = {
           ema_trend_hard_filter?: boolean | null
           enabled?: boolean | null
           hard_sl_pct?: number | null
+          hard_sl_pct_enabled?: boolean | null
           higher_trend_enabled?: boolean | null
           higher_trend_hard_filter?: boolean | null
           higher_trend_timeframe?: string | null
@@ -330,6 +332,7 @@ export type Database = {
           ema_trend_hard_filter?: boolean | null
           enabled?: boolean | null
           hard_sl_pct?: number | null
+          hard_sl_pct_enabled?: boolean | null
           higher_trend_enabled?: boolean | null
           higher_trend_hard_filter?: boolean | null
           higher_trend_timeframe?: string | null

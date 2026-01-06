@@ -113,6 +113,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     max_sl_after_mfe_max_dist_pct: config?.max_sl_after_mfe_max_dist_pct ?? 1.0,
     
     // Hard Stop Loss % (absolut yderste grænse - prioritet 1)
+    hard_sl_pct_enabled: config?.hard_sl_pct_enabled !== undefined ? config?.hard_sl_pct_enabled : true,
     hard_sl_pct: config?.hard_sl_pct ?? 3.0,
     
     // ADX
@@ -250,6 +251,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       max_sl_after_mfe_activate_pct: config.max_sl_after_mfe_activate_pct ?? 0.60,
       max_sl_after_mfe_max_dist_pct: config.max_sl_after_mfe_max_dist_pct ?? 1.0,
       // Hard Stop Loss %
+      hard_sl_pct_enabled: config.hard_sl_pct_enabled !== undefined ? config.hard_sl_pct_enabled : true,
       hard_sl_pct: config.hard_sl_pct ?? 3.0,
       // ADX
       adx_enabled: config.adx_enabled !== undefined ? config.adx_enabled : true,
@@ -372,6 +374,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       max_sl_after_mfe_activate_pct: config.max_sl_after_mfe_activate_pct ?? 0.60,
       max_sl_after_mfe_max_dist_pct: config.max_sl_after_mfe_max_dist_pct ?? 1.0,
       // Hard Stop Loss %
+      hard_sl_pct_enabled: config.hard_sl_pct_enabled !== undefined ? config.hard_sl_pct_enabled : true,
       hard_sl_pct: config.hard_sl_pct ?? 3.0,
       adx_enabled: config.adx_enabled !== undefined ? config.adx_enabled : true,
       adx_period: config.adx_period ?? 14,
@@ -1578,38 +1581,48 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       <Card>
         <CardHeader>
-          <CardTitle>🛑 Hard Stop Loss %</CardTitle>
-          <CardDescription>
-            Absolut yderste grænse. Højeste prioritet - overskriver alle andre stops.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="hard_sl_pct">Hard SL %</Label>
-            <Input
-              id="hard_sl_pct"
-              type="number"
-              step="0.1"
-              min="0.1"
-              max="20"
-              value={formData.hard_sl_pct}
-              onChange={(e) => setFormData({ ...formData, hard_sl_pct: parseFloat(e.target.value) || 3.0 })}
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>🛑 Hard Stop Loss %</CardTitle>
+              <CardDescription>
+                Absolut yderste grænse. Højeste prioritet - overskriver alle andre stops.
+              </CardDescription>
+            </div>
+            <Switch
+              checked={formData.hard_sl_pct_enabled}
+              onCheckedChange={(checked) => setFormData({ ...formData, hard_sl_pct_enabled: checked })}
             />
-            <p className="text-xs text-muted-foreground">
-              Maksimalt tab fra entry i % (fx 3.0 = max 3% tab)
-            </p>
           </div>
-          
-          <div className="sm:col-span-2 p-3 bg-muted/50 rounded-md">
-            <p className="text-xs text-muted-foreground">
-              <strong>📊 Logik:</strong><br/>
-              • <strong>LONG:</strong> Exit hvis price ≤ entry × (1 - {formData.hard_sl_pct}%)<br/>
-              • <strong>SHORT:</strong> Exit hvis price ≥ entry × (1 + {formData.hard_sl_pct}%)<br/>
-              • <strong>Prioritet:</strong> 1️⃣ Hard SL → 2️⃣ Max SL after MFE → 3️⃣ Break-Even → 4️⃣ Peak-Lock → 5️⃣ ATR Trailing<br/>
-              • <strong>Ratchet:</strong> Hard SL kan kun strammes ind, aldrig ud
-            </p>
-          </div>
-        </CardContent>
+        </CardHeader>
+        {formData.hard_sl_pct_enabled && (
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="hard_sl_pct">Hard SL %</Label>
+              <Input
+                id="hard_sl_pct"
+                type="number"
+                step="0.1"
+                min="0.1"
+                max="20"
+                value={formData.hard_sl_pct}
+                onChange={(e) => setFormData({ ...formData, hard_sl_pct: parseFloat(e.target.value) || 3.0 })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Maksimalt tab fra entry i % (fx 3.0 = max 3% tab)
+              </p>
+            </div>
+            
+            <div className="sm:col-span-2 p-3 bg-muted/50 rounded-md">
+              <p className="text-xs text-muted-foreground">
+                <strong>📊 Logik:</strong><br/>
+                • <strong>LONG:</strong> Exit hvis price ≤ entry × (1 - {formData.hard_sl_pct}%)<br/>
+                • <strong>SHORT:</strong> Exit hvis price ≥ entry × (1 + {formData.hard_sl_pct}%)<br/>
+                • <strong>Prioritet:</strong> 1️⃣ Hard SL → 2️⃣ Max SL after MFE → 3️⃣ Break-Even → 4️⃣ Peak-Lock → 5️⃣ ATR Trailing<br/>
+                • <strong>Ratchet:</strong> Hard SL kan kun strammes ind, aldrig ud
+              </p>
+            </div>
+          </CardContent>
+        )}
       </Card>
 
       <Card>

@@ -301,7 +301,7 @@ serve(async (req) => {
           // Hent den AKTIVE strategi
           const { data: activeConfig } = await supabaseClient
             .from('indicator_config')
-            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct')
+            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct')
             .eq('id', sessionData.active_config_id)
             .single();
           configData = activeConfig;
@@ -310,7 +310,7 @@ serve(async (req) => {
           // Fallback til første config hvis ingen session
           const { data: fallbackConfig } = await supabaseClient
             .from('indicator_config')
-            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct')
+            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct')
             .eq('user_id', position.user_id)
             .order('created_at', { ascending: false })
             .limit(1)
@@ -342,6 +342,7 @@ serve(async (req) => {
         let maxSlAfterMfeMaxDistPct = 1.0;
 
         // Hard Stop Loss % - absolut yderste grænse (prioritet 1)
+        let hardSlPctEnabled = true;
         let hardSlPct = 3.0;
 
         // Trailing multiplier fra UI (indicator_config)
@@ -379,11 +380,12 @@ serve(async (req) => {
           maxSlAfterMfeMaxDistPct = configData.max_sl_after_mfe_max_dist_pct ?? 1.0;
 
           // Hard Stop Loss %
+          hardSlPctEnabled = (configData as any).hard_sl_pct_enabled ?? true;
           hardSlPct = (configData as any).hard_sl_pct ?? 3.0;
 
           // Log for synkroniserede positioner uden strategy_hash
           if (!position.strategy_hash) {
-            console.log(`📋 Synkroniseret position ${position.symbol} bruger aktuel config: timeout=${maxPositionDurationMinutes}min, autoExit=${autoExitEnabled}, conditionalTimeExit=${conditionalTimeExitEnabled}, peakLock=${peakLockEnabled}, maxSlAfterMfe=${maxSlAfterMfeEnabled ? `${maxSlAfterMfeActivatePct}%→${maxSlAfterMfeMaxDistPct}%` : 'off'}, hardSlPct=${hardSlPct}%`);
+            console.log(`📋 Synkroniseret position ${position.symbol} bruger aktuel config: timeout=${maxPositionDurationMinutes}min, autoExit=${autoExitEnabled}, conditionalTimeExit=${conditionalTimeExitEnabled}, peakLock=${peakLockEnabled}, maxSlAfterMfe=${maxSlAfterMfeEnabled ? `${maxSlAfterMfeActivatePct}%→${maxSlAfterMfeMaxDistPct}%` : 'off'}, hardSlPct=${hardSlPctEnabled ? hardSlPct + '%' : 'off'}`);
           }
         }
 
@@ -906,27 +908,31 @@ serve(async (req) => {
         // LONG: Exit hvis price ≤ entry × (1 − hard_sl_pct/100)
         // SHORT: Exit hvis price ≥ entry × (1 + hard_sl_pct/100)
         // Hard SL kan kun strammes ind, aldrig ud
-        let hardStopLoss: number;
-        if (position.side === 'LONG') {
-          hardStopLoss = position.entry_price * (1 - hardSlPct / 100);
-        } else {
-          hardStopLoss = position.entry_price * (1 + hardSlPct / 100);
-        }
-        
-        // Ratchet: Hard SL kan kun strammes ind (gøres strammere af andre mekanismer, men den yderste grænse selv ændres ikke)
-        // Original SL fra position bruges til sammenligning - vælg den strammeste
-        const originalSl = position.indicators_snapshot?.original_stop_loss ?? position.stop_loss;
-        if (originalSl !== null && originalSl !== undefined && isFinite(Number(originalSl))) {
+        let hardStopLoss: number | null = null;
+        if (hardSlPctEnabled) {
           if (position.side === 'LONG') {
-            // LONG: Højere SL er strammere
-            hardStopLoss = Math.max(hardStopLoss, Number(originalSl));
+            hardStopLoss = position.entry_price * (1 - hardSlPct / 100);
           } else {
-            // SHORT: Lavere SL er strammere
-            hardStopLoss = Math.min(hardStopLoss, Number(originalSl));
+            hardStopLoss = position.entry_price * (1 + hardSlPct / 100);
           }
+          
+          // Ratchet: Hard SL kan kun strammes ind (gøres strammere af andre mekanismer, men den yderste grænse selv ændres ikke)
+          // Original SL fra position bruges til sammenligning - vælg den strammeste
+          const originalSl = position.indicators_snapshot?.original_stop_loss ?? position.stop_loss;
+          if (originalSl !== null && originalSl !== undefined && isFinite(Number(originalSl))) {
+            if (position.side === 'LONG') {
+              // LONG: Højere SL er strammere
+              hardStopLoss = Math.max(hardStopLoss, Number(originalSl));
+            } else {
+              // SHORT: Lavere SL er strammere
+              hardStopLoss = Math.min(hardStopLoss, Number(originalSl));
+            }
+          }
+          
+          console.log(`   🛑 HARD SL %: ${hardSlPct}% = ${hardStopLoss.toFixed(6)} (entry=${position.entry_price})`);
+        } else {
+          console.log(`   🛑 HARD SL %: DISABLED`);
         }
-        
-        console.log(`   🛑 HARD SL %: ${hardSlPct}% = ${hardStopLoss.toFixed(6)} (entry=${position.entry_price})`);
 
         const clampToEntrySide = (level: number) => {
           if (position.side === 'LONG') return Math.max(level, position.entry_price);
@@ -1080,10 +1086,10 @@ serve(async (req) => {
                 ? (position.side === 'LONG' ? newTrailingStop < breakEvenStop : newTrailingStop > breakEvenStop)
                 : false;
 
-              // KRAV: Trailing må aldrig være værre end hard SL (max loss)
-              const tsWorseThanSl = position.side === 'LONG' 
+              // KRAV: Trailing må aldrig være værre end hard SL (max loss) - kun hvis hard SL er enabled
+              const tsWorseThanSl = hardStopLoss !== null && (position.side === 'LONG' 
                 ? newTrailingStop < hardStopLoss 
-                : newTrailingStop > hardStopLoss;
+                : newTrailingStop > hardStopLoss);
 
               if (tsWorseThanSl) {
                 trailingStopActive = false;
@@ -1219,7 +1225,7 @@ serve(async (req) => {
         if (debug) {
           // Beregn hvilken stop-kandidat der vinder (mest beskyttende)
           const candidates: { name: string; value: number | null; active: boolean }[] = [
-            { name: 'HARD_SL_PCT', value: hardStopLoss, active: true },
+            { name: 'HARD_SL_PCT', value: hardStopLoss, active: hardSlPctEnabled && hardStopLoss !== null },
             { name: 'BREAK_EVEN', value: breakEvenStop, active: breakEvenActivatedState && breakEvenStop !== null },
             { name: 'PEAK_LOCK', value: peakLockActive ? trailingStop : null, active: peakLockActive },
             { name: 'ATR_TRAILING', value: trailingValidThisCycle && !peakLockActive ? trailingStop : null, active: trailingValidThisCycle && !peakLockActive },
@@ -1255,7 +1261,7 @@ serve(async (req) => {
           console.log(`     peakWasUpdated: ${peakWasUpdated}`);
           console.log(`     peak_price: ${newPeakPrice.toFixed(6)}`);
           console.log(`   Stop Candidates (priority order):`);
-          console.log(`     1️⃣ HARD_SL_PCT: ${hardStopLoss.toFixed(6)} (${hardSlPct}% from entry)`);
+          console.log(`     1️⃣ HARD_SL_PCT: ${hardStopLoss !== null ? hardStopLoss.toFixed(6) : 'DISABLED'} (${hardSlPct}% from entry, enabled: ${hardSlPctEnabled})`);
           console.log(`     2️⃣ MAX_SL_AFTER_MFE: computed later (active: ${maxSlAfterMfeEnabled})`);
           console.log(`     3️⃣ BREAK_EVEN: ${breakEvenStop !== null ? breakEvenStop.toFixed(6) : 'N/A'} (active: ${breakEvenActivatedState})`);
           console.log(`     4️⃣ PEAK_LOCK: ${peakLockActive ? trailingStop?.toFixed(6) : 'N/A'} (active: ${peakLockActive})`);
@@ -1268,7 +1274,7 @@ serve(async (req) => {
         // 🔍 EXIT HIERARCHY AUDIT - Bekræft rækkefølgen Hard SL % → Max SL after MFE → Break-even → Peak-Lock → Trailing
         console.log(`\n📊 EXIT HIERARCHY AUDIT - ${position.symbol} ${position.side}`);
         console.log(`   ═══════════════════════════════════════════════════════`);
-        console.log(`   1️⃣ HARD SL % (${hardSlPct}%): ${hardStopLoss.toFixed(8)}`);
+        console.log(`   1️⃣ HARD SL % (${hardSlPct}%): ${hardStopLoss !== null ? hardStopLoss.toFixed(8) : 'DISABLED'} (enabled: ${hardSlPctEnabled})`);
         console.log(`   2️⃣ MAX_SL_AFTER_MFE: computed later (enabled: ${maxSlAfterMfeEnabled})`);
         console.log(`   3️⃣ BREAK-EVEN: ${breakEvenStop !== null ? breakEvenStop.toFixed(8) : 'N/A'} (activated: ${breakEvenActivatedState})`);
         console.log(`   4️⃣ PEAK-LOCK: ${peakLockActive ? trailingStop?.toFixed(8) : 'N/A'} (active: ${peakLockActive})`);
@@ -1318,8 +1324,10 @@ serve(async (req) => {
         // Da monitor kører periodisk, kan prisen falde under flere levels på én gang.
         // Vi skal vælge det level der BURDE have lukket først (højeste for LONG).
         
-        const slTriggered = (position.side === 'LONG' && currentPrice <= hardStopLoss) ||
-          (position.side === 'SHORT' && currentPrice >= hardStopLoss);
+        const slTriggered = hardStopLoss !== null && (
+          (position.side === 'LONG' && currentPrice <= hardStopLoss) ||
+          (position.side === 'SHORT' && currentPrice >= hardStopLoss)
+        );
 
         const beTriggered = breakEvenStop !== null && (
           (position.side === 'LONG' && currentPrice <= breakEvenStop) ||
@@ -1363,7 +1371,7 @@ serve(async (req) => {
 
         // Find alle triggered levels og vælg det bedste (højeste for LONG, laveste for SHORT)
         const triggeredLevels: { type: string; level: number }[] = [];
-        if (slTriggered) triggeredLevels.push({ type: 'HARD_SL_PCT', level: hardStopLoss });
+        if (slTriggered && hardStopLoss !== null) triggeredLevels.push({ type: 'HARD_SL_PCT', level: hardStopLoss });
         if (beTriggered && breakEvenStop !== null) triggeredLevels.push({ type: 'BREAK_EVEN', level: breakEvenStop });
         if (tsTriggered && trailingStop !== null) triggeredLevels.push({ type: 'TRAILING', level: trailingStop });
         if (maxSlAfterMfeTriggered && maxSlAfterMfeCap !== null) triggeredLevels.push({ type: 'MAX_SL_AFTER_MFE', level: maxSlAfterMfeCap });
