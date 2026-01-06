@@ -210,7 +210,14 @@ export const PnLOverview = () => {
       // Leverage breakdown
       const leverageGroups = new Map<number, { count: number; netPnl: number; fees: number; notional: number }>();
       trades.forEach(t => {
-        const leverage = Number(t.leverage_used) || (t.indicators_snapshot as any)?.leverage || 10;
+        // Only use leverage if explicitly stored or available in indicators_snapshot
+        const storedLeverage = t.leverage_used != null ? Number(t.leverage_used) : null;
+        const snapshotLeverage = (t.indicators_snapshot as any)?.leverage != null ? Number((t.indicators_snapshot as any).leverage) : null;
+        const leverage = storedLeverage ?? snapshotLeverage;
+        
+        // Skip trades without known leverage
+        if (leverage == null) return;
+        
         const group = leverageGroups.get(leverage) || { count: 0, netPnl: 0, fees: 0, notional: 0 };
         group.count++;
         group.netPnl += Number(t.net_pnl ?? (Number(t.pnl) - Number(t.total_fee || 0) + Number(t.funding_fee || 0)));
