@@ -16,6 +16,19 @@ interface IndicatorConfigProps {
   onSave?: () => void;
 }
 
+// Helper functions to handle empty input values
+const safeParseInt = (value: string, fallback = 0): number => {
+  if (value === '' || value === '-') return fallback;
+  const parsed = parseInt(value);
+  return isNaN(parsed) ? fallback : parsed;
+};
+
+const safeParseFloat = (value: string, fallback = 0): number => {
+  if (value === '' || value === '-' || value === '.') return fallback;
+  const parsed = parseFloat(value);
+  return isNaN(parsed) ? fallback : parsed;
+};
+
 export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -630,7 +643,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="ema_fast"
               type="number"
               value={formData.ema_fast}
-              onChange={(e) => setFormData({ ...formData, ema_fast: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, ema_fast: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Antal bars - lavere = hurtigere reaktion</p>
           </div>
@@ -640,7 +653,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="ema_medium"
               type="number"
               value={formData.ema_medium}
-              onChange={(e) => setFormData({ ...formData, ema_medium: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, ema_medium: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Mellemperiode for trend bekræftelse</p>
           </div>
@@ -650,7 +663,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="ema_slow"
               type="number"
               value={formData.ema_slow}
-              onChange={(e) => setFormData({ ...formData, ema_slow: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, ema_slow: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Langsom linje - mere stabil trend</p>
           </div>
@@ -660,7 +673,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="ema_medium_trend"
               type="number"
               value={formData.ema_medium_trend}
-              onChange={(e) => setFormData({ ...formData, ema_medium_trend: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, ema_medium_trend: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">EMA for medium trend analyse (f.eks. 50)</p>
           </div>
@@ -671,7 +684,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.01"
               value={formData.min_ema_spread_percent}
-              onChange={(e) => setFormData({ ...formData, min_ema_spread_percent: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, min_ema_spread_percent: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">
               <strong className="text-warning">HARD FILTER:</strong> Blokerer trades hvis (Fast-Slow)/Price &lt; dette % (sidelæns marked filter)
@@ -684,7 +697,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.1"
               value={formData.max_ema_spread_percent}
-              onChange={(e) => setFormData({ ...formData, max_ema_spread_percent: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, max_ema_spread_percent: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">
               <strong className="text-warning">HARD FILTER:</strong> Blokerer trades hvis (Fast-Slow)/Price &gt; dette % (forhindrer for sene entries i stærkt udvidede trends)
@@ -725,7 +738,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="rsi_period"
               type="number"
               value={formData.rsi_period}
-              onChange={(e) => setFormData({ ...formData, rsi_period: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, rsi_period: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Antal bars til RSI beregning (standard 14)</p>
           </div>
@@ -736,7 +749,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.01"
               value={formData.rsi_min_long}
-              onChange={(e) => setFormData({ ...formData, rsi_min_long: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, rsi_min_long: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">LONG når RSI krydser OP over denne værdi</p>
           </div>
@@ -747,7 +760,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.01"
               value={formData.rsi_max_short}
-              onChange={(e) => setFormData({ ...formData, rsi_max_short: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, rsi_max_short: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">SHORT når RSI krydser NED under denne værdi</p>
           </div>
@@ -758,7 +771,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="1"
               value={formData.rsi_zone_width}
-              onChange={(e) => setFormData({ ...formData, rsi_zone_width: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, rsi_zone_width: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">
               {formData.rsi_zone_width === 0 
@@ -775,7 +788,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               max="5"
               step="1"
               value={formData.rsi_momentum_periods}
-              onChange={(e) => setFormData({ ...formData, rsi_momentum_periods: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, rsi_momentum_periods: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">
               Antal perioder der checkes for momentum. {formData.rsi_momentum_periods === 2 ? 'RSI₀ > RSI₁' : formData.rsi_momentum_periods === 3 ? 'RSI₀ > RSI₁ > RSI₂' : formData.rsi_momentum_periods === 4 ? 'RSI₀ > RSI₁ > RSI₂ > RSI₃' : 'RSI₀ > RSI₁ > ... > RSIₙ'}
@@ -816,7 +829,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="stochrsi_period"
               type="number"
               value={formData.stochrsi_period}
-              onChange={(e) => setFormData({ ...formData, stochrsi_period: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, stochrsi_period: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">RSI periode for StochRSI (standard 14)</p>
           </div>
@@ -826,7 +839,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="stochrsi_k_period"
               type="number"
               value={formData.stochrsi_k_period}
-              onChange={(e) => setFormData({ ...formData, stochrsi_k_period: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, stochrsi_k_period: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">%K smoothing periode (standard 3)</p>
           </div>
@@ -836,7 +849,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="stochrsi_d_period"
               type="number"
               value={formData.stochrsi_d_period}
-              onChange={(e) => setFormData({ ...formData, stochrsi_d_period: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, stochrsi_d_period: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">%D smoothing periode (standard 3)</p>
           </div>
@@ -847,7 +860,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.01"
               value={formData.stochrsi_overbought}
-              onChange={(e) => setFormData({ ...formData, stochrsi_overbought: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, stochrsi_overbought: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Overkøbt niveau (standard 80)</p>
           </div>
@@ -858,7 +871,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.01"
               value={formData.stochrsi_oversold}
-              onChange={(e) => setFormData({ ...formData, stochrsi_oversold: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, stochrsi_oversold: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Oversolgt niveau (standard 20)</p>
           </div>
@@ -915,7 +928,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="pivot_points_lookback"
               type="number"
               value={formData.pivot_points_lookback}
-              onChange={(e) => setFormData({ ...formData, pivot_points_lookback: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, pivot_points_lookback: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Antal bars tilbage til pivot beregning (f.eks. 24)</p>
           </div>
@@ -926,7 +939,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.0001"
               value={formData.pivot_points_near_threshold}
-              onChange={(e) => setFormData({ ...formData, pivot_points_near_threshold: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, pivot_points_near_threshold: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Tærskel for "tæt på" pivot (0.002 = 0.2%)</p>
           </div>
@@ -965,7 +978,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="macd_fast"
               type="number"
               value={formData.macd_fast}
-              onChange={(e) => setFormData({ ...formData, macd_fast: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, macd_fast: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Hurtig EMA periode (standard 12)</p>
           </div>
@@ -975,7 +988,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="macd_slow"
               type="number"
               value={formData.macd_slow}
-              onChange={(e) => setFormData({ ...formData, macd_slow: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, macd_slow: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Langsom EMA periode (standard 26)</p>
           </div>
@@ -985,7 +998,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="macd_signal"
               type="number"
               value={formData.macd_signal}
-              onChange={(e) => setFormData({ ...formData, macd_signal: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, macd_signal: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Signal linje EMA (standard 9)</p>
           </div>
@@ -996,7 +1009,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.000001"
               value={formData.macd_histogram_threshold}
-              onChange={(e) => setFormData({ ...formData, macd_histogram_threshold: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, macd_histogram_threshold: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Min histogram for signal (0 = alle)</p>
           </div>
@@ -1048,7 +1061,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               min="2"
               max="10"
               value={formData.histogram_momentum_periods}
-              onChange={(e) => setFormData({...formData, histogram_momentum_periods: parseInt(e.target.value)})}
+              onChange={(e) => setFormData({...formData, histogram_momentum_periods: safeParseInt(e.target.value)})}
             />
             <p className="text-xs text-muted-foreground">
               Antal perioder til momentum-beregning (2-10)
@@ -1089,7 +1102,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="bb_period"
               type="number"
               value={formData.bb_period}
-              onChange={(e) => setFormData({ ...formData, bb_period: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, bb_period: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">SMA periode for midt-båndet (standard 20)</p>
           </div>
@@ -1100,7 +1113,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.1"
               value={formData.bb_std_dev}
-              onChange={(e) => setFormData({ ...formData, bb_std_dev: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, bb_std_dev: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Hvor bredt båndet er (standard 2.0)</p>
           </div>
@@ -1141,7 +1154,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               min="10"
               max="500"
               value={formData.vwap_period}
-              onChange={(e) => setFormData({ ...formData, vwap_period: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, vwap_period: safeParseInt(e.target.value) })}
               disabled={!formData.vwap_enabled}
             />
             <p className="text-xs text-muted-foreground">
@@ -1183,7 +1196,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="atr_period"
               type="number"
               value={formData.atr_period}
-              onChange={(e) => setFormData({ ...formData, atr_period: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, atr_period: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Antal bars til volatilitet (standard 14)</p>
           </div>
@@ -1195,7 +1208,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.01"
               value={formData.min_atr_percent}
-              onChange={(e) => setFormData({ ...formData, min_atr_percent: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, min_atr_percent: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Bloker trade hvis (ATR/Price × 100) &lt; Minimum ATR (%)</p>
           </div>
@@ -1225,7 +1238,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.01"
               value={formData.atr_base_min}
-              onChange={(e) => setFormData({ ...formData, atr_base_min: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, atr_base_min: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Base værdi for adaptive beregning</p>
           </div>
@@ -1237,7 +1250,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.01"
               value={formData.atr_floor}
-              onChange={(e) => setFormData({ ...formData, atr_floor: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, atr_floor: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Minimum værdi (floor)</p>
           </div>
@@ -1249,7 +1262,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.01"
               value={formData.atr_ceiling}
-              onChange={(e) => setFormData({ ...formData, atr_ceiling: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, atr_ceiling: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Maksimum værdi (ceiling)</p>
           </div>
@@ -1260,7 +1273,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.1"
               value={formData.atr_stop_loss_multiplier}
-              onChange={(e) => setFormData({ ...formData, atr_stop_loss_multiplier: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, atr_stop_loss_multiplier: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Højere = løsere SL (2.0 = 2×ATR)</p>
           </div>
@@ -1271,7 +1284,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.1"
               value={formData.atr_trailing_stop_multiplier}
-              onChange={(e) => setFormData({ ...formData, atr_trailing_stop_multiplier: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, atr_trailing_stop_multiplier: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Trailing stop afstand fra peak (× ATR)</p>
           </div>
@@ -1298,7 +1311,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.1"
               value={formData.trailing_stop_activation_atr}
-              onChange={(e) => setFormData({ ...formData, trailing_stop_activation_atr: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, trailing_stop_activation_atr: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Trailing stop aktiveres først når profit ≥ (× ATR). Standard: 1.0 ATR</p>
           </div>
@@ -1374,7 +1387,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                         type="number"
                         step="0.1"
                         value={formData.break_even_atr}
-                        onChange={(e) => setFormData({ ...formData, break_even_atr: parseFloat(e.target.value) || 0 })}
+                        onChange={(e) => setFormData({ ...formData, break_even_atr: safeParseFloat(e.target.value) })}
                       />
                       <p className="text-xs text-muted-foreground">Aktiver BE når profit ≥ X × ATR</p>
                     </div>
@@ -1386,7 +1399,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                         step="0.1"
                         min="0"
                         value={formData.break_even_atr_stop_offset}
-                        onChange={(e) => setFormData({ ...formData, break_even_atr_stop_offset: parseFloat(e.target.value) || 0 })}
+                        onChange={(e) => setFormData({ ...formData, break_even_atr_stop_offset: safeParseFloat(e.target.value) })}
                       />
                       <p className="text-xs text-muted-foreground">Stop placeres entry ± (offset × ATR). 0 = præcis entry.</p>
                     </div>
@@ -1426,7 +1439,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                         min="0"
                         value={formData.break_even_profit_pct_trigger}
                         onChange={(e) => {
-                          const val = parseFloat(e.target.value) || 0;
+                          const val = safeParseFloat(e.target.value);
                           setFormData({ ...formData, break_even_profit_pct_trigger: val });
                         }}
                       />
@@ -1447,7 +1460,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                         max={formData.break_even_profit_pct_trigger}
                         value={formData.break_even_profit_pct_stop_over_entry}
                         onChange={(e) => {
-                          const val = parseFloat(e.target.value) || 0;
+                          const val = safeParseFloat(e.target.value);
                           // Validering: stop_over_entry_pct <= trigger_profit_pct
                           const clampedVal = Math.min(val, formData.break_even_profit_pct_trigger);
                           setFormData({ ...formData, break_even_profit_pct_stop_over_entry: clampedVal });
@@ -1512,7 +1525,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                   step="0.05"
                   min="0"
                   value={formData.peak_lock_activate_profit_pct}
-                  onChange={(e) => setFormData({ ...formData, peak_lock_activate_profit_pct: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) => setFormData({ ...formData, peak_lock_activate_profit_pct: safeParseFloat(e.target.value) })}
                 />
                 <p className="text-xs text-muted-foreground">
                   Peak-lock aktiveres når profit ≥ X% fra entry. Eks: 0.60 = 0.6% profit
@@ -1527,7 +1540,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                   step="0.05"
                   min="0"
                   value={formData.peak_lock_distance_pct}
-                  onChange={(e) => setFormData({ ...formData, peak_lock_distance_pct: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) => setFormData({ ...formData, peak_lock_distance_pct: safeParseFloat(e.target.value) })}
                 />
                 <p className="text-xs text-muted-foreground">
                   Stop placeres X% under peak (LONG) / over peak (SHORT). Eks: 0.35 = 0.35% fra peak
@@ -1542,7 +1555,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                   step="0.05"
                   min="0"
                   value={formData.peak_lock_min_profit_floor_pct}
-                  onChange={(e) => setFormData({ ...formData, peak_lock_min_profit_floor_pct: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) => setFormData({ ...formData, peak_lock_min_profit_floor_pct: safeParseFloat(e.target.value) })}
                 />
                 <p className="text-xs text-muted-foreground">
                   Stop må aldrig være under minimumsgevinst. Eks: 0.15 = stop altid ≥ 0.15% over entry
@@ -1605,7 +1618,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 min="0.1"
                 max="20"
                 value={formData.hard_sl_pct}
-                onChange={(e) => setFormData({ ...formData, hard_sl_pct: parseFloat(e.target.value) || 3.0 })}
+                onChange={(e) => setFormData({ ...formData, hard_sl_pct: safeParseFloat(e.target.value, 3.0) })}
               />
               <p className="text-xs text-muted-foreground">
                 Maksimalt tab fra entry i % (fx 3.0 = max 3% tab)
@@ -1655,7 +1668,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               min="0"
               max="5"
               value={formData.max_sl_after_mfe_activate_pct}
-              onChange={(e) => setFormData({ ...formData, max_sl_after_mfe_activate_pct: parseFloat(e.target.value) || 0 })}
+              onChange={(e) => setFormData({ ...formData, max_sl_after_mfe_activate_pct: safeParseFloat(e.target.value) })}
               disabled={!formData.max_sl_after_mfe_enabled}
             />
             <p className="text-xs text-muted-foreground">
@@ -1672,7 +1685,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               min="0"
               max="5"
               value={formData.max_sl_after_mfe_max_dist_pct}
-              onChange={(e) => setFormData({ ...formData, max_sl_after_mfe_max_dist_pct: parseFloat(e.target.value) || 0 })}
+              onChange={(e) => setFormData({ ...formData, max_sl_after_mfe_max_dist_pct: safeParseFloat(e.target.value) })}
               disabled={!formData.max_sl_after_mfe_enabled}
             />
             <p className="text-xs text-muted-foreground">
@@ -1727,7 +1740,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="adx_period"
               type="number"
               value={formData.adx_period}
-              onChange={(e) => setFormData({ ...formData, adx_period: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, adx_period: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Antal bars til ADX (standard 14)</p>
           </div>
@@ -1738,7 +1751,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.1"
               value={formData.adx_floor}
-              onChange={(e) => setFormData({ ...formData, adx_floor: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, adx_floor: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Minimum ADX værdi krævet for trade</p>
           </div>
@@ -1749,7 +1762,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.1"
               value={formData.adx_ceiling}
-              onChange={(e) => setFormData({ ...formData, adx_ceiling: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, adx_ceiling: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Maksimum ADX værdi tilladt for trade</p>
           </div>
@@ -1779,7 +1792,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.1"
               value={formData.adx_base_min}
-              onChange={(e) => setFormData({ ...formData, adx_base_min: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, adx_base_min: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Base værdi for adaptive beregning</p>
           </div>
@@ -1818,7 +1831,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="volume_avg_period"
               type="number"
               value={formData.volume_avg_period}
-              onChange={(e) => setFormData({ ...formData, volume_avg_period: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, volume_avg_period: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Antal bars for gennemsnit</p>
           </div>
@@ -1829,7 +1842,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.1"
               value={formData.volume_multiplier}
-              onChange={(e) => setFormData({ ...formData, volume_multiplier: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, volume_multiplier: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">
               Kræver vol &gt; avg×multiplier
@@ -1995,7 +2008,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="klines_limit"
               type="number"
               value={formData.klines_limit}
-              onChange={(e) => setFormData({ ...formData, klines_limit: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, klines_limit: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Antal bars at hente til analyse (f.eks. 100)</p>
           </div>
@@ -2014,7 +2027,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="leverage"
               type="number"
               value={formData.leverage}
-              onChange={(e) => setFormData({ ...formData, leverage: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, leverage: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Gearing - højere = større position med samme kapital</p>
           </div>
@@ -2025,7 +2038,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.1"
               value={formData.position_size_percent}
-              onChange={(e) => setFormData({ ...formData, position_size_percent: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, position_size_percent: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Direkte position størrelse i % af balance</p>
           </div>
@@ -2036,7 +2049,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.1"
               value={formData.risk_per_trade_percent}
-              onChange={(e) => setFormData({ ...formData, risk_per_trade_percent: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, risk_per_trade_percent: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Max tab hvis stop loss rammes</p>
           </div>
@@ -2046,7 +2059,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="max_open_positions"
               type="number"
               value={formData.max_open_positions}
-              onChange={(e) => setFormData({ ...formData, max_open_positions: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, max_open_positions: safeParseInt(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Antal samtidige trades tilladt</p>
           </div>
@@ -2057,7 +2070,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.1"
               value={formData.max_exposure_percent}
-              onChange={(e) => setFormData({ ...formData, max_exposure_percent: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, max_exposure_percent: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Total eksponering max i % af balance</p>
           </div>
@@ -2068,7 +2081,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               step="0.1"
               value={formData.daily_loss_limit_percent}
-              onChange={(e) => setFormData({ ...formData, daily_loss_limit_percent: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, daily_loss_limit_percent: safeParseFloat(e.target.value) })}
             />
             <p className="text-xs text-muted-foreground">Stop trading hvis tab når denne % på en dag</p>
           </div>
@@ -2103,7 +2116,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               id="max_position_duration_minutes"
               type="number"
               value={formData.max_position_duration_minutes || ''}
-              onChange={(e) => setFormData({ ...formData, max_position_duration_minutes: e.target.value ? parseInt(e.target.value) : null })}
+              onChange={(e) => setFormData({ ...formData, max_position_duration_minutes: e.target.value ? safeParseInt(e.target.value) : null })}
               placeholder="0 = deaktiveret"
               disabled={!formData.auto_exit_enabled}
             />
@@ -2314,6 +2327,12 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               `Aktivér Max SL efter MFE:${onOff(formData.max_sl_after_mfe_enabled)}`,
               `Aktivér ved MFE %:       ${formData.max_sl_after_mfe_activate_pct}%`,
               `Max SL afstand fra entry:${formData.max_sl_after_mfe_max_dist_pct}%`,
+              "",
+              "───────────────────────────────────────────────────────────────────",
+              "HARD STOP LOSS %",
+              "───────────────────────────────────────────────────────────────────",
+              `Aktivér Hard SL %:       ${onOff(formData.hard_sl_pct_enabled)}`,
+              `Hard SL %:               ${formData.hard_sl_pct_enabled ? formData.hard_sl_pct + '%' : '-'}`,
               "",
               "───────────────────────────────────────────────────────────────────",
               "ADX INDSTILLINGER",
