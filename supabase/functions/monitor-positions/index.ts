@@ -147,6 +147,80 @@ async function cancelAllOpenOrders(symbol: string, apiKey: string, apiSecret: st
   return { cancelled: true, result };
 }
 
+// Fetch commission/fee from recent trades for a symbol
+async function getRecentTradeFees(symbol: string, apiKey: string, apiSecret: string, startTime: number): Promise<{ entryFee: number, exitFee: number }> {
+  try {
+    const timestamp = Date.now();
+    const queryString = `symbol=${symbol}&startTime=${startTime}&timestamp=${timestamp}&recvWindow=10000`;
+    const signature = await createSignature(queryString, apiSecret);
+    const url = `https://fapi.binance.com/fapi/v1/userTrades?${queryString}&signature=${signature}`;
+    
+    const res = await fetch(url, { headers: { 'X-MBX-APIKEY': apiKey } });
+    if (!res.ok) {
+      console.warn(`Failed to fetch trades for fee calculation: ${await res.text()}`);
+      return { entryFee: 0, exitFee: 0 };
+    }
+    
+    const trades = await res.json();
+    if (!Array.isArray(trades) || trades.length === 0) {
+      return { entryFee: 0, exitFee: 0 };
+    }
+    
+    // Sort by time to separate entry and exit trades
+    trades.sort((a: any, b: any) => a.time - b.time);
+    
+    // First trade(s) are entry, last trade(s) are exit
+    let entryFee = 0;
+    let exitFee = 0;
+    const midpoint = Math.floor(trades.length / 2);
+    
+    for (let i = 0; i < trades.length; i++) {
+      const fee = Math.abs(parseFloat(trades[i].commission || 0));
+      if (i < midpoint || trades.length === 1) {
+        entryFee += fee;
+      } else {
+        exitFee += fee;
+      }
+    }
+    
+    // If only 2 trades, first is entry, second is exit
+    if (trades.length === 2) {
+      entryFee = Math.abs(parseFloat(trades[0].commission || 0));
+      exitFee = Math.abs(parseFloat(trades[1].commission || 0));
+    }
+    
+    return { entryFee, exitFee };
+  } catch (e) {
+    console.error('Error fetching trade fees:', e);
+    return { entryFee: 0, exitFee: 0 };
+  }
+}
+
+// Fetch accumulated funding fees for a symbol during position lifetime
+async function getPositionFundingFees(symbol: string, apiKey: string, apiSecret: string, startTime: number, endTime: number): Promise<number> {
+  try {
+    const timestamp = Date.now();
+    const queryString = `symbol=${symbol}&incomeType=FUNDING_FEE&startTime=${startTime}&endTime=${endTime}&timestamp=${timestamp}&recvWindow=10000`;
+    const signature = await createSignature(queryString, apiSecret);
+    const url = `https://fapi.binance.com/fapi/v1/income?${queryString}&signature=${signature}`;
+    
+    const res = await fetch(url, { headers: { 'X-MBX-APIKEY': apiKey } });
+    if (!res.ok) {
+      console.warn(`Failed to fetch funding fees: ${await res.text()}`);
+      return 0;
+    }
+    
+    const incomes = await res.json();
+    if (!Array.isArray(incomes)) return 0;
+    
+    // Sum all funding fee incomes (can be positive or negative)
+    return incomes.reduce((sum: number, inc: any) => sum + parseFloat(inc.income || 0), 0);
+  } catch (e) {
+    console.error('Error fetching funding fees:', e);
+    return 0;
+  }
+}
+
 async function closePositionOnBinance(symbol: string, side: string, quantity: number) {
   const apiKey = Deno.env.get('BINANCE_API_KEY');
   const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
@@ -2183,6 +2257,30 @@ serve(async (req) => {
             enhancedSnapshot.mae = maeValue;
             enhancedSnapshot.mae_percent = maePercent;
 
+            // 🔴 FEE & FUNDING LOGGING
+            const apiKey = Deno.env.get('BINANCE_API_KEY');
+            const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
+            let entryFee = 0;
+            let exitFee = 0;
+            let fundingFee = 0;
+            let totalFee = 0;
+            let netPnl: number | null = null;
+            
+            if (apiKey && apiSecret) {
+              const openedAtTime = position.opened_at ? new Date(position.opened_at).getTime() : now.getTime() - 3600000;
+              const closedAtTime = now.getTime();
+              
+              const fees = await getRecentTradeFees(position.symbol, apiKey, apiSecret, openedAtTime);
+              entryFee = fees.entryFee;
+              exitFee = fees.exitFee;
+              totalFee = entryFee + exitFee;
+              
+              fundingFee = await getPositionFundingFees(position.symbol, apiKey, apiSecret, openedAtTime, closedAtTime);
+              netPnl = actualPnl - totalFee + fundingFee; // fundingFee can be negative (paid) or positive (received)
+              
+              console.log(`📊 Fee logging for ${position.symbol}: entry=${entryFee.toFixed(4)}, exit=${exitFee.toFixed(4)}, total=${totalFee.toFixed(4)}, funding=${fundingFee.toFixed(4)}, gross=${actualPnl.toFixed(4)}, net=${netPnl.toFixed(4)}`);
+            }
+
             const { error: historyError } = await supabaseClient.from('trade_history').insert({
               user_id: position.user_id,
               symbol: position.symbol,
@@ -2203,6 +2301,12 @@ serve(async (req) => {
               mae: maeValue,
               mae_percent: maePercent,
               low_price: finalLowPrice,
+              // 🔴 FEE & FUNDING FELTER (ren logging for analyse)
+              entry_fee: entryFee || null,
+              exit_fee: exitFee || null,
+              total_fee: totalFee || null,
+              funding_fee: fundingFee || null,
+              net_pnl: netPnl,
             });
 
             if (historyError) {

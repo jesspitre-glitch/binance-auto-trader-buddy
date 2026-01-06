@@ -557,13 +557,17 @@ export type Database = {
           closed_at: string | null
           created_at: string | null
           duration_minutes: number | null
+          entry_fee: number | null
           entry_price: number
+          exit_fee: number | null
           exit_price: number
+          funding_fee: number | null
           id: string
           indicators_snapshot: Json | null
           low_price: number | null
           mae: number | null
           mae_percent: number | null
+          net_pnl: number | null
           open_reason: string | null
           opened_at: string
           pnl: number
@@ -572,6 +576,7 @@ export type Database = {
           side: string
           strategy_hash: string | null
           symbol: string
+          total_fee: number | null
           user_id: string
         }
         Insert: {
@@ -579,13 +584,17 @@ export type Database = {
           closed_at?: string | null
           created_at?: string | null
           duration_minutes?: number | null
+          entry_fee?: number | null
           entry_price: number
+          exit_fee?: number | null
           exit_price: number
+          funding_fee?: number | null
           id?: string
           indicators_snapshot?: Json | null
           low_price?: number | null
           mae?: number | null
           mae_percent?: number | null
+          net_pnl?: number | null
           open_reason?: string | null
           opened_at: string
           pnl: number
@@ -594,6 +603,7 @@ export type Database = {
           side: string
           strategy_hash?: string | null
           symbol: string
+          total_fee?: number | null
           user_id: string
         }
         Update: {
@@ -601,13 +611,17 @@ export type Database = {
           closed_at?: string | null
           created_at?: string | null
           duration_minutes?: number | null
+          entry_fee?: number | null
           entry_price?: number
+          exit_fee?: number | null
           exit_price?: number
+          funding_fee?: number | null
           id?: string
           indicators_snapshot?: Json | null
           low_price?: number | null
           mae?: number | null
           mae_percent?: number | null
+          net_pnl?: number | null
           open_reason?: string | null
           opened_at?: string
           pnl?: number
@@ -616,6 +630,7 @@ export type Database = {
           side?: string
           strategy_hash?: string | null
           symbol?: string
+          total_fee?: number | null
           user_id?: string
         }
         Relationships: []
