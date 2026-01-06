@@ -2122,9 +2122,9 @@ serve(async (req) => {
             }
 
             // 🔴 MAE BEREGNING: Maximum Adverse Excursion (kun til logging)
-            // MAE% = største negative prisbevægelse imod entry
-            // LONG: (entry - low_price) / entry * 100 (hvor meget prisen faldt under entry)
-            // SHORT: (low_price - entry) / entry * 100 (hvor meget prisen steg over entry)
+            // MAE = største ABSOLUTTE prisbevægelse imod entry (altid positiv)
+            // LONG: entry - low_price (hvor meget prisen faldt under entry)
+            // SHORT: low_price - entry (hvor meget prisen steg over entry)
             const finalLowPrice = newLowPrice;
             let maeValue: number | null = null;
             let maePercent: number | null = null;
