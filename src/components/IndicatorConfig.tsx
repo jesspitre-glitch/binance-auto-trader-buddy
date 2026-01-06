@@ -1265,41 +1265,45 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 </div>
               </div>
               
-              <div className="space-y-2">
-                <Label htmlFor="atr_base_min">ATR Base Minimum (%)</Label>
-                <Input
-                  id="atr_base_min"
-                  type="number"
-                  step="0.01"
-                  value={formData.atr_base_min}
-                  onChange={(e) => setFormData({ ...formData, atr_base_min: safeParseFloat(e.target.value) })}
-                />
-                <p className="text-xs text-muted-foreground">Base værdi for adaptive beregning</p>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="atr_floor">ATR Floor (%)</Label>
-                <Input
-                  id="atr_floor"
-                  type="number"
-                  step="0.01"
-                  value={formData.atr_floor}
-                  onChange={(e) => setFormData({ ...formData, atr_floor: safeParseFloat(e.target.value) })}
-                />
-                <p className="text-xs text-muted-foreground">Minimum værdi (floor)</p>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="atr_ceiling">ATR Ceiling (%)</Label>
-                <Input
-                  id="atr_ceiling"
-                  type="number"
-                  step="0.01"
-                  value={formData.atr_ceiling}
-                  onChange={(e) => setFormData({ ...formData, atr_ceiling: safeParseFloat(e.target.value) })}
-                />
-                <p className="text-xs text-muted-foreground">Maksimum værdi (ceiling)</p>
-              </div>
+              {formData.adaptive_atr_enabled && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="atr_base_min">ATR Base Minimum (%)</Label>
+                    <Input
+                      id="atr_base_min"
+                      type="number"
+                      step="0.01"
+                      value={formData.atr_base_min}
+                      onChange={(e) => setFormData({ ...formData, atr_base_min: safeParseFloat(e.target.value) })}
+                    />
+                    <p className="text-xs text-muted-foreground">Base værdi for adaptive beregning</p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="atr_floor">ATR Floor (%)</Label>
+                    <Input
+                      id="atr_floor"
+                      type="number"
+                      step="0.01"
+                      value={formData.atr_floor}
+                      onChange={(e) => setFormData({ ...formData, atr_floor: safeParseFloat(e.target.value) })}
+                    />
+                    <p className="text-xs text-muted-foreground">Minimum værdi (floor)</p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="atr_ceiling">ATR Ceiling (%)</Label>
+                    <Input
+                      id="atr_ceiling"
+                      type="number"
+                      step="0.01"
+                      value={formData.atr_ceiling}
+                      onChange={(e) => setFormData({ ...formData, atr_ceiling: safeParseFloat(e.target.value) })}
+                    />
+                    <p className="text-xs text-muted-foreground">Maksimum værdi (ceiling)</p>
+                  </div>
+                </>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="atr_stop_loss_multiplier">Stop-Loss Multiplikator</Label>
                 <Input
@@ -1824,17 +1828,19 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 </div>
               </div>
               
-              <div className="space-y-2">
-                <Label htmlFor="adx_base_min">ADX Base (Adaptive)</Label>
-                <Input
-                  id="adx_base_min"
-                  type="number"
-                  step="0.1"
-                  value={formData.adx_base_min}
-                  onChange={(e) => setFormData({ ...formData, adx_base_min: safeParseFloat(e.target.value) })}
-                />
-                <p className="text-xs text-muted-foreground">Base værdi for adaptive beregning</p>
-              </div>
+              {formData.adaptive_adx_enabled && (
+                <div className="space-y-2">
+                  <Label htmlFor="adx_base_min">ADX Base (Adaptive)</Label>
+                  <Input
+                    id="adx_base_min"
+                    type="number"
+                    step="0.1"
+                    value={formData.adx_base_min}
+                    onChange={(e) => setFormData({ ...formData, adx_base_min: safeParseFloat(e.target.value) })}
+                  />
+                  <p className="text-xs text-muted-foreground">Base værdi for adaptive beregning</p>
+                </div>
+              )}
             </>
           )}
         </CardContent>
@@ -2021,44 +2027,47 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="higher_trend_timeframe">Overordnet Trend Timeframe</Label>
-            <Select
-              value={formData.higher_trend_timeframe}
-              onValueChange={(value) => setFormData({ ...formData, higher_trend_timeframe: value })}
-              disabled={!formData.higher_trend_enabled}
-            >
-              <SelectTrigger id="higher_trend_timeframe">
-                <SelectValue placeholder="Vælg overordnet trend" />
-              </SelectTrigger>
-              <SelectContent className="bg-background">
-                <SelectItem value="5m">5 minutter</SelectItem>
-                <SelectItem value="10m">10 minutter</SelectItem>
-                <SelectItem value="15m">15 minutter</SelectItem>
-                <SelectItem value="30m">30 minutter</SelectItem>
-                <SelectItem value="1h">1 time</SelectItem>
-                <SelectItem value="2h">2 timer</SelectItem>
-                <SelectItem value="4h">4 timer</SelectItem>
-                <SelectItem value="6h">6 timer</SelectItem>
-                <SelectItem value="8h">8 timer</SelectItem>
-                <SelectItem value="12h">12 timer</SelectItem>
-                <SelectItem value="1d">1 dag</SelectItem>
-                <SelectItem value="3d">3 dage</SelectItem>
-                <SelectItem value="1w">1 uge</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">Timeframe for overordnet trend analyse</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="klines_limit">Klines Limit</Label>
-            <Input
-              id="klines_limit"
-              type="number"
-              value={formData.klines_limit}
-              onChange={(e) => setFormData({ ...formData, klines_limit: safeParseInt(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Antal bars at hente til analyse (f.eks. 100)</p>
-          </div>
+          {formData.higher_trend_enabled && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="higher_trend_timeframe">Overordnet Trend Timeframe</Label>
+                <Select
+                  value={formData.higher_trend_timeframe}
+                  onValueChange={(value) => setFormData({ ...formData, higher_trend_timeframe: value })}
+                >
+                  <SelectTrigger id="higher_trend_timeframe">
+                    <SelectValue placeholder="Vælg overordnet trend" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background">
+                    <SelectItem value="5m">5 minutter</SelectItem>
+                    <SelectItem value="10m">10 minutter</SelectItem>
+                    <SelectItem value="15m">15 minutter</SelectItem>
+                    <SelectItem value="30m">30 minutter</SelectItem>
+                    <SelectItem value="1h">1 time</SelectItem>
+                    <SelectItem value="2h">2 timer</SelectItem>
+                    <SelectItem value="4h">4 timer</SelectItem>
+                    <SelectItem value="6h">6 timer</SelectItem>
+                    <SelectItem value="8h">8 timer</SelectItem>
+                    <SelectItem value="12h">12 timer</SelectItem>
+                    <SelectItem value="1d">1 dag</SelectItem>
+                    <SelectItem value="3d">3 dage</SelectItem>
+                    <SelectItem value="1w">1 uge</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Timeframe for overordnet trend analyse</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="klines_limit">Klines Limit</Label>
+                <Input
+                  id="klines_limit"
+                  type="number"
+                  value={formData.klines_limit}
+                  onChange={(e) => setFormData({ ...formData, klines_limit: safeParseInt(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Antal bars at hente til analyse (f.eks. 100)</p>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
