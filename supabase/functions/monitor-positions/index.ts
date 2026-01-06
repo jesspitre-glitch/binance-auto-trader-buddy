@@ -2265,6 +2265,10 @@ serve(async (req) => {
             let fundingFee = 0;
             let totalFee = 0;
             let netPnl: number | null = null;
+            let pnlAfterFees: number | null = null;
+            let notional: number | null = null;
+            let feesPctOfNotional: number | null = null;
+            let leverageUsed: number | null = null;
             
             if (apiKey && apiSecret) {
               const openedAtTime = position.opened_at ? new Date(position.opened_at).getTime() : now.getTime() - 3600000;
@@ -2276,9 +2280,15 @@ serve(async (req) => {
               totalFee = entryFee + exitFee;
               
               fundingFee = await getPositionFundingFees(position.symbol, apiKey, apiSecret, openedAtTime, closedAtTime);
-              netPnl = actualPnl - totalFee + fundingFee; // fundingFee can be negative (paid) or positive (received)
+              pnlAfterFees = actualPnl - totalFee;
+              netPnl = pnlAfterFees + fundingFee; // fundingFee can be negative (paid) or positive (received)
               
-              console.log(`📊 Fee logging for ${position.symbol}: entry=${entryFee.toFixed(4)}, exit=${exitFee.toFixed(4)}, total=${totalFee.toFixed(4)}, funding=${fundingFee.toFixed(4)}, gross=${actualPnl.toFixed(4)}, net=${netPnl.toFixed(4)}`);
+              // Calculate notional value and leverage
+              notional = position.entry_price * actualQuantity;
+              feesPctOfNotional = notional > 0 ? (totalFee / notional) * 100 : 0;
+              leverageUsed = (position.indicators_snapshot as any)?.leverage || 10;
+              
+              console.log(`📊 Fee logging for ${position.symbol}: entry=${entryFee.toFixed(4)}, exit=${exitFee.toFixed(4)}, total=${totalFee.toFixed(4)} (${feesPctOfNotional.toFixed(4)}% of notional), funding=${fundingFee.toFixed(4)}, gross=${actualPnl.toFixed(4)}, afterFees=${pnlAfterFees.toFixed(4)}, net=${netPnl.toFixed(4)}, notional=${notional.toFixed(2)}, leverage=${leverageUsed}`);
             }
 
             const { error: historyError } = await supabaseClient.from('trade_history').insert({
@@ -2307,6 +2317,10 @@ serve(async (req) => {
               total_fee: totalFee || null,
               funding_fee: fundingFee || null,
               net_pnl: netPnl,
+              pnl_after_fees: pnlAfterFees,
+              notional: notional,
+              leverage_used: leverageUsed,
+              fees_pct_of_notional: feesPctOfNotional,
             });
 
             if (historyError) {
