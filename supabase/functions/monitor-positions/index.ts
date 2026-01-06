@@ -464,6 +464,24 @@ serve(async (req) => {
         let newPeakPrice = position.peak_price || position.entry_price;
         let newTrailingStop = position.trailing_stop;
         
+        // 🔴 LOW-TRACKING (MAE): Track laveste pris for LONG / højeste pris for SHORT
+        // MAE = Maximum Adverse Excursion (største bevægelse imod os)
+        // VIGTIGT: Kun til logging/analyse - påvirker IKKE exit-logik
+        let newLowPrice = position.low_price ?? position.entry_price;
+        let lowWasUpdated = false;
+        
+        // LONG: low_price = laveste pris set (adverse = nedad)
+        // SHORT: low_price = højeste pris set (adverse = opad)
+        if (position.side === 'LONG' && currentPrice < newLowPrice) {
+          console.log(`📉 MAE low_price opdateret: ${newLowPrice.toFixed(6)} → ${currentPrice.toFixed(6)} for ${position.symbol} (LONG adverse)`);
+          lowWasUpdated = true;
+          newLowPrice = currentPrice;
+        } else if (position.side === 'SHORT' && currentPrice > newLowPrice) {
+          console.log(`📈 MAE low_price opdateret: ${newLowPrice.toFixed(6)} → ${currentPrice.toFixed(6)} for ${position.symbol} (SHORT adverse)`);
+          lowWasUpdated = true;
+          newLowPrice = currentPrice;
+        }
+        
         // 🔴 PEAK-TRACKING: Opdater peak ALTID når position er åben (hvis Peak-Lock eller Trailing er aktivt i UI)
         // Peak må kun bevæge sig i gunstig retning (ratchet)
         // LONG: peak = højeste pris set, SHORT: peak = laveste pris set
@@ -1572,6 +1590,12 @@ serve(async (req) => {
           updateData.peak_price = newPeakPrice;
           console.log(`📈 PEAK GEMT | ${position.symbol} | ${position.peak_price || 'null'} → ${newPeakPrice}`);
         }
+        
+        // 🔴 MAE TRACKING: Opdater low_price for adverse excursion logging
+        if (lowWasUpdated) {
+          updateData.low_price = newLowPrice;
+          console.log(`📉 LOW GEMT (MAE) | ${position.symbol} | ${position.low_price || 'null'} → ${newLowPrice}`);
+        }
 
         // ALTID opdater stop_loss til BE-niveauet hvis BE er aktiveret
         if (breakEvenActivatedState && breakEvenAtPrice !== null && breakEvenAtPrice !== undefined) {
@@ -2097,6 +2121,32 @@ serve(async (req) => {
               }
             }
 
+            // 🔴 MAE BEREGNING: Maximum Adverse Excursion (kun til logging)
+            // MAE% = største negative prisbevægelse imod entry
+            // LONG: (entry - low_price) / entry * 100 (hvor meget prisen faldt under entry)
+            // SHORT: (low_price - entry) / entry * 100 (hvor meget prisen steg over entry)
+            const finalLowPrice = newLowPrice;
+            let maeValue: number | null = null;
+            let maePercent: number | null = null;
+            
+            if (finalLowPrice !== null && finalLowPrice !== undefined && isFinite(finalLowPrice)) {
+              if (position.side === 'LONG') {
+                // LONG: adverse = price going down (low < entry)
+                maeValue = Math.max(0, position.entry_price - finalLowPrice);
+                maePercent = (maeValue / position.entry_price) * 100;
+              } else {
+                // SHORT: adverse = price going up (low > entry, where "low" is actually the high)
+                maeValue = Math.max(0, finalLowPrice - position.entry_price);
+                maePercent = (maeValue / position.entry_price) * 100;
+              }
+              console.log(`📊 MAE BEREGNET | ${position.symbol} ${position.side} | entry=${position.entry_price} low=${finalLowPrice} | MAE=${maeValue.toFixed(6)} (${maePercent.toFixed(4)}%)`);
+            }
+            
+            // Tilføj MAE til enhancedSnapshot for export
+            enhancedSnapshot.low_price = finalLowPrice;
+            enhancedSnapshot.mae = maeValue;
+            enhancedSnapshot.mae_percent = maePercent;
+
             const { error: historyError } = await supabaseClient.from('trade_history').insert({
               user_id: position.user_id,
               symbol: position.symbol,
@@ -2113,6 +2163,10 @@ serve(async (req) => {
               open_reason: position.open_reason,
               close_reason: finalCloseReason,
               indicators_snapshot: enhancedSnapshot,
+              // 🔴 MAE FELTER (ren logging, ingen execution impact)
+              mae: maeValue,
+              mae_percent: maePercent,
+              low_price: finalLowPrice,
             });
 
             if (historyError) {

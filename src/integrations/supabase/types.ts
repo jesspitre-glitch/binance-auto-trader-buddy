@@ -412,6 +412,7 @@ export type Database = {
           entry_price: number
           id: string
           indicators_snapshot: Json | null
+          low_price: number | null
           open_reason: string | null
           opened_at: string | null
           peak_price: number | null
@@ -438,6 +439,7 @@ export type Database = {
           entry_price: number
           id?: string
           indicators_snapshot?: Json | null
+          low_price?: number | null
           open_reason?: string | null
           opened_at?: string | null
           peak_price?: number | null
@@ -464,6 +466,7 @@ export type Database = {
           entry_price?: number
           id?: string
           indicators_snapshot?: Json | null
+          low_price?: number | null
           open_reason?: string | null
           opened_at?: string | null
           peak_price?: number | null
@@ -552,6 +555,9 @@ export type Database = {
           exit_price: number
           id: string
           indicators_snapshot: Json | null
+          low_price: number | null
+          mae: number | null
+          mae_percent: number | null
           open_reason: string | null
           opened_at: string
           pnl: number
@@ -571,6 +577,9 @@ export type Database = {
           exit_price: number
           id?: string
           indicators_snapshot?: Json | null
+          low_price?: number | null
+          mae?: number | null
+          mae_percent?: number | null
           open_reason?: string | null
           opened_at: string
           pnl: number
@@ -590,6 +599,9 @@ export type Database = {
           exit_price?: number
           id?: string
           indicators_snapshot?: Json | null
+          low_price?: number | null
+          mae?: number | null
+          mae_percent?: number | null
           open_reason?: string | null
           opened_at?: string
           pnl?: number

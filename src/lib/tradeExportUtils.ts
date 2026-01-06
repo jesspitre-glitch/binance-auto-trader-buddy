@@ -339,7 +339,15 @@ export const formatTradeForExport = (t: any) => {
         : snap.peak_price != null && side === 'short'
           ? +(( +t.entry_price - +snap.peak_price) / +t.entry_price * 100).toFixed(4)
           : null),
-    mae_pct: snap.mae_percent != null ? +Number(snap.mae_percent).toFixed(4) : null,
+    mae_pct: t.mae_percent != null ? +Number(t.mae_percent).toFixed(4) :
+      (snap.mae_percent != null ? +Number(snap.mae_percent).toFixed(4) : 
+        (t.low_price != null && side === 'long'
+          ? +(( +t.entry_price - +t.low_price) / +t.entry_price * 100).toFixed(4)
+          : t.low_price != null && side === 'short'
+            ? +(( +t.low_price - +t.entry_price) / +t.entry_price * 100).toFixed(4)
+            : null)),
+    mae_abs: t.mae != null ? +Number(t.mae).toFixed(6) : (snap.mae != null ? +Number(snap.mae).toFixed(6) : null),
+    low_price: t.low_price ?? snap.low_price ?? null,
 
     // EMA - higher precision for analysis
     EMA_fast: snap.emaFast != null ? +Number(snap.emaFast).toFixed(8) : null,
