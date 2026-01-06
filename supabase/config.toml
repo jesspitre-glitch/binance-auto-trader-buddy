@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.sync-funding-fees]
 verify_jwt = false
+
+[functions.backfill-mae]
+verify_jwt = false
