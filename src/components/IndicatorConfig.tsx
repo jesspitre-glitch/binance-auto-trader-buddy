@@ -626,83 +626,87 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             </div>
           </div>
 
-          <div className="flex items-center justify-between sm:col-span-3">
-            <Label htmlFor="ema_trend_hard_filter">EMA Retnings-Filter</Label>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">{formData.ema_trend_hard_filter ? "Tændt" : "Slukket"}</span>
-              <Switch
-                id="ema_trend_hard_filter"
-                checked={formData.ema_trend_hard_filter}
-                onCheckedChange={(checked) => setFormData({ ...formData, ema_trend_hard_filter: checked })}
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ema_fast">Hurtig EMA</Label>
-            <Input
-              id="ema_fast"
-              type="number"
-              value={formData.ema_fast}
-              onChange={(e) => setFormData({ ...formData, ema_fast: safeParseInt(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Antal bars - lavere = hurtigere reaktion</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ema_medium">Medium EMA</Label>
-            <Input
-              id="ema_medium"
-              type="number"
-              value={formData.ema_medium}
-              onChange={(e) => setFormData({ ...formData, ema_medium: safeParseInt(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Mellemperiode for trend bekræftelse</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ema_slow">Langsom EMA</Label>
-            <Input
-              id="ema_slow"
-              type="number"
-              value={formData.ema_slow}
-              onChange={(e) => setFormData({ ...formData, ema_slow: safeParseInt(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Langsom linje - mere stabil trend</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ema_medium_trend">Medium Trend EMA</Label>
-            <Input
-              id="ema_medium_trend"
-              type="number"
-              value={formData.ema_medium_trend}
-              onChange={(e) => setFormData({ ...formData, ema_medium_trend: safeParseInt(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">EMA for medium trend analyse (f.eks. 50)</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="min_ema_spread_percent">⚠️ Minimum EMA Spread (%) - HARD FILTER</Label>
-            <Input
-              id="min_ema_spread_percent"
-              type="number"
-              step="0.01"
-              value={formData.min_ema_spread_percent}
-              onChange={(e) => setFormData({ ...formData, min_ema_spread_percent: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">
-              <strong className="text-warning">HARD FILTER:</strong> Blokerer trades hvis (Fast-Slow)/Price &lt; dette % (sidelæns marked filter)
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="max_ema_spread_percent">⚠️ Maksimum EMA Spread (%) - HARD FILTER</Label>
-            <Input
-              id="max_ema_spread_percent"
-              type="number"
-              step="0.1"
-              value={formData.max_ema_spread_percent}
-              onChange={(e) => setFormData({ ...formData, max_ema_spread_percent: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">
-              <strong className="text-warning">HARD FILTER:</strong> Blokerer trades hvis (Fast-Slow)/Price &gt; dette % (forhindrer for sene entries i stærkt udvidede trends)
-            </p>
-          </div>
+          {formData.ema_enabled && (
+            <>
+              <div className="flex items-center justify-between sm:col-span-3">
+                <Label htmlFor="ema_trend_hard_filter">EMA Retnings-Filter</Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">{formData.ema_trend_hard_filter ? "Tændt" : "Slukket"}</span>
+                  <Switch
+                    id="ema_trend_hard_filter"
+                    checked={formData.ema_trend_hard_filter}
+                    onCheckedChange={(checked) => setFormData({ ...formData, ema_trend_hard_filter: checked })}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ema_fast">Hurtig EMA</Label>
+                <Input
+                  id="ema_fast"
+                  type="number"
+                  value={formData.ema_fast}
+                  onChange={(e) => setFormData({ ...formData, ema_fast: safeParseInt(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Antal bars - lavere = hurtigere reaktion</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ema_medium">Medium EMA</Label>
+                <Input
+                  id="ema_medium"
+                  type="number"
+                  value={formData.ema_medium}
+                  onChange={(e) => setFormData({ ...formData, ema_medium: safeParseInt(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Mellemperiode for trend bekræftelse</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ema_slow">Langsom EMA</Label>
+                <Input
+                  id="ema_slow"
+                  type="number"
+                  value={formData.ema_slow}
+                  onChange={(e) => setFormData({ ...formData, ema_slow: safeParseInt(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Langsom linje - mere stabil trend</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ema_medium_trend">Medium Trend EMA</Label>
+                <Input
+                  id="ema_medium_trend"
+                  type="number"
+                  value={formData.ema_medium_trend}
+                  onChange={(e) => setFormData({ ...formData, ema_medium_trend: safeParseInt(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">EMA for medium trend analyse (f.eks. 50)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="min_ema_spread_percent">⚠️ Minimum EMA Spread (%) - HARD FILTER</Label>
+                <Input
+                  id="min_ema_spread_percent"
+                  type="number"
+                  step="0.01"
+                  value={formData.min_ema_spread_percent}
+                  onChange={(e) => setFormData({ ...formData, min_ema_spread_percent: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  <strong className="text-warning">HARD FILTER:</strong> Blokerer trades hvis (Fast-Slow)/Price &lt; dette % (sidelæns marked filter)
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="max_ema_spread_percent">⚠️ Maksimum EMA Spread (%) - HARD FILTER</Label>
+                <Input
+                  id="max_ema_spread_percent"
+                  type="number"
+                  step="0.1"
+                  value={formData.max_ema_spread_percent}
+                  onChange={(e) => setFormData({ ...formData, max_ema_spread_percent: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  <strong className="text-warning">HARD FILTER:</strong> Blokerer trades hvis (Fast-Slow)/Price &gt; dette % (forhindrer for sene entries i stærkt udvidede trends)
+                </p>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -732,68 +736,73 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="rsi_period">RSI Periode</Label>
-            <Input
-              id="rsi_period"
-              type="number"
-              value={formData.rsi_period}
-              onChange={(e) => setFormData({ ...formData, rsi_period: safeParseInt(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Antal bars til RSI beregning (standard 14)</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="rsi_min_long">RSI for LONG</Label>
-            <Input
-              id="rsi_min_long"
-              type="number"
-              step="0.01"
-              value={formData.rsi_min_long}
-              onChange={(e) => setFormData({ ...formData, rsi_min_long: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">LONG når RSI krydser OP over denne værdi</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="rsi_max_short">RSI for SHORT</Label>
-            <Input
-              id="rsi_max_short"
-              type="number"
-              step="0.01"
-              value={formData.rsi_max_short}
-              onChange={(e) => setFormData({ ...formData, rsi_max_short: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">SHORT når RSI krydser NED under denne værdi</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="rsi_zone_width">RSI Zone Bredde</Label>
-            <Input
-              id="rsi_zone_width"
-              type="number"
-              step="1"
-              value={formData.rsi_zone_width}
-              onChange={(e) => setFormData({ ...formData, rsi_zone_width: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">
-              {formData.rsi_zone_width === 0 
-                ? "CROSSOVER MODE: Signal kun når RSI krydser grænsen (meget få signaler)" 
-                : `ZONE MODE: LONG zone [${formData.rsi_min_long - formData.rsi_zone_width}-${formData.rsi_min_long + formData.rsi_zone_width}], SHORT zone [${formData.rsi_max_short - formData.rsi_zone_width}-${formData.rsi_max_short + formData.rsi_zone_width}]`}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="rsi_momentum_periods">RSI Momentum Perioder</Label>
-            <Input
-              id="rsi_momentum_periods"
-              type="number"
-              min="2"
-              max="5"
-              step="1"
-              value={formData.rsi_momentum_periods}
-              onChange={(e) => setFormData({ ...formData, rsi_momentum_periods: safeParseInt(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">
-              Antal perioder der checkes for momentum. {formData.rsi_momentum_periods === 2 ? 'RSI₀ > RSI₁' : formData.rsi_momentum_periods === 3 ? 'RSI₀ > RSI₁ > RSI₂' : formData.rsi_momentum_periods === 4 ? 'RSI₀ > RSI₁ > RSI₂ > RSI₃' : 'RSI₀ > RSI₁ > ... > RSIₙ'}
-            </p>
-          </div>
+          
+          {formData.rsi_enabled && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="rsi_period">RSI Periode</Label>
+                <Input
+                  id="rsi_period"
+                  type="number"
+                  value={formData.rsi_period}
+                  onChange={(e) => setFormData({ ...formData, rsi_period: safeParseInt(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Antal bars til RSI beregning (standard 14)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rsi_min_long">RSI for LONG</Label>
+                <Input
+                  id="rsi_min_long"
+                  type="number"
+                  step="0.01"
+                  value={formData.rsi_min_long}
+                  onChange={(e) => setFormData({ ...formData, rsi_min_long: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">LONG når RSI krydser OP over denne værdi</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rsi_max_short">RSI for SHORT</Label>
+                <Input
+                  id="rsi_max_short"
+                  type="number"
+                  step="0.01"
+                  value={formData.rsi_max_short}
+                  onChange={(e) => setFormData({ ...formData, rsi_max_short: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">SHORT når RSI krydser NED under denne værdi</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rsi_zone_width">RSI Zone Bredde</Label>
+                <Input
+                  id="rsi_zone_width"
+                  type="number"
+                  step="1"
+                  value={formData.rsi_zone_width}
+                  onChange={(e) => setFormData({ ...formData, rsi_zone_width: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {formData.rsi_zone_width === 0 
+                    ? "CROSSOVER MODE: Signal kun når RSI krydser grænsen (meget få signaler)" 
+                    : `ZONE MODE: LONG zone [${formData.rsi_min_long - formData.rsi_zone_width}-${formData.rsi_min_long + formData.rsi_zone_width}], SHORT zone [${formData.rsi_max_short - formData.rsi_zone_width}-${formData.rsi_max_short + formData.rsi_zone_width}]`}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rsi_momentum_periods">RSI Momentum Perioder</Label>
+                <Input
+                  id="rsi_momentum_periods"
+                  type="number"
+                  min="2"
+                  max="5"
+                  step="1"
+                  value={formData.rsi_momentum_periods}
+                  onChange={(e) => setFormData({ ...formData, rsi_momentum_periods: safeParseInt(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Antal perioder der checkes for momentum. {formData.rsi_momentum_periods === 2 ? 'RSI₀ > RSI₁' : formData.rsi_momentum_periods === 3 ? 'RSI₀ > RSI₁ > RSI₂' : formData.rsi_momentum_periods === 4 ? 'RSI₀ > RSI₁ > RSI₂ > RSI₃' : 'RSI₀ > RSI₁ > ... > RSIₙ'}
+                </p>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -823,58 +832,63 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="stochrsi_period">RSI Periode</Label>
-            <Input
-              id="stochrsi_period"
-              type="number"
-              value={formData.stochrsi_period}
-              onChange={(e) => setFormData({ ...formData, stochrsi_period: safeParseInt(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">RSI periode for StochRSI (standard 14)</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="stochrsi_k_period">%K Periode</Label>
-            <Input
-              id="stochrsi_k_period"
-              type="number"
-              value={formData.stochrsi_k_period}
-              onChange={(e) => setFormData({ ...formData, stochrsi_k_period: safeParseInt(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">%K smoothing periode (standard 3)</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="stochrsi_d_period">%D Periode</Label>
-            <Input
-              id="stochrsi_d_period"
-              type="number"
-              value={formData.stochrsi_d_period}
-              onChange={(e) => setFormData({ ...formData, stochrsi_d_period: safeParseInt(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">%D smoothing periode (standard 3)</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="stochrsi_overbought">Overkøbt</Label>
-            <Input
-              id="stochrsi_overbought"
-              type="number"
-              step="0.01"
-              value={formData.stochrsi_overbought}
-              onChange={(e) => setFormData({ ...formData, stochrsi_overbought: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Overkøbt niveau (standard 80)</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="stochrsi_oversold">Oversolgt</Label>
-            <Input
-              id="stochrsi_oversold"
-              type="number"
-              step="0.01"
-              value={formData.stochrsi_oversold}
-              onChange={(e) => setFormData({ ...formData, stochrsi_oversold: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Oversolgt niveau (standard 20)</p>
-          </div>
+          
+          {formData.stochrsi_enabled && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="stochrsi_period">RSI Periode</Label>
+                <Input
+                  id="stochrsi_period"
+                  type="number"
+                  value={formData.stochrsi_period}
+                  onChange={(e) => setFormData({ ...formData, stochrsi_period: safeParseInt(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">RSI periode for StochRSI (standard 14)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="stochrsi_k_period">%K Periode</Label>
+                <Input
+                  id="stochrsi_k_period"
+                  type="number"
+                  value={formData.stochrsi_k_period}
+                  onChange={(e) => setFormData({ ...formData, stochrsi_k_period: safeParseInt(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">%K smoothing periode (standard 3)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="stochrsi_d_period">%D Periode</Label>
+                <Input
+                  id="stochrsi_d_period"
+                  type="number"
+                  value={formData.stochrsi_d_period}
+                  onChange={(e) => setFormData({ ...formData, stochrsi_d_period: safeParseInt(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">%D smoothing periode (standard 3)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="stochrsi_overbought">Overkøbt</Label>
+                <Input
+                  id="stochrsi_overbought"
+                  type="number"
+                  step="0.01"
+                  value={formData.stochrsi_overbought}
+                  onChange={(e) => setFormData({ ...formData, stochrsi_overbought: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Overkøbt niveau (standard 80)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="stochrsi_oversold">Oversolgt</Label>
+                <Input
+                  id="stochrsi_oversold"
+                  type="number"
+                  step="0.01"
+                  value={formData.stochrsi_oversold}
+                  onChange={(e) => setFormData({ ...formData, stochrsi_oversold: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Oversolgt niveau (standard 20)</p>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -905,44 +919,49 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="pivot_points_timeframe">Tidsramme</Label>
-            <Select
-              value={formData.pivot_points_timeframe}
-              onValueChange={(value) => setFormData({ ...formData, pivot_points_timeframe: value })}
-            >
-              <SelectTrigger id="pivot_points_timeframe">
-                <SelectValue placeholder="Vælg tidsramme" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1d">Daily</SelectItem>
-                <SelectItem value="1w">Weekly</SelectItem>
-                <SelectItem value="1M">Monthly</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">Beregningsperiode for pivot points</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="pivot_points_lookback">Lookback Periode</Label>
-            <Input
-              id="pivot_points_lookback"
-              type="number"
-              value={formData.pivot_points_lookback}
-              onChange={(e) => setFormData({ ...formData, pivot_points_lookback: safeParseInt(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Antal bars tilbage til pivot beregning (f.eks. 24)</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="pivot_points_near_threshold">Near Threshold</Label>
-            <Input
-              id="pivot_points_near_threshold"
-              type="number"
-              step="0.0001"
-              value={formData.pivot_points_near_threshold}
-              onChange={(e) => setFormData({ ...formData, pivot_points_near_threshold: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Tærskel for "tæt på" pivot (0.002 = 0.2%)</p>
-          </div>
+          
+          {formData.pivot_points_enabled && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="pivot_points_timeframe">Tidsramme</Label>
+                <Select
+                  value={formData.pivot_points_timeframe}
+                  onValueChange={(value) => setFormData({ ...formData, pivot_points_timeframe: value })}
+                >
+                  <SelectTrigger id="pivot_points_timeframe">
+                    <SelectValue placeholder="Vælg tidsramme" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1d">Daily</SelectItem>
+                    <SelectItem value="1w">Weekly</SelectItem>
+                    <SelectItem value="1M">Monthly</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Beregningsperiode for pivot points</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pivot_points_lookback">Lookback Periode</Label>
+                <Input
+                  id="pivot_points_lookback"
+                  type="number"
+                  value={formData.pivot_points_lookback}
+                  onChange={(e) => setFormData({ ...formData, pivot_points_lookback: safeParseInt(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Antal bars tilbage til pivot beregning (f.eks. 24)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pivot_points_near_threshold">Near Threshold</Label>
+                <Input
+                  id="pivot_points_near_threshold"
+                  type="number"
+                  step="0.0001"
+                  value={formData.pivot_points_near_threshold}
+                  onChange={(e) => setFormData({ ...formData, pivot_points_near_threshold: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Tærskel for "tæt på" pivot (0.002 = 0.2%)</p>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -972,101 +991,106 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="macd_fast">Hurtig</Label>
-            <Input
-              id="macd_fast"
-              type="number"
-              value={formData.macd_fast}
-              onChange={(e) => setFormData({ ...formData, macd_fast: safeParseInt(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Hurtig EMA periode (standard 12)</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="macd_slow">Langsom</Label>
-            <Input
-              id="macd_slow"
-              type="number"
-              value={formData.macd_slow}
-              onChange={(e) => setFormData({ ...formData, macd_slow: safeParseInt(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Langsom EMA periode (standard 26)</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="macd_signal">Signal</Label>
-            <Input
-              id="macd_signal"
-              type="number"
-              value={formData.macd_signal}
-              onChange={(e) => setFormData({ ...formData, macd_signal: safeParseInt(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Signal linje EMA (standard 9)</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="macd_histogram_threshold">Histogram Tærskel</Label>
-            <Input
-              id="macd_histogram_threshold"
-              type="number"
-              step="0.000001"
-              value={formData.macd_histogram_threshold}
-              onChange={(e) => setFormData({ ...formData, macd_histogram_threshold: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Min histogram for signal (0 = alle)</p>
-          </div>
+          
+          {formData.macd_enabled && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="macd_fast">Hurtig</Label>
+                <Input
+                  id="macd_fast"
+                  type="number"
+                  value={formData.macd_fast}
+                  onChange={(e) => setFormData({ ...formData, macd_fast: safeParseInt(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Hurtig EMA periode (standard 12)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="macd_slow">Langsom</Label>
+                <Input
+                  id="macd_slow"
+                  type="number"
+                  value={formData.macd_slow}
+                  onChange={(e) => setFormData({ ...formData, macd_slow: safeParseInt(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Langsom EMA periode (standard 26)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="macd_signal">Signal</Label>
+                <Input
+                  id="macd_signal"
+                  type="number"
+                  value={formData.macd_signal}
+                  onChange={(e) => setFormData({ ...formData, macd_signal: safeParseInt(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Signal linje EMA (standard 9)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="macd_histogram_threshold">Histogram Tærskel</Label>
+                <Input
+                  id="macd_histogram_threshold"
+                  type="number"
+                  step="0.000001"
+                  value={formData.macd_histogram_threshold}
+                  onChange={(e) => setFormData({ ...formData, macd_histogram_threshold: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Min histogram for signal (0 = alle)</p>
+              </div>
 
-          <div className="flex items-center justify-between sm:col-span-4">
-            <Label htmlFor="macd_direction_enabled">MACD Retnings-Filter (hård)</Label>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">{formData.macd_direction_enabled ? "Tændt" : "Slukket"}</span>
-              <Switch
-                id="macd_direction_enabled"
-                checked={formData.macd_direction_enabled}
-                onCheckedChange={(checked) => setFormData({...formData, macd_direction_enabled: checked})}
-              />
-            </div>
-          </div>
+              <div className="flex items-center justify-between sm:col-span-4">
+                <Label htmlFor="macd_direction_enabled">MACD Retnings-Filter (hård)</Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">{formData.macd_direction_enabled ? "Tændt" : "Slukket"}</span>
+                  <Switch
+                    id="macd_direction_enabled"
+                    checked={formData.macd_direction_enabled}
+                    onCheckedChange={(checked) => setFormData({...formData, macd_direction_enabled: checked})}
+                  />
+                </div>
+              </div>
 
-          <div className="flex items-center justify-between sm:col-span-4">
-            <Label htmlFor="macd_color_change_hard_filter">MACD Farveskift-Filter (hård)</Label>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">{formData.macd_color_change_hard_filter ? "Tændt" : "Slukket"}</span>
-              <Switch
-                id="macd_color_change_hard_filter"
-                checked={formData.macd_color_change_hard_filter}
-                onCheckedChange={(checked) => setFormData({...formData, macd_color_change_hard_filter: checked})}
-              />
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground sm:col-span-4 -mt-2">
-            Når aktiveret: LONG kun ved skift rød→grøn, SHORT kun ved skift grøn→rød
-          </p>
+              <div className="flex items-center justify-between sm:col-span-4">
+                <Label htmlFor="macd_color_change_hard_filter">MACD Farveskift-Filter (hård)</Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">{formData.macd_color_change_hard_filter ? "Tændt" : "Slukket"}</span>
+                  <Switch
+                    id="macd_color_change_hard_filter"
+                    checked={formData.macd_color_change_hard_filter}
+                    onCheckedChange={(checked) => setFormData({...formData, macd_color_change_hard_filter: checked})}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground sm:col-span-4 -mt-2">
+                Når aktiveret: LONG kun ved skift rød→grøn, SHORT kun ved skift grøn→rød
+              </p>
 
-          <div className="flex items-center justify-between sm:col-span-4">
-            <Label htmlFor="histogram_momentum_enabled">Histogram Momentum Shift (blød)</Label>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">{formData.histogram_momentum_enabled ? "Tændt" : "Slukket"}</span>
-              <Switch
-                id="histogram_momentum_enabled"
-                checked={formData.histogram_momentum_enabled}
-                onCheckedChange={(checked) => setFormData({...formData, histogram_momentum_enabled: checked})}
-              />
-            </div>
-          </div>
+              <div className="flex items-center justify-between sm:col-span-4">
+                <Label htmlFor="histogram_momentum_enabled">Histogram Momentum Shift (blød)</Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">{formData.histogram_momentum_enabled ? "Tændt" : "Slukket"}</span>
+                  <Switch
+                    id="histogram_momentum_enabled"
+                    checked={formData.histogram_momentum_enabled}
+                    onCheckedChange={(checked) => setFormData({...formData, histogram_momentum_enabled: checked})}
+                  />
+                </div>
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="histogram_momentum_periods">Momentum Perioder</Label>
-            <Input
-              id="histogram_momentum_periods"
-              type="number"
-              min="2"
-              max="10"
-              value={formData.histogram_momentum_periods}
-              onChange={(e) => setFormData({...formData, histogram_momentum_periods: safeParseInt(e.target.value)})}
-            />
-            <p className="text-xs text-muted-foreground">
-              Antal perioder til momentum-beregning (2-10)
-            </p>
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="histogram_momentum_periods">Momentum Perioder</Label>
+                <Input
+                  id="histogram_momentum_periods"
+                  type="number"
+                  min="2"
+                  max="10"
+                  value={formData.histogram_momentum_periods}
+                  onChange={(e) => setFormData({...formData, histogram_momentum_periods: safeParseInt(e.target.value)})}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Antal perioder til momentum-beregning (2-10)
+                </p>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -1096,27 +1120,32 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="bb_period">Periode</Label>
-            <Input
-              id="bb_period"
-              type="number"
-              value={formData.bb_period}
-              onChange={(e) => setFormData({ ...formData, bb_period: safeParseInt(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">SMA periode for midt-båndet (standard 20)</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="bb_std_dev">Standard Afvigelse</Label>
-            <Input
-              id="bb_std_dev"
-              type="number"
-              step="0.1"
-              value={formData.bb_std_dev}
-              onChange={(e) => setFormData({ ...formData, bb_std_dev: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Hvor bredt båndet er (standard 2.0)</p>
-          </div>
+          
+          {formData.bb_enabled && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="bb_period">Periode</Label>
+                <Input
+                  id="bb_period"
+                  type="number"
+                  value={formData.bb_period}
+                  onChange={(e) => setFormData({ ...formData, bb_period: safeParseInt(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">SMA periode for midt-båndet (standard 20)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bb_std_dev">Standard Afvigelse</Label>
+                <Input
+                  id="bb_std_dev"
+                  type="number"
+                  step="0.1"
+                  value={formData.bb_std_dev}
+                  onChange={(e) => setFormData({ ...formData, bb_std_dev: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Hvor bredt båndet er (standard 2.0)</p>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -1146,21 +1175,23 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="vwap_period">VWAP Periode (antal candles)</Label>
-            <Input
-              id="vwap_period"
-              type="number"
-              min="10"
-              max="500"
-              value={formData.vwap_period}
-              onChange={(e) => setFormData({ ...formData, vwap_period: safeParseInt(e.target.value) })}
-              disabled={!formData.vwap_enabled}
-            />
-            <p className="text-xs text-muted-foreground">
-              Antal bars til VWAP beregning (standard 50, 288 ≈ 24h på 5m)
-            </p>
-          </div>
+          
+          {formData.vwap_enabled && (
+            <div className="space-y-2">
+              <Label htmlFor="vwap_period">VWAP Periode (antal candles)</Label>
+              <Input
+                id="vwap_period"
+                type="number"
+                min="10"
+                max="500"
+                value={formData.vwap_period}
+                onChange={(e) => setFormData({ ...formData, vwap_period: safeParseInt(e.target.value) })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Antal bars til VWAP beregning (standard 50, 288 ≈ 24h på 5m)
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1190,131 +1221,136 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="atr_period">ATR Periode</Label>
-            <Input
-              id="atr_period"
-              type="number"
-              value={formData.atr_period}
-              onChange={(e) => setFormData({ ...formData, atr_period: safeParseInt(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Antal bars til volatilitet (standard 14)</p>
-          </div>
-          {/* min_atr (raw) er DEPRECATED og skjult - kun ATR% bruges nu */}
-          <div className="space-y-2">
-            <Label htmlFor="min_atr_percent">Minimum ATR (%) – HARD FILTER</Label>
-            <Input
-              id="min_atr_percent"
-              type="number"
-              step="0.01"
-              value={formData.min_atr_percent}
-              onChange={(e) => setFormData({ ...formData, min_atr_percent: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Bloker trade hvis (ATR/Price × 100) &lt; Minimum ATR (%)</p>
-          </div>
           
-          <div className="flex items-center justify-between sm:col-span-3 border-t pt-4">
-            <div>
-              <h4 className="font-semibold">🔄 Adaptive ATR (%)</h4>
-              <p className="text-xs text-muted-foreground">
-                Dynamisk ATR% = Base × (Nuværende Volume% eller ATR%)<br/>
-                Overskriver Minimum ATR% når aktiveret
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">{formData.adaptive_atr_enabled ? "Tændt" : "Slukket"}</span>
-              <Switch
-                id="adaptive_atr_enabled"
-                checked={formData.adaptive_atr_enabled}
-                onCheckedChange={(checked) => setFormData({ ...formData, adaptive_atr_enabled: checked })}
-              />
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="atr_base_min">ATR Base Minimum (%)</Label>
-            <Input
-              id="atr_base_min"
-              type="number"
-              step="0.01"
-              value={formData.atr_base_min}
-              onChange={(e) => setFormData({ ...formData, atr_base_min: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Base værdi for adaptive beregning</p>
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="atr_floor">ATR Floor (%)</Label>
-            <Input
-              id="atr_floor"
-              type="number"
-              step="0.01"
-              value={formData.atr_floor}
-              onChange={(e) => setFormData({ ...formData, atr_floor: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Minimum værdi (floor)</p>
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="atr_ceiling">ATR Ceiling (%)</Label>
-            <Input
-              id="atr_ceiling"
-              type="number"
-              step="0.01"
-              value={formData.atr_ceiling}
-              onChange={(e) => setFormData({ ...formData, atr_ceiling: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Maksimum værdi (ceiling)</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="atr_stop_loss_multiplier">Stop-Loss Multiplikator</Label>
-            <Input
-              id="atr_stop_loss_multiplier"
-              type="number"
-              step="0.1"
-              value={formData.atr_stop_loss_multiplier}
-              onChange={(e) => setFormData({ ...formData, atr_stop_loss_multiplier: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Højere = løsere SL (2.0 = 2×ATR)</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="atr_trailing_stop_multiplier">ATR Trailing Stop Multiplier</Label>
-            <Input
-              id="atr_trailing_stop_multiplier"
-              type="number"
-              step="0.1"
-              value={formData.atr_trailing_stop_multiplier}
-              onChange={(e) => setFormData({ ...formData, atr_trailing_stop_multiplier: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Trailing stop afstand fra peak (× ATR)</p>
-          </div>
+          {formData.atr_enabled && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="atr_period">ATR Periode</Label>
+                <Input
+                  id="atr_period"
+                  type="number"
+                  value={formData.atr_period}
+                  onChange={(e) => setFormData({ ...formData, atr_period: safeParseInt(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Antal bars til volatilitet (standard 14)</p>
+              </div>
+              {/* min_atr (raw) er DEPRECATED og skjult - kun ATR% bruges nu */}
+              <div className="space-y-2">
+                <Label htmlFor="min_atr_percent">Minimum ATR (%) – HARD FILTER</Label>
+                <Input
+                  id="min_atr_percent"
+                  type="number"
+                  step="0.01"
+                  value={formData.min_atr_percent}
+                  onChange={(e) => setFormData({ ...formData, min_atr_percent: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Bloker trade hvis (ATR/Price × 100) &lt; Minimum ATR (%)</p>
+              </div>
+              
+              <div className="flex items-center justify-between sm:col-span-3 border-t pt-4">
+                <div>
+                  <h4 className="font-semibold">🔄 Adaptive ATR (%)</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Dynamisk ATR% = Base × (Nuværende Volume% eller ATR%)<br/>
+                    Overskriver Minimum ATR% når aktiveret
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">{formData.adaptive_atr_enabled ? "Tændt" : "Slukket"}</span>
+                  <Switch
+                    id="adaptive_atr_enabled"
+                    checked={formData.adaptive_atr_enabled}
+                    onCheckedChange={(checked) => setFormData({ ...formData, adaptive_atr_enabled: checked })}
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="atr_base_min">ATR Base Minimum (%)</Label>
+                <Input
+                  id="atr_base_min"
+                  type="number"
+                  step="0.01"
+                  value={formData.atr_base_min}
+                  onChange={(e) => setFormData({ ...formData, atr_base_min: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Base værdi for adaptive beregning</p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="atr_floor">ATR Floor (%)</Label>
+                <Input
+                  id="atr_floor"
+                  type="number"
+                  step="0.01"
+                  value={formData.atr_floor}
+                  onChange={(e) => setFormData({ ...formData, atr_floor: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Minimum værdi (floor)</p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="atr_ceiling">ATR Ceiling (%)</Label>
+                <Input
+                  id="atr_ceiling"
+                  type="number"
+                  step="0.01"
+                  value={formData.atr_ceiling}
+                  onChange={(e) => setFormData({ ...formData, atr_ceiling: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Maksimum værdi (ceiling)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="atr_stop_loss_multiplier">Stop-Loss Multiplikator</Label>
+                <Input
+                  id="atr_stop_loss_multiplier"
+                  type="number"
+                  step="0.1"
+                  value={formData.atr_stop_loss_multiplier}
+                  onChange={(e) => setFormData({ ...formData, atr_stop_loss_multiplier: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Højere = løsere SL (2.0 = 2×ATR)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="atr_trailing_stop_multiplier">ATR Trailing Stop Multiplier</Label>
+                <Input
+                  id="atr_trailing_stop_multiplier"
+                  type="number"
+                  step="0.1"
+                  value={formData.atr_trailing_stop_multiplier}
+                  onChange={(e) => setFormData({ ...formData, atr_trailing_stop_multiplier: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Trailing stop afstand fra peak (× ATR)</p>
+              </div>
 
-          <div className="flex items-center justify-between sm:col-span-3 border-t pt-4">
-            <div className="space-y-1">
-              <Label htmlFor="trailing_stop_activation_enabled">Trailing Stop Aktivering (HARD FILTER)</Label>
-              <p className="text-xs text-muted-foreground">Aktiver kun trailing stop når profit overstiger threshold</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">{formData.trailing_stop_activation_enabled ? "Tændt" : "Slukket"}</span>
-              <Switch
-                id="trailing_stop_activation_enabled"
-                checked={formData.trailing_stop_activation_enabled}
-                onCheckedChange={(checked) => setFormData({...formData, trailing_stop_activation_enabled: checked})}
-              />
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="trailing_stop_activation_atr">Trailing Stop Aktiverings-Threshold (× ATR)</Label>
-            <Input
-              id="trailing_stop_activation_atr"
-              type="number"
-              step="0.1"
-              value={formData.trailing_stop_activation_atr}
-              onChange={(e) => setFormData({ ...formData, trailing_stop_activation_atr: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Trailing stop aktiveres først når profit ≥ (× ATR). Standard: 1.0 ATR</p>
-          </div>
+              <div className="flex items-center justify-between sm:col-span-3 border-t pt-4">
+                <div className="space-y-1">
+                  <Label htmlFor="trailing_stop_activation_enabled">Trailing Stop Aktivering (HARD FILTER)</Label>
+                  <p className="text-xs text-muted-foreground">Aktiver kun trailing stop når profit overstiger threshold</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">{formData.trailing_stop_activation_enabled ? "Tændt" : "Slukket"}</span>
+                  <Switch
+                    id="trailing_stop_activation_enabled"
+                    checked={formData.trailing_stop_activation_enabled}
+                    onCheckedChange={(checked) => setFormData({...formData, trailing_stop_activation_enabled: checked})}
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="trailing_stop_activation_atr">Trailing Stop Aktiverings-Threshold (× ATR)</Label>
+                <Input
+                  id="trailing_stop_activation_atr"
+                  type="number"
+                  step="0.1"
+                  value={formData.trailing_stop_activation_atr}
+                  onChange={(e) => setFormData({ ...formData, trailing_stop_activation_atr: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Trailing stop aktiveres først når profit ≥ (× ATR). Standard: 1.0 ATR</p>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -1734,68 +1770,73 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="adx_period">ADX Periode</Label>
-            <Input
-              id="adx_period"
-              type="number"
-              value={formData.adx_period}
-              onChange={(e) => setFormData({ ...formData, adx_period: safeParseInt(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Antal bars til ADX (standard 14)</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="adx_floor">ADX Min</Label>
-            <Input
-              id="adx_floor"
-              type="number"
-              step="0.1"
-              value={formData.adx_floor}
-              onChange={(e) => setFormData({ ...formData, adx_floor: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Minimum ADX værdi krævet for trade</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="adx_ceiling">ADX Max</Label>
-            <Input
-              id="adx_ceiling"
-              type="number"
-              step="0.1"
-              value={formData.adx_ceiling}
-              onChange={(e) => setFormData({ ...formData, adx_ceiling: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Maksimum ADX værdi tilladt for trade</p>
-          </div>
           
-          <div className="flex items-center justify-between sm:col-span-2 border-t pt-4">
-            <div>
-              <h4 className="font-semibold">🔄 Adaptive ADX</h4>
-              <p className="text-xs text-muted-foreground">
-                Dynamisk ADX = Base × (ATR% / Gennemsnits ATR%)<br/>
-                Overskriver ADX Tærskel når aktiveret
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">{formData.adaptive_adx_enabled ? "Tændt" : "Slukket"}</span>
-              <Switch
-                id="adaptive_adx_enabled"
-                checked={formData.adaptive_adx_enabled}
-                onCheckedChange={(checked) => setFormData({ ...formData, adaptive_adx_enabled: checked })}
-              />
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="adx_base_min">ADX Base (Adaptive)</Label>
-            <Input
-              id="adx_base_min"
-              type="number"
-              step="0.1"
-              value={formData.adx_base_min}
-              onChange={(e) => setFormData({ ...formData, adx_base_min: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Base værdi for adaptive beregning</p>
-          </div>
+          {formData.adx_enabled && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="adx_period">ADX Periode</Label>
+                <Input
+                  id="adx_period"
+                  type="number"
+                  value={formData.adx_period}
+                  onChange={(e) => setFormData({ ...formData, adx_period: safeParseInt(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Antal bars til ADX (standard 14)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="adx_floor">ADX Min</Label>
+                <Input
+                  id="adx_floor"
+                  type="number"
+                  step="0.1"
+                  value={formData.adx_floor}
+                  onChange={(e) => setFormData({ ...formData, adx_floor: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Minimum ADX værdi krævet for trade</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="adx_ceiling">ADX Max</Label>
+                <Input
+                  id="adx_ceiling"
+                  type="number"
+                  step="0.1"
+                  value={formData.adx_ceiling}
+                  onChange={(e) => setFormData({ ...formData, adx_ceiling: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Maksimum ADX værdi tilladt for trade</p>
+              </div>
+              
+              <div className="flex items-center justify-between sm:col-span-2 border-t pt-4">
+                <div>
+                  <h4 className="font-semibold">🔄 Adaptive ADX</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Dynamisk ADX = Base × (ATR% / Gennemsnits ATR%)<br/>
+                    Overskriver ADX Tærskel når aktiveret
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">{formData.adaptive_adx_enabled ? "Tændt" : "Slukket"}</span>
+                  <Switch
+                    id="adaptive_adx_enabled"
+                    checked={formData.adaptive_adx_enabled}
+                    onCheckedChange={(checked) => setFormData({ ...formData, adaptive_adx_enabled: checked })}
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="adx_base_min">ADX Base (Adaptive)</Label>
+                <Input
+                  id="adx_base_min"
+                  type="number"
+                  step="0.1"
+                  value={formData.adx_base_min}
+                  onChange={(e) => setFormData({ ...formData, adx_base_min: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Base værdi for adaptive beregning</p>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -1825,29 +1866,35 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="volume_avg_period">Volumen Gennemsnit Periode</Label>
-            <Input
-              id="volume_avg_period"
-              type="number"
-              value={formData.volume_avg_period}
-              onChange={(e) => setFormData({ ...formData, volume_avg_period: safeParseInt(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">Antal bars for gennemsnit</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="volume_multiplier">Volumen Multiplier</Label>
-            <Input
-              id="volume_multiplier"
-              type="number"
-              step="0.1"
-              value={formData.volume_multiplier}
-              onChange={(e) => setFormData({ ...formData, volume_multiplier: safeParseFloat(e.target.value) })}
-            />
-            <p className="text-xs text-muted-foreground">
-              Kræver vol &gt; avg×multiplier
-            </p>
-          </div>
+          
+          {formData.volume_enabled && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="volume_avg_period">Volumen Gennemsnit Periode</Label>
+                <Input
+                  id="volume_avg_period"
+                  type="number"
+                  value={formData.volume_avg_period}
+                  onChange={(e) => setFormData({ ...formData, volume_avg_period: safeParseInt(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Antal bars for gennemsnit</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="volume_multiplier">Volumen Multiplier</Label>
+                <Input
+                  id="volume_multiplier"
+                  type="number"
+                  step="0.1"
+                  value={formData.volume_multiplier}
+                  onChange={(e) => setFormData({ ...formData, volume_multiplier: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Kræver vol &gt; avg×multiplier
+                </p>
+              </div>
+            </>
+          )}
+          
           <div className="space-y-2 sm:col-span-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="signal_conditions_required">Signal Betingelser Påkrævet (Soft Rules)</Label>
