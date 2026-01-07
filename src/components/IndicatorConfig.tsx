@@ -889,6 +889,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                   step="0.01"
                   value={formData.stochrsi_overbought_k}
                   onChange={(e) => setFormData({ ...formData, stochrsi_overbought_k: safeParseFloat(e.target.value) })}
+                  onFocus={(e) => e.target.select()}
                 />
                 <p className="text-xs text-muted-foreground">K ≥ denne værdi for SHORT</p>
               </div>
@@ -900,6 +901,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                   step="0.01"
                   value={formData.stochrsi_overbought_d}
                   onChange={(e) => setFormData({ ...formData, stochrsi_overbought_d: safeParseFloat(e.target.value) })}
+                  onFocus={(e) => e.target.select()}
                 />
                 <p className="text-xs text-muted-foreground">D ≥ denne værdi for SHORT</p>
               </div>
@@ -916,6 +918,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                   step="0.01"
                   value={formData.stochrsi_oversold_k}
                   onChange={(e) => setFormData({ ...formData, stochrsi_oversold_k: safeParseFloat(e.target.value) })}
+                  onFocus={(e) => e.target.select()}
                 />
                 <p className="text-xs text-muted-foreground">K ≤ denne værdi for LONG</p>
               </div>
@@ -927,6 +930,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                   step="0.01"
                   value={formData.stochrsi_oversold_d}
                   onChange={(e) => setFormData({ ...formData, stochrsi_oversold_d: safeParseFloat(e.target.value) })}
+                  onFocus={(e) => e.target.select()}
                 />
                 <p className="text-xs text-muted-foreground">D ≤ denne værdi for LONG</p>
               </div>
