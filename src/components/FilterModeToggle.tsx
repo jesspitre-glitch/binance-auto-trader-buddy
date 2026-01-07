@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ShieldAlert, Zap } from "lucide-react";
 
 interface FilterModeToggleProps {
@@ -9,12 +9,12 @@ interface FilterModeToggleProps {
 
 export const FilterModeToggle = ({ isHard, onChange, disabled }: FilterModeToggleProps) => {
   return (
-    <Button
+    <Badge
       variant={isHard ? "destructive" : "secondary"}
-      size="sm"
-      onClick={() => onChange(!isHard)}
-      disabled={disabled}
-      className="h-7 px-2 text-xs gap-1"
+      className={`cursor-pointer px-2.5 py-1 text-xs gap-1 select-none transition-colors ${
+        disabled ? "opacity-50 cursor-not-allowed" : "hover:opacity-80"
+      } ${isHard ? "bg-destructive text-destructive-foreground" : "bg-muted text-muted-foreground"}`}
+      onClick={() => !disabled && onChange(!isHard)}
       title={isHard ? "Hard Filter: Blokerer trade hvis ikke opfyldt" : "Soft Condition: Bidrager til signal score"}
     >
       {isHard ? (
@@ -28,6 +28,6 @@ export const FilterModeToggle = ({ isHard, onChange, disabled }: FilterModeToggl
           Soft
         </>
       )}
-    </Button>
+    </Badge>
   );
 };
