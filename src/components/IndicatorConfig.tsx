@@ -62,6 +62,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     stochrsi_d_period: config?.stochrsi_d_period || 3,
     stochrsi_overbought: config?.stochrsi_overbought || 80,
     stochrsi_oversold: config?.stochrsi_oversold || 20,
+    stochrsi_overbought_k: config?.stochrsi_overbought_k ?? config?.stochrsi_overbought ?? 80,
+    stochrsi_overbought_d: config?.stochrsi_overbought_d ?? config?.stochrsi_overbought ?? 80,
+    stochrsi_oversold_k: config?.stochrsi_oversold_k ?? config?.stochrsi_oversold ?? 20,
+    stochrsi_oversold_d: config?.stochrsi_oversold_d ?? config?.stochrsi_oversold ?? 20,
     
     // Pivot Points
     pivot_points_enabled: config?.pivot_points_enabled !== undefined ? config?.pivot_points_enabled : true,
@@ -209,6 +213,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       stochrsi_d_period: config.stochrsi_d_period ?? 3,
       stochrsi_overbought: config.stochrsi_overbought ?? 80,
       stochrsi_oversold: config.stochrsi_oversold ?? 20,
+      stochrsi_overbought_k: config.stochrsi_overbought_k ?? config.stochrsi_overbought ?? 80,
+      stochrsi_overbought_d: config.stochrsi_overbought_d ?? config.stochrsi_overbought ?? 80,
+      stochrsi_oversold_k: config.stochrsi_oversold_k ?? config.stochrsi_oversold ?? 20,
+      stochrsi_oversold_d: config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20,
       // Pivot Points
       pivot_points_enabled: config.pivot_points_enabled !== undefined ? config.pivot_points_enabled : true,
       pivot_points_timeframe: config.pivot_points_timeframe ?? "1d",
@@ -338,6 +346,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       stochrsi_d_period: config.stochrsi_d_period ?? 3,
       stochrsi_overbought: config.stochrsi_overbought ?? 80,
       stochrsi_oversold: config.stochrsi_oversold ?? 20,
+      stochrsi_overbought_k: config.stochrsi_overbought_k ?? config.stochrsi_overbought ?? 80,
+      stochrsi_overbought_d: config.stochrsi_overbought_d ?? config.stochrsi_overbought ?? 80,
+      stochrsi_oversold_k: config.stochrsi_oversold_k ?? config.stochrsi_oversold ?? 20,
+      stochrsi_oversold_d: config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20,
       pivot_points_enabled: config.pivot_points_enabled !== undefined ? config.pivot_points_enabled : true,
       pivot_points_timeframe: config.pivot_points_timeframe ?? "1d",
       pivot_points_lookback: config.pivot_points_lookback ?? 24,
@@ -865,27 +877,58 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 />
                 <p className="text-xs text-muted-foreground">%D smoothing periode (standard 3)</p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="stochrsi_overbought">Overkøbt</Label>
-                <Input
-                  id="stochrsi_overbought"
-                  type="number"
-                  step="0.01"
-                  value={formData.stochrsi_overbought}
-                  onChange={(e) => setFormData({ ...formData, stochrsi_overbought: safeParseFloat(e.target.value) })}
-                />
-                <p className="text-xs text-muted-foreground">Overkøbt niveau (standard 80)</p>
+              {/* Overbought thresholds for SHORT */}
+              <div className="sm:col-span-4 border-t pt-4 mt-2">
+                <p className="text-sm font-medium text-muted-foreground mb-3">Overkøbt (SHORT tærskler)</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="stochrsi_oversold">Oversolgt</Label>
+                <Label htmlFor="stochrsi_overbought_k">Overkøbt K</Label>
                 <Input
-                  id="stochrsi_oversold"
+                  id="stochrsi_overbought_k"
                   type="number"
                   step="0.01"
-                  value={formData.stochrsi_oversold}
-                  onChange={(e) => setFormData({ ...formData, stochrsi_oversold: safeParseFloat(e.target.value) })}
+                  value={formData.stochrsi_overbought_k}
+                  onChange={(e) => setFormData({ ...formData, stochrsi_overbought_k: safeParseFloat(e.target.value) })}
                 />
-                <p className="text-xs text-muted-foreground">Oversolgt niveau (standard 20)</p>
+                <p className="text-xs text-muted-foreground">K ≥ denne værdi for SHORT</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="stochrsi_overbought_d">Overkøbt D</Label>
+                <Input
+                  id="stochrsi_overbought_d"
+                  type="number"
+                  step="0.01"
+                  value={formData.stochrsi_overbought_d}
+                  onChange={(e) => setFormData({ ...formData, stochrsi_overbought_d: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">D ≥ denne værdi for SHORT</p>
+              </div>
+              
+              {/* Oversold thresholds for LONG */}
+              <div className="sm:col-span-4 border-t pt-4 mt-2">
+                <p className="text-sm font-medium text-muted-foreground mb-3">Oversolgt (LONG tærskler)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="stochrsi_oversold_k">Oversolgt K</Label>
+                <Input
+                  id="stochrsi_oversold_k"
+                  type="number"
+                  step="0.01"
+                  value={formData.stochrsi_oversold_k}
+                  onChange={(e) => setFormData({ ...formData, stochrsi_oversold_k: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">K ≤ denne værdi for LONG</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="stochrsi_oversold_d">Oversolgt D</Label>
+                <Input
+                  id="stochrsi_oversold_d"
+                  type="number"
+                  step="0.01"
+                  value={formData.stochrsi_oversold_d}
+                  onChange={(e) => setFormData({ ...formData, stochrsi_oversold_d: safeParseFloat(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">D ≤ denne værdi for LONG</p>
               </div>
             </>
           )}
@@ -2278,8 +2321,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                     `  Periode:              ${formData.stochrsi_period}`,
                     `  K Periode:            ${formData.stochrsi_k_period}`,
                     `  D Periode:            ${formData.stochrsi_d_period}`,
-                    `  Overbought:           ${formData.stochrsi_overbought}`,
-                    `  Oversold:             ${formData.stochrsi_oversold}`,
+                    `  Overbought K:         ${formData.stochrsi_overbought_k}`,
+                    `  Overbought D:         ${formData.stochrsi_overbought_d}`,
+                    `  Oversold K:           ${formData.stochrsi_oversold_k}`,
+                    `  Oversold D:           ${formData.stochrsi_oversold_d}`,
                     "",
                   ]
                 : []),
@@ -2329,8 +2374,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                     `   Periode:             ${formData.stochrsi_period}`,
                     `   K Periode:           ${formData.stochrsi_k_period}`,
                     `   D Periode:           ${formData.stochrsi_d_period}`,
-                    `   Overbought:          ${formData.stochrsi_overbought}`,
-                    `   Oversold:            ${formData.stochrsi_oversold}`,
+                    `   Overbought K:        ${formData.stochrsi_overbought_k}`,
+                    `   Overbought D:        ${formData.stochrsi_overbought_d}`,
+                    `   Oversold K:          ${formData.stochrsi_oversold_k}`,
+                    `   Oversold D:          ${formData.stochrsi_oversold_d}`,
                     "",
                   ]
                 : []),

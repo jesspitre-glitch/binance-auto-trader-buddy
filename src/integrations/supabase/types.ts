@@ -154,7 +154,11 @@ export type Database = {
           stochrsi_hard_filter: boolean | null
           stochrsi_k_period: number | null
           stochrsi_overbought: number | null
+          stochrsi_overbought_d: number | null
+          stochrsi_overbought_k: number | null
           stochrsi_oversold: number | null
+          stochrsi_oversold_d: number | null
+          stochrsi_oversold_k: number | null
           stochrsi_period: number | null
           trailing_stop_activation_atr: number | null
           trailing_stop_activation_enabled: boolean | null
@@ -272,7 +276,11 @@ export type Database = {
           stochrsi_hard_filter?: boolean | null
           stochrsi_k_period?: number | null
           stochrsi_overbought?: number | null
+          stochrsi_overbought_d?: number | null
+          stochrsi_overbought_k?: number | null
           stochrsi_oversold?: number | null
+          stochrsi_oversold_d?: number | null
+          stochrsi_oversold_k?: number | null
           stochrsi_period?: number | null
           trailing_stop_activation_atr?: number | null
           trailing_stop_activation_enabled?: boolean | null
@@ -390,7 +398,11 @@ export type Database = {
           stochrsi_hard_filter?: boolean | null
           stochrsi_k_period?: number | null
           stochrsi_overbought?: number | null
+          stochrsi_overbought_d?: number | null
+          stochrsi_overbought_k?: number | null
           stochrsi_oversold?: number | null
+          stochrsi_oversold_d?: number | null
+          stochrsi_oversold_k?: number | null
           stochrsi_period?: number | null
           trailing_stop_activation_atr?: number | null
           trailing_stop_activation_enabled?: boolean | null
