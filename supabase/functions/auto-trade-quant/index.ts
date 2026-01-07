@@ -28,6 +28,10 @@ interface IndicatorConfig {
   stochrsi_d_period: number;
   stochrsi_overbought: number;
   stochrsi_oversold: number;
+  stochrsi_overbought_k?: number;
+  stochrsi_overbought_d?: number;
+  stochrsi_oversold_k?: number;
+  stochrsi_oversold_d?: number;
   stochrsi_hard_filter?: boolean;
   pivot_points_enabled: boolean;
   pivot_points_timeframe: string;
@@ -1309,10 +1313,21 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   
   // StochRSI (hvis enabled) - kan være HARD eller SOFT filter baseret på config
   if (config.stochrsi_enabled && stochRSI) {
-    // LONG: BÅDE K og D skal være under oversold niveau
-    const stochRSILong = stochRSI.k < config.stochrsi_oversold && stochRSI.d < config.stochrsi_oversold;
-    // SHORT: BÅDE K og D skal være over overbought niveau
-    const stochRSIShort = stochRSI.k > config.stochrsi_overbought && stochRSI.d > config.stochrsi_overbought;
+    // Get thresholds - use new K/D specific thresholds, falling back to legacy values
+    const oversoldK = config.stochrsi_oversold_k ?? config.stochrsi_oversold ?? 20;
+    const oversoldD = config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20;
+    const overboughtK = config.stochrsi_overbought_k ?? config.stochrsi_overbought ?? 80;
+    const overboughtD = config.stochrsi_overbought_d ?? config.stochrsi_overbought ?? 80;
+    
+    // LONG: K <= oversold_k AND D <= oversold_d
+    const stochRSILong = stochRSI.k <= oversoldK && stochRSI.d <= oversoldD;
+    // SHORT: K >= overbought_k AND D >= overbought_d
+    const stochRSIShort = stochRSI.k >= overboughtK && stochRSI.d >= overboughtD;
+    
+    // Detailed logging for StochRSI evaluation
+    console.log(`   📊 StochRSI Values: K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)}`);
+    console.log(`   📊 StochRSI LONG Thresholds: K<=${oversoldK}, D<=${oversoldD} → K_pass=${stochRSI.k <= oversoldK}, D_pass=${stochRSI.d <= oversoldD} → LONG=${stochRSILong ? '✅ PASS' : '❌ FAIL'}`);
+    console.log(`   📊 StochRSI SHORT Thresholds: K>=${overboughtK}, D>=${overboughtD} → K_pass=${stochRSI.k >= overboughtK}, D_pass=${stochRSI.d >= overboughtD} → SHORT=${stochRSIShort ? '✅ PASS' : '❌ FAIL'}`);
     
     // Gem i filterStatus.hard for hard filter evaluering
     filterStatus.hard.stochrsi.long = stochRSILong;
@@ -1324,11 +1339,11 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       // For hard filter: mindst én retning skal passe (K AND D begge i zone)
       if (!stochRSILong && !stochRSIShort) {
         filterStatus.hard.stochrsi.passed = false;
-        filterStatus.hard.stochrsi.reason = `K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)} - kræver K AND D begge <${config.stochrsi_oversold} (LONG) eller >${config.stochrsi_overbought} (SHORT)`;
+        filterStatus.hard.stochrsi.reason = `K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)} - LONG kræver K<=${oversoldK} AND D<=${oversoldD}, SHORT kræver K>=${overboughtK} AND D>=${overboughtD}`;
       }
-      console.log(`   📊 StochRSI (HARD): K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)} - Long: ${stochRSILong ? '✅' : '❌'} (K<${config.stochrsi_oversold} AND D<${config.stochrsi_oversold}), Short: ${stochRSIShort ? '✅' : '❌'} (K>${config.stochrsi_overbought} AND D>${config.stochrsi_overbought})`);
+      console.log(`   📊 StochRSI (HARD): Long: ${stochRSILong ? '✅' : '❌'}, Short: ${stochRSIShort ? '✅' : '❌'}`);
     } else {
-      console.log(`   📊 StochRSI (SOFT): K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)} - Long: ${stochRSILong ? '✅' : '❌'}, Short: ${stochRSIShort ? '✅' : '❌'}`);
+      console.log(`   📊 StochRSI (SOFT): Long: ${stochRSILong ? '✅' : '❌'}, Short: ${stochRSIShort ? '✅' : '❌'}`);
       
       // 🔴 FIX: Kun tilføj til soft conditions hvis det IKKE er hard filter
       // Ellers tælles det dobbelt (som hard OG soft)
@@ -1543,15 +1558,20 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   let stochrsiHardPassed = true;
   if (config.stochrsi_enabled && config.stochrsi_hard_filter === true) {
     // Tjek retningsspecifikt: LONG skal have oversold, SHORT skal have overbought
+    const oversoldK = config.stochrsi_oversold_k ?? config.stochrsi_oversold ?? 20;
+    const oversoldD = config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20;
+    const overboughtK = config.stochrsi_overbought_k ?? config.stochrsi_overbought ?? 80;
+    const overboughtD = config.stochrsi_overbought_d ?? config.stochrsi_overbought ?? 80;
+    
     if (finalSide === 'LONG') {
       stochrsiHardPassed = filterStatus.hard.stochrsi.long === true;
       if (!stochrsiHardPassed) {
-        console.log(`   🚫 StochRSI HARD BLOKERER LONG: K=${filterStatus.hard.stochrsi.value} - kræver K<${config.stochrsi_oversold} AND D<${config.stochrsi_oversold}`);
+        console.log(`   🚫 StochRSI HARD BLOKERER LONG: ${filterStatus.hard.stochrsi.value} - kræver K<=${oversoldK} AND D<=${oversoldD}`);
       }
     } else if (finalSide === 'SHORT') {
       stochrsiHardPassed = filterStatus.hard.stochrsi.short === true;
       if (!stochrsiHardPassed) {
-        console.log(`   🚫 StochRSI HARD BLOKERER SHORT: K=${filterStatus.hard.stochrsi.value} - kræver K>${config.stochrsi_overbought} AND D>${config.stochrsi_overbought}`);
+        console.log(`   🚫 StochRSI HARD BLOKERER SHORT: ${filterStatus.hard.stochrsi.value} - kræver K>=${overboughtK} AND D>=${overboughtD}`);
       }
     }
     // For NONE signal (ingen retning bestemt endnu), tjek om mindst én retning er mulig
@@ -1607,12 +1627,16 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   
   // STOCHRSI DETALJERET
   if (config.stochrsi_enabled && stochRSI) {
+    const osK = config.stochrsi_oversold_k ?? config.stochrsi_oversold ?? 20;
+    const osD = config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20;
+    const obK = config.stochrsi_overbought_k ?? config.stochrsi_overbought ?? 80;
+    const obD = config.stochrsi_overbought_d ?? config.stochrsi_overbought ?? 80;
     console.log(`📉 StochRSI:`);
     console.log(`   K Value: ${stochRSI.k.toFixed(2)}, D Value: ${stochRSI.d.toFixed(2)}`);
-    console.log(`   LONG threshold (oversolgt): < ${config.stochrsi_oversold}`);
-    console.log(`   SHORT threshold (overkøbt): > ${config.stochrsi_overbought}`);
-    console.log(`   LONG (${stochRSI.k.toFixed(2)} < ${config.stochrsi_oversold}): ${conditionDetails.stochRSI.long ? '✅ TRUE' : '❌ FALSE'}`);
-    console.log(`   SHORT (${stochRSI.k.toFixed(2)} > ${config.stochrsi_overbought}): ${conditionDetails.stochRSI.short ? '✅ TRUE' : '❌ FALSE'}\n`);
+    console.log(`   LONG thresholds: K<=${osK}, D<=${osD}`);
+    console.log(`   SHORT thresholds: K>=${obK}, D>=${obD}`);
+    console.log(`   LONG (K=${stochRSI.k.toFixed(2)}<=${osK} && D=${stochRSI.d.toFixed(2)}<=${osD}): ${conditionDetails.stochRSI.long ? '✅ TRUE' : '❌ FALSE'}`);
+    console.log(`   SHORT (K=${stochRSI.k.toFixed(2)}>=${obK} && D=${stochRSI.d.toFixed(2)}>=${obD}): ${conditionDetails.stochRSI.short ? '✅ TRUE' : '❌ FALSE'}\n`);
   } else {
     console.log(`📉 StochRSI: ⚪ DISABLED\n`);
   }
@@ -2460,12 +2484,18 @@ serve(async (req) => {
             const stochShort = fs?.hard?.stochrsi?.short;
             const stochK = analysis.indicators?.stochRSI_k;
             
+            const osK = config.stochrsi_oversold_k ?? config.stochrsi_oversold ?? 20;
+            const osD = config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20;
+            const obK = config.stochrsi_overbought_k ?? config.stochrsi_overbought ?? 80;
+            const obD = config.stochrsi_overbought_d ?? config.stochrsi_overbought ?? 80;
+            const stochD = analysis.indicators?.stochRSI_d;
+            
             if (signal === 'LONG' && stochLong !== true) {
               gateBlocked = true;
-              blockReason = `REJECT: STOCHRSI_ZONE_FAILED_LONG → K=${stochK?.toFixed(2)} >= ${config.stochrsi_oversold} (ikke oversolgt)`;
+              blockReason = `REJECT: STOCHRSI_ZONE_FAILED_LONG → K=${stochK?.toFixed(2)}, D=${stochD?.toFixed(2)} - kræver K<=${osK} AND D<=${osD}`;
             } else if (signal === 'SHORT' && stochShort !== true) {
               gateBlocked = true;
-              blockReason = `REJECT: STOCHRSI_ZONE_FAILED_SHORT → K=${stochK?.toFixed(2)} <= ${config.stochrsi_overbought} (ikke overkøbt)`;
+              blockReason = `REJECT: STOCHRSI_ZONE_FAILED_SHORT → K=${stochK?.toFixed(2)}, D=${stochD?.toFixed(2)} - kræver K>=${obK} AND D>=${obD}`;
             }
           }
           
