@@ -880,59 +880,63 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               {/* Overbought thresholds for SHORT */}
               <div className="sm:col-span-4 border-t pt-4 mt-2">
                 <p className="text-sm font-medium text-muted-foreground mb-3">Overkøbt (SHORT tærskler)</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="stochrsi_overbought_k">Overkøbt K</Label>
-                <Input
-                  id="stochrsi_overbought_k"
-                  type="number"
-                  step="0.01"
-                  value={formData.stochrsi_overbought_k}
-                  onChange={(e) => setFormData({ ...formData, stochrsi_overbought_k: safeParseFloat(e.target.value) })}
-                  onFocus={(e) => e.target.select()}
-                />
-                <p className="text-xs text-muted-foreground">K ≥ denne værdi for SHORT</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="stochrsi_overbought_d">Overkøbt D</Label>
-                <Input
-                  id="stochrsi_overbought_d"
-                  type="number"
-                  step="0.01"
-                  value={formData.stochrsi_overbought_d}
-                  onChange={(e) => setFormData({ ...formData, stochrsi_overbought_d: safeParseFloat(e.target.value) })}
-                  onFocus={(e) => e.target.select()}
-                />
-                <p className="text-xs text-muted-foreground">D ≥ denne værdi for SHORT</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="stochrsi_overbought_k">Overkøbt K</Label>
+                    <Input
+                      id="stochrsi_overbought_k"
+                      type="number"
+                      step="0.01"
+                      value={formData.stochrsi_overbought_k}
+                      onChange={(e) => setFormData({ ...formData, stochrsi_overbought_k: safeParseFloat(e.target.value) })}
+                      onFocus={(e) => e.target.select()}
+                    />
+                    <p className="text-xs text-muted-foreground">K ≥ denne værdi for SHORT</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="stochrsi_overbought_d">Overkøbt D</Label>
+                    <Input
+                      id="stochrsi_overbought_d"
+                      type="number"
+                      step="0.01"
+                      value={formData.stochrsi_overbought_d}
+                      onChange={(e) => setFormData({ ...formData, stochrsi_overbought_d: safeParseFloat(e.target.value) })}
+                      onFocus={(e) => e.target.select()}
+                    />
+                    <p className="text-xs text-muted-foreground">D ≥ denne værdi for SHORT</p>
+                  </div>
+                </div>
               </div>
               
               {/* Oversold thresholds for LONG */}
               <div className="sm:col-span-4 border-t pt-4 mt-2">
                 <p className="text-sm font-medium text-muted-foreground mb-3">Oversolgt (LONG tærskler)</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="stochrsi_oversold_k">Oversolgt K</Label>
-                <Input
-                  id="stochrsi_oversold_k"
-                  type="number"
-                  step="0.01"
-                  value={formData.stochrsi_oversold_k}
-                  onChange={(e) => setFormData({ ...formData, stochrsi_oversold_k: safeParseFloat(e.target.value) })}
-                  onFocus={(e) => e.target.select()}
-                />
-                <p className="text-xs text-muted-foreground">K ≤ denne værdi for LONG</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="stochrsi_oversold_d">Oversolgt D</Label>
-                <Input
-                  id="stochrsi_oversold_d"
-                  type="number"
-                  step="0.01"
-                  value={formData.stochrsi_oversold_d}
-                  onChange={(e) => setFormData({ ...formData, stochrsi_oversold_d: safeParseFloat(e.target.value) })}
-                  onFocus={(e) => e.target.select()}
-                />
-                <p className="text-xs text-muted-foreground">D ≤ denne værdi for LONG</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="stochrsi_oversold_k">Oversolgt K</Label>
+                    <Input
+                      id="stochrsi_oversold_k"
+                      type="number"
+                      step="0.01"
+                      value={formData.stochrsi_oversold_k}
+                      onChange={(e) => setFormData({ ...formData, stochrsi_oversold_k: safeParseFloat(e.target.value) })}
+                      onFocus={(e) => e.target.select()}
+                    />
+                    <p className="text-xs text-muted-foreground">K ≤ denne værdi for LONG</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="stochrsi_oversold_d">Oversolgt D</Label>
+                    <Input
+                      id="stochrsi_oversold_d"
+                      type="number"
+                      step="0.01"
+                      value={formData.stochrsi_oversold_d}
+                      onChange={(e) => setFormData({ ...formData, stochrsi_oversold_d: safeParseFloat(e.target.value) })}
+                      onFocus={(e) => e.target.select()}
+                    />
+                    <p className="text-xs text-muted-foreground">D ≤ denne værdi for LONG</p>
+                  </div>
+                </div>
               </div>
             </>
           )}
