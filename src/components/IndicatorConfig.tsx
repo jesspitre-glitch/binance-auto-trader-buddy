@@ -66,6 +66,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     stochrsi_overbought_d: config?.stochrsi_overbought_d ?? config?.stochrsi_overbought ?? 80,
     stochrsi_oversold_k: config?.stochrsi_oversold_k ?? config?.stochrsi_oversold ?? 20,
     stochrsi_oversold_d: config?.stochrsi_oversold_d ?? config?.stochrsi_oversold ?? 20,
+    stochrsi_short_mode: config?.stochrsi_short_mode || 'REVERSAL_OVERBOUGHT',
+    rollover_d_min_short: config?.rollover_d_min_short ?? 50,
     
     // Pivot Points
     pivot_points_enabled: config?.pivot_points_enabled !== undefined ? config?.pivot_points_enabled : true,
@@ -217,6 +219,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       stochrsi_overbought_d: config.stochrsi_overbought_d ?? config.stochrsi_overbought ?? 80,
       stochrsi_oversold_k: config.stochrsi_oversold_k ?? config.stochrsi_oversold ?? 20,
       stochrsi_oversold_d: config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20,
+      stochrsi_short_mode: config.stochrsi_short_mode ?? 'REVERSAL_OVERBOUGHT',
+      rollover_d_min_short: config.rollover_d_min_short ?? 50,
       // Pivot Points
       pivot_points_enabled: config.pivot_points_enabled !== undefined ? config.pivot_points_enabled : true,
       pivot_points_timeframe: config.pivot_points_timeframe ?? "1d",
@@ -350,6 +354,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       stochrsi_overbought_d: config.stochrsi_overbought_d ?? config.stochrsi_overbought ?? 80,
       stochrsi_oversold_k: config.stochrsi_oversold_k ?? config.stochrsi_oversold ?? 20,
       stochrsi_oversold_d: config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20,
+      stochrsi_short_mode: config.stochrsi_short_mode ?? 'REVERSAL_OVERBOUGHT',
+      rollover_d_min_short: config.rollover_d_min_short ?? 50,
       pivot_points_enabled: config.pivot_points_enabled !== undefined ? config.pivot_points_enabled : true,
       pivot_points_timeframe: config.pivot_points_timeframe ?? "1d",
       pivot_points_lookback: config.pivot_points_lookback ?? 24,
@@ -877,40 +883,83 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 />
                 <p className="text-xs text-muted-foreground">%D smoothing periode (standard 3)</p>
               </div>
-              {/* Overbought thresholds for SHORT */}
-              <div className="sm:col-span-4 border-t pt-4 mt-2">
-                <p className="text-sm font-medium text-muted-foreground mb-3">Overkøbt (SHORT tærskler)</p>
+              {/* StochRSI SHORT Mode */}
+              <div className="sm:col-span-5 border-t pt-4 mt-2">
+                <p className="text-sm font-medium text-muted-foreground mb-3">SHORT Signal Mode</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="stochrsi_overbought_k">Overkøbt K</Label>
-                    <Input
-                      id="stochrsi_overbought_k"
-                      type="number"
-                      step="0.01"
-                      value={formData.stochrsi_overbought_k}
-                      onChange={(e) => setFormData({ ...formData, stochrsi_overbought_k: safeParseFloat(e.target.value) })}
-                      onFocus={(e) => e.target.select()}
-                    />
-                    <p className="text-xs text-muted-foreground">K ≥ denne værdi for SHORT</p>
+                    <Label htmlFor="stochrsi_short_mode">StochRSI SHORT Mode</Label>
+                    <Select
+                      value={formData.stochrsi_short_mode}
+                      onValueChange={(value) => setFormData({ ...formData, stochrsi_short_mode: value })}
+                    >
+                      <SelectTrigger id="stochrsi_short_mode">
+                        <SelectValue placeholder="Vælg SHORT mode" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="REVERSAL_OVERBOUGHT">Reversal (Overbought)</SelectItem>
+                        <SelectItem value="CONTINUATION_OVERSOLD">Continuation (Oversold)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {formData.stochrsi_short_mode === 'REVERSAL_OVERBOUGHT' 
+                        ? 'SHORT når K/D er overbought (reversal)' 
+                        : 'SHORT når K/D er oversold (continuation i bear-trend)'}
+                    </p>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="stochrsi_overbought_d">Overkøbt D</Label>
-                    <Input
-                      id="stochrsi_overbought_d"
-                      type="number"
-                      step="0.01"
-                      value={formData.stochrsi_overbought_d}
-                      onChange={(e) => setFormData({ ...formData, stochrsi_overbought_d: safeParseFloat(e.target.value) })}
-                      onFocus={(e) => e.target.select()}
-                    />
-                    <p className="text-xs text-muted-foreground">D ≥ denne værdi for SHORT</p>
-                  </div>
+                  {formData.stochrsi_short_mode === 'REVERSAL_OVERBOUGHT' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="rollover_d_min_short">Rollover D Min (SHORT)</Label>
+                      <Input
+                        id="rollover_d_min_short"
+                        type="number"
+                        step="1"
+                        value={formData.rollover_d_min_short}
+                        onChange={(e) => setFormData({ ...formData, rollover_d_min_short: safeParseFloat(e.target.value) })}
+                        onFocus={(e) => e.target.select()}
+                      />
+                      <p className="text-xs text-muted-foreground">Min D for rollover SHORT (lavere end Overbought D)</p>
+                    </div>
+                  )}
                 </div>
               </div>
               
+              {/* Overbought thresholds for SHORT - only show for REVERSAL mode */}
+              {formData.stochrsi_short_mode === 'REVERSAL_OVERBOUGHT' && (
+                <div className="sm:col-span-5 border-t pt-4 mt-2">
+                  <p className="text-sm font-medium text-muted-foreground mb-3">Overkøbt (SHORT tærskler - Reversal)</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="stochrsi_overbought_k">Overkøbt K</Label>
+                      <Input
+                        id="stochrsi_overbought_k"
+                        type="number"
+                        step="0.01"
+                        value={formData.stochrsi_overbought_k}
+                        onChange={(e) => setFormData({ ...formData, stochrsi_overbought_k: safeParseFloat(e.target.value) })}
+                        onFocus={(e) => e.target.select()}
+                      />
+                      <p className="text-xs text-muted-foreground">K ≥ denne værdi for DIRECT SHORT</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="stochrsi_overbought_d">Overkøbt D</Label>
+                      <Input
+                        id="stochrsi_overbought_d"
+                        type="number"
+                        step="0.01"
+                        value={formData.stochrsi_overbought_d}
+                        onChange={(e) => setFormData({ ...formData, stochrsi_overbought_d: safeParseFloat(e.target.value) })}
+                        onFocus={(e) => e.target.select()}
+                      />
+                      <p className="text-xs text-muted-foreground">D ≥ denne værdi for DIRECT SHORT</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {/* Oversold thresholds for LONG */}
-              <div className="sm:col-span-4 border-t pt-4 mt-2">
-                <p className="text-sm font-medium text-muted-foreground mb-3">Oversolgt (LONG tærskler)</p>
+              <div className="sm:col-span-5 border-t pt-4 mt-2">
+                <p className="text-sm font-medium text-muted-foreground mb-3">Oversolgt (LONG tærskler{formData.stochrsi_short_mode === 'CONTINUATION_OVERSOLD' ? ' + SHORT continuation' : ''})</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="stochrsi_oversold_k">Oversolgt K</Label>
@@ -922,7 +971,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                       onChange={(e) => setFormData({ ...formData, stochrsi_oversold_k: safeParseFloat(e.target.value) })}
                       onFocus={(e) => e.target.select()}
                     />
-                    <p className="text-xs text-muted-foreground">K ≤ denne værdi for LONG</p>
+                    <p className="text-xs text-muted-foreground">K ≤ denne værdi for LONG{formData.stochrsi_short_mode === 'CONTINUATION_OVERSOLD' ? ' og SHORT' : ''}</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="stochrsi_oversold_d">Oversolgt D</Label>
@@ -934,7 +983,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                       onChange={(e) => setFormData({ ...formData, stochrsi_oversold_d: safeParseFloat(e.target.value) })}
                       onFocus={(e) => e.target.select()}
                     />
-                    <p className="text-xs text-muted-foreground">D ≤ denne værdi for LONG</p>
+                    <p className="text-xs text-muted-foreground">D ≤ denne værdi for LONG{formData.stochrsi_short_mode === 'CONTINUATION_OVERSOLD' ? ' og SHORT' : ''}</p>
                   </div>
                 </div>
               </div>
