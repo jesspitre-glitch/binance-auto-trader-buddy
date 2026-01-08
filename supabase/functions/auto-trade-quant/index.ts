@@ -2216,7 +2216,18 @@ serve(async (req) => {
 
       // Calculate strategy identifier for this config
       const strategyHash = await getStrategyIdentifier(config);
-      console.log(`📋 Strategy hash calculated: ${strategyHash.substring(0, 16)}... (signal_conditions_required=${config.signal_conditions_required})`);
+      console.log(`\n══════════════════════════════════════════════════════════════════════════════════`);
+      console.log(`📋 CONFIG LOADED: id=${config.id}, name="${config.name}"`);
+      console.log(`📋 STRATEGY HASH: ${strategyHash}`);
+      console.log(`📋 REQUIRED CONDITIONS: ${config.signal_conditions_required}`);
+      console.log(`📋 ADX: enabled=${config.adx_enabled}, floor=${config.adx_floor}, ceiling=${config.adx_ceiling}, threshold=${config.adx_threshold}`);
+      console.log(`📋 VOLUME: enabled=${config.volume_enabled}, multiplier_long=${config.volume_multiplier}, multiplier_short=${config.volume_multiplier_short}, mode_short=${config.volume_mode_short}`);
+      console.log(`📋 STOCHRSI: enabled=${config.stochrsi_enabled}, hard_filter=${config.stochrsi_hard_filter}, oversold_k=${config.stochrsi_oversold_k ?? config.stochrsi_oversold}, oversold_d=${config.stochrsi_oversold_d ?? config.stochrsi_oversold}, overbought_k=${config.stochrsi_overbought_k ?? config.stochrsi_overbought}, overbought_d=${config.stochrsi_overbought_d ?? config.stochrsi_overbought}`);
+      console.log(`══════════════════════════════════════════════════════════════════════════════════\n`);
+      
+      // Track scan count for debug logging (first 50)
+      let scanDebugCount = 0;
+      const MAX_DEBUG_SCANS = 50;
 
       // Check current open positions
       const { data: positions } = await supabaseClient
@@ -2270,6 +2281,53 @@ serve(async (req) => {
           
           // Analyze signal on scan interval (men ADX beregnes på trend timeframe)
           const analysis = analyzeSignal(scanKlines, trendKlines, config);
+          
+          // 🔍 DETAILED DEBUG LOG (first 50 scans)
+          scanDebugCount++;
+          if (scanDebugCount <= MAX_DEBUG_SCANS) {
+            const fs = analysis.filterStatus;
+            const ind = analysis.indicators;
+            
+            // Extract values
+            const adxVal = ind.adx?.toFixed(2) ?? 'null';
+            const adxPassed = fs?.hard?.adx?.passed;
+            const adxReason = fs?.hard?.adx?.reason ?? '';
+            
+            const volCurrent = ind.volume;
+            const volAvg = ind.avgVolume;
+            const volRatio = (volCurrent && volAvg && volAvg > 0) ? (volCurrent / volAvg).toFixed(2) : 'null';
+            const volLongThreshold = config.volume_multiplier;
+            const volShortThreshold = config.volume_multiplier_short;
+            const volLongPassed = fs?.hard?.volumeLong?.passed ?? fs?.soft?.volumeLong?.passed;
+            const volShortPassed = fs?.hard?.volumeShort?.passed ?? fs?.soft?.volumeShort?.passed;
+            
+            const stochK = ind.stochRSI_k?.toFixed(2) ?? 'null';
+            const stochD = ind.stochRSI_d?.toFixed(2) ?? 'null';
+            const stochLongPassed = fs?.hard?.stochrsi?.long;
+            const stochShortPassed = fs?.hard?.stochrsi?.short;
+            
+            const longConditions = ind.conditionDetails?.longConditionsMet ?? 0;
+            const shortConditions = ind.conditionDetails?.shortConditionsMet ?? 0;
+            const requiredConds = config.signal_conditions_required;
+            
+            const longAllowed = analysis.signal === 'LONG' && analysis.hardFiltersPassed;
+            const shortAllowed = analysis.signal === 'SHORT' && analysis.hardFiltersPassed;
+            
+            console.log(`\n┌─────────────────────────────────────────────────────────────────────────────`);
+            console.log(`│ 🔍 SCAN #${scanDebugCount}: ${symbol}`);
+            console.log(`├─────────────────────────────────────────────────────────────────────────────`);
+            console.log(`│ ADX: value=${adxVal}, floor=${config.adx_floor}, ceiling=${config.adx_ceiling}, passed=${adxPassed} ${adxPassed ? '✅' : '❌'}`);
+            if (!adxPassed && adxReason) console.log(`│      reason: ${adxReason}`);
+            console.log(`│ VOL_LONG:  ratio=${volRatio}x, threshold=${volLongThreshold}x, passed=${volLongPassed} ${volLongPassed ? '✅' : volLongPassed === false ? '❌' : '⚪'}`);
+            console.log(`│ VOL_SHORT: ratio=${volRatio}x, threshold=${volShortThreshold}x, passed=${volShortPassed} ${volShortPassed ? '✅' : volShortPassed === false ? '❌' : '⚪'}`);
+            console.log(`│ StochRSI: K=${stochK}, D=${stochD}`);
+            console.log(`│      LONG_passed=${stochLongPassed} ${stochLongPassed ? '✅' : '❌'} (requires K<=${config.stochrsi_oversold_k ?? config.stochrsi_oversold}, D<=${config.stochrsi_oversold_d ?? config.stochrsi_oversold})`);
+            console.log(`│      SHORT_passed=${stochShortPassed} ${stochShortPassed ? '✅' : '❌'} (mode=${config.stochrsi_short_mode})`);
+            console.log(`│ SOFT CONDITIONS: long=${longConditions}/${requiredConds}, short=${shortConditions}/${requiredConds}`);
+            console.log(`│ HARD_FILTERS_PASSED: ${analysis.hardFiltersPassed} ${analysis.hardFiltersPassed ? '✅' : '❌'}`);
+            console.log(`│ RAW_SIGNAL: ${analysis.signal}, FINAL: longAllowed=${longAllowed} ${longAllowed ? '🟢' : '⚪'}, shortAllowed=${shortAllowed} ${shortAllowed ? '🔴' : '⚪'}`);
+            console.log(`└─────────────────────────────────────────────────────────────────────────────`);
+          }
           
           // Filter signal based on trend timeframes
           let filteredSignal = analysis.signal;
