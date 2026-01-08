@@ -170,7 +170,9 @@ export type Database = {
           volume_avg_period: number | null
           volume_enabled: boolean | null
           volume_hard_filter: boolean | null
+          volume_mode_short: string
           volume_multiplier: number | null
+          volume_multiplier_short: number
           vwap_enabled: boolean | null
           vwap_hard_filter: boolean | null
           vwap_period: number | null
@@ -294,7 +296,9 @@ export type Database = {
           volume_avg_period?: number | null
           volume_enabled?: boolean | null
           volume_hard_filter?: boolean | null
+          volume_mode_short?: string
           volume_multiplier?: number | null
+          volume_multiplier_short?: number
           vwap_enabled?: boolean | null
           vwap_hard_filter?: boolean | null
           vwap_period?: number | null
@@ -418,7 +422,9 @@ export type Database = {
           volume_avg_period?: number | null
           volume_enabled?: boolean | null
           volume_hard_filter?: boolean | null
+          volume_mode_short?: string
           volume_multiplier?: number | null
+          volume_multiplier_short?: number
           vwap_enabled?: boolean | null
           vwap_hard_filter?: boolean | null
           vwap_period?: number | null

@@ -148,6 +148,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     volume_enabled: config?.volume_enabled !== undefined ? config?.volume_enabled : true,
     volume_avg_period: config?.volume_avg_period || 20,
     volume_multiplier: config?.volume_multiplier ?? 1.2,
+    volume_mode_short: config?.volume_mode_short || 'HARD',
+    volume_multiplier_short: config?.volume_multiplier_short ?? 0.50,
     signal_conditions_required: config?.signal_conditions_required || 5,
     
     // Timeframes
@@ -290,6 +292,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       volume_enabled: config.volume_enabled !== undefined ? config.volume_enabled : true,
       volume_avg_period: config.volume_avg_period ?? 20,
       volume_multiplier: config.volume_multiplier ?? 1.2,
+      volume_mode_short: config.volume_mode_short ?? 'HARD',
+      volume_multiplier_short: config.volume_multiplier_short ?? 0.50,
       signal_conditions_required: config.signal_conditions_required ?? 5,
       // Timeframes
       scan_interval: config.scan_interval ?? "5m",
@@ -417,6 +421,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       volume_enabled: config.volume_enabled !== undefined ? config.volume_enabled : true,
       volume_avg_period: config.volume_avg_period ?? 20,
       volume_multiplier: config.volume_multiplier ?? 1.2,
+      volume_mode_short: config.volume_mode_short ?? 'HARD',
+      volume_multiplier_short: config.volume_multiplier_short ?? 0.50,
       signal_conditions_required: config.signal_conditions_required ?? 5,
       scan_interval: config.scan_interval ?? "5m",
       trend_timeframe: config.trend_timeframe ?? config.mtf_timeframe ?? "15m",
@@ -1986,7 +1992,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 <p className="text-xs text-muted-foreground">Antal bars for gennemsnit</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="volume_multiplier">Volumen Multiplier</Label>
+                <Label htmlFor="volume_multiplier">Volumen Multiplier (LONG)</Label>
                 <Input
                   id="volume_multiplier"
                   type="number"
@@ -1995,7 +2001,51 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                   onChange={(e) => setFormData({ ...formData, volume_multiplier: safeParseFloat(e.target.value) })}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Kræver vol &gt; avg×multiplier
+                  LONG kræver vol ≥ avg×{formData.volume_multiplier}
+                </p>
+              </div>
+              
+              {/* SHORT-specific Volume settings */}
+              <div className="sm:col-span-2 pt-4 border-t border-border">
+                <Label className="text-base font-medium">Volume (SHORT) - Separat indstilling</Label>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Uafhængig volume-gate for SHORT trades
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="volume_mode_short">Volume Mode (SHORT)</Label>
+                <Select
+                  value={formData.volume_mode_short}
+                  onValueChange={(value) => setFormData({ ...formData, volume_mode_short: value })}
+                >
+                  <SelectTrigger id="volume_mode_short">
+                    <SelectValue placeholder="Vælg mode" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background">
+                    <SelectItem value="OFF">OFF - Ingen volume check</SelectItem>
+                    <SelectItem value="SOFT">SOFT - Giver 1 point</SelectItem>
+                    <SelectItem value="HARD">HARD - Krævet for SHORT</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  OFF=deaktiveret, SOFT=1 point, HARD=blokerer
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="volume_multiplier_short">Volumen Multiplier (SHORT)</Label>
+                <Input
+                  id="volume_multiplier_short"
+                  type="number"
+                  step="0.05"
+                  min="0"
+                  value={formData.volume_multiplier_short}
+                  onChange={(e) => setFormData({ ...formData, volume_multiplier_short: safeParseFloat(e.target.value, 0.50) })}
+                  disabled={formData.volume_mode_short === 'OFF'}
+                />
+                <p className="text-xs text-muted-foreground">
+                  SHORT kræver vol ≥ avg×{formData.volume_multiplier_short} (default: 0.50)
                 </p>
               </div>
             </>
@@ -2362,10 +2412,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               `  Adaptiv:              ${onOff(formData.adaptive_adx_enabled)}`,
               `  Adaptiv Base:         ${formData.adx_base_min}`,
               "",
-              "Volume:",
+              "Volume (LONG):",
               `  Status:               ${onOff(formData.volume_enabled)}`,
               `  Multiplier:           ${formData.volume_multiplier}x`,
               `  Avg Periode:          ${formData.volume_avg_period}`,
+              "",
+              "Volume (SHORT):",
+              `  Mode:                 ${formData.volume_mode_short}`,
+              `  Multiplier:           ${formData.volume_multiplier_short}x`,
               "",
               "MACD:",
               `  Direction Hard:       ${onOff(formData.macd_direction_enabled && formData.macd_enabled)}`,
