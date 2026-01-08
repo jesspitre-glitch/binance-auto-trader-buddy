@@ -28,21 +28,7 @@ export const TradingDashboard = () => {
   const [configs, setConfigs] = useState<any[]>([]);
   const [activeConfigId, setActiveConfigId] = useState<string | null>(null);
   const [selectedConfig, setSelectedConfig] = useState<any>(null);
-  const [scannerStatus, setScannerStatus] = useState<'active' | 'stopped' | 'unknown'>('unknown');
   const { toast } = useToast();
-
-  const checkScannerStatus = async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('continuous-scan-quant', {
-        body: { action: 'status' }
-      });
-      if (!error && data?.status) {
-        setScannerStatus(data.status as 'active' | 'stopped');
-      }
-    } catch (e) {
-      console.error('Scanner status check error:', e);
-    }
-  };
 
   const fetchConfigs = async () => {
     try {
@@ -93,17 +79,12 @@ export const TradingDashboard = () => {
   useEffect(() => {
     fetchConfigs();
     fetchSession();
-    checkScannerStatus();
-
-    // Poll scanner status every 10s
-    const statusInterval = setInterval(checkScannerStatus, 10000);
 
     // Refresh data when user returns to the tab
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         fetchConfigs();
         fetchSession();
-        checkScannerStatus();
       }
     };
 
@@ -121,7 +102,6 @@ export const TradingDashboard = () => {
       .subscribe();
 
     return () => {
-      clearInterval(statusInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       supabase.removeChannel(channel);
     };
@@ -178,7 +158,6 @@ export const TradingDashboard = () => {
       }
 
       setIsActive(newState);
-      setScannerStatus(newState ? 'active' : 'stopped');
       
       toast({
         title: newState ? "Trading startet" : "Trading stoppet",
@@ -230,15 +209,13 @@ export const TradingDashboard = () => {
             </span>
             <span
               className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1.5 ${
-                scannerStatus === 'active'
+                isActive
                   ? "bg-success/10 text-success"
-                  : scannerStatus === 'stopped'
-                  ? "bg-destructive/10 text-destructive"
-                  : "bg-muted text-muted-foreground"
+                  : "bg-destructive/10 text-destructive"
               }`}
             >
-              <Radio className={`h-3 w-3 ${scannerStatus === 'active' ? 'animate-pulse' : ''}`} />
-              Scanner: {scannerStatus === 'active' ? 'Kører' : scannerStatus === 'stopped' ? 'Stoppet' : '...'}
+              <Radio className={`h-3 w-3 ${isActive ? 'animate-pulse' : ''}`} />
+              Scanner: {isActive ? 'Kører' : 'Stoppet'}
             </span>
           </div>
         </div>
