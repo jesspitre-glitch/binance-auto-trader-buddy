@@ -32,6 +32,8 @@ interface IndicatorConfig {
   stochrsi_overbought_d?: number;
   stochrsi_oversold_k?: number;
   stochrsi_oversold_d?: number;
+  stochrsi_short_mode?: string;
+  rollover_d_min_short?: number;
   stochrsi_hard_filter?: boolean;
   pivot_points_enabled: boolean;
   pivot_points_timeframe: string;
@@ -127,6 +129,8 @@ async function getStrategyIdentifier(config: any): Promise<string> {
     stochrsi_d_period: config.stochrsi_d_period,
     stochrsi_overbought: config.stochrsi_overbought,
     stochrsi_oversold: config.stochrsi_oversold,
+    stochrsi_short_mode: config.stochrsi_short_mode,
+    rollover_d_min_short: config.rollover_d_min_short,
     // Pivot Points settings
     pivot_points_enabled: config.pivot_points_enabled,
     pivot_points_timeframe: config.pivot_points_timeframe,
@@ -1318,72 +1322,89 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     const oversoldD = config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20;
     const overboughtK = config.stochrsi_overbought_k ?? config.stochrsi_overbought ?? 80;
     const overboughtD = config.stochrsi_overbought_d ?? config.stochrsi_overbought ?? 80;
+    const shortMode = config.stochrsi_short_mode ?? 'REVERSAL_OVERBOUGHT';
+    const rolloverDMin = config.rollover_d_min_short ?? 50;
     
     // LONG: K <= oversold_k AND D <= oversold_d (UNCHANGED)
     const stochRSILong = stochRSI.k <= oversoldK && stochRSI.d <= oversoldD;
     
-    // SHORT: To betingelser - direkte ELLER rollover-entry
-    // Betingelse 1 (direkte): K >= overbought_k AND D >= overbought_d
-    const shortDirect = stochRSI.k >= overboughtK && stochRSI.d >= overboughtD;
-    
-    // Betingelse 2 (rollover): K har været >= overbought_k inden for X candles, K er nu faldende, D >= overbought_d
-    // Beregn StochRSI for de sidste X candles for at finde rollover
-    const rolloverLookback = 5; // Check de sidste 5 candles for K >= overboughtK
+    // SHORT: Afhænger af SHORT_MODE
+    let stochRSIShort = false;
+    let shortConditionType: 'DIRECT' | 'ROLLOVER' | 'CONTINUATION' | 'NONE' = 'NONE';
     let kWasOverbought = false;
     let kIsFalling = false;
-    const kHistory: number[] = [stochRSI.k]; // Current K
+    const kHistory: number[] = [stochRSI.k];
+    const rolloverLookback = 5;
     
-    // Calculate K values for previous candles to detect rollover
-    if (closes.length >= config.stochrsi_period + config.stochrsi_k_period + config.stochrsi_d_period + rolloverLookback) {
-      for (let offset = 1; offset <= rolloverLookback; offset++) {
-        const slicedCloses = closes.slice(0, closes.length - offset);
-        if (slicedCloses.length >= config.stochrsi_period + config.stochrsi_k_period + config.stochrsi_d_period) {
-          const prevStochRSI = calculateStochRSI(slicedCloses, config.stochrsi_period, config.stochrsi_k_period, config.stochrsi_d_period);
-          kHistory.push(prevStochRSI.k);
-          if (prevStochRSI.k >= overboughtK) {
-            kWasOverbought = true;
+    if (shortMode === 'REVERSAL_OVERBOUGHT') {
+      // MODE A: REVERSAL_OVERBOUGHT (nuværende adfærd)
+      // Betingelse 1 (DIRECT): K >= overbought_k AND D >= overbought_d
+      const shortDirect = stochRSI.k >= overboughtK && stochRSI.d >= overboughtD;
+      
+      // Betingelse 2 (ROLLOVER): K har været >= overbought_k inden for X candles, K falder nu, D >= rollover_d_min
+      if (closes.length >= config.stochrsi_period + config.stochrsi_k_period + config.stochrsi_d_period + rolloverLookback) {
+        for (let offset = 1; offset <= rolloverLookback; offset++) {
+          const slicedCloses = closes.slice(0, closes.length - offset);
+          if (slicedCloses.length >= config.stochrsi_period + config.stochrsi_k_period + config.stochrsi_d_period) {
+            const prevStochRSI = calculateStochRSI(slicedCloses, config.stochrsi_period, config.stochrsi_k_period, config.stochrsi_d_period);
+            kHistory.push(prevStochRSI.k);
+            if (prevStochRSI.k >= overboughtK) {
+              kWasOverbought = true;
+            }
           }
         }
       }
+      
+      // K is falling if current K < previous K
+      if (kHistory.length >= 2) {
+        kIsFalling = stochRSI.k < kHistory[1];
+      }
+      
+      // Rollover SHORT: K var overbought inden for lookback, K falder nu, D >= rollover_d_min (lavere krav end overboughtD)
+      const dMeetsRolloverMin = stochRSI.d >= rolloverDMin;
+      const shortRollover = kWasOverbought && kIsFalling && dMeetsRolloverMin;
+      
+      // Final SHORT signal: DIRECT ELLER ROLLOVER
+      stochRSIShort = shortDirect || shortRollover;
+      shortConditionType = shortDirect ? 'DIRECT' : (shortRollover ? 'ROLLOVER' : 'NONE');
+      
+      console.log(`   📊 StochRSI SHORT_MODE=${shortMode}`);
+      console.log(`   📊 StochRSI Values: K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)}`);
+      console.log(`   📊 StochRSI SHORT Thresholds: OverboughtK=${overboughtK}, OverboughtD=${overboughtD}, RolloverDMin=${rolloverDMin}`);
+      console.log(`   📊 StochRSI SHORT DIRECT: K>=${overboughtK} (${stochRSI.k >= overboughtK}), D>=${overboughtD} (${stochRSI.d >= overboughtD}) → ${shortDirect ? '✅ PASS' : '❌ FAIL'}`);
+      console.log(`   📊 StochRSI SHORT ROLLOVER: K_was_overbought_last_${rolloverLookback}=${kWasOverbought}, K_falling=${kIsFalling}, D>=${rolloverDMin} (${dMeetsRolloverMin}) → ${shortRollover ? '✅ PASS' : '❌ FAIL'}`);
+      
+    } else if (shortMode === 'CONTINUATION_OVERSOLD') {
+      // MODE B: CONTINUATION_OVERSOLD (continuation SHORT i bear-trend)
+      // SHORT når: K <= oversold_k AND D <= oversold_d (symmetrisk med LONG)
+      const shortContinuation = stochRSI.k <= oversoldK && stochRSI.d <= oversoldD;
+      stochRSIShort = shortContinuation;
+      shortConditionType = shortContinuation ? 'CONTINUATION' : 'NONE';
+      
+      console.log(`   📊 StochRSI SHORT_MODE=${shortMode}`);
+      console.log(`   📊 StochRSI Values: K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)}`);
+      console.log(`   📊 StochRSI SHORT CONTINUATION: K<=${oversoldK} (${stochRSI.k <= oversoldK}), D<=${oversoldD} (${stochRSI.d <= oversoldD}) → ${shortContinuation ? '✅ PASS' : '❌ FAIL'}`);
     }
     
-    // K is falling if current K < previous K
-    if (kHistory.length >= 2) {
-      kIsFalling = stochRSI.k < kHistory[1]; // Compare current K with K from 1 candle ago
-    }
-    
-    // Rollover SHORT: K var overbought inden for lookback, K falder nu, D >= overbought_d
-    const dIsOverbought = stochRSI.d >= overboughtD;
-    const shortRollover = kWasOverbought && kIsFalling && dIsOverbought;
-    
-    // Final SHORT signal: direkte ELLER rollover
-    const stochRSIShort = shortDirect || shortRollover;
-    
-    // Determine which SHORT condition was met for logging
-    const shortConditionType = shortDirect ? 'DIRECT' : (shortRollover ? 'ROLLOVER' : 'NONE');
-    
-    // Detailed logging for StochRSI evaluation
-    console.log(`   📊 StochRSI Values: K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)}`);
-    console.log(`   📊 StochRSI LONG (unchanged): K<=${oversoldK}, D<=${oversoldD} → K_pass=${stochRSI.k <= oversoldK}, D_pass=${stochRSI.d <= oversoldD} → LONG=${stochRSILong ? '✅ PASS' : '❌ FAIL'}`);
-    console.log(`   📊 StochRSI SHORT Thresholds: OverboughtK=${overboughtK}, OverboughtD=${overboughtD}`);
-    console.log(`   📊 StochRSI SHORT DIRECT: K>=${overboughtK} (${stochRSI.k >= overboughtK}), D>=${overboughtD} (${dIsOverbought}) → ${shortDirect ? '✅ PASS' : '❌ FAIL'}`);
-    console.log(`   📊 StochRSI SHORT ROLLOVER: K_was_overbought_last_${rolloverLookback}=${kWasOverbought}, K_falling=${kIsFalling}, D>=${overboughtD} (${dIsOverbought}) → ${shortRollover ? '✅ PASS' : '❌ FAIL'}`);
-    console.log(`   📊 StochRSI SHORT FINAL: ${stochRSIShort ? '✅ PASS' : '❌ FAIL'} (via ${shortConditionType})`);
-    if (kHistory.length > 1) {
+    console.log(`   📊 StochRSI LONG: K<=${oversoldK}, D<=${oversoldD} → ${stochRSILong ? '✅ PASS' : '❌ FAIL'}`);
+    console.log(`   📊 StochRSI SHORT FINAL: ${stochRSIShort ? '✅ PASS' : '❌ FAIL'} (SHORT_MODE=${shortMode}, SHORT_TYPE=${shortConditionType})`);
+    if (kHistory.length > 1 && shortMode === 'REVERSAL_OVERBOUGHT') {
       console.log(`   📊 StochRSI K-history (last ${kHistory.length}): ${kHistory.map(k => k.toFixed(2)).join(' → ')}`);
     }
     
     // Gem i filterStatus.hard for hard filter evaluering
     filterStatus.hard.stochrsi.long = stochRSILong;
     filterStatus.hard.stochrsi.short = stochRSIShort;
-    filterStatus.hard.stochrsi.value = `K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)}, SHORT_TYPE=${shortConditionType}`;
+    filterStatus.hard.stochrsi.value = `K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)}, SHORT_MODE=${shortMode}, SHORT_TYPE=${shortConditionType}`;
     
     // Hvis stochrsi_hard_filter=true, evaluér som hard filter
     if (config.stochrsi_hard_filter === true) {
       // For hard filter: mindst én retning skal passe
       if (!stochRSILong && !stochRSIShort) {
         filterStatus.hard.stochrsi.passed = false;
-        filterStatus.hard.stochrsi.reason = `K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)} - LONG kræver K<=${oversoldK} AND D<=${oversoldD}, SHORT kræver K>=${overboughtK} AND D>=${overboughtD} (direkte) ELLER rollover`;
+        filterStatus.hard.stochrsi.reason = shortMode === 'REVERSAL_OVERBOUGHT' 
+          ? `K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)} - LONG kræver K<=${oversoldK} AND D<=${oversoldD}, SHORT kræver K>=${overboughtK} AND D>=${overboughtD} (direkte) ELLER rollover (D>=${rolloverDMin})`
+          : `K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)} - LONG kræver K<=${oversoldK} AND D<=${oversoldD}, SHORT (continuation) kræver K<=${oversoldK} AND D<=${oversoldD}`;
       }
       console.log(`   📊 StochRSI (HARD): Long: ${stochRSILong ? '✅' : '❌'}, Short: ${stochRSIShort ? '✅' : '❌'} (${shortConditionType})`);
     } else {

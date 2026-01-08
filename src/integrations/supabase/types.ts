@@ -138,6 +138,7 @@ export type Database = {
           pivot_points_timeframe: string | null
           position_size_percent: number | null
           risk_per_trade_percent: number | null
+          rollover_d_min_short: number | null
           rsi_enabled: boolean | null
           rsi_hard_filter: boolean | null
           rsi_max_short: number | null
@@ -160,6 +161,7 @@ export type Database = {
           stochrsi_oversold_d: number | null
           stochrsi_oversold_k: number | null
           stochrsi_period: number | null
+          stochrsi_short_mode: string
           trailing_stop_activation_atr: number | null
           trailing_stop_activation_enabled: boolean | null
           trend_timeframe: string | null
@@ -260,6 +262,7 @@ export type Database = {
           pivot_points_timeframe?: string | null
           position_size_percent?: number | null
           risk_per_trade_percent?: number | null
+          rollover_d_min_short?: number | null
           rsi_enabled?: boolean | null
           rsi_hard_filter?: boolean | null
           rsi_max_short?: number | null
@@ -282,6 +285,7 @@ export type Database = {
           stochrsi_oversold_d?: number | null
           stochrsi_oversold_k?: number | null
           stochrsi_period?: number | null
+          stochrsi_short_mode?: string
           trailing_stop_activation_atr?: number | null
           trailing_stop_activation_enabled?: boolean | null
           trend_timeframe?: string | null
@@ -382,6 +386,7 @@ export type Database = {
           pivot_points_timeframe?: string | null
           position_size_percent?: number | null
           risk_per_trade_percent?: number | null
+          rollover_d_min_short?: number | null
           rsi_enabled?: boolean | null
           rsi_hard_filter?: boolean | null
           rsi_max_short?: number | null
@@ -404,6 +409,7 @@ export type Database = {
           stochrsi_oversold_d?: number | null
           stochrsi_oversold_k?: number | null
           stochrsi_period?: number | null
+          stochrsi_short_mode?: string
           trailing_stop_activation_atr?: number | null
           trailing_stop_activation_enabled?: boolean | null
           trend_timeframe?: string | null
