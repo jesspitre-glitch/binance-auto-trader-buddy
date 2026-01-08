@@ -78,6 +78,8 @@ interface IndicatorConfig {
   volume_enabled: boolean;
   volume_avg_period: number;
   volume_multiplier: number;
+  volume_mode_short?: string;
+  volume_multiplier_short?: number;
   volume_hard_filter?: boolean;
   signal_conditions_required: number;
   position_size_percent: number;
@@ -177,6 +179,8 @@ async function getStrategyIdentifier(config: any): Promise<string> {
     volume_enabled: config.volume_enabled,
     volume_avg_period: config.volume_avg_period,
     volume_multiplier: config.volume_multiplier,
+    volume_mode_short: config.volume_mode_short,
+    volume_multiplier_short: config.volume_multiplier_short,
     // Candle momentum
     candle_momentum_enabled: config.candle_momentum_enabled,
     min_candle_body_percent: config.min_candle_body_percent,
@@ -806,8 +810,9 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       emaSpread: { passed: true, value: '', reason: '' },
       atr: { passed: true, value: '', reason: '', atr_floor_used: null as number | null, atr_floor_source: '', atr_floor_passed_boolean: false, effective_min_atr_percent_used: null as number | null },
       adx: { passed: true, value: '', reason: '' },
-      // 🔴 FIX: Volume tri-state - passed: null=disabled/no-data, true/false=evaluated
-      volume: { passed: null as boolean | null, value: '', reason: '' },
+      // 🔴 Volume tri-state - LONG uses volume_enabled+volume_multiplier, SHORT uses volume_mode_short+volume_multiplier_short
+      volumeLong: { passed: null as boolean | null, value: '', reason: '' },
+      volumeShort: { passed: null as boolean | null, value: '', reason: '', mode: 'HARD' as string },
       // 🔴 FIX: long/short kan være null (disabled), true (passed), false (failed)
       macdDirection: { passed: true, long: null as boolean | null, short: null as boolean | null, reason: '', value: '' },
       macdColorChange: { passed: true, long: null as boolean | null, short: null as boolean | null, reason: '' },
@@ -818,8 +823,9 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     soft: {
       emaAlignment: { long: false, short: false },
       macd: { long: false, short: false },
-      // 🔴 FIX: Volume soft condition tri-state
-      volume: { long: null as boolean | null, short: null as boolean | null },
+      // 🔴 Volume soft condition - LONG always from volume_enabled, SHORT from volume_mode_short
+      volumeLong: { passed: null as boolean | null },
+      volumeShort: { passed: null as boolean | null },
     }
   };
   
@@ -1069,50 +1075,87 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     }
   }
   
-  // 4️⃣ VOLUME - TRI-STATE LOGIK
+  // 4️⃣ VOLUME - RETNINGS-SPECIFIK TRI-STATE LOGIK
+  // LONG: bruger volume_enabled + volume_multiplier (eksisterende)
+  // SHORT: bruger volume_mode_short + volume_multiplier_short (nye felter)
   // null = disabled eller manglende data (ikke evalueret)
   // true = opfylder krav
   // false = fejler krav
-  if (config.volume_enabled !== true) {
-    // Volume er slukket - ikke evalueret
-    filterStatus.hard.volume.passed = null;
-    filterStatus.hard.volume.reason = 'Volume disabled';
-    filterStatus.soft.volume.long = null;
-    filterStatus.soft.volume.short = null;
-    console.log(`   📊 Volume: ⚪ DISABLED (tri-state: null)`);
-  } else if (currentVolume === null || avgVolume === null) {
-    // Data mangler - ikke evalueret
-    filterStatus.hard.volume.passed = null;
-    filterStatus.hard.volume.reason = `Data mangler: current=${currentVolume}, avg=${avgVolume}`;
-    filterStatus.soft.volume.long = null;
-    filterStatus.soft.volume.short = null;
-    console.log(`   📊 Volume: ⚪ NULL DATA (tri-state: null) - current=${currentVolume}, avg=${avgVolume}`);
+  
+  const volumeModeShort = config.volume_mode_short ?? 'HARD';
+  const volumeMultiplierShort = config.volume_multiplier_short ?? 0.50;
+  let volumeRatio: number | null = null;
+  
+  if (currentVolume === null || avgVolume === null) {
+    // Data mangler - ikke evalueret for begge retninger
+    filterStatus.hard.volumeLong.passed = null;
+    filterStatus.hard.volumeLong.reason = `Data mangler: current=${currentVolume}, avg=${avgVolume}`;
+    filterStatus.hard.volumeShort.passed = null;
+    filterStatus.hard.volumeShort.reason = `Data mangler: current=${currentVolume}, avg=${avgVolume}`;
+    filterStatus.soft.volumeLong.passed = null;
+    filterStatus.soft.volumeShort.passed = null;
+    console.log(`   📊 VOL_LONG: ⚪ NULL DATA | VOL_SHORT: ⚪ NULL DATA`);
   } else {
-    // Evaluer volume multiplier hard filter
-    const volumeRatio = currentVolume / avgVolume;
-    const requiredVolume = avgVolume * config.volume_multiplier;
-    filterStatus.hard.volume.value = `${volumeRatio.toFixed(2)}x (${(volumeRatio * 100).toFixed(0)}%)`;
+    volumeRatio = currentVolume / avgVolume;
+    const volumeRatioStr = `${volumeRatio.toFixed(2)}x`;
     
-    console.log(`   📊 Volume Check:`);
-    console.log(`      Current: ${currentVolume.toFixed(2)}`);
-    console.log(`      Average: ${avgVolume.toFixed(2)}`);
-    console.log(`      Ratio: ${volumeRatio.toFixed(2)} (${(volumeRatio * 100).toFixed(0)}%)`);
-    console.log(`      Required Multiplier: ${config.volume_multiplier}x (${(config.volume_multiplier * 100).toFixed(0)}%)`);
-    console.log(`      Required Volume: ${requiredVolume.toFixed(2)}`);
+    console.log(`\n   ════════════════════════════════════════════════════════════`);
+    console.log(`   📊 VOLUME DIRECTION-SPECIFIC CHECK:`);
+    console.log(`      Current Volume: ${currentVolume.toFixed(2)}`);
+    console.log(`      Average Volume: ${avgVolume.toFixed(2)}`);
+    console.log(`      Ratio: ${volumeRatioStr}`);
     
-    if (volumeRatio < config.volume_multiplier) {
-      filterStatus.hard.volume.passed = false;
-      filterStatus.hard.volume.reason = `Ratio ${volumeRatio.toFixed(2)}x (${(volumeRatio * 100).toFixed(0)}%) < ${config.volume_multiplier}x required (current: ${currentVolume.toFixed(2)}, avg: ${avgVolume.toFixed(2)})`;
-      console.log(`      ❌ BLOKERET: ${volumeRatio.toFixed(2)}x < ${config.volume_multiplier}x`);
+    // ═══════════════════════════════════════════════════════
+    // LONG Volume Check (uses existing volume_enabled + volume_multiplier)
+    // ═══════════════════════════════════════════════════════
+    if (config.volume_enabled !== true) {
+      filterStatus.hard.volumeLong.passed = null;
+      filterStatus.hard.volumeLong.reason = 'Volume disabled for LONG';
+      filterStatus.soft.volumeLong.passed = null;
+      console.log(`   📊 VOL_LONG=disabled (threshold: ${config.volume_multiplier}x)`);
     } else {
-      filterStatus.hard.volume.passed = true;
-      console.log(`      ✅ OPFYLDT: ${volumeRatio.toFixed(2)}x >= ${config.volume_multiplier}x`);
+      filterStatus.hard.volumeLong.value = volumeRatioStr;
+      const longPassed = volumeRatio >= config.volume_multiplier;
+      filterStatus.hard.volumeLong.passed = longPassed;
+      filterStatus.hard.volumeLong.reason = longPassed 
+        ? '' 
+        : `${volumeRatioStr} < ${config.volume_multiplier}x required`;
+      // Soft condition for LONG: ratio >= 1.0 (current > avg)
+      filterStatus.soft.volumeLong.passed = volumeRatio >= 1.0;
+      console.log(`   📊 VOL_LONG=${longPassed ? 'pass' : 'fail'} (ratio: ${volumeRatioStr}, threshold: ${config.volume_multiplier}x, mode: HARD)`);
     }
     
-    // Soft volume condition (current > avg)
-    const highVolume = currentVolume > avgVolume;
-    filterStatus.soft.volume.long = highVolume;
-    filterStatus.soft.volume.short = highVolume;
+    // ═══════════════════════════════════════════════════════
+    // SHORT Volume Check (uses NEW volume_mode_short + volume_multiplier_short)
+    // ═══════════════════════════════════════════════════════
+    filterStatus.hard.volumeShort.mode = volumeModeShort;
+    
+    if (volumeModeShort === 'OFF') {
+      filterStatus.hard.volumeShort.passed = null;
+      filterStatus.hard.volumeShort.reason = 'Volume disabled for SHORT (mode=OFF)';
+      filterStatus.soft.volumeShort.passed = null;
+      console.log(`   📊 VOL_SHORT=disabled (mode: OFF)`);
+    } else {
+      filterStatus.hard.volumeShort.value = volumeRatioStr;
+      const shortPassed = volumeRatio >= volumeMultiplierShort;
+      
+      if (volumeModeShort === 'HARD') {
+        // HARD mode: Volume is required for SHORT
+        filterStatus.hard.volumeShort.passed = shortPassed;
+        filterStatus.hard.volumeShort.reason = shortPassed 
+          ? '' 
+          : `${volumeRatioStr} < ${volumeMultiplierShort}x required`;
+        filterStatus.soft.volumeShort.passed = null; // Not used in HARD mode
+        console.log(`   📊 VOL_SHORT=${shortPassed ? 'pass' : 'fail'} (ratio: ${volumeRatioStr}, threshold: ${volumeMultiplierShort}x, mode: HARD)`);
+      } else if (volumeModeShort === 'SOFT') {
+        // SOFT mode: Volume gives 1 soft point for SHORT
+        filterStatus.hard.volumeShort.passed = null; // Not a hard filter
+        filterStatus.hard.volumeShort.reason = 'Volume is SOFT for SHORT';
+        filterStatus.soft.volumeShort.passed = shortPassed;
+        console.log(`   📊 VOL_SHORT=${shortPassed ? 'pass' : 'fail'} (ratio: ${volumeRatioStr}, threshold: ${volumeMultiplierShort}x, mode: SOFT → ${shortPassed ? '+1 point' : '0 points'})`);
+      }
+    }
+    console.log(`   ════════════════════════════════════════════════════════════\n`);
   }
   
   // 5️⃣ MACD RETNINGS-FILTER (HÅRDT FILTER - blokerer trades mod MACD retning)
@@ -1266,7 +1309,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   console.log(`   📏 EMA Spread: ${filterStatus.hard.emaSpread.passed ? '✅' : '❌'} ${filterStatus.hard.emaSpread.value} ${filterStatus.hard.emaSpread.reason ? `- ${filterStatus.hard.emaSpread.reason}` : ''}`);
   console.log(`   📊 ATR: ${filterStatus.hard.atr.passed ? '✅' : '❌'} ${filterStatus.hard.atr.value} ${filterStatus.hard.atr.reason ? `- ${filterStatus.hard.atr.reason}` : ''}`);
   console.log(`   📈 ADX: ${filterStatus.hard.adx.passed ? '✅' : '❌'} ${filterStatus.hard.adx.value} ${filterStatus.hard.adx.reason ? `- ${filterStatus.hard.adx.reason}` : ''}`);
-  console.log(`   🔊 Volume: ${filterStatus.hard.volume.passed ? '✅' : '❌'} ${filterStatus.hard.volume.value} ${filterStatus.hard.volume.reason ? `- ${filterStatus.hard.volume.reason}` : ''}`);
+  console.log(`   🔊 Volume LONG: ${filterStatus.hard.volumeLong.passed === null ? '⚪' : (filterStatus.hard.volumeLong.passed ? '✅' : '❌')} ${filterStatus.hard.volumeLong.value} ${filterStatus.hard.volumeLong.reason ? `- ${filterStatus.hard.volumeLong.reason}` : ''}`);
+  console.log(`   🔊 Volume SHORT: ${filterStatus.hard.volumeShort.passed === null ? '⚪' : (filterStatus.hard.volumeShort.passed ? '✅' : '❌')} ${filterStatus.hard.volumeShort.value} (mode: ${filterStatus.hard.volumeShort.mode}) ${filterStatus.hard.volumeShort.reason ? `- ${filterStatus.hard.volumeShort.reason}` : ''}`);
   console.log(`   📐 MACD Retning: ${filterStatus.hard.macdDirection.passed ? '✅' : '❌'} Long: ${filterStatus.hard.macdDirection.long ? '✅' : '❌'} Short: ${filterStatus.hard.macdDirection.short ? '✅' : '❌'} ${filterStatus.hard.macdDirection.reason ? `- ${filterStatus.hard.macdDirection.reason}` : ''}`);
   console.log(`   🎨 MACD Farveskift: ${filterStatus.hard.macdColorChange.passed ? '✅' : '❌'} Long: ${filterStatus.hard.macdColorChange.long ? '✅' : '❌'} Short: ${filterStatus.hard.macdColorChange.short ? '✅' : '❌'} ${filterStatus.hard.macdColorChange.reason ? `- ${filterStatus.hard.macdColorChange.reason}` : ''}`);
   console.log(`   🎯 RSI Momentum: ${filterStatus.hard.rsiMomentum.passed ? '✅' : '❌'} Long: ${filterStatus.hard.rsiMomentum.long ? '✅' : '❌'} Short: ${filterStatus.hard.rsiMomentum.short ? '✅' : '❌'} ${filterStatus.hard.rsiMomentum.reason ? `- ${filterStatus.hard.rsiMomentum.reason}` : ''}\n`);
@@ -1505,15 +1549,16 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   // ADX er nu et HÅRDT filter - checket sker tidligt i funktionen
   // Ingen condition push nødvendig her
   
-  // Volume soft condition - bruger tri-state fra filterStatus (sat i volume hard filter sektionen)
-  // Kun tilføj til conditions array hvis der er en faktisk boolean (ikke null)
-  if (filterStatus.soft.volume.long !== null) {
-    longConditions.push(filterStatus.soft.volume.long);
-    conditionDetails.volume.long = filterStatus.soft.volume.long;
+  // Volume soft condition - bruger retnings-specifik tri-state fra filterStatus
+  // LONG: bruger soft.volumeLong (fra volume_enabled check)
+  // SHORT: bruger soft.volumeShort (fra volume_mode_short == SOFT check)
+  if (filterStatus.soft.volumeLong.passed !== null) {
+    longConditions.push(filterStatus.soft.volumeLong.passed);
+    conditionDetails.volume.long = filterStatus.soft.volumeLong.passed;
   }
-  if (filterStatus.soft.volume.short !== null) {
-    shortConditions.push(filterStatus.soft.volume.short);
-    conditionDetails.volume.short = filterStatus.soft.volume.short;
+  if (filterStatus.soft.volumeShort.passed !== null) {
+    shortConditions.push(filterStatus.soft.volumeShort.passed);
+    conditionDetails.volume.short = filterStatus.soft.volumeShort.passed;
   }
   
   // Pivot Points - Blokerer trades nær key levels (hvis enabled)
@@ -1614,15 +1659,18 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   
   // Kun check enabled filters (MACD retning evalueres IKKE her - den er retnings-specifik)
   // 🔴 FIX: Volume tri-state - null betyder "ikke evalueret", tæller som bestået
+  // LONG: bruger volumeLong, SHORT: bruger volumeShort
   // (hvis volume er disabled eller data mangler, blokerer den IKKE trades)
-  const volumeHardPassed = filterStatus.hard.volume.passed === null || filterStatus.hard.volume.passed === true;
+  // Volume retnings-specifik check
+  const volumeLongHardPassed = filterStatus.hard.volumeLong.passed === null || filterStatus.hard.volumeLong.passed === true;
+  const volumeShortHardPassed = filterStatus.hard.volumeShort.passed === null || filterStatus.hard.volumeShort.passed === true;
+  const volumeHardPassedForSide = finalSide === 'LONG' ? volumeLongHardPassed : 
+                                   finalSide === 'SHORT' ? volumeShortHardPassed : 
+                                   (volumeLongHardPassed || volumeShortHardPassed);
   
   // 🔴 StochRSI hard filter - RETNINGSSPECIFIK! 
-  // LONG kræver K og D i oversold zone (<15), SHORT kræver K og D i overbought zone (>85)
-  // Den gamle logik tillod trades hvis bare én zone var opfyldt - FORKERT!
   let stochrsiHardPassed = true;
   if (config.stochrsi_enabled && config.stochrsi_hard_filter === true) {
-    // Tjek retningsspecifikt: LONG skal have oversold, SHORT skal have overbought
     const oversoldK = config.stochrsi_oversold_k ?? config.stochrsi_oversold ?? 20;
     const oversoldD = config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20;
     const overboughtK = config.stochrsi_overbought_k ?? config.stochrsi_overbought ?? 80;
@@ -1638,9 +1686,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       if (!stochrsiHardPassed) {
         console.log(`   🚫 StochRSI HARD BLOKERER SHORT: ${filterStatus.hard.stochrsi.value} - kræver K>=${overboughtK} AND D>=${overboughtD}`);
       }
-    }
-    // For NONE signal (ingen retning bestemt endnu), tjek om mindst én retning er mulig
-    else {
+    } else {
       stochrsiHardPassed = filterStatus.hard.stochrsi.long === true || filterStatus.hard.stochrsi.short === true;
     }
   }
@@ -1649,7 +1695,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     (!config.ema_enabled || filterStatus.hard.emaSpread.passed) &&
     (!config.atr_enabled || filterStatus.hard.atr.passed) &&
     (!config.adx_enabled || filterStatus.hard.adx.passed) &&
-    volumeHardPassed &&
+    volumeHardPassedForSide &&
     stochrsiHardPassed &&
     (!config.rsi_enabled || filterStatus.hard.rsiMomentum.passed);
   
