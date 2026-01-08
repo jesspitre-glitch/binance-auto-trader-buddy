@@ -2282,13 +2282,12 @@ serve(async (req) => {
           // Analyze signal on scan interval (men ADX beregnes på trend timeframe)
           const analysis = analyzeSignal(scanKlines, trendKlines, config);
           
-          // 🔍 DETAILED DEBUG LOG (first 50 scans)
+          // DEBUG LOG (first 50 scans) - simplified for log visibility
           scanDebugCount++;
           if (scanDebugCount <= MAX_DEBUG_SCANS) {
             const fs = analysis.filterStatus;
             const ind = analysis.indicators;
             
-            // Extract values
             const adxVal = ind.adx?.toFixed(2) ?? 'null';
             const adxPassed = fs?.hard?.adx?.passed;
             const adxReason = fs?.hard?.adx?.reason ?? '';
@@ -2296,8 +2295,6 @@ serve(async (req) => {
             const volCurrent = ind.volume;
             const volAvg = ind.avgVolume;
             const volRatio = (volCurrent && volAvg && volAvg > 0) ? (volCurrent / volAvg).toFixed(2) : 'null';
-            const volLongThreshold = config.volume_multiplier;
-            const volShortThreshold = config.volume_multiplier_short;
             const volLongPassed = fs?.hard?.volumeLong?.passed ?? fs?.soft?.volumeLong?.passed;
             const volShortPassed = fs?.hard?.volumeShort?.passed ?? fs?.soft?.volumeShort?.passed;
             
@@ -2306,27 +2303,18 @@ serve(async (req) => {
             const stochLongPassed = fs?.hard?.stochrsi?.long;
             const stochShortPassed = fs?.hard?.stochrsi?.short;
             
-            const longConditions = ind.conditionDetails?.longConditionsMet ?? 0;
-            const shortConditions = ind.conditionDetails?.shortConditionsMet ?? 0;
-            const requiredConds = config.signal_conditions_required;
+            const longConds = ind.conditionDetails?.longConditionsMet ?? 0;
+            const shortConds = ind.conditionDetails?.shortConditionsMet ?? 0;
+            const reqConds = config.signal_conditions_required;
             
-            const longAllowed = analysis.signal === 'LONG' && analysis.hardFiltersPassed;
-            const shortAllowed = analysis.signal === 'SHORT' && analysis.hardFiltersPassed;
+            const longOK = analysis.signal === 'LONG' && analysis.hardFiltersPassed;
+            const shortOK = analysis.signal === 'SHORT' && analysis.hardFiltersPassed;
             
-            console.log(`\n┌─────────────────────────────────────────────────────────────────────────────`);
-            console.log(`│ 🔍 SCAN #${scanDebugCount}: ${symbol}`);
-            console.log(`├─────────────────────────────────────────────────────────────────────────────`);
-            console.log(`│ ADX: value=${adxVal}, floor=${config.adx_floor}, ceiling=${config.adx_ceiling}, passed=${adxPassed} ${adxPassed ? '✅' : '❌'}`);
-            if (!adxPassed && adxReason) console.log(`│      reason: ${adxReason}`);
-            console.log(`│ VOL_LONG:  ratio=${volRatio}x, threshold=${volLongThreshold}x, passed=${volLongPassed} ${volLongPassed ? '✅' : volLongPassed === false ? '❌' : '⚪'}`);
-            console.log(`│ VOL_SHORT: ratio=${volRatio}x, threshold=${volShortThreshold}x, passed=${volShortPassed} ${volShortPassed ? '✅' : volShortPassed === false ? '❌' : '⚪'}`);
-            console.log(`│ StochRSI: K=${stochK}, D=${stochD}`);
-            console.log(`│      LONG_passed=${stochLongPassed} ${stochLongPassed ? '✅' : '❌'} (requires K<=${config.stochrsi_oversold_k ?? config.stochrsi_oversold}, D<=${config.stochrsi_oversold_d ?? config.stochrsi_oversold})`);
-            console.log(`│      SHORT_passed=${stochShortPassed} ${stochShortPassed ? '✅' : '❌'} (mode=${config.stochrsi_short_mode})`);
-            console.log(`│ SOFT CONDITIONS: long=${longConditions}/${requiredConds}, short=${shortConditions}/${requiredConds}`);
-            console.log(`│ HARD_FILTERS_PASSED: ${analysis.hardFiltersPassed} ${analysis.hardFiltersPassed ? '✅' : '❌'}`);
-            console.log(`│ RAW_SIGNAL: ${analysis.signal}, FINAL: longAllowed=${longAllowed} ${longAllowed ? '🟢' : '⚪'}, shortAllowed=${shortAllowed} ${shortAllowed ? '🔴' : '⚪'}`);
-            console.log(`└─────────────────────────────────────────────────────────────────────────────`);
+            console.log(`[DEBUG_SCAN_${scanDebugCount}] ${symbol} | ADX=${adxVal} pass=${adxPassed} | VOL=${volRatio}x L=${volLongPassed} S=${volShortPassed} | StochK=${stochK} D=${stochD} L=${stochLongPassed} S=${stochShortPassed} | Conds L=${longConds}/${reqConds} S=${shortConds}/${reqConds} | HardPass=${analysis.hardFiltersPassed} | Signal=${analysis.signal} longOK=${longOK} shortOK=${shortOK}`);
+            
+            if (!adxPassed && adxReason) {
+              console.log(`[DEBUG_SCAN_${scanDebugCount}] ADX_BLOCK: ${adxReason}`);
+            }
           }
           
           // Filter signal based on trend timeframes
