@@ -960,14 +960,19 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       }
     } else {
       // STATIC MODE: Brug KUN min_atr_percent (ingen adaptive)
+      // 🔴 FALLBACK: Hvis min_atr_percent er null/undefined, brug 0.04 som default
+      const FALLBACK_MIN_ATR_PERCENT = 0.04;
       const minOk = typeof ui_min_atr_percent === 'number' && Number.isFinite(ui_min_atr_percent);
       if (minOk) {
         effective_min_atr_percent_used = ui_min_atr_percent;
         atr_floor_used = ui_min_atr_percent;
         atr_floor_source = 'manual';
       } else {
-        effective_min_atr_percent_used = null;
-        atr_floor_source = 'manual_invalid';
+        // 🔴 FALLBACK AKTIVERET
+        effective_min_atr_percent_used = FALLBACK_MIN_ATR_PERCENT;
+        atr_floor_used = FALLBACK_MIN_ATR_PERCENT;
+        atr_floor_source = 'fallback_0.04';
+        console.log(`   ⚠️ ATR FALLBACK BRUGT: min_atr_percent var null/undefined, bruger default ${FALLBACK_MIN_ATR_PERCENT}%`);
       }
     }
 
@@ -3469,10 +3474,14 @@ serve(async (req) => {
         ema_enabled: c.ema_enabled,
         ema_fast: c.ema_fast,
         ema_slow: c.ema_slow,
-        // ATR settings
+        // ATR settings (with raw DB value + fallback info)
         atr_enabled: c.atr_enabled,
-        atr_min_percent: c.atr_min_percent,
-        atr_max_percent: c.atr_max_percent,
+        min_atr_percent_raw: c.min_atr_percent,
+        min_atr_percent_effective: (typeof c.min_atr_percent === 'number' && Number.isFinite(c.min_atr_percent)) ? c.min_atr_percent : 0.04,
+        min_atr_percent_source: (typeof c.min_atr_percent === 'number' && Number.isFinite(c.min_atr_percent)) ? 'db' : 'fallback_0.04',
+        adaptive_atr_enabled: c.adaptive_atr_enabled,
+        atr_floor: c.atr_floor,
+        atr_ceiling: c.atr_ceiling,
       };
     }).filter(Boolean) || [];
 
@@ -3481,6 +3490,8 @@ serve(async (req) => {
       symbol: string;
       trend: string;
       atr_pct: number | null;
+      atr_min_threshold: number;
+      atr_pass: boolean;
       adx: number | null;
       vol_ratio: number | null;
       stoch_k: number | null;
@@ -3548,13 +3559,22 @@ serve(async (req) => {
       }
       
       // Check ATR blockers
+      // 🔴 FIX: Brug min_atr_percent (korrekt DB-felt) med fallback 0.04
+      const ATR_FALLBACK = 0.04;
       const atrPct = ind.atr && ind.price ? (ind.atr / ind.price) * 100 : null;
+      const atrMinThreshold = (typeof config?.min_atr_percent === 'number' && Number.isFinite(config.min_atr_percent)) 
+        ? config.min_atr_percent 
+        : ATR_FALLBACK;
+      const atrPass = atrPct !== null && atrPct >= atrMinThreshold;
+      
       if (config?.atr_enabled && atrPct != null) {
-        if (atrPct < (config.atr_min_percent ?? 0.5)) {
-          blockers.push(`ATR_BELOW_MIN:${atrPct.toFixed(2)}%<${config.atr_min_percent}%`);
+        if (atrPct < atrMinThreshold) {
+          blockers.push(`ATR_BELOW_MIN:${atrPct.toFixed(2)}%<${atrMinThreshold.toFixed(2)}%`);
         }
-        if (atrPct > (config.atr_max_percent ?? 5)) {
-          blockers.push(`ATR_ABOVE_MAX:${atrPct.toFixed(2)}%>${config.atr_max_percent}%`);
+        // Ceiling check (atr_ceiling only, not atr_max_percent which doesn't exist)
+        const atrMaxThreshold = config.atr_ceiling ?? 5;
+        if (atrPct > atrMaxThreshold) {
+          blockers.push(`ATR_ABOVE_MAX:${atrPct.toFixed(2)}%>${atrMaxThreshold.toFixed(2)}%`);
         }
       }
       
@@ -3562,6 +3582,8 @@ serve(async (req) => {
         symbol: result.symbol,
         trend: result.trend || 'N/A',
         atr_pct: atrPct,
+        atr_min_threshold: atrMinThreshold,
+        atr_pass: atrPass,
         adx: ind.adx ?? null,
         vol_ratio: volRatio,
         stoch_k: ind.stochRSI_k ?? null,
