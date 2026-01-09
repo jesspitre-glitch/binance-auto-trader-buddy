@@ -3428,14 +3428,153 @@ serve(async (req) => {
       } // End of signalsToTrade loop
     }
 
-    // Include runtime config info in response for debugging
-    const runtimeConfigInfo = sessions?.map(s => ({
-      config_id: s.indicator_config?.id,
-      name: s.indicator_config?.name,
-      updated_at: s.indicator_config?.updated_at,
-    })) || [];
+    // Include FULL runtime config info in response for debugging
+    const runtimeConfigInfo = sessions?.map(s => {
+      const c = s.indicator_config;
+      if (!c) return null;
+      return {
+        config_id: c.id,
+        name: c.name,
+        updated_at: c.updated_at,
+        // Core settings
+        signal_conditions_required: c.signal_conditions_required,
+        leverage: c.leverage,
+        // ADX settings
+        adx_enabled: c.adx_enabled,
+        adx_floor: c.adx_floor,
+        adx_ceiling: c.adx_ceiling,
+        adx_threshold: c.adx_threshold,
+        adx_hard_filter: c.adx_hard_filter,
+        // Volume settings (LONG)
+        volume_enabled: c.volume_enabled,
+        volume_multiplier: c.volume_multiplier,
+        volume_hard_filter: c.volume_hard_filter,
+        // Volume settings (SHORT)
+        volume_mode_short: c.volume_mode_short,
+        volume_multiplier_short: c.volume_multiplier_short,
+        // StochRSI settings
+        stochrsi_enabled: c.stochrsi_enabled,
+        stochrsi_hard_filter: c.stochrsi_hard_filter,
+        stochrsi_oversold_k: c.stochrsi_oversold_k ?? c.stochrsi_oversold,
+        stochrsi_oversold_d: c.stochrsi_oversold_d ?? c.stochrsi_oversold,
+        stochrsi_overbought_k: c.stochrsi_overbought_k ?? c.stochrsi_overbought,
+        stochrsi_overbought_d: c.stochrsi_overbought_d ?? c.stochrsi_overbought,
+        stochrsi_short_mode: c.stochrsi_short_mode,
+        rollover_d_min_short: c.rollover_d_min_short,
+        // RSI settings
+        rsi_enabled: c.rsi_enabled,
+        rsi_oversold: c.rsi_oversold,
+        rsi_overbought: c.rsi_overbought,
+        // EMA settings
+        ema_enabled: c.ema_enabled,
+        ema_fast: c.ema_fast,
+        ema_slow: c.ema_slow,
+        // ATR settings
+        atr_enabled: c.atr_enabled,
+        atr_min_percent: c.atr_min_percent,
+        atr_max_percent: c.atr_max_percent,
+      };
+    }).filter(Boolean) || [];
 
-    return new Response(JSON.stringify({ results, _runtime_config: runtimeConfigInfo }), {
+    // Build gate snapshot for top symbols
+    const gateSnapshots: Array<{
+      symbol: string;
+      trend: string;
+      atr_pct: number | null;
+      adx: number | null;
+      vol_ratio: number | null;
+      stoch_k: number | null;
+      stoch_d: number | null;
+      top3_blockers: string[];
+    }> = [];
+
+    // Collect from all results (each result is a single scan)
+    const config = sessions?.find(s => s.indicator_config)?.indicator_config;
+    
+    for (const result of results.slice(0, 10)) { // Top 10 results
+      const blockers: string[] = [];
+      const ind = result.analysis?.indicators || {};
+      const signal = result.analysis?.signal || 'NONE';
+      
+      // Check ADX blockers
+      if (config?.adx_enabled) {
+        if (ind.adx != null && ind.adx < (config.adx_floor ?? 15)) {
+          blockers.push(`ADX_BELOW_MIN:${ind.adx?.toFixed(1)}<${config.adx_floor}`);
+        } else if (ind.adx != null && ind.adx > (config.adx_ceiling ?? 50)) {
+          blockers.push(`ADX_ABOVE_MAX:${ind.adx?.toFixed(1)}>${config.adx_ceiling}`);
+        }
+      }
+      
+      // Check Volume blockers
+      const volCurrent = ind.volume;
+      const volAvg = ind.avgVolume;
+      const volRatio = volCurrent && volAvg ? volCurrent / volAvg : null;
+      if (config?.volume_enabled && volRatio != null) {
+        const isLong = signal === 'LONG';
+        const isShort = signal === 'SHORT';
+        if (isLong && volRatio < (config.volume_multiplier ?? 1)) {
+          blockers.push(`VOL_LONG_FAIL:${volRatio.toFixed(2)}x<${config.volume_multiplier}x`);
+        }
+        if (isShort && (config.volume_mode_short === 'HARD' || config.volume_mode_short === 'SOFT')) {
+          if (volRatio < (config.volume_multiplier_short ?? 0.5)) {
+            blockers.push(`VOL_SHORT_FAIL:${volRatio.toFixed(2)}x<${config.volume_multiplier_short}x`);
+          }
+        }
+      }
+      
+      // Check StochRSI blockers
+      if (config?.stochrsi_enabled && config.stochrsi_hard_filter) {
+        const k = ind.stochRSI_k;
+        const d = ind.stochRSI_d;
+        const isLong = signal === 'LONG';
+        const isShort = signal === 'SHORT';
+        const oversoldK = config.stochrsi_oversold_k ?? config.stochrsi_oversold ?? 20;
+        const oversoldD = config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20;
+        const overboughtK = config.stochrsi_overbought_k ?? config.stochrsi_overbought ?? 80;
+        const overboughtD = config.stochrsi_overbought_d ?? config.stochrsi_overbought ?? 80;
+        
+        if (isLong && k != null && k > oversoldK) {
+          blockers.push(`STOCH_LONG_K:${k.toFixed(1)}>${oversoldK}`);
+        }
+        if (isLong && d != null && d > oversoldD) {
+          blockers.push(`STOCH_LONG_D:${d.toFixed(1)}>${oversoldD}`);
+        }
+        if (isShort && k != null && k < overboughtK) {
+          blockers.push(`STOCH_SHORT_K:${k.toFixed(1)}<${overboughtK}`);
+        }
+        if (isShort && d != null && d < overboughtD) {
+          blockers.push(`STOCH_SHORT_D:${d.toFixed(1)}<${overboughtD}`);
+        }
+      }
+      
+      // Check ATR blockers
+      const atrPct = ind.atr && ind.price ? (ind.atr / ind.price) * 100 : null;
+      if (config?.atr_enabled && atrPct != null) {
+        if (atrPct < (config.atr_min_percent ?? 0.5)) {
+          blockers.push(`ATR_BELOW_MIN:${atrPct.toFixed(2)}%<${config.atr_min_percent}%`);
+        }
+        if (atrPct > (config.atr_max_percent ?? 5)) {
+          blockers.push(`ATR_ABOVE_MAX:${atrPct.toFixed(2)}%>${config.atr_max_percent}%`);
+        }
+      }
+      
+      gateSnapshots.push({
+        symbol: result.symbol,
+        trend: result.trend || 'N/A',
+        atr_pct: atrPct,
+        adx: ind.adx ?? null,
+        vol_ratio: volRatio,
+        stoch_k: ind.stochRSI_k ?? null,
+        stoch_d: ind.stochRSI_d ?? null,
+        top3_blockers: blockers.slice(0, 3),
+      });
+    }
+
+    return new Response(JSON.stringify({ 
+      results, 
+      _runtime_config: runtimeConfigInfo,
+      _gate_snapshots: gateSnapshots.slice(0, 10), // Top 10 symbols
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: any) {
