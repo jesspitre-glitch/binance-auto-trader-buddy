@@ -493,24 +493,44 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       }
 
       let result;
+      let savedConfigId: string | null = null;
+      let savedUpdatedAt: string | null = null;
+      
       if (config?.id) {
         result = await supabase
           .from("indicator_config")
           .update(finalPayload)
-          .eq("id", config.id);
+          .eq("id", config.id)
+          .select("id, updated_at")
+          .single();
+        
+        if (result.data) {
+          savedConfigId = result.data.id;
+          savedUpdatedAt = result.data.updated_at;
+        }
       } else {
         result = await supabase
           .from("indicator_config")
-          .insert(finalPayload);
+          .insert(finalPayload)
+          .select("id, updated_at")
+          .single();
+          
+        if (result.data) {
+          savedConfigId = result.data.id;
+          savedUpdatedAt = result.data.updated_at;
+        }
       }
 
       if (result.error) throw result.error;
 
+      // 🔍 DEBUG: Log saved config info to console for verification
+      console.log(`[SAVED_CONFIG] saved_config_id=${savedConfigId} | saved_updated_at=${savedUpdatedAt} | config_name="${config?.name ?? finalPayload.name}"`);
+      
       toast({
         title: "Gemt",
         description: config?.id 
-          ? "Strategi er opdateret" 
-          : `Ny strategi "${finalPayload.name}" er oprettet`,
+          ? `Strategi opdateret (ID: ${savedConfigId?.slice(0, 8)}...)` 
+          : `Ny strategi "${finalPayload.name}" oprettet (ID: ${savedConfigId?.slice(0, 8)}...)`,
       });
       onSave?.();
     } catch (error: any) {
