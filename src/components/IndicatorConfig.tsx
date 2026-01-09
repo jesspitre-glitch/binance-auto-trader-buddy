@@ -33,6 +33,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [lastSaveInfo, setLastSaveInfo] = useState<{ id: string; updated_at: string; name: string } | null>(null);
   const [formData, setFormData] = useState({
     name: config?.name || "1",
     enabled: config?.enabled !== undefined ? config?.enabled : true,
@@ -523,14 +524,19 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
       if (result.error) throw result.error;
 
-      // 🔍 DEBUG: Log saved config info to console for verification
+      // 🔍 DEBUG: Set lastSaveInfo for visible UI display
+      if (savedConfigId && savedUpdatedAt) {
+        setLastSaveInfo({
+          id: savedConfigId,
+          updated_at: savedUpdatedAt,
+          name: config?.name ?? finalPayload.name
+        });
+      }
       console.log(`[SAVED_CONFIG] saved_config_id=${savedConfigId} | saved_updated_at=${savedUpdatedAt} | config_name="${config?.name ?? finalPayload.name}"`);
       
       toast({
         title: "Gemt",
-        description: config?.id 
-          ? `Strategi opdateret (ID: ${savedConfigId?.slice(0, 8)}...)` 
-          : `Ny strategi "${finalPayload.name}" oprettet (ID: ${savedConfigId?.slice(0, 8)}...)`,
+        description: `saved_config_id: ${savedConfigId}`,
       });
       onSave?.();
     } catch (error: any) {
@@ -606,6 +612,21 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
   return (
     <div className="space-y-6">
+      {/* DEBUG BANNER - Shows last saved config info */}
+      {lastSaveInfo && (
+        <div className="bg-green-900/50 border border-green-500 rounded-lg p-3 text-sm font-mono">
+          <div className="text-green-400 font-bold mb-1">✅ SAVED CONFIG INFO</div>
+          <div className="text-green-200">
+            <div>saved_config_id: <span className="text-white font-bold">{lastSaveInfo.id}</span></div>
+            <div>saved_updated_at: <span className="text-white font-bold">{lastSaveInfo.updated_at}</span></div>
+            <div>name: <span className="text-white font-bold">{lastSaveInfo.name}</span></div>
+          </div>
+          <div className="text-xs text-green-400 mt-2">
+            Kør en scan og sammenlign med runtime_config.config_id
+          </div>
+        </div>
+      )}
+      
       <Card>
         <CardHeader>
           <CardTitle>Strategi Indstillinger</CardTitle>
