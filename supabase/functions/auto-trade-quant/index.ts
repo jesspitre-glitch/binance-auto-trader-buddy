@@ -2216,13 +2216,8 @@ serve(async (req) => {
 
       // Calculate strategy identifier for this config
       const strategyHash = await getStrategyIdentifier(config);
-      console.log(`\n══════════════════════════════════════════════════════════════════════════════════`);
-      console.log(`[RUNTIME_CONFIG] config_id=${config.id} | name="${config.name}" | updated_at=${config.updated_at} | strategy_hash=${strategyHash}`);
-      console.log(`📋 REQUIRED CONDITIONS: ${config.signal_conditions_required}`);
-      console.log(`📋 ADX: enabled=${config.adx_enabled}, floor=${config.adx_floor}, ceiling=${config.adx_ceiling}, threshold=${config.adx_threshold}`);
-      console.log(`📋 VOLUME: enabled=${config.volume_enabled}, multiplier_long=${config.volume_multiplier}, multiplier_short=${config.volume_multiplier_short}, mode_short=${config.volume_mode_short}`);
-      console.log(`📋 STOCHRSI: enabled=${config.stochrsi_enabled}, hard_filter=${config.stochrsi_hard_filter}, oversold_k=${config.stochrsi_oversold_k ?? config.stochrsi_oversold}, oversold_d=${config.stochrsi_oversold_d ?? config.stochrsi_oversold}, overbought_k=${config.stochrsi_overbought_k ?? config.stochrsi_overbought}, overbought_d=${config.stochrsi_overbought_d ?? config.stochrsi_overbought}`);
-      console.log(`══════════════════════════════════════════════════════════════════════════════════\n`);
+      console.warn(`[RUNTIME_CONFIG] config_id=${config.id} | name="${config.name}" | updated_at=${config.updated_at} | strategy_hash=${strategyHash}`);
+      console.warn(`[RUNTIME_CONFIG_DETAIL] required_conds=${config.signal_conditions_required} | adx_floor=${config.adx_floor} | adx_ceiling=${config.adx_ceiling} | vol_long=${config.volume_multiplier} | vol_short=${config.volume_multiplier_short}`);
       
       // Track scan count for debug logging (first 50)
       let scanDebugCount = 0;
@@ -3433,7 +3428,14 @@ serve(async (req) => {
       } // End of signalsToTrade loop
     }
 
-    return new Response(JSON.stringify({ results }), {
+    // Include runtime config info in response for debugging
+    const runtimeConfigInfo = sessions?.map(s => ({
+      config_id: s.indicator_config?.id,
+      name: s.indicator_config?.name,
+      updated_at: s.indicator_config?.updated_at,
+    })) || [];
+
+    return new Response(JSON.stringify({ results, _runtime_config: runtimeConfigInfo }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: any) {
