@@ -2217,8 +2217,7 @@ serve(async (req) => {
       // Calculate strategy identifier for this config
       const strategyHash = await getStrategyIdentifier(config);
       console.log(`\n══════════════════════════════════════════════════════════════════════════════════`);
-      console.log(`📋 CONFIG LOADED: id=${config.id}, name="${config.name}"`);
-      console.log(`📋 STRATEGY HASH: ${strategyHash}`);
+      console.log(`[RUNTIME_CONFIG] config_id=${config.id} | name="${config.name}" | updated_at=${config.updated_at} | strategy_hash=${strategyHash}`);
       console.log(`📋 REQUIRED CONDITIONS: ${config.signal_conditions_required}`);
       console.log(`📋 ADX: enabled=${config.adx_enabled}, floor=${config.adx_floor}, ceiling=${config.adx_ceiling}, threshold=${config.adx_threshold}`);
       console.log(`📋 VOLUME: enabled=${config.volume_enabled}, multiplier_long=${config.volume_multiplier}, multiplier_short=${config.volume_multiplier_short}, mode_short=${config.volume_mode_short}`);
