@@ -502,30 +502,47 @@ export const PnLOverview = () => {
   }, [timeRange]);
 
   // Separate effect for realtime subscription - only set up once
+  // Non-blocking: errors don't prevent the component from rendering
   useEffect(() => {
-    console.log("[PnL] Setting up realtime subscription for trade_history");
-    
-    const channel = supabase
-      .channel("pnl-trade-history-changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "trade_history",
-        },
-        (payload) => {
-          console.log("[PnL] Realtime: New trade detected, refetching data", payload);
-          fetchPnLData(timeRangeRef.current);
-        }
-      )
-      .subscribe((status) => {
-        console.log("[PnL] Realtime subscription status:", status);
-      });
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let mounted = true;
+
+    const setupSubscription = () => {
+      if (!mounted) return;
+      
+      console.log("[PnL] Setting up realtime subscription for trade_history");
+      
+      channel = supabase
+        .channel("pnl-trade-history-changes")
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "trade_history",
+          },
+          (payload) => {
+            if (!mounted) return;
+            console.log("[PnL] Realtime: New trade detected, refetching data", payload);
+            fetchPnLData(timeRangeRef.current);
+          }
+        )
+        .subscribe((status) => {
+          console.log("[PnL] Realtime subscription status:", status);
+          // Don't let subscription errors affect the UI
+        });
+    };
+
+    // Delay subscription setup slightly to not block initial render
+    const timer = window.setTimeout(setupSubscription, 500);
 
     return () => {
-      console.log("[PnL] Cleaning up realtime subscription");
-      supabase.removeChannel(channel);
+      mounted = false;
+      window.clearTimeout(timer);
+      if (channel) {
+        console.log("[PnL] Cleaning up realtime subscription");
+        supabase.removeChannel(channel);
+      }
     };
   }, []);
 
