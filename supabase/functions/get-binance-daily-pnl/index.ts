@@ -123,16 +123,54 @@ serve(async (req) => {
       );
     }
 
-    // Calculate UTC day boundaries (like Binance does)
+    // Parse request body for custom time range
+    let requestedStartTime: number | null = null;
+    let requestedEndTime: number | null = null;
+    
+    if (req.method === 'POST') {
+      try {
+        const body = await req.json();
+        if (body.startTime) requestedStartTime = body.startTime;
+        if (body.endTime) requestedEndTime = body.endTime;
+      } catch {
+        // No body or invalid JSON, use defaults
+      }
+    }
+
+    // Calculate time boundaries
     const now = new Date();
-    const utcDayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
-    const startTime = utcDayStart.getTime();
-    const endTime = now.getTime();
+    let startTime: number;
+    let endTime: number;
+    
+    if (requestedStartTime && requestedEndTime) {
+      // Use requested range
+      startTime = requestedStartTime;
+      endTime = requestedEndTime;
+    } else {
+      // Default to UTC day (like Binance does)
+      const utcDayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+      startTime = utcDayStart.getTime();
+      endTime = now.getTime();
+    }
 
-    console.log(`Fetching Binance income from ${utcDayStart.toISOString()} to ${now.toISOString()}`);
+    console.log(`Fetching Binance income from ${new Date(startTime).toISOString()} to ${new Date(endTime).toISOString()}`);
 
-    // Fetch all income types for today (UTC)
-    const allIncome = await getBinanceIncome(apiKey, apiSecret, startTime, endTime);
+    // Binance API limits: max 7 days per request, max 1000 records
+    // For longer periods, we need to chunk the requests
+    const MAX_CHUNK_MS = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
+    const allIncome: any[] = [];
+    
+    let chunkStart = startTime;
+    while (chunkStart < endTime) {
+      const chunkEnd = Math.min(chunkStart + MAX_CHUNK_MS, endTime);
+      
+      console.log(`Fetching chunk: ${new Date(chunkStart).toISOString()} to ${new Date(chunkEnd).toISOString()}`);
+      
+      const chunkIncome = await getBinanceIncome(apiKey, apiSecret, chunkStart, chunkEnd);
+      allIncome.push(...chunkIncome);
+      
+      chunkStart = chunkEnd;
+    }
     
     // Get current account data for unrealized PNL
     const accountData = await getBinanceAccount(apiKey, apiSecret);
@@ -180,9 +218,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        // UTC day boundaries
-        startTime: utcDayStart.toISOString(),
-        endTime: now.toISOString(),
+        // Time boundaries used
+        startTime: new Date(startTime).toISOString(),
+        endTime: new Date(endTime).toISOString(),
         
         // Main P&L figures (matching Binance display)
         todaysRealizedPnl,           // "Today's Realized PNL" as shown in Binance
