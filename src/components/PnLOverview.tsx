@@ -79,7 +79,7 @@ export const PnLOverview = () => {
       // Fetch portfolio balance
       const portfolioResult = await supabase
         .from("user_portfolio")
-        .select("futures_capital")
+        .select("futures_capital, futures_deposited, futures_withdrawn")
         .eq("user_id", user.id)
         .maybeSingle();
 
