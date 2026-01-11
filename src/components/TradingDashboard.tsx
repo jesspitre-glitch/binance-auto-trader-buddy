@@ -70,6 +70,22 @@ export const TradingDashboard = () => {
         if (data.active_config_id) {
           setActiveConfigId(data.active_config_id);
         }
+        
+        // Auto-restart scanner if trading session is active but scanner is not
+        if (data.is_active) {
+          const { data: scannerStatus } = await supabase
+            .from("scanner_status")
+            .select("is_active")
+            .eq("id", "main")
+            .maybeSingle();
+          
+          if (!scannerStatus?.is_active) {
+            console.log("Scanner inactive but trading active - restarting scanner");
+            await supabase.functions.invoke('continuous-scan-quant', {
+              body: { action: 'start', interval_ms: 3000, user_id: user.id }
+            });
+          }
+        }
       }
     } catch (error: any) {
       console.error("Session fetch error:", error);
