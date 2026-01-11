@@ -33,21 +33,14 @@ export const ContinuousSyncControl = () => {
   const startSync = async () => {
     try {
       setLoading(true);
-      
-      const params = new URLSearchParams({ action: 'start' });
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/continuous-sync-binance?${params}`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          }
-        }
-      );
 
-      if (!response.ok) throw new Error('Failed to start sync');
+      const { error } = await supabase.functions.invoke("continuous-sync-binance", {
+        body: { action: "start" },
+      });
 
-      setSyncStatus('active');
+      if (error) throw error;
+
+      setSyncStatus("active");
       toast({
         title: "Kontinuerlig sync startet",
         description: "Synkroniserer med Binance hvert 5. sekund",
@@ -66,20 +59,14 @@ export const ContinuousSyncControl = () => {
   const stopSync = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams({ action: 'stop' });
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/continuous-sync-binance?${params}`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          }
-        }
-      );
 
-      if (!response.ok) throw new Error('Failed to stop sync');
+      const { error } = await supabase.functions.invoke("continuous-sync-binance", {
+        body: { action: "stop" },
+      });
 
-      setSyncStatus('stopped');
+      if (error) throw error;
+
+      setSyncStatus("stopped");
       toast({
         title: "Sync stoppet",
         description: "Kontinuerlig synkronisering er deaktiveret",

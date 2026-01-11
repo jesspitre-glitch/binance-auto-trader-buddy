@@ -51,7 +51,6 @@ export function useBinanceFuturesPrices(symbols: string[]) {
         
         if (!symbol || !isFinite(price)) return;
         
-        console.log(`Price update: ${symbol} = ${price}`);
         setPrices((prev) => ({ ...prev, [symbol]: price }));
         setUpdatedAt((prev) => ({ ...prev, [symbol]: ts }));
       } catch (err) {
