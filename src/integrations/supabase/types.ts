@@ -575,6 +575,42 @@ export type Database = {
         }
         Relationships: []
       }
+      scanner_status: {
+        Row: {
+          created_at: string
+          id: string
+          interval_ms: number
+          is_active: boolean
+          last_heartbeat_at: string | null
+          last_scan_at: string | null
+          started_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          interval_ms?: number
+          is_active?: boolean
+          last_heartbeat_at?: string | null
+          last_scan_at?: string | null
+          started_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          interval_ms?: number
+          is_active?: boolean
+          last_heartbeat_at?: string | null
+          last_scan_at?: string | null
+          started_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       trade_history: {
         Row: {
           close_reason: string | null

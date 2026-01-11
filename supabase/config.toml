@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.backfill-mae]
 verify_jwt = false
+
+[functions.continuous-scan-quant]
+verify_jwt = false
+
+[functions.scanner-keepalive]
+verify_jwt = false

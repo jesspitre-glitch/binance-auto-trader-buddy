@@ -142,10 +142,14 @@ export const TradingDashboard = () => {
 
       if (error) throw error;
 
-      // Start/stop continuous scanner
+      // Start/stop continuous scanner with user_id for DB persistence
       const scannerAction = newState ? 'start' : 'stop';
-      const { error: scannerError } = await supabase.functions.invoke('continuous-scan-quant', {
-        body: { action: scannerAction, interval_ms: 3000 }
+      const { data: scannerResult, error: scannerError } = await supabase.functions.invoke('continuous-scan-quant', {
+        body: { 
+          action: scannerAction, 
+          interval_ms: 3000,
+          user_id: user.id  // Pass user_id for DB-based scanner status
+        }
       });
 
       if (scannerError) {
@@ -155,6 +159,8 @@ export const TradingDashboard = () => {
           description: `Kunne ikke ${scannerAction === 'start' ? 'starte' : 'stoppe'} continuous scanner`,
           variant: "destructive",
         });
+      } else {
+        console.log('Scanner result:', scannerResult);
       }
 
       setIsActive(newState);
@@ -162,7 +168,7 @@ export const TradingDashboard = () => {
       toast({
         title: newState ? "Trading startet" : "Trading stoppet",
         description: newState
-          ? "Auto-trading og continuous scanner er nu aktivt"
+          ? "Auto-trading og continuous scanner er nu aktivt. Scanner kører i baggrunden."
           : "Auto-trading og continuous scanner er stoppet",
       });
     } catch (error: any) {
