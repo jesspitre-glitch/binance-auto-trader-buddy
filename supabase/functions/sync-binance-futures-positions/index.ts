@@ -221,6 +221,27 @@ serve(async (req) => {
             futures_capital: totalMarginBalance,
           });
       }
+      
+      // Create daily balance snapshot if it doesn't exist yet (Binance-style P&L tracking)
+      const todayDateStr = new Date().toISOString().split('T')[0];
+      const { data: existingSnapshot } = await supabaseClient
+        .from('daily_balance_snapshots')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('snapshot_date', todayDateStr)
+        .maybeSingle();
+      
+      if (!existingSnapshot) {
+        console.log(`Creating daily balance snapshot for ${todayDateStr}: ${totalMarginBalance}`);
+        await supabaseClient
+          .from('daily_balance_snapshots')
+          .insert({
+            user_id: userId,
+            snapshot_date: todayDateStr,
+            futures_balance: totalMarginBalance,
+            unrealized_pnl: totalUnrealizedProfit,
+          });
+      }
 
       // Fetch positions from Binance
       const binancePositions = await getBinancePositions(apiKey, apiSecret);

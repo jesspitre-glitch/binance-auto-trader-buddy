@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      daily_balance_snapshots: {
+        Row: {
+          created_at: string
+          futures_balance: number
+          id: string
+          snapshot_date: string
+          unrealized_pnl: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          futures_balance?: number
+          id?: string
+          snapshot_date: string
+          unrealized_pnl?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          futures_balance?: number
+          id?: string
+          snapshot_date?: string
+          unrealized_pnl?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       funding_fees: {
         Row: {
           asset: string
