@@ -18,26 +18,33 @@ const App = () => {
 
   useEffect(() => {
     let mounted = true;
+    const watchdog = window.setTimeout(() => {
+      if (!mounted) return;
+      console.warn("[App] Auth init timeout – showing UI anyway");
+      setLoading(false);
+      setAuthReady(true);
+    }, 4000);
 
     const initAuth = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
         if (!mounted) return;
-        
+
         if (error) {
           console.error("Auth init error:", error);
         }
-        
+
         setSession(session);
       } catch (err) {
         console.error("Auth exception:", err);
       } finally {
+        window.clearTimeout(watchdog);
         if (mounted) {
           setLoading(false);
-          // Small delay to ensure auth is fully propagated
-          setTimeout(() => {
-            if (mounted) setAuthReady(true);
-          }, 100);
+          setAuthReady(true);
         }
       }
     };
@@ -49,12 +56,14 @@ const App = () => {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted) {
         setSession(session);
+        setLoading(false);
         setAuthReady(true);
       }
     });
 
     return () => {
       mounted = false;
+      window.clearTimeout(watchdog);
       subscription.unsubscribe();
     };
   }, []);
