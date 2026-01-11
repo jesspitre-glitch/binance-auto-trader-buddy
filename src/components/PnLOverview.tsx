@@ -82,15 +82,37 @@ export const PnLOverview = () => {
         .select("futures_capital, futures_deposited, futures_withdrawn")
         .eq("user_id", user.id)
         .maybeSingle();
+
+      // For 24h view, fetch REAL Binance daily P&L from income ledger
+      let binanceDailyPnl: {
+        todaysRealizedPnl: number;
+        commission: number;
+        fundingFee: number;
+        netPnl: number;
+        unrealizedPnl: number;
+        walletBalance: number;
+        marginBalance: number;
+      } | null = null;
       
-      // Fetch start-of-day balance snapshot for Binance-style P&L calculation
-      const todayDateStr = new Date().toISOString().split('T')[0];
-      const { data: snapshotData } = await supabase
-        .from("daily_balance_snapshots")
-        .select("futures_balance, unrealized_pnl")
-        .eq("user_id", user.id)
-        .eq("snapshot_date", todayDateStr)
-        .maybeSingle();
+      if (range === "24h") {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (sessionData?.session) {
+            const response = await supabase.functions.invoke("get-binance-daily-pnl", {
+              headers: {
+                Authorization: `Bearer ${sessionData.session.access_token}`,
+              },
+            });
+            
+            if (response.data && !response.error) {
+              binanceDailyPnl = response.data;
+              console.log("[PnL] Binance daily P&L from income ledger:", binanceDailyPnl);
+            }
+          }
+        } catch (err) {
+          console.warn("[PnL] Failed to fetch Binance daily P&L:", err);
+        }
+      }
 
       // Fetch ALL trades using pagination
       const allTradesData: any[] = [];
@@ -146,14 +168,11 @@ export const PnLOverview = () => {
       );
       
       const currentBalance = Number(portfolioResult?.data?.futures_capital || 0);
-      const startOfDayBalance = Number(snapshotData?.futures_balance || 0);
-      const netDeposits = Number(portfolioResult?.data?.futures_deposited || 0) - Number(portfolioResult?.data?.futures_withdrawn || 0);
       const portfolioBalance = currentBalance;
 
       setAllTrades(trades);
 
-      // Calculate P&L using Binance-style method: Current balance - Start balance - Net transfers
-      // For 24h/today view, use balance-based calculation if snapshot exists
+      // Calculate P&L
       let totalPnL: number;
       let totalPnLGross: number;
       let totalPnLAfterFees: number;
@@ -161,23 +180,23 @@ export const PnLOverview = () => {
       let totalFees: number;
       let totalFunding: number;
       
-      // Trade-based calculations (for detailed stats)
-      const tradePnL = trades.reduce((sum, t) => sum + Number(t.pnl), 0);
-      totalFees = trades.reduce((sum, t) => sum + Number(t.total_fee || 0), 0);
-      totalFunding = trades.reduce((sum, t) => sum + Number(t.funding_fee || 0), 0);
-      
-      // Use Binance-style balance calculation for 24h view when snapshot exists
-      if (range === "24h" && snapshotData && startOfDayBalance > 0) {
-        // Binance formula: Current balance - Start of day balance - Net deposits today
-        // For simplicity, assume no deposits/withdrawals during the day
-        totalPnL = currentBalance - startOfDayBalance;
-        totalPnLNet = totalPnL;
-        totalPnLAfterFees = totalPnL; // Already includes fees
-        totalPnLGross = tradePnL; // Keep trade-based gross for reference
+      // For 24h view, use REAL Binance income ledger data
+      if (range === "24h" && binanceDailyPnl) {
+        // Binance's exact figures from income ledger API
+        totalPnLGross = binanceDailyPnl.todaysRealizedPnl;  // REALIZED_PNL
+        totalFees = Math.abs(binanceDailyPnl.commission);   // COMMISSION (negative in API)
+        totalFunding = binanceDailyPnl.fundingFee;          // FUNDING_FEE
+        totalPnLAfterFees = binanceDailyPnl.todaysRealizedPnl + binanceDailyPnl.commission; // Gross - fees
+        totalPnLNet = binanceDailyPnl.netPnl;               // REALIZED_PNL + COMMISSION + FUNDING_FEE
+        totalPnL = totalPnLNet;
         
-        console.log(`[PnL] Binance-style: current=${currentBalance.toFixed(2)}, startOfDay=${startOfDayBalance.toFixed(2)}, PnL=${totalPnL.toFixed(2)}`);
+        console.log(`[PnL] Binance income ledger: gross=${totalPnLGross.toFixed(2)}, fees=${totalFees.toFixed(2)}, funding=${totalFunding.toFixed(4)}, net=${totalPnLNet.toFixed(2)}`);
       } else {
-        // Fallback to trade-based calculation for other ranges or when no snapshot
+        // Fallback to trade-based calculation for other ranges
+        const tradePnL = trades.reduce((sum, t) => sum + Number(t.pnl), 0);
+        totalFees = trades.reduce((sum, t) => sum + Number(t.total_fee || 0), 0);
+        totalFunding = trades.reduce((sum, t) => sum + Number(t.funding_fee || 0), 0);
+        
         totalPnLGross = tradePnL;
         totalPnLAfterFees = tradePnL - totalFees;
         totalPnLNet = totalPnLAfterFees + totalFunding;
@@ -251,7 +270,7 @@ export const PnLOverview = () => {
 
       // Impact calculations
       const absNetPnl = Math.abs(totalPnLNet);
-      const absGrossPnl = Math.abs(tradePnL);
+      const absGrossPnl = Math.abs(totalPnLGross);
       const absFunding = Math.abs(totalFunding);
       const absFees = Math.abs(totalFees);
 
@@ -342,7 +361,7 @@ export const PnLOverview = () => {
         profitFactor,
         fundingFees: totalFunding,
         // New fee stats
-        totalPnLGross: tradePnL,
+        totalPnLGross,
         totalPnLAfterFees,
         totalPnLNet,
         totalFees,
