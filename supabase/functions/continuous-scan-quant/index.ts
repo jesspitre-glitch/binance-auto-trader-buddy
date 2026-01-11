@@ -6,6 +6,25 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const getUserIdFromAuthHeader = (req: Request): string | null => {
+  try {
+    const auth = req.headers.get('authorization') ?? req.headers.get('Authorization');
+    if (!auth || !auth.startsWith('Bearer ')) return null;
+    const token = auth.slice('Bearer '.length);
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+
+    // JWT payload is base64url encoded
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    const payloadJson = atob(padded);
+    const payload = JSON.parse(payloadJson) as { sub?: unknown };
+    return typeof payload.sub === 'string' ? payload.sub : null;
+  } catch {
+    return null;
+  }
+};
+
 /**
  * ROBUST CONTINUOUS SCANNER
  * 
@@ -59,6 +78,10 @@ serve(async (req) => {
 
     // Handle START action
     if (action === 'start') {
+      if (!userId) {
+        userId = getUserIdFromAuthHeader(req) ?? '';
+      }
+
       if (!userId) {
         return new Response(JSON.stringify({ error: 'user_id required' }), {
           status: 400,
