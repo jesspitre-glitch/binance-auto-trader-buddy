@@ -55,15 +55,21 @@ export const TradingDashboard = () => {
   const fetchSession = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        console.log("No user found during session fetch");
+        return;
+      }
 
       const { data, error } = await supabase
         .from("trading_session")
         .select("*")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== "PGRST116") throw error;
+      if (error) {
+        console.error("Trading session query error:", error);
+        return;
+      }
       
       if (data) {
         setIsActive(data.is_active || false);
@@ -73,17 +79,21 @@ export const TradingDashboard = () => {
         
         // Auto-restart scanner if trading session is active but scanner is not
         if (data.is_active) {
-          const { data: scannerStatus } = await supabase
-            .from("scanner_status")
-            .select("is_active")
-            .eq("id", "main")
-            .maybeSingle();
-          
-          if (!scannerStatus?.is_active) {
-            console.log("Scanner inactive but trading active - restarting scanner");
-            await supabase.functions.invoke('continuous-scan-quant', {
-              body: { action: 'start', interval_ms: 3000, user_id: user.id }
-            });
+          try {
+            const { data: scannerStatus } = await supabase
+              .from("scanner_status")
+              .select("is_active")
+              .eq("id", "main")
+              .maybeSingle();
+            
+            if (!scannerStatus?.is_active) {
+              console.log("Scanner inactive but trading active - restarting scanner");
+              await supabase.functions.invoke('continuous-scan-quant', {
+                body: { action: 'start', interval_ms: 3000, user_id: user.id }
+              }).catch(err => console.error("Scanner restart failed:", err));
+            }
+          } catch (scanError) {
+            console.error("Scanner status check failed:", scanError);
           }
         }
       }
