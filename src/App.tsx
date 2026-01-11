@@ -14,24 +14,57 @@ const queryClient = new QueryClient();
 const App = () => {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
+    let mounted = true;
+
+    const initAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (!mounted) return;
+        
+        if (error) {
+          console.error("Auth init error:", error);
+        }
+        
+        setSession(session);
+      } catch (err) {
+        console.error("Auth exception:", err);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+          // Small delay to ensure auth is fully propagated
+          setTimeout(() => {
+            if (mounted) setAuthReady(true);
+          }, 100);
+        }
+      }
+    };
+
+    initAuth();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+      if (mounted) {
+        setSession(session);
+        setAuthReady(true);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  if (loading) {
-    return null;
+  if (loading || (session && !authReady)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
   }
 
   if (!session) {
