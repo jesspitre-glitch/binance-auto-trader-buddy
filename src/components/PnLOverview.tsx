@@ -46,35 +46,45 @@ export const PnLOverview = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Calculate rolling time window using exact hours (UTC/Binance server time)
+      // Calculate UTC day-aligned time window (matching Binance's day boundaries)
       const nowMs = Date.now();
+      const now = new Date(nowMs);
+      
+      // Get start of current UTC day
+      const todayUtcStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0);
+      
       let startMs: number;
       
       switch (range) {
         case "24h":
-          startMs = nowMs - (24 * 60 * 60 * 1000); // Exactly 24 hours
+          // Start of today UTC (Binance's "Today")
+          startMs = todayUtcStart;
           break;
         case "7d":
-          startMs = nowMs - (7 * 24 * 60 * 60 * 1000); // Exactly 7×24 hours = 168 hours
+          // 7 UTC days ago at 00:00:00
+          startMs = todayUtcStart - (6 * 24 * 60 * 60 * 1000); // Today + 6 previous days = 7 days
           break;
         case "30d":
-          startMs = nowMs - (30 * 24 * 60 * 60 * 1000); // Exactly 30×24 hours
+          // 30 UTC days ago at 00:00:00
+          startMs = todayUtcStart - (29 * 24 * 60 * 60 * 1000); // Today + 29 previous days = 30 days
           break;
         case "90d":
-          startMs = nowMs - (90 * 24 * 60 * 60 * 1000); // Exactly 90×24 hours
+          // 90 UTC days ago at 00:00:00
+          startMs = todayUtcStart - (89 * 24 * 60 * 60 * 1000);
           break;
         case "1y":
-          startMs = nowMs - (365 * 24 * 60 * 60 * 1000); // Exactly 365×24 hours
+          // 365 UTC days ago at 00:00:00
+          startMs = todayUtcStart - (364 * 24 * 60 * 60 * 1000);
           break;
         case "all":
-          startMs = new Date(2020, 0, 1).getTime(); // All time
+          // All time - go back to 2020
+          startMs = Date.UTC(2020, 0, 1, 0, 0, 0, 0);
           break;
       }
       
       const startDate = new Date(startMs);
-      const now = new Date(nowMs);
 
-      console.log(`[PnL] Rolling window: ${range}, from ${startDate.toISOString()} to ${now.toISOString()}`);
+      console.log(`[PnL] UTC-aligned window: ${range}, from ${startDate.toISOString()} to ${now.toISOString()}`);
       
       // Fetch portfolio balance (current)
       const portfolioResult = await supabase
@@ -83,8 +93,8 @@ export const PnLOverview = () => {
         .eq("user_id", user.id)
         .maybeSingle();
 
-      // For 24h view, fetch REAL Binance daily P&L from income ledger
-      let binanceDailyPnl: {
+      // Fetch Binance P&L from income ledger for ALL time ranges
+      let binancePnl: {
         todaysRealizedPnl: number;
         commission: number;
         fundingFee: number;
@@ -94,24 +104,26 @@ export const PnLOverview = () => {
         marginBalance: number;
       } | null = null;
       
-      if (range === "24h") {
-        try {
-          const { data: sessionData } = await supabase.auth.getSession();
-          if (sessionData?.session) {
-            const response = await supabase.functions.invoke("get-binance-daily-pnl", {
-              headers: {
-                Authorization: `Bearer ${sessionData.session.access_token}`,
-              },
-            });
-            
-            if (response.data && !response.error) {
-              binanceDailyPnl = response.data;
-              console.log("[PnL] Binance daily P&L from income ledger:", binanceDailyPnl);
-            }
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session) {
+          const response = await supabase.functions.invoke("get-binance-daily-pnl", {
+            headers: {
+              Authorization: `Bearer ${sessionData.session.access_token}`,
+            },
+            body: {
+              startTime: startMs,
+              endTime: nowMs,
+            },
+          });
+          
+          if (response.data && !response.error) {
+            binancePnl = response.data;
+            console.log(`[PnL] Binance income ledger (${range}):`, binancePnl);
           }
-        } catch (err) {
-          console.warn("[PnL] Failed to fetch Binance daily P&L:", err);
         }
+      } catch (err) {
+        console.warn("[PnL] Failed to fetch Binance P&L:", err);
       }
 
       // Fetch ALL trades using pagination
@@ -180,19 +192,19 @@ export const PnLOverview = () => {
       let totalFees: number;
       let totalFunding: number;
       
-      // For 24h view, use REAL Binance income ledger data
-      if (range === "24h" && binanceDailyPnl) {
+      // Use Binance income ledger data for all ranges when available
+      if (binancePnl) {
         // Binance's exact figures from income ledger API
-        totalPnLGross = binanceDailyPnl.todaysRealizedPnl;  // REALIZED_PNL
-        totalFees = Math.abs(binanceDailyPnl.commission);   // COMMISSION (negative in API)
-        totalFunding = binanceDailyPnl.fundingFee;          // FUNDING_FEE
-        totalPnLAfterFees = binanceDailyPnl.todaysRealizedPnl + binanceDailyPnl.commission; // Gross - fees
-        totalPnLNet = binanceDailyPnl.netPnl;               // REALIZED_PNL + COMMISSION + FUNDING_FEE
+        totalPnLGross = binancePnl.todaysRealizedPnl;  // REALIZED_PNL
+        totalFees = Math.abs(binancePnl.commission);   // COMMISSION (negative in API)
+        totalFunding = binancePnl.fundingFee;          // FUNDING_FEE
+        totalPnLAfterFees = binancePnl.todaysRealizedPnl + binancePnl.commission; // Gross - fees
+        totalPnLNet = binancePnl.netPnl;               // REALIZED_PNL + COMMISSION + FUNDING_FEE
         totalPnL = totalPnLNet;
         
-        console.log(`[PnL] Binance income ledger: gross=${totalPnLGross.toFixed(2)}, fees=${totalFees.toFixed(2)}, funding=${totalFunding.toFixed(4)}, net=${totalPnLNet.toFixed(2)}`);
+        console.log(`[PnL] Binance income ledger (${range}): gross=${totalPnLGross.toFixed(2)}, fees=${totalFees.toFixed(2)}, funding=${totalFunding.toFixed(4)}, net=${totalPnLNet.toFixed(2)}`);
       } else {
-        // Fallback to trade-based calculation for other ranges
+        // Fallback to trade-based calculation if Binance API fails
         const tradePnL = trades.reduce((sum, t) => sum + Number(t.pnl), 0);
         totalFees = trades.reduce((sum, t) => sum + Number(t.total_fee || 0), 0);
         totalFunding = trades.reduce((sum, t) => sum + Number(t.funding_fee || 0), 0);
@@ -202,7 +214,7 @@ export const PnLOverview = () => {
         totalPnLNet = totalPnLAfterFees + totalFunding;
         totalPnL = totalPnLNet;
         
-        console.log(`[PnL] Trade-based: gross=${totalPnLGross.toFixed(2)}, afterFees=${totalPnLAfterFees.toFixed(2)}, net=${totalPnLNet.toFixed(2)}`);
+        console.log(`[PnL] Trade-based fallback: gross=${totalPnLGross.toFixed(2)}, afterFees=${totalPnLAfterFees.toFixed(2)}, net=${totalPnLNet.toFixed(2)}`);
       }
 
       if (trades.length === 0 && fundingFees.length === 0) {
