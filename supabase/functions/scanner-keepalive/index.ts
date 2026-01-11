@@ -61,10 +61,10 @@ serve(async (req) => {
     console.log(`[scanner-keepalive] Last heartbeat: ${lastHeartbeat?.toISOString() ?? 'never'}, age: ${heartbeatAgeMs}ms`);
 
     // Always trigger a loop to keep scanning
-    console.log('[scanner-keepalive] Triggering scanner loop...');
+    console.log('[scanner-keepalive] Triggering scanner loop for user:', statusData.user_id);
     
     const { data: loopResult, error: loopError } = await supabaseClient.functions.invoke('continuous-scan-quant', {
-      body: { action: 'loop' }
+      body: { action: 'loop', user_id: statusData.user_id }
     });
 
     if (loopError) {
