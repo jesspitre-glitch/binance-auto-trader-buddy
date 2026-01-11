@@ -13,14 +13,19 @@ export const ContinuousSyncControl = () => {
 
   const checkStatus = async () => {
     try {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 5000);
+      
       const { data, error } = await supabase.functions.invoke('continuous-sync-binance', {
         body: { action: 'status' }
       });
 
+      window.clearTimeout(timeout);
       if (error) throw error;
       setSyncStatus(data.status);
     } catch (error: any) {
-      console.error('Failed to check sync status:', error);
+      // Silently ignore - don't block UI
+      console.warn('Sync status check failed (non-blocking):', error?.message);
     }
   };
 

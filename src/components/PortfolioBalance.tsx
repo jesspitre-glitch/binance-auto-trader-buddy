@@ -62,24 +62,32 @@ export const PortfolioBalance = () => {
   useEffect(() => {
     fetchPortfolio();
     
-    // Realtime subscription
-    const channel = supabase
-      .channel("portfolio-changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "user_portfolio",
-        },
-        () => {
-          fetchPortfolio();
-        }
-      )
-      .subscribe();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let mounted = true;
+    
+    // Delay subscription to not block initial render
+    const timer = window.setTimeout(() => {
+      if (!mounted) return;
+      channel = supabase
+        .channel("portfolio-changes")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "user_portfolio",
+          },
+          () => {
+            if (mounted) fetchPortfolio();
+          }
+        )
+        .subscribe();
+    }, 500);
 
     return () => {
-      supabase.removeChannel(channel);
+      mounted = false;
+      window.clearTimeout(timer);
+      if (channel) supabase.removeChannel(channel);
     };
   }, []);
 
