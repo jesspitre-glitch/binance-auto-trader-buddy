@@ -6,83 +6,267 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-let isScanning = false;
-let loopPromise: Promise<void> | null = null;
-
-async function scanLoop(intervalMs: number) {
-  const supabaseClient = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  );
-
-  while (isScanning) {
-    try {
-      const start = Date.now();
-      console.log(`[continuous-scan] Invoking auto-trade-quant...`);
-      const { data, error } = await supabaseClient.functions.invoke('auto-trade-quant');
-      if (error) {
-        console.error('[continuous-scan] auto-trade-quant error:', error);
-      } else {
-        console.log('[continuous-scan] Scan completed');
-      }
-      const elapsed = Date.now() - start;
-      const wait = Math.max(250, intervalMs - elapsed);
-      await new Promise((r) => setTimeout(r, wait));
-    } catch (err) {
-      console.error('[continuous-scan] Unexpected error:', err);
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-  }
-}
+/**
+ * ROBUST CONTINUOUS SCANNER
+ * 
+ * This function uses database state (scanner_status table) to persist scanner status.
+ * The scanner runs when is_active=true and stops when is_active=false.
+ * 
+ * Actions:
+ * - start: Set is_active=true in DB and run scan loop
+ * - stop: Set is_active=false in DB
+ * - tick: Check if active and run ONE scan (for cron/scheduled calls)
+ * - status: Return current status from DB
+ */
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const supabaseClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
+
   try {
     const url = new URL(req.url);
     let action = url.searchParams.get('action') || '';
     let intervalMs = parseInt(url.searchParams.get('interval_ms') || '0', 10);
+    let userId = url.searchParams.get('user_id') || '';
 
     if (req.method === 'POST') {
-      const body = await req.json().catch(() => null) as { action?: string; interval_ms?: number } | null;
+      const body = await req.json().catch(() => null) as { 
+        action?: string; 
+        interval_ms?: number;
+        user_id?: string;
+      } | null;
       if (body?.action) action = body.action;
       if (typeof body?.interval_ms === 'number') intervalMs = body.interval_ms;
+      if (body?.user_id) userId = body.user_id;
     }
 
     if (!intervalMs || !isFinite(intervalMs) || intervalMs < 1000) {
-      intervalMs = 3000; // default 3s
+      intervalMs = 3000;
     }
 
+    // Get current scanner status from DB
+    const { data: statusData, error: statusError } = await supabaseClient
+      .from('scanner_status')
+      .select('*')
+      .eq('id', 'main')
+      .maybeSingle();
+
+    // Handle START action
     if (action === 'start') {
-      if (isScanning) {
-        return new Response(JSON.stringify({ status: 'active', message: 'Already running' }), {
+      if (!userId) {
+        return new Response(JSON.stringify({ error: 'user_id required' }), {
+          status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      isScanning = true;
-      loopPromise = scanLoop(intervalMs);
-      return new Response(JSON.stringify({ status: 'active', interval_ms: intervalMs }), {
+
+      // Upsert scanner status
+      const { error: upsertError } = await supabaseClient
+        .from('scanner_status')
+        .upsert({
+          id: 'main',
+          is_active: true,
+          interval_ms: intervalMs,
+          started_at: new Date().toISOString(),
+          last_heartbeat_at: new Date().toISOString(),
+          user_id: userId,
+        }, { onConflict: 'id' });
+
+      if (upsertError) {
+        console.error('[continuous-scan] Failed to start:', upsertError);
+        return new Response(JSON.stringify({ error: upsertError.message }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      console.log(`[continuous-scan] Scanner started for user ${userId}, interval ${intervalMs}ms`);
+
+      // Run initial scan immediately
+      try {
+        await supabaseClient.functions.invoke('auto-trade-quant');
+        await supabaseClient
+          .from('scanner_status')
+          .update({ last_scan_at: new Date().toISOString() })
+          .eq('id', 'main');
+      } catch (scanErr) {
+        console.error('[continuous-scan] Initial scan error:', scanErr);
+      }
+
+      return new Response(JSON.stringify({ 
+        status: 'active', 
+        interval_ms: intervalMs,
+        message: 'Scanner started. Use tick action or cron to keep scanning.'
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
+    // Handle STOP action
     if (action === 'stop') {
-      isScanning = false;
-      await loopPromise?.catch(() => {});
-      loopPromise = null;
+      const { error: stopError } = await supabaseClient
+        .from('scanner_status')
+        .update({ 
+          is_active: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', 'main');
+
+      if (stopError) {
+        console.error('[continuous-scan] Failed to stop:', stopError);
+      }
+
+      console.log('[continuous-scan] Scanner stopped');
+
       return new Response(JSON.stringify({ status: 'stopped' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // status
-    return new Response(JSON.stringify({ status: isScanning ? 'active' : 'stopped' }), {
+    // Handle TICK action (for cron/scheduled execution)
+    if (action === 'tick') {
+      if (!statusData?.is_active) {
+        return new Response(JSON.stringify({ 
+          status: 'stopped', 
+          message: 'Scanner not active, skipping tick' 
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      console.log('[continuous-scan] Tick: Running scan...');
+      
+      try {
+        const { data, error } = await supabaseClient.functions.invoke('auto-trade-quant');
+        
+        await supabaseClient
+          .from('scanner_status')
+          .update({ 
+            last_scan_at: new Date().toISOString(),
+            last_heartbeat_at: new Date().toISOString()
+          })
+          .eq('id', 'main');
+
+        if (error) {
+          console.error('[continuous-scan] Tick scan error:', error);
+          return new Response(JSON.stringify({ 
+            status: 'active', 
+            tick: 'error',
+            error: error.message
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        return new Response(JSON.stringify({ 
+          status: 'active', 
+          tick: 'completed',
+          scan_result: data
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (err: any) {
+        console.error('[continuous-scan] Tick error:', err);
+        return new Response(JSON.stringify({ 
+          status: 'active', 
+          tick: 'error',
+          error: err.message
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // Handle LOOP action (runs continuous loop for ~50 seconds max to stay within edge function limits)
+    if (action === 'loop') {
+      if (!statusData?.is_active) {
+        return new Response(JSON.stringify({ 
+          status: 'stopped', 
+          message: 'Scanner not active' 
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const loopIntervalMs = statusData.interval_ms || intervalMs || 3000;
+      const maxDurationMs = 50000; // Run for max 50 seconds (leave buffer before 60s timeout)
+      const startTime = Date.now();
+      let scanCount = 0;
+
+      console.log(`[continuous-scan] Starting loop, interval=${loopIntervalMs}ms, maxDuration=${maxDurationMs}ms`);
+
+      while (Date.now() - startTime < maxDurationMs) {
+        // Re-check if still active
+        const { data: currentStatus } = await supabaseClient
+          .from('scanner_status')
+          .select('is_active')
+          .eq('id', 'main')
+          .single();
+
+        if (!currentStatus?.is_active) {
+          console.log('[continuous-scan] Loop stopped: is_active=false');
+          break;
+        }
+
+        try {
+          console.log(`[continuous-scan] Loop scan #${scanCount + 1}...`);
+          await supabaseClient.functions.invoke('auto-trade-quant');
+          scanCount++;
+          
+          await supabaseClient
+            .from('scanner_status')
+            .update({ 
+              last_scan_at: new Date().toISOString(),
+              last_heartbeat_at: new Date().toISOString()
+            })
+            .eq('id', 'main');
+        } catch (err) {
+          console.error('[continuous-scan] Loop scan error:', err);
+        }
+
+        // Wait for next interval
+        const elapsed = Date.now() - startTime;
+        const remaining = maxDurationMs - elapsed;
+        if (remaining < loopIntervalMs) break;
+        
+        await new Promise(r => setTimeout(r, loopIntervalMs));
+      }
+
+      console.log(`[continuous-scan] Loop completed: ${scanCount} scans in ${Date.now() - startTime}ms`);
+
+      return new Response(JSON.stringify({ 
+        status: 'active', 
+        loop_completed: true,
+        scans_executed: scanCount,
+        duration_ms: Date.now() - startTime
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Default: return status from DB
+    const isActive = statusData?.is_active ?? false;
+    const lastScan = statusData?.last_scan_at;
+    const lastHeartbeat = statusData?.last_heartbeat_at;
+
+    return new Response(JSON.stringify({ 
+      status: isActive ? 'active' : 'stopped',
+      last_scan_at: lastScan,
+      last_heartbeat_at: lastHeartbeat,
+      interval_ms: statusData?.interval_ms,
+      started_at: statusData?.started_at
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
+
   } catch (error: any) {
-    console.error('[continuous-scan] handler error:', error);
+    console.error('[continuous-scan] Handler error:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
