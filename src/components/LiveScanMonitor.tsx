@@ -39,9 +39,15 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     if (!open) return;
 
     // Start continuous scanner (3s interval) when monitor opens; stop on close
-    supabase.functions.invoke('continuous-scan-quant', {
-      body: { action: 'start', interval_ms: 3000 },
-    }).catch(console.error);
+    const startScanner = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        supabase.functions.invoke('continuous-scan-quant', {
+          body: { action: 'start', interval_ms: 3000, user_id: user.id },
+        }).catch(console.error);
+      }
+    };
+    startScanner();
 
     const initMonitor = async () => {
       await fetchConfig();
