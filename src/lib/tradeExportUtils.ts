@@ -306,6 +306,17 @@ export const formatTradeForExport = (t: any) => {
     trade_id: tradeId,
     signal_id: signalId,
 
+    // 🔴 GATE AUDIT - Alle gates med pass/fail + reason
+    gate_audit: snap.gate_audit ?? null,
+
+    // 🔴 DETAILED INDICATOR AUDITS med null_reason (v3+)
+    stochrsi_audit: snap.stochrsi_audit ?? null,
+    volume_audit: snap.volume_audit ?? null,
+    adx_audit_full: snap.adx_audit_full ?? null,
+    atr_audit_full: snap.atr_audit_full ?? null,
+    macd_audit: snap.macd_audit ?? null,
+    trend_audit: snap.trend_audit ?? null,
+
     // 🔴 FILTER MODE SETTINGS (hard=blokerer trades, soft=bidrager til score)
     filter_modes: filterModeSettings,
 
