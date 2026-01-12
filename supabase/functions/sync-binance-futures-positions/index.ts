@@ -379,14 +379,20 @@ serve(async (req) => {
           console.log(`Creating new position for ${binancePos.symbol}`);
           
           const entryPrice = parseFloat(binancePos.entryPrice);
+          // Get leverage from Binance API response
+          const binanceLeverage = binancePos.leverage ? parseInt(binancePos.leverage) : null;
           
-          // Get user's indicator config for SL calculation
+          // Get user's indicator config for SL calculation and leverage fallback
           const { data: userConfig } = await supabaseClient
             .from('indicator_config')
-            .select('atr_stop_loss_multiplier')
+            .select('atr_stop_loss_multiplier, leverage')
             .eq('user_id', userId)
             .limit(1)
             .single();
+          
+          // Use Binance leverage if available, otherwise fall back to user config
+          const leverageUsed = binanceLeverage ?? userConfig?.leverage ?? null;
+          console.log(`[SYNC] ${binancePos.symbol}: Binance leverage=${binanceLeverage}, config leverage=${userConfig?.leverage}, using=${leverageUsed}`);
           
           // Calculate a default stop loss based on entry price
           // Use 3% as default safety margin if no config found
@@ -424,12 +430,14 @@ serve(async (req) => {
             atr_percent: null,
             stop_loss_percent_used: defaultSlPercent,
             sync_timestamp: new Date().toISOString(),
+            leverage: leverageUsed, // Store leverage from Binance or config
             warning: 'Position synced from Binance without bot signal - using percent-based stop loss fallback'
           };
           
           console.log(`⚠️ PERCENT_FALLBACK_DETECTED: ${binancePos.symbol} synced without bot signal`);
           console.log(`   exit_type: PERCENT_FALLBACK (${defaultSlPercent}% SL)`);
           console.log(`   ATR: NULL (not available for synced positions)`);
+          console.log(`   leverage: ${leverageUsed}`);
           
           // If we found a recent signal from the bot, use that data including proper SL
           if (recentSignals && recentSignals.length > 0) {
@@ -548,6 +556,23 @@ serve(async (req) => {
             
             // Insert trade history only if we actually changed the row (avoids duplicates)
             if (updatedRows && updatedRows.length > 0) {
+              // Get leverage from indicators_snapshot or user config
+              const snapshotLev = (dbPos.indicators_snapshot as any)?.leverage;
+              let leverageUsed: number | null = snapshotLev != null ? Number(snapshotLev) : null;
+              
+              // If no leverage in snapshot, try to get from user's active config
+              if (leverageUsed == null) {
+                const { data: userConfig } = await supabaseClient
+                  .from('indicator_config')
+                  .select('leverage')
+                  .eq('user_id', dbPos.user_id)
+                  .limit(1)
+                  .single();
+                leverageUsed = userConfig?.leverage ?? null;
+              }
+              
+              console.log(`[SYNC] Trade history for ${dbPos.symbol}: leverage_used=${leverageUsed}`);
+              
               await supabaseClient
                 .from('trade_history')
                 .insert({
@@ -565,12 +590,18 @@ serve(async (req) => {
                   strategy_hash: dbPos.strategy_hash,
                   open_reason: dbPos.open_reason,
                   close_reason: inferredReason,
+                  leverage_used: leverageUsed,
+                  indicators_snapshot: dbPos.indicators_snapshot,
+                  low_price: dbPos.low_price,
+                  mae: dbPos.low_price && sideDb === 'LONG' ? entry - Number(dbPos.low_price) : 
+                       dbPos.low_price && sideDb === 'SHORT' ? Number(dbPos.low_price) - entry : null,
                   // Fee fields left null for sync-closed positions (no API call to get historical fees)
                   entry_fee: null,
                   exit_fee: null,
                   total_fee: null,
                   funding_fee: null,
                   net_pnl: null,
+                  fees_data_missing: true,
                 });
 
               updates.push({ symbol: dbPos.symbol, action: 'closed', id: dbPos.id });
