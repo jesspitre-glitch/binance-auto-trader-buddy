@@ -3003,17 +3003,288 @@ serve(async (req) => {
             };
           })();
           
+          // 🔴 BUILD GATE_AUDIT - Comprehensive list of all gates with pass/fail + reason
+          const filterStatusForGate = analysis.filterStatus;
+          const gateAudit = {
+            // ═══════════════════════════════════════════════════════
+            // HARD FILTERS (blokerer trades hvis de fejler)
+            // ═══════════════════════════════════════════════════════
+            ema_spread: {
+              enabled: config.ema_enabled === true && config.ema_hard_filter !== false,
+              passed: filterStatusForGate?.hard?.emaSpread?.passed ?? null,
+              reason: filterStatusForGate?.hard?.emaSpread?.reason ?? (config.ema_enabled !== true ? 'filter_disabled' : 'not_evaluated'),
+              value: filterStatusForGate?.hard?.emaSpread?.value ?? null,
+              threshold_min: config.min_ema_spread_percent ?? null,
+              threshold_max: config.max_ema_spread_percent ?? null,
+            },
+            atr: {
+              enabled: config.atr_enabled === true && config.atr_hard_filter !== false,
+              passed: filterStatusForGate?.hard?.atr?.passed ?? null,
+              reason: atrFilterAudit.reason ?? (config.atr_enabled !== true ? 'filter_disabled' : 'not_evaluated'),
+              value: analysis.indicators.atr ?? null,
+              value_percent: atrPercent ?? null,
+              threshold_min: filterStatusForGate?.hard?.atr?.effective_min_atr_percent_used ?? config.min_atr_percent ?? null,
+              null_reason: analysis.indicators.atr === null || analysis.indicators.atr === undefined 
+                ? 'indicator_not_computed' : null,
+            },
+            adx: {
+              enabled: config.adx_enabled === true && config.adx_hard_filter !== false,
+              passed: filterStatusForGate?.hard?.adx?.passed ?? null,
+              reason: adxFilterAudit.reason ?? (config.adx_enabled !== true ? 'filter_disabled' : 'not_evaluated'),
+              value: analysis.indicators.adx ?? null,
+              threshold_min: config.adx_floor ?? 20,
+              threshold_max: config.adx_ceiling ?? 40,
+              null_reason: analysis.indicators.adx === null || analysis.indicators.adx === undefined 
+                ? 'indicator_not_computed' : null,
+            },
+            volume_long: {
+              enabled: config.volume_enabled === true && config.volume_hard_filter !== false,
+              passed: filterStatusForGate?.hard?.volumeLong?.passed ?? null,
+              reason: filterStatusForGate?.hard?.volumeLong?.reason ?? (config.volume_enabled !== true ? 'filter_disabled' : 'not_evaluated'),
+              current_volume: analysis.indicators.volume ?? null,
+              avg_volume: analysis.indicators.avgVolume ?? null,
+              vol_ratio: (analysis.indicators.volume && analysis.indicators.avgVolume && analysis.indicators.avgVolume > 0)
+                ? analysis.indicators.volume / analysis.indicators.avgVolume : null,
+              threshold: config.volume_multiplier ?? null,
+              null_reason: analysis.indicators.volume === null || analysis.indicators.avgVolume === null
+                ? 'volume_data_missing' : null,
+            },
+            volume_short: {
+              enabled: config.volume_enabled === true && (config.volume_mode_short ?? 'HARD') === 'HARD',
+              passed: filterStatusForGate?.hard?.volumeShort?.passed ?? null,
+              reason: filterStatusForGate?.hard?.volumeShort?.reason ?? (config.volume_enabled !== true ? 'filter_disabled' : 'not_evaluated'),
+              mode: config.volume_mode_short ?? 'HARD',
+              threshold: config.volume_multiplier_short ?? 0.50,
+              null_reason: analysis.indicators.volume === null || analysis.indicators.avgVolume === null
+                ? 'volume_data_missing' : null,
+            },
+            rsi_momentum: {
+              enabled: config.rsi_enabled === true && config.rsi_hard_filter !== false,
+              passed: signal === 'LONG' 
+                ? filterStatusForGate?.hard?.rsiMomentum?.long ?? null 
+                : filterStatusForGate?.hard?.rsiMomentum?.short ?? null,
+              reason: filterStatusForGate?.hard?.rsiMomentum?.reason ?? (config.rsi_enabled !== true ? 'filter_disabled' : 'not_evaluated'),
+              value: analysis.indicators.rsi ?? null,
+              threshold_long: config.rsi_min_long ?? null,
+              threshold_short: config.rsi_max_short ?? null,
+              null_reason: analysis.indicators.rsi === null || analysis.indicators.rsi === undefined
+                ? 'indicator_not_computed' : null,
+            },
+            stochrsi: {
+              enabled: config.stochrsi_enabled === true && config.stochrsi_hard_filter === true,
+              passed: signal === 'LONG' ? filterStatusForGate?.hard?.stochrsi?.long ?? null : filterStatusForGate?.hard?.stochrsi?.short ?? null,
+              reason: (!config.stochrsi_enabled) ? 'filter_disabled' 
+                : (config.stochrsi_hard_filter !== true) ? 'soft_mode_only'
+                : (signal === 'LONG' && filterStatusForGate?.hard?.stochrsi?.long !== true) 
+                  ? `K=${analysis.indicators.stochRSI_k?.toFixed(2)}, D=${analysis.indicators.stochRSI_d?.toFixed(2)} - kræver K<=${config.stochrsi_oversold_k ?? 20} AND D<=${config.stochrsi_oversold_d ?? 20}`
+                : (signal === 'SHORT' && filterStatusForGate?.hard?.stochrsi?.short !== true)
+                  ? `K=${analysis.indicators.stochRSI_k?.toFixed(2)}, D=${analysis.indicators.stochRSI_d?.toFixed(2)} - kræver K>=${config.stochrsi_overbought_k ?? 80} AND D>=${config.stochrsi_overbought_d ?? 80}`
+                : 'passed',
+              k: analysis.indicators.stochRSI_k ?? null,
+              d: analysis.indicators.stochRSI_d ?? null,
+              mode: config.stochrsi_hard_filter === true ? 'hard' : 'soft',
+              threshold_overbought_k: config.stochrsi_overbought_k ?? config.stochrsi_overbought ?? 80,
+              threshold_overbought_d: config.stochrsi_overbought_d ?? config.stochrsi_overbought ?? 80,
+              threshold_oversold_k: config.stochrsi_oversold_k ?? config.stochrsi_oversold ?? 20,
+              threshold_oversold_d: config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20,
+              null_reason: (analysis.indicators.stochRSI_k === null || analysis.indicators.stochRSI_d === null)
+                ? 'indicator_not_computed' : null,
+            },
+            macd_direction: {
+              enabled: config.macd_direction_enabled === true,
+              passed: signal === 'LONG' 
+                ? filterStatusForGate?.hard?.macdDirection?.long ?? null 
+                : filterStatusForGate?.hard?.macdDirection?.short ?? null,
+              reason: (!config.macd_direction_enabled) ? 'filter_disabled'
+                : (analysis.indicators.macdLine === null || analysis.indicators.macdSignal === null) 
+                  ? 'macd_data_missing'
+                : (signal === 'LONG') 
+                  ? `macdLine=${analysis.indicators.macdLine?.toFixed(6)} ${analysis.indicators.macdLine > analysis.indicators.macdSignal ? '>' : '<='} signalLine=${analysis.indicators.macdSignal?.toFixed(6)}`
+                  : `macdLine=${analysis.indicators.macdLine?.toFixed(6)} ${analysis.indicators.macdLine < analysis.indicators.macdSignal ? '<' : '>='} signalLine=${analysis.indicators.macdSignal?.toFixed(6)}`,
+              line: analysis.indicators.macdLine ?? null,
+              signal_line: analysis.indicators.macdSignal ?? null,
+              histogram: analysis.indicators.macd ?? null,
+              histogram_threshold: config.macd_histogram_threshold ?? null,
+              null_reason: (analysis.indicators.macdLine === null || analysis.indicators.macdSignal === null)
+                ? 'indicator_not_computed' : null,
+            },
+            macd_color_change: {
+              enabled: config.macd_color_change_hard_filter === true,
+              passed: signal === 'LONG' 
+                ? filterStatusForGate?.hard?.macdColorChange?.long ?? null 
+                : filterStatusForGate?.hard?.macdColorChange?.short ?? null,
+              reason: filterStatusForGate?.hard?.macdColorChange?.reason ?? (config.macd_color_change_hard_filter !== true ? 'filter_disabled' : 'not_evaluated'),
+            },
+            higher_trend: {
+              enabled: config.higher_trend_enabled === true && config.higher_trend_hard_filter !== false,
+              passed: (signal === 'LONG' && selectedSignal.higherTrend === 'BULLISH') 
+                || (signal === 'SHORT' && selectedSignal.higherTrend === 'BEARISH') 
+                || !config.higher_trend_enabled,
+              reason: (!config.higher_trend_enabled) ? 'filter_disabled'
+                : `${config.higher_trend_timeframe} trend=${selectedSignal.higherTrend}, required=${signal === 'LONG' ? 'BULLISH' : 'BEARISH'}`,
+              trend_value: selectedSignal.higherTrend,
+              timeframe: config.higher_trend_timeframe ?? null,
+            },
+            medium_trend: {
+              enabled: config.ema_enabled === true && config.ema_hard_filter !== false,
+              passed: (signal === 'LONG' && selectedSignal.trend === 'BULLISH') 
+                || (signal === 'SHORT' && selectedSignal.trend === 'BEARISH'),
+              reason: `${config.trend_timeframe} trend=${selectedSignal.trend}, required=${signal === 'LONG' ? 'BULLISH' : 'BEARISH'}`,
+              trend_value: selectedSignal.trend,
+              timeframe: config.trend_timeframe ?? null,
+            },
+            // ═══════════════════════════════════════════════════════
+            // SOFT CONDITIONS (giver points, blokerer ikke)
+            // ═══════════════════════════════════════════════════════
+            soft_ema_trend: {
+              enabled: config.ema_enabled === true,
+              passed: analysis.indicators.conditionDetails?.ema?.[signal.toLowerCase()] === true,
+              points: analysis.indicators.conditionDetails?.ema?.[signal.toLowerCase()] === true ? 1 : 0,
+            },
+            soft_stochrsi: {
+              enabled: config.stochrsi_enabled === true && config.stochrsi_hard_filter !== true,
+              passed: analysis.indicators.conditionDetails?.stochRSI?.[signal.toLowerCase()] === true,
+              points: analysis.indicators.conditionDetails?.stochRSI?.[signal.toLowerCase()] === true ? 1 : 0,
+            },
+            soft_macd_histogram: {
+              enabled: config.macd_enabled === true,
+              passed: analysis.indicators.conditionDetails?.macd?.[signal.toLowerCase()] === true,
+              points: analysis.indicators.conditionDetails?.macd?.[signal.toLowerCase()] === true ? 1 : 0,
+            },
+            soft_macd_momentum: {
+              enabled: config.histogram_momentum_enabled === true,
+              passed: analysis.indicators.conditionDetails?.histogramMomentum?.[signal.toLowerCase()] === true,
+              points: analysis.indicators.conditionDetails?.histogramMomentum?.[signal.toLowerCase()] === true ? 1 : 0,
+            },
+            soft_bb: {
+              enabled: config.bb_enabled === true,
+              passed: analysis.indicators.conditionDetails?.bb?.[signal.toLowerCase()] === true,
+              points: analysis.indicators.conditionDetails?.bb?.[signal.toLowerCase()] === true ? 1 : 0,
+            },
+            soft_volume: {
+              enabled: config.volume_enabled === true,
+              passed: softVolumePassedTriState === true,
+              points: softVolumePassedTriState === true ? 1 : 0,
+            },
+            soft_pivot: {
+              enabled: config.pivot_points_enabled === true,
+              passed: analysis.indicators.conditionDetails?.pivotPoints?.[signal.toLowerCase()] === true,
+              points: analysis.indicators.conditionDetails?.pivotPoints?.[signal.toLowerCase()] === true ? 1 : 0,
+            },
+            soft_vwap: {
+              enabled: config.vwap_enabled === true,
+              passed: analysis.indicators.conditionDetails?.vwap?.[signal.toLowerCase()] === true,
+              points: analysis.indicators.conditionDetails?.vwap?.[signal.toLowerCase()] === true ? 1 : 0,
+            },
+            // ═══════════════════════════════════════════════════════
+            // SUMMARY
+            // ═══════════════════════════════════════════════════════
+            hard_filters_total: 10,
+            hard_filters_enabled: [
+              config.ema_enabled && config.ema_hard_filter !== false,
+              config.atr_enabled && config.atr_hard_filter !== false,
+              config.adx_enabled && config.adx_hard_filter !== false,
+              config.volume_enabled && config.volume_hard_filter !== false,
+              config.rsi_enabled && config.rsi_hard_filter !== false,
+              config.stochrsi_enabled && config.stochrsi_hard_filter === true,
+              config.macd_direction_enabled,
+              config.macd_color_change_hard_filter,
+              config.higher_trend_enabled && config.higher_trend_hard_filter !== false,
+              config.ema_enabled && config.ema_hard_filter !== false, // medium trend
+            ].filter(Boolean).length,
+            soft_conditions_required: config.signal_conditions_required,
+            soft_conditions_met: signal === 'LONG' 
+              ? analysis.indicators.conditionDetails?.longConditionsMet ?? 0
+              : analysis.indicators.conditionDetails?.shortConditionsMet ?? 0,
+          };
+          
           console.log(`\n📋 ENTRY AUDIT - ${symbol} ${signal}`);
           console.log(`   signal_id: ${signalId}`);
           console.log(`   expected_stop_loss_price: ${analysis.stopLoss.toFixed(8)}`);
           console.log(`   ATR: ${atrFilterAudit.reason}`);
           console.log(`   ADX: ${adxFilterAudit.reason}`);
+          console.log(`   GATE_AUDIT: ${gateAudit.hard_filters_enabled}/${gateAudit.hard_filters_total} hard filters enabled, ${gateAudit.soft_conditions_met}/${gateAudit.soft_conditions_required} soft conditions met`);
+          
+          // 🔴 BUILD INDICATOR SNAPSHOT med null_reason for manglende værdier
+          const stochRsiAudit = {
+            k: analysis.indicators.stochRSI_k ?? null,
+            d: analysis.indicators.stochRSI_d ?? null,
+            mode: config.stochrsi_short_mode ?? 'REVERSAL_OVERBOUGHT',
+            passed: signal === 'LONG' 
+              ? analysis.indicators.conditionDetails?.stochRSI?.long === true || fs?.hard?.stochrsi?.long === true
+              : analysis.indicators.conditionDetails?.stochRSI?.short === true || fs?.hard?.stochrsi?.short === true,
+            threshold_overbought_k: config.stochrsi_overbought_k ?? config.stochrsi_overbought ?? 80,
+            threshold_overbought_d: config.stochrsi_overbought_d ?? config.stochrsi_overbought ?? 80,
+            threshold_oversold_k: config.stochrsi_oversold_k ?? config.stochrsi_oversold ?? 20,
+            threshold_oversold_d: config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20,
+            null_reason: (analysis.indicators.stochRSI_k === null || analysis.indicators.stochRSI_d === null)
+              ? 'insufficient_data_for_stochrsi' : null,
+          };
+          
+          const volumeAudit = {
+            current_volume: analysis.indicators.volume ?? null,
+            avg_volume: analysis.indicators.avgVolume ?? null,
+            vol_ratio: (analysis.indicators.volume && analysis.indicators.avgVolume && analysis.indicators.avgVolume > 0)
+              ? analysis.indicators.volume / analysis.indicators.avgVolume : null,
+            vol_threshold_long: config.volume_multiplier ?? 1.2,
+            vol_threshold_short: config.volume_multiplier_short ?? 0.50,
+            passed_long: volumeMultiplierFilterPassedTriState,
+            passed_short: fs?.hard?.volumeShort?.passed ?? null,
+            null_reason: (analysis.indicators.volume === null || analysis.indicators.avgVolume === null)
+              ? 'volume_data_unavailable' : null,
+          };
+          
+          const adxAudit = {
+            adx_value: analysis.indicators.adx ?? null,
+            adx_min: config.adx_floor ?? 20,
+            adx_max: config.adx_ceiling ?? 40,
+            passed: fs?.hard?.adx?.passed ?? null,
+            plus_di: analysis.indicators.adx_audit?.plus_di ?? null,
+            minus_di: analysis.indicators.adx_audit?.minus_di ?? null,
+            null_reason: analysis.indicators.adx === null || analysis.indicators.adx === undefined
+              ? 'adx_not_computed' : null,
+          };
+          
+          const atrAuditFull = {
+            atr_value: analysis.indicators.atr ?? null,
+            atr_pct: atrPercent ?? null,
+            atr_min_threshold: fs?.hard?.atr?.effective_min_atr_percent_used ?? config.min_atr_percent ?? null,
+            atr_max_threshold: null, // ATR har ingen max threshold
+            passed: fs?.hard?.atr?.passed ?? null,
+            atr_period: config.atr_period ?? 14,
+            atr_timeframe: config.trend_timeframe || config.scan_interval || '5m',
+            null_reason: (analysis.indicators.atr === null || analysis.indicators.atr === undefined)
+              ? 'atr_not_computed' : null,
+          };
+          
+          const macdAudit = {
+            line: analysis.indicators.macdLine ?? null,
+            signal: analysis.indicators.macdSignal ?? null,
+            hist: analysis.indicators.macd ?? null,
+            hist_threshold: config.macd_histogram_threshold ?? 0,
+            momentum_periods: config.histogram_momentum_periods ?? 3,
+            direction_passed: signal === 'LONG' 
+              ? fs?.hard?.macdDirection?.long ?? null 
+              : fs?.hard?.macdDirection?.short ?? null,
+            histogram_passed: analysis.indicators.conditionDetails?.macd?.[signal.toLowerCase()] === true,
+            null_reason: (analysis.indicators.macdLine === null || analysis.indicators.macdSignal === null)
+              ? 'macd_not_computed' : null,
+          };
+          
+          const trendAudit = {
+            trend_medium: selectedSignal.trend,
+            trend_higher: selectedSignal.higherTrend,
+            medium_timeframe: config.trend_timeframe ?? '15m',
+            higher_timeframe: config.higher_trend_timeframe ?? '1h',
+            higher_trend_enabled: config.higher_trend_enabled ?? false,
+          };
           
           const comprehensiveSnapshot = {
             // 🔴 SCHEMA VERSION - Bruges til at skelne legacy vs nye snapshots
             // v1 = legacy trades før schema fixes (ingen garanti for felter)
             // v2 = nye trades med garanterede felter (MACD, BE, ADX audit, trailing audit, StochRSI)
-            schema_version: 2,
+            // v3 = med gate_audit og null_reason for alle indikatorer
+            schema_version: 3,
             
             // 🔴 UNIQUE IDENTIFIERS for dublet-afklaring
             signal_id: signalId,
@@ -3023,6 +3294,17 @@ serve(async (req) => {
             
             // Core indicators
             ...analysis.indicators,
+            
+            // 🔴 GATE AUDIT - Alle gates med pass/fail + reason
+            gate_audit: gateAudit,
+            
+            // 🔴 DETAILED INDICATOR AUDITS med null_reason
+            stochrsi_audit: stochRsiAudit,
+            volume_audit: volumeAudit,
+            adx_audit_full: adxAudit,
+            atr_audit_full: atrAuditFull,
+            macd_audit: macdAudit,
+            trend_audit: trendAudit,
             
             // 🔴 FILTER MODE SETTINGS - EXPLICIT gemmes for eksport (fra config, IKKE spread overskrevet)
             filter_mode_settings: {
