@@ -2560,16 +2560,42 @@ serve(async (req) => {
               : `ADX_OUT_OF_RANGE (${val?.toFixed(2)} not in [${config.adx_floor}, ${config.adx_ceiling}])`;
           }
           
-          // 4. Volume (if volume_enabled AND volume_hard_filter)
+          // 4. Volume (if volume_enabled AND volume_hard_filter) - RETNINGS-SPECIFIK
+          // 🔴 BUG FIX: Bruger volumeLong/volumeShort, IKKE volume.passed
           if (!gateBlocked && config.volume_enabled === true && config.volume_hard_filter !== false) {
-            const volPassed = fs?.hard?.volume?.passed;
-            if (volPassed !== true) {
+            const volCurrent = analysis.indicators?.volume;
+            const volAvg = analysis.indicators?.avgVolume;
+            const volRatio = (volCurrent && volAvg && volAvg > 0) ? volCurrent / volAvg : null;
+            
+            // 🔴 FIX: Check retnings-specifik volume baseret på signal
+            let volPassed: boolean | null;
+            let volThreshold: number;
+            
+            if (signal === 'LONG') {
+              volPassed = fs?.hard?.volumeLong?.passed;
+              volThreshold = config.volume_multiplier ?? 1.2;
+            } else if (signal === 'SHORT') {
+              // SHORT bruger volume_mode_short - hvis HARD, så check volumeShort
+              const volumeModeShort = config.volume_mode_short ?? 'HARD';
+              if (volumeModeShort === 'HARD') {
+                volPassed = fs?.hard?.volumeShort?.passed;
+                volThreshold = config.volume_multiplier_short ?? 0.50;
+              } else {
+                // SOFT eller OFF mode - ikke et hard filter for SHORT
+                volPassed = true; // Passerer hard filter (kan stadig give soft point)
+                volThreshold = 0;
+              }
+            } else {
+              volPassed = null;
+              volThreshold = config.volume_multiplier ?? 1.2;
+            }
+            
+            if (volPassed !== true && volPassed !== null) {
               gateBlocked = true;
-              const volCurrent = analysis.indicators?.volume_current ?? fs?.hard?.volume?.current;
-              const volAvg = analysis.indicators?.volume_avg ?? fs?.hard?.volume?.avg;
-              blockReason = volPassed === null
-                ? `VOLUME_MISSING_OR_INVALID (current=${volCurrent}, avg=${volAvg})`
-                : `VOLUME_FILTER_FAILED (ratio=${volCurrent && volAvg ? (volCurrent/volAvg).toFixed(2) : 'N/A'}x < ${config.volume_multiplier}x required)`;
+              blockReason = `REJECT: VOLUME_FILTER_FAILED_${signal} → ratio=${volRatio?.toFixed(2) ?? 'N/A'}x < ${volThreshold}x required (current=${volCurrent?.toFixed(2) ?? 'N/A'}, avg=${volAvg?.toFixed(2) ?? 'N/A'})`;
+            } else if (volPassed === null && volRatio === null) {
+              // Data mangler - bloker kun hvis det er kritisk
+              console.log(`⚠️ VOLUME DATA MISSING for ${symbol} - continuing with caution`);
             }
           }
           
