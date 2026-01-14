@@ -721,12 +721,41 @@ function calculatePivotPoints(high: number, low: number, close: number) {
   return { pp, r1, s1, r2, s2, r3, s3 };
 }
 
+// Helper: Convert interval string to milliseconds
+function intervalToMs(interval: string): number {
+  const unit = interval.slice(-1);
+  const val = parseInt(interval.slice(0, -1), 10);
+  switch (unit) {
+    case 'm': return val * 60 * 1000;
+    case 'h': return val * 60 * 60 * 1000;
+    case 'd': return val * 24 * 60 * 60 * 1000;
+    case 'w': return val * 7 * 24 * 60 * 60 * 1000;
+    default: return 15 * 60 * 1000; // default 15m
+  }
+}
+
 function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfig) {
   const closes = klines.map(k => k.close);
   const highs = klines.map(k => k.high);
   const lows = klines.map(k => k.low);
   const volumes = klines.map(k => k.volume);
   const currentPrice = closes[closes.length - 1];
+  
+  // 🔴 VOLUME CANDLE AUDIT: Extract last kline metadata for volume debugging
+  const lastKline = klines[klines.length - 1];
+  const volumeCandleOpenTime = lastKline?.time ?? null; // ms since epoch
+  const intervalMs = intervalToMs(config.scan_interval);
+  const volumeCandleCloseTime = volumeCandleOpenTime !== null 
+    ? volumeCandleOpenTime + intervalMs 
+    : null;
+  const nowMs = Date.now();
+  const volumeCandleClosed = volumeCandleCloseTime !== null && nowMs >= volumeCandleCloseTime;
+  const secondsSinceCandleOpen = volumeCandleOpenTime !== null 
+    ? Math.floor((nowMs - volumeCandleOpenTime) / 1000) 
+    : null;
+  const minuteIntoCandleFraction = secondsSinceCandleOpen !== null 
+    ? (secondsSinceCandleOpen / 60).toFixed(2) 
+    : null;
   
   // Calculate indicators only if enabled
   console.log(`Indicator config: EMA=${config.ema_enabled}, RSI=${config.rsi_enabled}, StochRSI=${config.stochrsi_enabled}, MACD=${config.macd_enabled}, BB=${config.bb_enabled}, ATR=${config.atr_enabled}, ADX=${config.adx_enabled}`);
@@ -800,6 +829,18 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   
   const rawCurrentVolume = config.volume_enabled ? volumes[volumes.length - 1] : null;
   const currentVolume = (rawCurrentVolume == null || !Number.isFinite(rawCurrentVolume)) ? null : rawCurrentVolume;
+  
+  // 🔴 VOLUME CANDLE METADATA - gemmes i indicators for audit
+  const volumeCandleAudit = {
+    candle_open_time: volumeCandleOpenTime,
+    candle_close_time: volumeCandleCloseTime,
+    candle_open_time_iso: volumeCandleOpenTime ? new Date(volumeCandleOpenTime).toISOString() : null,
+    candle_close_time_iso: volumeCandleCloseTime ? new Date(volumeCandleCloseTime).toISOString() : null,
+    is_closed: volumeCandleClosed,
+    seconds_since_open: secondsSinceCandleOpen,
+    minute_into_candle: minuteIntoCandleFraction,
+    scan_tf: config.scan_interval,
+  };
   
   // ════════════════════════════════════════════════════════════════
   // 📋 EVALUERING AF ALLE FILTRE (HÅRDE + BLØDE)
@@ -1914,6 +1955,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     volume: currentVolume,
     avgVolume,
     volumeRatio: currentVolume && avgVolume ? currentVolume / avgVolume : null,
+    // 🔴 VOLUME CANDLE AUDIT - til debugging af live candle hypotesen
+    volume_candle_audit: volumeCandleAudit,
     pivotPoints,
     vwap,
     vwap_period: config.vwap_period ?? 50,
@@ -2310,6 +2353,12 @@ serve(async (req) => {
             const shortOK = analysis.signal === 'SHORT' && analysis.hardFiltersPassed;
             
             console.log(`[DEBUG_SCAN_${scanDebugCount}] ${symbol} | ADX=${adxVal} pass=${adxPassed} | VOL=${volRatio}x L=${volLongPassed} S=${volShortPassed} | StochK=${stochK} D=${stochD} L=${stochLongPassed} S=${stochShortPassed} | Conds L=${longConds}/${reqConds} S=${shortConds}/${reqConds} | HardPass=${analysis.hardFiltersPassed} | Signal=${analysis.signal} longOK=${longOK} shortOK=${shortOK}`);
+            
+            // 🔴 VOLUME CANDLE AUDIT LOG - pr symbol for at teste live candle hypotese
+            const vca = ind.volume_candle_audit;
+            const volThresholdLong = config.volume_multiplier ?? 1.05;
+            const volPassLong = (volCurrent && volAvg && volAvg > 0) ? (volCurrent / volAvg >= volThresholdLong) : null;
+            console.log(`[VOLUME_CANDLE_AUDIT] ${symbol} | scan_tf=${vca?.scan_tf ?? 'null'} | candle_open=${vca?.candle_open_time_iso ?? 'null'} | candle_close=${vca?.candle_close_time_iso ?? 'null'} | is_closed=${vca?.is_closed ?? 'null'} | sec_since_open=${vca?.seconds_since_open ?? 'null'} | min_into_candle=${vca?.minute_into_candle ?? 'null'} | current_vol=${volCurrent?.toFixed(2) ?? 'null'} | avg_vol=${volAvg?.toFixed(2) ?? 'null'} | vol_ratio=${volRatio}x | threshold_long=${volThresholdLong} | pass_long=${volPassLong}`);
             
             if (!adxPassed && adxReason) {
               console.log(`[DEBUG_SCAN_${scanDebugCount}] ADX_BLOCK: ${adxReason}`);
