@@ -247,6 +247,9 @@ export const PnLOverview = () => {
 
       // Calculate statistics
       const totalPnLPercent = portfolioBalance > 0 ? (totalPnL / portfolioBalance) * 100 : 0;
+      const totalPnLGrossPercent = portfolioBalance > 0 ? (totalPnLGross / portfolioBalance) * 100 : 0;
+      const totalPnLAfterFeesPercent = portfolioBalance > 0 ? (totalPnLAfterFees / portfolioBalance) * 100 : 0;
+      const totalPnLNetPercent = portfolioBalance > 0 ? (totalPnLNet / portfolioBalance) * 100 : 0;
       const winners = trades.filter(t => Number(t.pnl) > 0);
       const losers = trades.filter(t => Number(t.pnl) < 0);
       const winRate = trades.length > 0 ? (winners.length / trades.length) * 100 : 0;
@@ -364,6 +367,9 @@ export const PnLOverview = () => {
       setStats({
         totalPnL,
         totalPnLPercent,
+        totalPnLGrossPercent,
+        totalPnLAfterFeesPercent,
+        totalPnLNetPercent,
         totalTrades: trades.length,
         winRate,
         avgWin,
@@ -656,6 +662,9 @@ export const PnLOverview = () => {
                   }`}
                 >
                   {stats?.totalPnLGross >= 0 ? "+" : ""}${stats?.totalPnLGross?.toFixed(2) || "0.00"}
+                  <span className="text-sm ml-2">
+                    ({stats?.totalPnLGrossPercent >= 0 ? "+" : ""}{stats?.totalPnLGrossPercent?.toFixed(2) || "0.00"}%)
+                  </span>
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Wins: {stats?.winsGross || 0}
@@ -673,6 +682,9 @@ export const PnLOverview = () => {
                   }`}
                 >
                   {stats?.totalPnLAfterFees >= 0 ? "+" : ""}${stats?.totalPnLAfterFees?.toFixed(2) || "0.00"}
+                  <span className="text-sm ml-2">
+                    ({stats?.totalPnLAfterFeesPercent >= 0 ? "+" : ""}{stats?.totalPnLAfterFeesPercent?.toFixed(2) || "0.00"}%)
+                  </span>
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Wins: {stats?.winsAfterFees || 0} | Fees: ${stats?.totalFees?.toFixed(2) || "0.00"}
@@ -690,6 +702,9 @@ export const PnLOverview = () => {
                   }`}
                 >
                   {stats?.totalPnLNet >= 0 ? "+" : ""}${stats?.totalPnLNet?.toFixed(2) || "0.00"}
+                  <span className="text-sm ml-2">
+                    ({stats?.totalPnLNetPercent >= 0 ? "+" : ""}{stats?.totalPnLNetPercent?.toFixed(2) || "0.00"}%)
+                  </span>
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Wins: {stats?.winsNet || 0} | Funding: {stats?.totalFunding >= 0 ? "+" : ""}{stats?.totalFunding?.toFixed(2) || "0.00"}
