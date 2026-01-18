@@ -102,17 +102,30 @@ export const formatTradeForExport = (t: any) => {
   const hasSchemaError = schemaErrors.length > 0;
   const schemaErrorReason = hasSchemaError ? schemaErrors.join(', ') : null;
 
-  // Map close_reason to standardized exit_reason
+  // 🔴 KRAV 3: Standardisér exit_reason til UPPER_SNAKE_CASE
   const exitReasonMap: Record<string, string> = {
-    'TRAILING_STOP': 'trailing_stop',
-    'TRAILING_STOP_HIT': 'trailing_stop',
-    'BREAK_EVEN': 'break_even',
-    'STOP_LOSS': 'stop_loss',
-    'TIMEOUT': 'timeout',
-    'MANUAL': 'manual',
-    'TAKE_PROFIT': 'take_profit'
+    // Standard exit reasons (map to UPPER_SNAKE_CASE)
+    'TRAILING_STOP': 'TRAILING_STOP_HIT',
+    'TRAILING_STOP_HIT': 'TRAILING_STOP_HIT',
+    'trailing_stop': 'TRAILING_STOP_HIT',
+    'LEGACY_TRAILING_STOP_HIT': 'TRAILING_STOP_HIT',
+    'BREAK_EVEN': 'BREAK_EVEN_HIT',
+    'BREAK_EVEN_HIT': 'BREAK_EVEN_HIT',
+    'break_even': 'BREAK_EVEN_HIT',
+    'STOP_LOSS': 'STOP_LOSS_HIT',
+    'STOP_LOSS_HIT': 'STOP_LOSS_HIT',
+    'stop_loss': 'STOP_LOSS_HIT',
+    'HARD_STOP_LOSS_HIT': 'HARD_STOP_LOSS_HIT',
+    'PEAK_LOCK_HIT': 'PEAK_LOCK_HIT',
+    'MAX_SL_AFTER_MFE_HIT': 'MAX_SL_AFTER_MFE_HIT',
+    'TIMEOUT': 'TIMEOUT',
+    'timeout': 'TIMEOUT',
+    'MANUAL': 'MANUAL',
+    'manual': 'MANUAL',
+    'TAKE_PROFIT': 'TAKE_PROFIT',
+    'take_profit': 'TAKE_PROFIT'
   };
-  const exitReason = exitReasonMap[t.close_reason] || t.close_reason?.toLowerCase() || 'unknown';
+  const exitReason = exitReasonMap[t.close_reason] || t.close_reason?.toUpperCase() || 'UNKNOWN';
 
   // 🔴 V2 SCHEMA: Direct field access - NO FALLBACKS
   // 🔴 V1 LEGACY: Fallback to old field names
@@ -565,6 +578,35 @@ export const formatTradeForExport = (t: any) => {
       clamp_delta: snap.trailing_stop_exit_audit.clamp_delta,
       clamp_protection_level: snap.trailing_stop_exit_audit.clamp_protection_level,
       clamp_applied_correctly: snap.trailing_stop_exit_audit.clamp_applied_correctly,
+    } : null,
+
+    // 🔴 KRAV 2: EXIT MODEL AUDIT - candidate_stops[], effective_stop, stop_type_hit, stop_level_hit
+    // Disse felter dokumenterer hvilke stop-niveauer der var aktive ved exit og hvilket niveau der lukkede traden
+    exit_model_audit: snap.exit_audit ? {
+      // Alle kandidat-stops med type, level, active, triggered status
+      candidate_stops: Array.isArray(snap.exit_audit.candidate_stops) 
+        ? snap.exit_audit.candidate_stops.map((c: any) => ({
+            type: c.type,
+            level: c.level != null ? +Number(c.level).toFixed(8) : null,
+            active: c.active ?? false,
+            triggered: c.triggered ?? false,
+          }))
+        : null,
+      // Det mest beskyttende stop (MAX for LONG, MIN for SHORT)
+      effective_stop: snap.exit_audit.effective_stop != null ? +Number(snap.exit_audit.effective_stop).toFixed(8) : null,
+      effective_stop_type: snap.exit_audit.effective_stop_type ?? null,
+      // Hvilket stop der faktisk lukkede traden
+      stop_type_hit: snap.exit_audit.stop_type_hit ?? null,
+      stop_level_hit: snap.exit_audit.stop_level_hit != null ? +Number(snap.exit_audit.stop_level_hit).toFixed(8) : null,
+      // Beregningsmetode (MAX for LONG, MIN for SHORT)
+      selection_method: snap.exit_audit.selection_method ?? null,
+      // Exit status flags
+      break_even_active: snap.exit_audit.break_even_active ?? false,
+      trailing_active: snap.exit_audit.trailing_active ?? false,
+      peak_lock_active: snap.exit_audit.peak_lock_active ?? false,
+      // Resulting values
+      resulting_stop_level: snap.exit_audit.resulting_stop_level != null ? +Number(snap.exit_audit.resulting_stop_level).toFixed(8) : null,
+      exit_reason: snap.exit_audit.exit_reason ?? null,
     } : null,
 
     // Trend data

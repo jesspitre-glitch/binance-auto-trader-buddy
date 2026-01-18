@@ -2146,6 +2146,10 @@ serve(async (req) => {
                   expected_trailing_from_peak: expectedTrailingLevel,
                 };
               })(),
+              
+              // 🔴 KRAV 2: EXIT AUDIT - candidate_stops[], effective_stop, stop_type_hit, stop_level_hit
+              // @ts-ignore - dynamisk tilføjet property fra exit-logik
+              exit_audit: position._exitAudit ?? null,
             };
             
             // 🔴 FINAL ASSERTION: Verificer at BE-felter er konsistente
