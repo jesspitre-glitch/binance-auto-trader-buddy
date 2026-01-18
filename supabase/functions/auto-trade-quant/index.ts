@@ -1078,6 +1078,7 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   }
   
   // 3️⃣ ADX (med min/max range og optional adaptive threshold)
+  // 🔴 KRAV 1: Når Adaptive ADX = OFF, skal dynamicMinADX være PRÆCIS LIG adx_floor (UI)
   if (config.adx_enabled && adx !== null) {
     filterStatus.hard.adx.value = adx.toFixed(2);
     
@@ -1085,10 +1086,13 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     const adxMin = config.adx_floor ?? 20;
     const adxMax = config.adx_ceiling ?? 40;
     
-    // Hvis adaptive er enabled, beregn dynamisk minimum inden for floor/ceiling
+    // 🔴 ADX MIN SOURCE TRACKING - eksplicit logning af kilde
     let dynamicMinADX = adxMin;
+    let adx_min_source: 'UI' | 'ADAPTIVE' = 'UI';
+    let adaptive_adx_computed: number | null = null;
     
     if (config.adaptive_adx_enabled && config.adx_base_min && atr !== null) {
+      adx_min_source = 'ADAPTIVE';
       const currentATRPercent = (atr / currentPrice) * 100;
       const atrPeriod = config.atr_period || 14;
       let avgATRPercent = currentATRPercent;
@@ -1108,28 +1112,58 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       
       if (avgATRPercent > 0) {
         const atrRatio = currentATRPercent / avgATRPercent;
-        dynamicMinADX = config.adx_base_min * atrRatio;
+        adaptive_adx_computed = config.adx_base_min * atrRatio;
+        dynamicMinADX = adaptive_adx_computed;
         
         // Clamp til floor/ceiling
         if (dynamicMinADX < adxMin) dynamicMinADX = adxMin;
         if (dynamicMinADX > adxMax) dynamicMinADX = adxMax;
         
-        console.log(`   🔄 Adaptive ADX: Base=${config.adx_base_min} × ATR%(${atrRatio.toFixed(2)}) = ${dynamicMinADX.toFixed(2)} (min=${adxMin}, max=${adxMax})`);
+        console.log(`   🔄 Adaptive ADX: Base=${config.adx_base_min} × ATR%(${atrRatio.toFixed(2)}) = ${adaptive_adx_computed.toFixed(2)} → clamped=${dynamicMinADX.toFixed(2)} (floor=${adxMin}, ceiling=${adxMax})`);
       }
+    } else {
+      // 🔴 ADAPTIVE OFF: dynamicMinADX = adx_floor PRÆCIST
+      // Dette er KRAV 1 opfyldt - ingen beregning, bare UI-værdi
+      console.log(`   📋 ADX Static Mode: dynamicMinADX = adx_floor = ${adxMin} (source: UI)`);
     }
+    
+    // 🔴 AUDIT LOG: Alle ADX værdier for verifikation
+    console.log(`\n   ═══════════════════════════════════════════════════════════════════`);
+    console.log(`   📊 ADX FILTER AUDIT:`);
+    console.log(`      adx_value: ${adx.toFixed(2)}`);
+    console.log(`      adx_min (floor): ${adxMin} (from UI: adx_floor)`);
+    console.log(`      adx_max (ceiling): ${adxMax} (from UI: adx_ceiling)`);
+    console.log(`      adaptive_adx_enabled: ${config.adaptive_adx_enabled === true}`);
+    console.log(`      adx_min_source: ${adx_min_source}`);
+    console.log(`      dynamic_min_adx: ${dynamicMinADX.toFixed(2)}`);
+    if (adx_min_source === 'ADAPTIVE') {
+      console.log(`      adaptive_adx_computed: ${adaptive_adx_computed?.toFixed(2) ?? 'null'}`);
+    }
+    console.log(`   ═══════════════════════════════════════════════════════════════════`);
+    
+    // 🔴 Gem ADX audit data til filterStatus for snapshot export
+    (filterStatus.hard.adx as any).adx_min = adxMin;
+    (filterStatus.hard.adx as any).adx_max = adxMax;
+    (filterStatus.hard.adx as any).adx_min_source = adx_min_source;
+    (filterStatus.hard.adx as any).dynamic_min_adx = dynamicMinADX;
+    (filterStatus.hard.adx as any).adaptive_adx_computed = adaptive_adx_computed;
     
     // Tjek ADX er inden for min/max range
     // 🔴 ADX Min er HÅRDT filter - blokerer trades med for lav trend
     if (adx < dynamicMinADX) {
       filterStatus.hard.adx.passed = false;
-      filterStatus.hard.adx.reason = `ADX_BELOW_MIN: ${adx.toFixed(2)} < ${dynamicMinADX.toFixed(2)}`;
-      console.log(`   ❌ ADX HARD BLOCK: ${adx.toFixed(2)} < ${dynamicMinADX.toFixed(2)} (under minimum)`);
+      filterStatus.hard.adx.reason = `ADX_BELOW_MIN: ${adx.toFixed(2)} < ${dynamicMinADX.toFixed(2)} (source: ${adx_min_source})`;
+      console.log(`   ❌ ADX HARD BLOCK: ${adx.toFixed(2)} < ${dynamicMinADX.toFixed(2)} (under minimum, source: ${adx_min_source})`);
     }
     // 🔴 ADX Max er HÅRDT filter - blokerer trades med for høj volatilitet
     if (adx > adxMax) {
       filterStatus.hard.adx.passed = false;
       filterStatus.hard.adx.reason = `ADX_ABOVE_MAX: ${adx.toFixed(2)} > ${adxMax.toFixed(2)}`;
       console.log(`   ❌ ADX HARD BLOCK: ${adx.toFixed(2)} > ${adxMax.toFixed(2)} (over maximum)`);
+    }
+    
+    if (filterStatus.hard.adx.passed) {
+      console.log(`   ✅ ADX PASSED: ${adxMin} ≤ ${adx.toFixed(2)} ≤ ${adxMax} (source: ${adx_min_source})`);
     }
   }
   

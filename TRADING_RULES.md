@@ -37,18 +37,33 @@ Hvis ÉN hård filter fejler → ingen trade.
 - **Regel:** Hvis ATR% < effective_threshold → **BLOKÉR TRADE**
 - **Logging:** `atr_percent_raw`, `atr_floor_used`, `atr_floor_source`, `effective_min_atr_percent_used`, `atr_floor_passed_boolean`
 
-### 3️⃣ ADX RANGE (Hard Filter) ⚠️ RETTET
+### 3️⃣ ADX RANGE (Hard Filter) ⚠️ RETTET + VERIFICERET
 - **Enabled hvis:** `adx_enabled = true`
 - **Periode:** `adx_period` (default 14)
 - **Range:** `adx_floor` (minimum) ≤ ADX ≤ `adx_ceiling` (maximum)
   - Default: 20 ≤ ADX ≤ 40
-- **Adaptive Mode:** Hvis `adaptive_adx_enabled = true`:
+
+**🔴 KRAV 1: Adaptive ADX = OFF → dynamicMinADX = adx_floor PRÆCIST**
+- Når `adaptive_adx_enabled = false`: `dynamicMinADX = adx_floor` (ingen beregning)
+- Når `adaptive_adx_enabled = true`:
   - `dynamic_min = adx_base_min × (current_ATR% / avg_ATR%)`
   - Clamped til [adx_floor, adx_ceiling]
-- **Regler:**
-  - Hvis ADX < `adx_floor` (eller dynamic_min) → **BLOKÉR TRADE** (for lav trend)
-  - Hvis ADX > `adx_ceiling` → **BLOKÉR TRADE** (for høj volatilitet)
-- **Logging:** `adx_value`, `adx_min` (floor), `adx_max` (ceiling), `adx_dynamic_min`, `adx_filter_passed`
+
+**Regler:**
+- Hvis ADX < `dynamicMinADX` → **BLOKÉR TRADE** (for lav trend)
+- Hvis ADX > `adx_ceiling` → **BLOKÉR TRADE** (for høj volatilitet)
+
+**Logging (KRAV 1 OPFYLDT):**
+```javascript
+{
+  adx_value: number,           // Beregnet ADX værdi
+  adx_min: number,             // adx_floor fra UI
+  adx_max: number,             // adx_ceiling fra UI  
+  adx_min_source: 'UI' | 'ADAPTIVE',  // 🔴 NY: Kilde til dynamicMinADX
+  dynamic_min_adx: number,     // Faktisk brugt minimum
+  adaptive_adx_computed: number | null  // Kun sat hvis adaptive
+}
+```
 
 ### 4️⃣ VOLUME (Retnings-specifikt Hard/Soft Filter)
 
@@ -241,6 +256,8 @@ Når alle tre faser består:
 
 ### "Mest Beskyttende" Definition ⚠️ PRÆCIS MATEMATISK
 
+**🔴 KRAV 2: EXIT MODEL B - effective_stop = mest beskyttende stop**
+
 Når flere stop-levels er aktive samtidig, vælges det **mest beskyttende**:
 
 ```javascript
@@ -251,17 +268,23 @@ effective_stop = Math.max(hard_sl, max_sl_cap, break_even, peak_lock, trailing)
 effective_stop = Math.min(hard_sl, max_sl_cap, break_even, peak_lock, trailing)
 ```
 
-**Logging:** Alle aktive stop-niveauer logges i snapshot:
+**KRAV 2 OPFYLDT - Logging ved hver monitor cycle:**
 ```javascript
 {
-  stop_level_hard_sl_pct: number | null,
-  stop_level_max_sl_after_mfe: number | null,
-  stop_level_break_even: number | null,
-  stop_level_peak_lock: number | null,
-  stop_level_trailing: number | null,
-  stop_level_effective: number,
-  stop_level_winner: string
+  candidate_stops: [
+    { type: 'HARD_STOP_LOSS_HIT', level: number, active: boolean, triggered: boolean },
+    { type: 'MAX_SL_AFTER_MFE_HIT', level: number, active: boolean, triggered: boolean },
+    { type: 'BREAK_EVEN_HIT', level: number, active: boolean, triggered: boolean },
+    { type: 'PEAK_LOCK_HIT', level: number, active: boolean, triggered: boolean },
+    { type: 'TRAILING_STOP_HIT', level: number, active: boolean, triggered: boolean }
+  ],
+  effective_stop: number,           // 🔴 Mest beskyttende af alle AKTIVE stops
+  effective_stop_type: string,      // Type af effective_stop
+  stop_type_hit: string | null,     // 🔴 Hvilken stop der faktisk triggerede
+  stop_level_hit: number | null,    // 🔴 Præcis level der triggerede
+  selection_method: 'MAX' | 'MIN'   // LONG=MAX, SHORT=MIN
 }
+```
 ```
 
 ---
@@ -598,15 +621,19 @@ Signals sorteres efter score, trades åbnes indtil `max_open_positions` nået.
 
 ---
 
-## ✅ BEKRÆFTELSER
+## ✅ BEKRÆFTELSER (OPDATERET)
 
-1. ✅ **ADX hard filter:** Er `adx_floor` ≤ ADX ≤ `adx_ceiling` (range, ikke bare threshold)
-2. ✅ **Higher TF NEUTRAL:** Defineret som alle tilfælde hvor EMA ikke har klar alignment
-3. ✅ **Peak-lock:** Beregnes ud fra `peak_price`, ikke entry
-4. ✅ **Mest beskyttende:** LONG=max(), SHORT=min() af alle aktive stops
-5. ✅ **Exit reasons:** Entydige med logging af `stop_level_hit` og `stop_type_hit`
-6. ✅ **UI-styret:** Alle thresholds/parametre kommer fra UI config
-7. ✅ **Eksport:** Komplet `exit_profile_snapshot` + `regime_router_settings` pr trade
+1. ✅ **KRAV 1 - ADX Adaptive OFF:** `dynamicMinADX = adx_floor` PRÆCIST (ingen beregning)
+   - Logging inkluderer: `adx_min`, `adx_max`, `adx_value`, `adx_min_source` ('UI' eller 'ADAPTIVE')
+2. ✅ **KRAV 2 - Exit Model B:** `effective_stop = MAX(LONG) / MIN(SHORT)` af alle aktive stops
+   - Logging inkluderer: `candidate_stops[]`, `effective_stop`, `stop_type_hit`, `stop_level_hit`
+3. ✅ **ADX hard filter:** Er `adx_floor` ≤ ADX ≤ `adx_ceiling` (range, ikke bare threshold)
+4. ✅ **Higher TF NEUTRAL:** Defineret som alle tilfælde hvor EMA ikke har klar alignment
+5. ✅ **Peak-lock:** Beregnes ud fra `peak_price`, ikke entry
+6. ✅ **Mest beskyttende:** LONG=max(), SHORT=min() af alle aktive stops
+7. ✅ **Exit reasons:** Entydige med logging af `stop_level_hit` og `stop_type_hit`
+8. ✅ **UI-styret:** Alle thresholds/parametre kommer fra UI config
+9. ✅ **Eksport:** Komplet `exit_profile_snapshot` + `regime_router_settings` pr trade
 
 ---
 
