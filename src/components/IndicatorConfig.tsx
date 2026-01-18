@@ -2721,6 +2721,26 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               `Max Position Duration:  ${formData.max_position_duration_minutes} min`,
               `Betinget Tids-Exit:     ${onOff(formData.conditional_time_exit_enabled)}`,
               "",
+              "───────────────────────────────────────────────────────────────────",
+              "REGIME ROUTER",
+              "───────────────────────────────────────────────────────────────────",
+              `Status:                 ${onOff(formData.regime_router_enabled)}`,
+              ...(formData.regime_router_enabled ? [
+                `Method:                 ${formData.regime_method === 'ADX_AND_ATR' ? 'ADX + ATR%' : formData.regime_method === 'ADX_ONLY' ? 'ADX Only' : formData.regime_method === 'ATR_ONLY' ? 'ATR% Only' : formData.regime_method}`,
+                `Operator:               ${formData.regime_operator}`,
+                `ADX Threshold:          ${formData.regime_adx_threshold}`,
+                `ATR% Threshold:         ${formData.regime_atr_pct_threshold}%`,
+                `Lock Regime at Entry:   ${onOff(formData.regime_lock_at_entry)}`,
+                `If Condition TRUE:      ${formData.regime_if_true}`,
+                `If Condition FALSE:     ${formData.regime_if_false}`,
+                "",
+                "REGIME → EXIT PROFILE MAPPING",
+                `  TREND →               ${exitProfiles.find(p => p.id === formData.regime_trend_exit_profile_id)?.name ?? '(ikke valgt)'}`,
+                `  RANGE →               ${exitProfiles.find(p => p.id === formData.regime_range_exit_profile_id)?.name ?? '(ikke valgt)'}`,
+              ] : [
+                "(Regime Router er slukket - alle trades bruger standard exit-indstillinger)"
+              ]),
+              "",
               "═══════════════════════════════════════════════════════════════════",
             ];
             
