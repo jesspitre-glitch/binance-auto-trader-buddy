@@ -99,6 +99,18 @@ interface IndicatorConfig {
   vwap_enabled?: boolean;
   vwap_period?: number;
   vwap_hard_filter?: boolean;
+  
+  // Regime Router
+  regime_router_enabled?: boolean;
+  regime_method?: string;
+  regime_adx_threshold?: number;
+  regime_atr_pct_threshold?: number;
+  regime_operator?: string;
+  regime_if_true?: string;
+  regime_if_false?: string;
+  regime_lock_at_entry?: boolean;
+  regime_trend_exit_profile_id?: string;
+  regime_range_exit_profile_id?: string;
 }
 
 // Calculate strategy identifier from ALL config parameters using SHA-256 hash
@@ -2972,6 +2984,110 @@ serve(async (req) => {
           const atrPercent = analysis.indicators.atr && analysis.indicators.price 
             ? (analysis.indicators.atr / analysis.indicators.price) * 100 
             : null;
+          
+          // 🔄 REGIME ROUTER - Beregn regime baseret på config
+          const regimeResult = await (async () => {
+            if (!config.regime_router_enabled) {
+              return {
+                enabled: false,
+                label: null,
+                reason: 'REGIME_ROUTER_DISABLED',
+                adx_value_at_entry: analysis.indicators.adx ?? null,
+                atr_pct_at_entry: atrPercent,
+                exit_profile_id: null,
+                exit_profile_name: null,
+                exit_profile_version: null,
+                exit_profile_snapshot: null,
+              };
+            }
+            
+            const adxVal = analysis.indicators.adx ?? 0;
+            const atrPctVal = atrPercent ?? 0;
+            const adxThresh = config.regime_adx_threshold ?? 22;
+            const atrPctThresh = config.regime_atr_pct_threshold ?? 0.15;
+            const method = config.regime_method ?? 'ADX_AND_ATR';
+            const operator = config.regime_operator ?? 'AND';
+            
+            // Evaluate condition
+            let conditionMet = false;
+            let reasonParts: string[] = [];
+            
+            if (method === 'ADX_ONLY') {
+              conditionMet = adxVal >= adxThresh;
+              reasonParts.push(`ADX(${adxVal.toFixed(2)})${conditionMet ? '>=' : '<'}${adxThresh}`);
+            } else if (method === 'ATR_ONLY') {
+              conditionMet = atrPctVal >= atrPctThresh;
+              reasonParts.push(`ATR%(${atrPctVal.toFixed(4)})${conditionMet ? '>=' : '<'}${atrPctThresh}`);
+            } else {
+              // ADX_AND_ATR
+              const adxPassed = adxVal >= adxThresh;
+              const atrPassed = atrPctVal >= atrPctThresh;
+              reasonParts.push(`ADX(${adxVal.toFixed(2)})${adxPassed ? '>=' : '<'}${adxThresh}`);
+              reasonParts.push(`ATR%(${atrPctVal.toFixed(4)})${atrPassed ? '>=' : '<'}${atrPctThresh}`);
+              
+              conditionMet = operator === 'OR' ? (adxPassed || atrPassed) : (adxPassed && atrPassed);
+            }
+            
+            const regimeLabel = conditionMet 
+              ? (config.regime_if_true ?? 'TREND') 
+              : (config.regime_if_false ?? 'RANGE');
+            const reason = `${method}[${operator}]: ${reasonParts.join(' ' + operator + ' ')} => ${regimeLabel}`;
+            
+            // Find exit profile based on regime
+            const exitProfileId = regimeLabel === 'TREND' 
+              ? config.regime_trend_exit_profile_id 
+              : config.regime_range_exit_profile_id;
+            
+            let exitProfileSnapshot = null;
+            let exitProfileName = null;
+            let exitProfileVersion = null;
+            
+            if (exitProfileId) {
+              const { data: profile } = await supabaseClient
+                .from('exit_profiles')
+                .select('*')
+                .eq('id', exitProfileId)
+                .single();
+              
+              if (profile) {
+                exitProfileName = profile.name;
+                exitProfileVersion = profile.version;
+                exitProfileSnapshot = {
+                  be_enabled: profile.be_enabled,
+                  be_trigger_profit_pct: profile.be_trigger_profit_pct,
+                  be_stop_over_entry_pct: profile.be_stop_over_entry_pct,
+                  be_ratchet_only: profile.be_ratchet_only,
+                  peaklock_enabled: profile.peaklock_enabled,
+                  peaklock_activate_profit_pct: profile.peaklock_activate_profit_pct,
+                  peaklock_distance_from_peak_pct: profile.peaklock_distance_from_peak_pct,
+                  peaklock_min_profit_floor_pct: profile.peaklock_min_profit_floor_pct,
+                  peaklock_ratchet_only: profile.peaklock_ratchet_only,
+                  trailing_enabled: profile.trailing_enabled,
+                  trailing_stop_atr_mult: profile.trailing_stop_atr_mult,
+                  trailing_activation_enabled: profile.trailing_activation_enabled,
+                  trailing_activation_atr_mult: profile.trailing_activation_atr_mult,
+                  max_duration_enabled: profile.max_duration_enabled,
+                  max_duration_minutes: profile.max_duration_minutes,
+                  hard_sl_override_enabled: profile.hard_sl_override_enabled,
+                  hard_sl_pct: profile.hard_sl_pct,
+                };
+              }
+            }
+            
+            console.log(`🔄 REGIME ROUTER | ${reason} | exit_profile="${exitProfileName}" v${exitProfileVersion}`);
+            
+            return {
+              enabled: true,
+              label: regimeLabel,
+              reason,
+              adx_value_at_entry: adxVal,
+              atr_pct_at_entry: atrPctVal,
+              exit_profile_id: exitProfileId ?? null,
+              exit_profile_name: exitProfileName,
+              exit_profile_version: exitProfileVersion,
+              exit_profile_snapshot: exitProfileSnapshot,
+            };
+          })();
 
           // 🔎 AUDIT: Volume multiplier tri-state (skal aldrig blive true når data mangler)
           // 🔴 FIX: Bruger Number.isFinite for at fange NaN/Infinity/undefined
@@ -3559,6 +3675,26 @@ serve(async (req) => {
             // Trend data
             trend_medium: selectedSignal.trend,
             trend_higher: selectedSignal.higherTrend,
+            
+            // 🔄 REGIME ROUTER DATA - Exit profile selection
+            regime_router_enabled: regimeResult.enabled,
+            regime_method: config.regime_method ?? null,
+            regime_operator: config.regime_operator ?? null,
+            regime_adx_threshold: config.regime_adx_threshold ?? null,
+            regime_atr_pct_threshold: config.regime_atr_pct_threshold ?? null,
+            regime_adx_value_at_entry: regimeResult.adx_value_at_entry,
+            regime_atr_pct_at_entry: regimeResult.atr_pct_at_entry,
+            regime_label: regimeResult.label,
+            regime_reason: regimeResult.reason,
+            regime_lock_at_entry: config.regime_lock_at_entry ?? true,
+            
+            // Exit profile identity
+            exit_profile_id: regimeResult.exit_profile_id,
+            exit_profile_name: regimeResult.exit_profile_name,
+            exit_profile_version: regimeResult.exit_profile_version,
+            
+            // Exit profile snapshot (all params from selected profile)
+            exit_profile_snapshot: regimeResult.exit_profile_snapshot,
           };
 
           // 🔴 KRITISK: Stop Loss er ALTID ATR-baseret - INGEN FALLBACK
