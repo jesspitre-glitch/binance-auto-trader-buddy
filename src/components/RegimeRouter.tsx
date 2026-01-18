@@ -105,6 +105,7 @@ export function RegimeRouter({
                 step="0.1"
                 value={adxThreshold}
                 onChange={(e) => onChange("regime_adx_threshold", parseFloat(e.target.value) || 22)}
+                onFocus={(e) => e.target.select()}
                 className="h-9"
               />
             </div>
@@ -115,6 +116,7 @@ export function RegimeRouter({
                 step="0.01"
                 value={atrPctThreshold}
                 onChange={(e) => onChange("regime_atr_pct_threshold", parseFloat(e.target.value) || 0.15)}
+                onFocus={(e) => e.target.select()}
                 className="h-9"
               />
             </div>
