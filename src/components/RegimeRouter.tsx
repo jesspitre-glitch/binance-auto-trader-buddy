@@ -1,7 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -10,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { DecimalInput } from "@/components/DecimalInput";
 import { Route, TrendingUp, BarChart3, Lock } from "lucide-react";
 
 interface ExitProfile {
@@ -100,23 +100,19 @@ export function RegimeRouter({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs">ADX Threshold</Label>
-              <Input
-                type="number"
-                step="0.1"
+              <DecimalInput
                 value={adxThreshold}
-                onChange={(e) => onChange("regime_adx_threshold", parseFloat(e.target.value) || 22)}
-                onFocus={(e) => e.target.select()}
+                fallback={22}
+                onValueChange={(v) => onChange("regime_adx_threshold", v)}
                 className="h-9"
               />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">ATR% Threshold</Label>
-              <Input
-                type="number"
-                step="0.01"
+              <DecimalInput
                 value={atrPctThreshold}
-                onChange={(e) => onChange("regime_atr_pct_threshold", parseFloat(e.target.value) || 0.15)}
-                onFocus={(e) => e.target.select()}
+                fallback={0.15}
+                onValueChange={(v) => onChange("regime_atr_pct_threshold", v)}
                 className="h-9"
               />
             </div>
