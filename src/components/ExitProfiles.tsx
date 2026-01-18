@@ -87,6 +87,13 @@ const defaultProfile: Omit<ExitProfile, "id" | "user_id"> = {
   hard_sl_pct: 3.0,
 };
 
+// Helper function to parse floats with comma support (European locale)
+const safeParseFloat = (value: string): number => {
+  const normalized = value.replace(',', '.');
+  const parsed = parseFloat(normalized);
+  return isNaN(parsed) ? 0 : parsed;
+};
+
 export function ExitProfiles({ profiles, onProfilesChange }: ExitProfilesProps) {
   const [localProfiles, setLocalProfiles] = useState<ExitProfile[]>(profiles);
   const [saving, setSaving] = useState<string | null>(null);
@@ -252,10 +259,11 @@ export function ExitProfiles({ profiles, onProfilesChange }: ExitProfilesProps) 
                         <div className="space-y-1">
                           <Label className="text-xs">Trigger Profit %</Label>
                           <Input
-                            type="number"
-                            step="0.1"
+                            type="text"
+                            inputMode="decimal"
                             value={profile.be_trigger_profit_pct}
-                            onChange={(e) => handleProfileChange(profile.id, "be_trigger_profit_pct", parseFloat(e.target.value) || 0)}
+                            onChange={(e) => handleProfileChange(profile.id, "be_trigger_profit_pct", safeParseFloat(e.target.value))}
+                            onFocus={(e) => e.target.select()}
                             className="h-8"
                             disabled={!profile.be_enabled}
                           />
@@ -263,10 +271,11 @@ export function ExitProfiles({ profiles, onProfilesChange }: ExitProfilesProps) 
                         <div className="space-y-1">
                           <Label className="text-xs">Stop Over Entry %</Label>
                           <Input
-                            type="number"
-                            step="0.01"
+                            type="text"
+                            inputMode="decimal"
                             value={profile.be_stop_over_entry_pct}
-                            onChange={(e) => handleProfileChange(profile.id, "be_stop_over_entry_pct", parseFloat(e.target.value) || 0)}
+                            onChange={(e) => handleProfileChange(profile.id, "be_stop_over_entry_pct", safeParseFloat(e.target.value))}
+                            onFocus={(e) => e.target.select()}
                             className="h-8"
                             disabled={!profile.be_enabled}
                           />
@@ -300,10 +309,11 @@ export function ExitProfiles({ profiles, onProfilesChange }: ExitProfilesProps) 
                         <div className="space-y-1">
                           <Label className="text-xs">Activate At Profit %</Label>
                           <Input
-                            type="number"
-                            step="0.1"
+                            type="text"
+                            inputMode="decimal"
                             value={profile.peaklock_activate_profit_pct}
-                            onChange={(e) => handleProfileChange(profile.id, "peaklock_activate_profit_pct", parseFloat(e.target.value) || 0)}
+                            onChange={(e) => handleProfileChange(profile.id, "peaklock_activate_profit_pct", safeParseFloat(e.target.value))}
+                            onFocus={(e) => e.target.select()}
                             className="h-8"
                             disabled={!profile.peaklock_enabled}
                           />
@@ -311,10 +321,11 @@ export function ExitProfiles({ profiles, onProfilesChange }: ExitProfilesProps) 
                         <div className="space-y-1">
                           <Label className="text-xs">Distance From Peak %</Label>
                           <Input
-                            type="number"
-                            step="0.01"
+                            type="text"
+                            inputMode="decimal"
                             value={profile.peaklock_distance_from_peak_pct}
-                            onChange={(e) => handleProfileChange(profile.id, "peaklock_distance_from_peak_pct", parseFloat(e.target.value) || 0)}
+                            onChange={(e) => handleProfileChange(profile.id, "peaklock_distance_from_peak_pct", safeParseFloat(e.target.value))}
+                            onFocus={(e) => e.target.select()}
                             className="h-8"
                             disabled={!profile.peaklock_enabled}
                           />
@@ -322,10 +333,11 @@ export function ExitProfiles({ profiles, onProfilesChange }: ExitProfilesProps) 
                         <div className="space-y-1">
                           <Label className="text-xs">Min Profit Floor %</Label>
                           <Input
-                            type="number"
-                            step="0.01"
+                            type="text"
+                            inputMode="decimal"
                             value={profile.peaklock_min_profit_floor_pct}
-                            onChange={(e) => handleProfileChange(profile.id, "peaklock_min_profit_floor_pct", parseFloat(e.target.value) || 0)}
+                            onChange={(e) => handleProfileChange(profile.id, "peaklock_min_profit_floor_pct", safeParseFloat(e.target.value))}
+                            onFocus={(e) => e.target.select()}
                             className="h-8"
                             disabled={!profile.peaklock_enabled}
                           />
@@ -359,10 +371,11 @@ export function ExitProfiles({ profiles, onProfilesChange }: ExitProfilesProps) 
                         <div className="space-y-1">
                           <Label className="text-xs">Trailing Stop (x ATR)</Label>
                           <Input
-                            type="number"
-                            step="0.1"
+                            type="text"
+                            inputMode="decimal"
                             value={profile.trailing_stop_atr_mult}
-                            onChange={(e) => handleProfileChange(profile.id, "trailing_stop_atr_mult", parseFloat(e.target.value) || 0)}
+                            onChange={(e) => handleProfileChange(profile.id, "trailing_stop_atr_mult", safeParseFloat(e.target.value))}
+                            onFocus={(e) => e.target.select()}
                             className="h-8"
                             disabled={!profile.trailing_enabled}
                           />
@@ -380,10 +393,11 @@ export function ExitProfiles({ profiles, onProfilesChange }: ExitProfilesProps) 
                         <div className="space-y-1">
                           <Label className="text-xs">Activation ATR Mult</Label>
                           <Input
-                            type="number"
-                            step="0.1"
+                            type="text"
+                            inputMode="decimal"
                             value={profile.trailing_activation_atr_mult}
-                            onChange={(e) => handleProfileChange(profile.id, "trailing_activation_atr_mult", parseFloat(e.target.value) || 0)}
+                            onChange={(e) => handleProfileChange(profile.id, "trailing_activation_atr_mult", safeParseFloat(e.target.value))}
+                            onFocus={(e) => e.target.select()}
                             className="h-8"
                             disabled={!profile.trailing_enabled || !profile.trailing_activation_enabled}
                           />
@@ -408,9 +422,10 @@ export function ExitProfiles({ profiles, onProfilesChange }: ExitProfilesProps) 
                           <Label className="text-xs">Max Duration (minutes)</Label>
                           <Input
                             type="number"
-                            step="1"
+                            inputMode="numeric"
                             value={profile.max_duration_minutes}
                             onChange={(e) => handleProfileChange(profile.id, "max_duration_minutes", parseInt(e.target.value) || 0)}
+                            onFocus={(e) => e.target.select()}
                             className="h-8 w-32"
                             disabled={!profile.max_duration_enabled}
                           />
@@ -434,10 +449,11 @@ export function ExitProfiles({ profiles, onProfilesChange }: ExitProfilesProps) 
                         <div className="space-y-1">
                           <Label className="text-xs">Hard SL %</Label>
                           <Input
-                            type="number"
-                            step="0.1"
+                            type="text"
+                            inputMode="decimal"
                             value={profile.hard_sl_pct}
-                            onChange={(e) => handleProfileChange(profile.id, "hard_sl_pct", parseFloat(e.target.value) || 0)}
+                            onChange={(e) => handleProfileChange(profile.id, "hard_sl_pct", safeParseFloat(e.target.value))}
+                            onFocus={(e) => e.target.select()}
                             className="h-8 w-32"
                             disabled={!profile.hard_sl_override_enabled}
                           />
