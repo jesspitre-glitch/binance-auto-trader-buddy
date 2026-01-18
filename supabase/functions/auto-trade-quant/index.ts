@@ -3192,9 +3192,10 @@ serve(async (req) => {
           })();
           
           // 🔴 ADX FILTER AUDIT - Detaljeret reason string med DI værdier
+          // 🔴 KRAV 1: ADX MIN SOURCE AUDIT - inkluderer adx_min_source og dynamic_min_adx
           const adxFilterAudit = (() => {
             if (!config.adx_enabled) {
-              return { passed: null, reason: 'ADX_FILTER_DISABLED' };
+              return { passed: null, reason: 'ADX_FILTER_DISABLED', adx_min_source: null };
             }
             const adxVal = analysis.indicators.adx;
             const adxAuditData = analysis.indicators.adx_audit;
@@ -3202,14 +3203,22 @@ serve(async (req) => {
             const ceilingUsed = config.adx_ceiling ?? 40;
             
             if (adxVal === null || adxVal === undefined) {
-              return { passed: null, reason: 'ADX_VALUE_MISSING' };
+              return { passed: null, reason: 'ADX_VALUE_MISSING', adx_min_source: null };
             }
             
-            const inRange = adxVal >= floorUsed && adxVal <= ceilingUsed;
+            // 🔴 KRAV 1: Hent adx_min_source fra filterStatus
+            // Når adaptive_adx_enabled = OFF: adx_min_source = 'UI', dynamic_min_adx = adx_floor
+            // Når adaptive_adx_enabled = ON: adx_min_source = 'ADAPTIVE', dynamic_min_adx = beregnet værdi
+            const fs = analysis.filterStatus?.hard?.adx;
+            const adxMinSource: 'UI' | 'ADAPTIVE' = config.adaptive_adx_enabled === true ? 'ADAPTIVE' : 'UI';
+            const dynamicMinAdx = fs?.dynamic_min_adx ?? floorUsed;
+            const adaptiveAdxComputed = fs?.adaptive_adx_computed ?? null;
+            
+            const inRange = adxVal >= dynamicMinAdx && adxVal <= ceilingUsed;
             const reason = inRange 
-              ? `ADX_OK: ${adxVal.toFixed(4)} in [${floorUsed}, ${ceilingUsed}]`
-              : adxVal < floorUsed
-                ? `ADX_BELOW_MIN: ${adxVal.toFixed(4)} < ${floorUsed}`
+              ? `ADX_OK: ${adxVal.toFixed(4)} in [${dynamicMinAdx.toFixed(2)}, ${ceilingUsed}] (source: ${adxMinSource})`
+              : adxVal < dynamicMinAdx
+                ? `ADX_BELOW_MIN: ${adxVal.toFixed(4)} < ${dynamicMinAdx.toFixed(2)} (source: ${adxMinSource})`
                 : `ADX_ABOVE_MAX: ${adxVal.toFixed(4)} > ${ceilingUsed}`;
             
             return {
@@ -3218,13 +3227,17 @@ serve(async (req) => {
               adx_value_raw: adxVal,
               adx_floor_used: floorUsed,
               adx_ceiling_used: ceilingUsed,
-              adx_adaptive_enabled: config.adaptive_adx_enabled,
+              adx_adaptive_enabled: config.adaptive_adx_enabled === true,
               adx_base_used: config.adx_base_min,
               plus_di: adxAuditData?.plus_di ?? null,
               minus_di: adxAuditData?.minus_di ?? null,
               dx_instant: adxAuditData?.dx_instant ?? null,
               adx_timeframe: config.trend_timeframe,
               adx_period: config.adx_period,
+              // 🔴 KRAV 1: NYE FELTER
+              adx_min_source: adxMinSource, // 'UI' eller 'ADAPTIVE'
+              dynamic_min_adx: dynamicMinAdx, // Det faktiske minimum brugt (= adx_floor når adaptive OFF)
+              adaptive_adx_computed: adaptiveAdxComputed, // Kun ikke-null når adaptive ON
             };
           })();
           
@@ -3545,6 +3558,9 @@ serve(async (req) => {
               pivot_points_hard_filter: config.pivot_points_hard_filter,
               higher_trend_hard_filter: config.higher_trend_hard_filter,
             },
+            
+            // 🔴 KRAV 1: FILTER STATUS - Gemmes for at eksporten kan læse ADX min source audit
+            filterStatus: analysis.filterStatus ?? null,
             
             // Signal strength
             signalStrength: selectedSignal.strength,
