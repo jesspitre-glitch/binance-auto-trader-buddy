@@ -89,10 +89,63 @@ const defaultProfile: Omit<ExitProfile, "id" | "user_id"> = {
 
 // Helper function to parse floats with comma support (European locale)
 const safeParseFloat = (value: string): number => {
-  const normalized = value.replace(',', '.');
+  const normalized = value.replace(",", ".");
   const parsed = parseFloat(normalized);
-  return isNaN(parsed) ? 0 : parsed;
+  return Number.isNaN(parsed) ? 0 : parsed;
 };
+
+type DecimalInputProps = {
+  value: number;
+  onValueChange: (value: number) => void;
+  disabled?: boolean;
+  className?: string;
+};
+
+function DecimalInput({ value, onValueChange, disabled, className }: DecimalInputProps) {
+  const [text, setText] = useState<string>(() => String(value ?? 0));
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) setText(String(value ?? 0));
+  }, [value, focused]);
+
+  const handleChange = (raw: string) => {
+    // Allow partial values while typing: "", "0,", "0.", "-", "-0," etc.
+    const isAllowed = /^-?\d*(?:[.,]\d*)?$/.test(raw);
+    if (!isAllowed) return;
+
+    setText(raw);
+
+    const normalized = raw.replace(",", ".");
+    if (normalized === "" || normalized === "-" || normalized === "." || normalized === "-.") return;
+
+    const parsed = Number(normalized);
+    if (!Number.isNaN(parsed)) onValueChange(parsed);
+  };
+
+  const handleBlur = () => {
+    setFocused(false);
+    const finalValue = safeParseFloat(text);
+    onValueChange(finalValue);
+    setText(String(finalValue));
+  };
+
+  return (
+    <Input
+      type="text"
+      inputMode="decimal"
+      value={text}
+      onChange={(e) => handleChange(e.target.value)}
+      onFocus={(e) => {
+        setFocused(true);
+        e.target.select();
+      }}
+      onBlur={handleBlur}
+      className={className}
+      disabled={disabled}
+    />
+  );
+}
 
 export function ExitProfiles({ profiles, onProfilesChange }: ExitProfilesProps) {
   const [localProfiles, setLocalProfiles] = useState<ExitProfile[]>(profiles);
@@ -258,24 +311,18 @@ export function ExitProfiles({ profiles, onProfilesChange }: ExitProfilesProps) 
                       <div className={`grid grid-cols-3 gap-2 ${!profile.be_enabled ? "opacity-50" : ""}`}>
                         <div className="space-y-1">
                           <Label className="text-xs">Trigger Profit %</Label>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
+                          <DecimalInput
                             value={profile.be_trigger_profit_pct}
-                            onChange={(e) => handleProfileChange(profile.id, "be_trigger_profit_pct", safeParseFloat(e.target.value))}
-                            onFocus={(e) => e.target.select()}
+                            onValueChange={(v) => handleProfileChange(profile.id, "be_trigger_profit_pct", v)}
                             className="h-8"
                             disabled={!profile.be_enabled}
                           />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">Stop Over Entry %</Label>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
+                          <DecimalInput
                             value={profile.be_stop_over_entry_pct}
-                            onChange={(e) => handleProfileChange(profile.id, "be_stop_over_entry_pct", safeParseFloat(e.target.value))}
-                            onFocus={(e) => e.target.select()}
+                            onValueChange={(v) => handleProfileChange(profile.id, "be_stop_over_entry_pct", v)}
                             className="h-8"
                             disabled={!profile.be_enabled}
                           />
@@ -308,36 +355,27 @@ export function ExitProfiles({ profiles, onProfilesChange }: ExitProfilesProps) 
                       <div className={`grid grid-cols-2 gap-2 ${!profile.peaklock_enabled ? "opacity-50" : ""}`}>
                         <div className="space-y-1">
                           <Label className="text-xs">Activate At Profit %</Label>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
+                          <DecimalInput
                             value={profile.peaklock_activate_profit_pct}
-                            onChange={(e) => handleProfileChange(profile.id, "peaklock_activate_profit_pct", safeParseFloat(e.target.value))}
-                            onFocus={(e) => e.target.select()}
+                            onValueChange={(v) => handleProfileChange(profile.id, "peaklock_activate_profit_pct", v)}
                             className="h-8"
                             disabled={!profile.peaklock_enabled}
                           />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">Distance From Peak %</Label>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
+                          <DecimalInput
                             value={profile.peaklock_distance_from_peak_pct}
-                            onChange={(e) => handleProfileChange(profile.id, "peaklock_distance_from_peak_pct", safeParseFloat(e.target.value))}
-                            onFocus={(e) => e.target.select()}
+                            onValueChange={(v) => handleProfileChange(profile.id, "peaklock_distance_from_peak_pct", v)}
                             className="h-8"
                             disabled={!profile.peaklock_enabled}
                           />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">Min Profit Floor %</Label>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
+                          <DecimalInput
                             value={profile.peaklock_min_profit_floor_pct}
-                            onChange={(e) => handleProfileChange(profile.id, "peaklock_min_profit_floor_pct", safeParseFloat(e.target.value))}
-                            onFocus={(e) => e.target.select()}
+                            onValueChange={(v) => handleProfileChange(profile.id, "peaklock_min_profit_floor_pct", v)}
                             className="h-8"
                             disabled={!profile.peaklock_enabled}
                           />
@@ -370,12 +408,9 @@ export function ExitProfiles({ profiles, onProfilesChange }: ExitProfilesProps) 
                       <div className={`grid grid-cols-2 gap-2 ${!profile.trailing_enabled ? "opacity-50" : ""}`}>
                         <div className="space-y-1">
                           <Label className="text-xs">Trailing Stop (x ATR)</Label>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
+                          <DecimalInput
                             value={profile.trailing_stop_atr_mult}
-                            onChange={(e) => handleProfileChange(profile.id, "trailing_stop_atr_mult", safeParseFloat(e.target.value))}
-                            onFocus={(e) => e.target.select()}
+                            onValueChange={(v) => handleProfileChange(profile.id, "trailing_stop_atr_mult", v)}
                             className="h-8"
                             disabled={!profile.trailing_enabled}
                           />
@@ -392,12 +427,9 @@ export function ExitProfiles({ profiles, onProfilesChange }: ExitProfilesProps) 
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">Activation ATR Mult</Label>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
+                          <DecimalInput
                             value={profile.trailing_activation_atr_mult}
-                            onChange={(e) => handleProfileChange(profile.id, "trailing_activation_atr_mult", safeParseFloat(e.target.value))}
-                            onFocus={(e) => e.target.select()}
+                            onValueChange={(v) => handleProfileChange(profile.id, "trailing_activation_atr_mult", v)}
                             className="h-8"
                             disabled={!profile.trailing_enabled || !profile.trailing_activation_enabled}
                           />
@@ -448,12 +480,9 @@ export function ExitProfiles({ profiles, onProfilesChange }: ExitProfilesProps) 
                       <div className={`${!profile.hard_sl_override_enabled ? "opacity-50" : ""}`}>
                         <div className="space-y-1">
                           <Label className="text-xs">Hard SL %</Label>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
+                          <DecimalInput
                             value={profile.hard_sl_pct}
-                            onChange={(e) => handleProfileChange(profile.id, "hard_sl_pct", safeParseFloat(e.target.value))}
-                            onFocus={(e) => e.target.select()}
+                            onValueChange={(v) => handleProfileChange(profile.id, "hard_sl_pct", v)}
                             className="h-8 w-32"
                             disabled={!profile.hard_sl_override_enabled}
                           />
