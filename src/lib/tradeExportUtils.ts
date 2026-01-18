@@ -556,6 +556,25 @@ export const formatTradeForExport = (t: any) => {
     trend_medium: trendMedium,
     trend_higher: trendHigher,
 
+    // 🔴 REGIME ROUTER - Exit profile selection
+    regime_router_enabled: snap.regime_router_enabled ?? false,
+    regime_method: snap.regime_method ?? null,
+    regime_operator: snap.regime_operator ?? null,
+    regime_adx_threshold: snap.regime_adx_threshold ?? null,
+    regime_atr_pct_threshold: snap.regime_atr_pct_threshold ?? null,
+    regime_adx_value_at_entry: snap.regime_adx_value_at_entry ?? null,
+    regime_atr_pct_at_entry: snap.regime_atr_pct_at_entry ?? null,
+    regime_label: snap.regime_label ?? null,
+    regime_reason: snap.regime_reason ?? null,
+    
+    // Exit profile identity
+    exit_profile_id: snap.exit_profile_id ?? null,
+    exit_profile_name: snap.exit_profile_name ?? null,
+    exit_profile_version: snap.exit_profile_version ?? null,
+    
+    // Exit profile snapshot (all params from selected profile)
+    exit_profile_snapshot: snap.exit_profile_snapshot ?? null,
+
     // Timestamps
     timestamp_open: openedAt.toISOString(),
     timestamp_close: closedAt.toISOString()

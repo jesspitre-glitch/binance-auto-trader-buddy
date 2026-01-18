@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Copy, Check } from "lucide-react";
 import { FilterModeToggle } from "./FilterModeToggle";
+import { RegimeRouter } from "./RegimeRouter";
+import { ExitProfiles, ExitProfile } from "./ExitProfiles";
 
 interface IndicatorConfigProps {
   config?: any;
@@ -185,7 +187,22 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     adx_hard_filter: config?.adx_hard_filter !== undefined ? config?.adx_hard_filter : true,
     volume_hard_filter: config?.volume_hard_filter !== undefined ? config?.volume_hard_filter : true,
     higher_trend_hard_filter: config?.higher_trend_hard_filter !== undefined ? config?.higher_trend_hard_filter : true,
+    
+    // Regime Router
+    regime_router_enabled: config?.regime_router_enabled ?? false,
+    regime_method: config?.regime_method ?? 'ADX_AND_ATR',
+    regime_adx_threshold: config?.regime_adx_threshold ?? 22,
+    regime_atr_pct_threshold: config?.regime_atr_pct_threshold ?? 0.15,
+    regime_operator: config?.regime_operator ?? 'AND',
+    regime_if_true: config?.regime_if_true ?? 'TREND',
+    regime_if_false: config?.regime_if_false ?? 'RANGE',
+    regime_lock_at_entry: config?.regime_lock_at_entry ?? true,
+    regime_trend_exit_profile_id: config?.regime_trend_exit_profile_id ?? null,
+    regime_range_exit_profile_id: config?.regime_range_exit_profile_id ?? null,
   });
+  
+  // State for exit profiles
+  const [exitProfiles, setExitProfiles] = useState<ExitProfile[]>([]);
   
   // Sync form with incoming config changes - use config.id to detect actual config change
   useEffect(() => {
@@ -325,8 +342,39 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       adx_hard_filter: config.adx_hard_filter !== undefined ? config.adx_hard_filter : true,
       volume_hard_filter: config.volume_hard_filter !== undefined ? config.volume_hard_filter : true,
       higher_trend_hard_filter: config.higher_trend_hard_filter !== undefined ? config.higher_trend_hard_filter : true,
+      // Regime Router
+      regime_router_enabled: config.regime_router_enabled ?? false,
+      regime_method: config.regime_method ?? 'ADX_AND_ATR',
+      regime_adx_threshold: config.regime_adx_threshold ?? 22,
+      regime_atr_pct_threshold: config.regime_atr_pct_threshold ?? 0.15,
+      regime_operator: config.regime_operator ?? 'AND',
+      regime_if_true: config.regime_if_true ?? 'TREND',
+      regime_if_false: config.regime_if_false ?? 'RANGE',
+      regime_lock_at_entry: config.regime_lock_at_entry ?? true,
+      regime_trend_exit_profile_id: config.regime_trend_exit_profile_id ?? null,
+      regime_range_exit_profile_id: config.regime_range_exit_profile_id ?? null,
     });
   }, [config?.id, config?.updated_at]);
+
+  // Fetch exit profiles on mount
+  useEffect(() => {
+    const fetchExitProfiles = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { data, error } = await supabase
+        .from("exit_profiles")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true });
+      
+      if (!error && data) {
+        setExitProfiles(data as ExitProfile[]);
+      }
+    };
+    
+    fetchExitProfiles();
+  }, []);
 
   const handleCancel = () => {
     if (!config) return;
@@ -451,6 +499,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       adx_hard_filter: config.adx_hard_filter !== undefined ? config.adx_hard_filter : true,
       volume_hard_filter: config.volume_hard_filter !== undefined ? config.volume_hard_filter : true,
       higher_trend_hard_filter: config.higher_trend_hard_filter !== undefined ? config.higher_trend_hard_filter : true,
+      // Regime Router
+      regime_router_enabled: config.regime_router_enabled ?? false,
+      regime_method: config.regime_method ?? 'ADX_AND_ATR',
+      regime_adx_threshold: config.regime_adx_threshold ?? 22,
+      regime_atr_pct_threshold: config.regime_atr_pct_threshold ?? 0.15,
+      regime_operator: config.regime_operator ?? 'AND',
+      regime_if_true: config.regime_if_true ?? 'TREND',
+      regime_if_false: config.regime_if_false ?? 'RANGE',
+      regime_lock_at_entry: config.regime_lock_at_entry ?? true,
+      regime_trend_exit_profile_id: config.regime_trend_exit_profile_id ?? null,
+      regime_range_exit_profile_id: config.regime_range_exit_profile_id ?? null,
     });
     
     toast({
@@ -661,6 +720,28 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           </div>
         </CardContent>
       </Card>
+
+      {/* REGIME ROUTER SECTION */}
+      <RegimeRouter
+        enabled={formData.regime_router_enabled}
+        method={formData.regime_method}
+        adxThreshold={formData.regime_adx_threshold}
+        atrPctThreshold={formData.regime_atr_pct_threshold}
+        operator={formData.regime_operator}
+        ifTrue={formData.regime_if_true}
+        ifFalse={formData.regime_if_false}
+        lockAtEntry={formData.regime_lock_at_entry}
+        trendExitProfileId={formData.regime_trend_exit_profile_id}
+        rangeExitProfileId={formData.regime_range_exit_profile_id}
+        exitProfiles={exitProfiles.map(p => ({ id: p.id, name: p.name }))}
+        onChange={(field, value) => setFormData({ ...formData, [field]: value })}
+      />
+
+      {/* EXIT PROFILES SECTION */}
+      <ExitProfiles
+        profiles={exitProfiles}
+        onProfilesChange={setExitProfiles}
+      />
 
       <Card>
         <CardHeader>

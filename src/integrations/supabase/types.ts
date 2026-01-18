@@ -41,6 +41,84 @@ export type Database = {
         }
         Relationships: []
       }
+      exit_profiles: {
+        Row: {
+          be_enabled: boolean | null
+          be_ratchet_only: boolean | null
+          be_stop_over_entry_pct: number | null
+          be_trigger_profit_pct: number | null
+          created_at: string | null
+          hard_sl_override_enabled: boolean | null
+          hard_sl_pct: number | null
+          id: string
+          max_duration_enabled: boolean | null
+          max_duration_minutes: number | null
+          name: string
+          peaklock_activate_profit_pct: number | null
+          peaklock_distance_from_peak_pct: number | null
+          peaklock_enabled: boolean | null
+          peaklock_min_profit_floor_pct: number | null
+          peaklock_ratchet_only: boolean | null
+          trailing_activation_atr_mult: number | null
+          trailing_activation_enabled: boolean | null
+          trailing_enabled: boolean | null
+          trailing_stop_atr_mult: number | null
+          updated_at: string | null
+          user_id: string
+          version: number
+        }
+        Insert: {
+          be_enabled?: boolean | null
+          be_ratchet_only?: boolean | null
+          be_stop_over_entry_pct?: number | null
+          be_trigger_profit_pct?: number | null
+          created_at?: string | null
+          hard_sl_override_enabled?: boolean | null
+          hard_sl_pct?: number | null
+          id?: string
+          max_duration_enabled?: boolean | null
+          max_duration_minutes?: number | null
+          name: string
+          peaklock_activate_profit_pct?: number | null
+          peaklock_distance_from_peak_pct?: number | null
+          peaklock_enabled?: boolean | null
+          peaklock_min_profit_floor_pct?: number | null
+          peaklock_ratchet_only?: boolean | null
+          trailing_activation_atr_mult?: number | null
+          trailing_activation_enabled?: boolean | null
+          trailing_enabled?: boolean | null
+          trailing_stop_atr_mult?: number | null
+          updated_at?: string | null
+          user_id: string
+          version?: number
+        }
+        Update: {
+          be_enabled?: boolean | null
+          be_ratchet_only?: boolean | null
+          be_stop_over_entry_pct?: number | null
+          be_trigger_profit_pct?: number | null
+          created_at?: string | null
+          hard_sl_override_enabled?: boolean | null
+          hard_sl_pct?: number | null
+          id?: string
+          max_duration_enabled?: boolean | null
+          max_duration_minutes?: number | null
+          name?: string
+          peaklock_activate_profit_pct?: number | null
+          peaklock_distance_from_peak_pct?: number | null
+          peaklock_enabled?: boolean | null
+          peaklock_min_profit_floor_pct?: number | null
+          peaklock_ratchet_only?: boolean | null
+          trailing_activation_atr_mult?: number | null
+          trailing_activation_enabled?: boolean | null
+          trailing_enabled?: boolean | null
+          trailing_stop_atr_mult?: number | null
+          updated_at?: string | null
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
       funding_fees: {
         Row: {
           asset: string
@@ -164,6 +242,16 @@ export type Database = {
           pivot_points_near_threshold: number | null
           pivot_points_timeframe: string | null
           position_size_percent: number | null
+          regime_adx_threshold: number | null
+          regime_atr_pct_threshold: number | null
+          regime_if_false: string | null
+          regime_if_true: string | null
+          regime_lock_at_entry: boolean | null
+          regime_method: string | null
+          regime_operator: string | null
+          regime_range_exit_profile_id: string | null
+          regime_router_enabled: boolean | null
+          regime_trend_exit_profile_id: string | null
           risk_per_trade_percent: number | null
           rollover_d_min_short: number | null
           rsi_enabled: boolean | null
@@ -290,6 +378,16 @@ export type Database = {
           pivot_points_near_threshold?: number | null
           pivot_points_timeframe?: string | null
           position_size_percent?: number | null
+          regime_adx_threshold?: number | null
+          regime_atr_pct_threshold?: number | null
+          regime_if_false?: string | null
+          regime_if_true?: string | null
+          regime_lock_at_entry?: boolean | null
+          regime_method?: string | null
+          regime_operator?: string | null
+          regime_range_exit_profile_id?: string | null
+          regime_router_enabled?: boolean | null
+          regime_trend_exit_profile_id?: string | null
           risk_per_trade_percent?: number | null
           rollover_d_min_short?: number | null
           rsi_enabled?: boolean | null
@@ -416,6 +514,16 @@ export type Database = {
           pivot_points_near_threshold?: number | null
           pivot_points_timeframe?: string | null
           position_size_percent?: number | null
+          regime_adx_threshold?: number | null
+          regime_atr_pct_threshold?: number | null
+          regime_if_false?: string | null
+          regime_if_true?: string | null
+          regime_lock_at_entry?: boolean | null
+          regime_method?: string | null
+          regime_operator?: string | null
+          regime_range_exit_profile_id?: string | null
+          regime_router_enabled?: boolean | null
+          regime_trend_exit_profile_id?: string | null
           risk_per_trade_percent?: number | null
           rollover_d_min_short?: number | null
           rsi_enabled?: boolean | null
@@ -456,7 +564,22 @@ export type Database = {
           vwap_hard_filter?: boolean | null
           vwap_period?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "indicator_config_regime_range_exit_profile_id_fkey"
+            columns: ["regime_range_exit_profile_id"]
+            isOneToOne: false
+            referencedRelation: "exit_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "indicator_config_regime_trend_exit_profile_id_fkey"
+            columns: ["regime_trend_exit_profile_id"]
+            isOneToOne: false
+            referencedRelation: "exit_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       positions: {
         Row: {
