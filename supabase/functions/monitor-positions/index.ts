@@ -1443,12 +1443,86 @@ serve(async (req) => {
           }
         }
 
-        // Find alle triggered levels og vælg det bedste (højeste for LONG, laveste for SHORT)
-        const triggeredLevels: { type: string; level: number }[] = [];
-        if (slTriggered && hardStopLoss !== null) triggeredLevels.push({ type: 'HARD_SL_PCT', level: hardStopLoss });
-        if (beTriggered && breakEvenStop !== null) triggeredLevels.push({ type: 'BREAK_EVEN', level: breakEvenStop });
-        if (tsTriggered && trailingStop !== null) triggeredLevels.push({ type: 'TRAILING', level: trailingStop });
-        if (maxSlAfterMfeTriggered && maxSlAfterMfeCap !== null) triggeredLevels.push({ type: 'MAX_SL_AFTER_MFE', level: maxSlAfterMfeCap });
+        // ═══════════════════════════════════════════════════════════════════════
+        // 🔴 KRAV 2: EXIT MODEL B - effective_stop = mest beskyttende stop
+        // LONG: effective_stop = MAX(alle aktive stop levels)
+        // SHORT: effective_stop = MIN(alle aktive stop levels)
+        // ═══════════════════════════════════════════════════════════════════════
+        
+        // 1) Byg candidate_stops[] med ALLE aktive stop-niveauer (uanset om triggered)
+        const candidateStops: { type: string; level: number; active: boolean; triggered: boolean }[] = [];
+        
+        // Hard SL % - altid aktiv hvis enabled
+        if (hardSlPctEnabled && hardStopLoss !== null) {
+          candidateStops.push({ 
+            type: 'HARD_STOP_LOSS_HIT', 
+            level: hardStopLoss, 
+            active: true, 
+            triggered: slTriggered 
+          });
+        }
+        
+        // Max SL after MFE - kun aktiv hvis enabled OG MFE threshold nået
+        if (maxSlAfterMfeCap !== null) {
+          candidateStops.push({ 
+            type: 'MAX_SL_AFTER_MFE_HIT', 
+            level: maxSlAfterMfeCap, 
+            active: true, 
+            triggered: maxSlAfterMfeTriggered 
+          });
+        }
+        
+        // Break-even - kun aktiv hvis BE er aktiveret
+        if (breakEvenActivatedState && breakEvenStop !== null) {
+          candidateStops.push({ 
+            type: 'BREAK_EVEN_HIT', 
+            level: breakEvenStop, 
+            active: true, 
+            triggered: beTriggered 
+          });
+        }
+        
+        // Peak-Lock trailing - kun aktiv hvis peak-lock er aktiveret
+        if (peakLockActive && trailingStop !== null) {
+          candidateStops.push({ 
+            type: 'PEAK_LOCK_HIT', 
+            level: trailingStop, 
+            active: true, 
+            triggered: tsTriggered 
+          });
+        }
+        
+        // ATR Trailing - kun aktiv hvis trailing er aktivt (og ikke peak-lock)
+        if (trailingValidThisCycle && !peakLockActive && trailingStop !== null) {
+          candidateStops.push({ 
+            type: 'TRAILING_STOP_HIT', 
+            level: trailingStop, 
+            active: true, 
+            triggered: tsTriggered 
+          });
+        }
+        
+        // 2) Beregn effective_stop = mest beskyttende af alle AKTIVE stops
+        // LONG: MAX(levels) = højeste stop er mest beskyttende
+        // SHORT: MIN(levels) = laveste stop er mest beskyttende
+        const activeStops = candidateStops.filter(c => c.active);
+        let effectiveStop: number | null = null;
+        let effectiveStopType: string | null = null;
+        
+        if (activeStops.length > 0) {
+          if (position.side === 'LONG') {
+            const best = activeStops.reduce((a, b) => b.level > a.level ? b : a);
+            effectiveStop = best.level;
+            effectiveStopType = best.type;
+          } else {
+            const best = activeStops.reduce((a, b) => b.level < a.level ? b : a);
+            effectiveStop = best.level;
+            effectiveStopType = best.type;
+          }
+        }
+        
+        // 3) Find TRIGGERED levels og vælg det mest beskyttende af dem
+        const triggeredLevels = candidateStops.filter(c => c.triggered);
 
         let selectedExit = 'NONE';
         let resultingStopLevel: number | null = null;
@@ -1456,6 +1530,9 @@ serve(async (req) => {
         let beHit = false;
         let tsHit = false;
         let maxSlAfterMfeHit = false;
+        let peakLockHit = false;
+        let stopTypeHit: string | null = null;
+        let stopLevelHit: number | null = null;
 
         if (triggeredLevels.length > 0) {
           // Sortér: For LONG vælg højeste level (det der burde have lukket først)
@@ -1467,17 +1544,31 @@ serve(async (req) => {
           const bestExit = triggeredLevels[0];
           selectedExit = bestExit.type;
           resultingStopLevel = bestExit.level;
+          stopTypeHit = bestExit.type;
+          stopLevelHit = bestExit.level;
           
-          slHit = bestExit.type === 'HARD_SL_PCT';
-          beHit = bestExit.type === 'BREAK_EVEN';
-          tsHit = bestExit.type === 'TRAILING';
-          maxSlAfterMfeHit = bestExit.type === 'MAX_SL_AFTER_MFE';
-          
-          console.log(`\n🎯 EXIT SELECTION - ${position.symbol} ${position.side}`);
-          console.log(`   triggered_levels: ${triggeredLevels.map(l => `${l.type}@${l.level.toFixed(6)}`).join(', ')}`);
-          console.log(`   selected: ${selectedExit} @ ${resultingStopLevel?.toFixed(6)}`);
-          console.log(`   reason: ${position.side === 'LONG' ? 'highest' : 'lowest'} level = first to trigger`);
+          slHit = bestExit.type === 'HARD_STOP_LOSS_HIT';
+          beHit = bestExit.type === 'BREAK_EVEN_HIT';
+          tsHit = bestExit.type === 'TRAILING_STOP_HIT';
+          peakLockHit = bestExit.type === 'PEAK_LOCK_HIT';
+          maxSlAfterMfeHit = bestExit.type === 'MAX_SL_AFTER_MFE_HIT';
         }
+        
+        // 🔴 KRAV 2 OPFYLDT: Log candidate_stops[], effective_stop, stop_type_hit, stop_level_hit
+        console.log(`\n🎯 ═══════════════════════════════════════════════════════════════════`);
+        console.log(`🎯 EXIT MODEL B AUDIT - ${position.symbol} ${position.side}`);
+        console.log(`🎯 ═══════════════════════════════════════════════════════════════════`);
+        console.log(`   📋 candidate_stops[]:`);
+        candidateStops.forEach((c, i) => {
+          console.log(`      ${i + 1}. ${c.type}: ${c.level.toFixed(8)} (active: ${c.active}, triggered: ${c.triggered})`);
+        });
+        console.log(`   ───────────────────────────────────────────────────────────────────`);
+        console.log(`   🏆 effective_stop: ${effectiveStop !== null ? effectiveStop.toFixed(8) : 'null'} (type: ${effectiveStopType ?? 'none'})`);
+        console.log(`   🎯 stop_type_hit: ${stopTypeHit ?? 'none'}`);
+        console.log(`   📍 stop_level_hit: ${stopLevelHit !== null ? stopLevelHit.toFixed(8) : 'null'}`);
+        console.log(`   📊 current_price: ${currentPrice}`);
+        console.log(`   📐 selection_method: ${position.side === 'LONG' ? 'MAX' : 'MIN'}(triggered_levels)`);
+        console.log(`🎯 ═══════════════════════════════════════════════════════════════════\n`);
 
         // 🔴 COMPREHENSIVE EXIT AUDIT - expected vs effective values
         const snapshotAtrForAudit = position.indicators_snapshot?.atr ?? 0;
@@ -1492,25 +1583,36 @@ serve(async (req) => {
             : null;
         
         const exitAudit = {
+          // 🔴 KRAV 2: Eksporter disse felter pr trade
+          candidate_stops: candidateStops.map(c => ({ type: c.type, level: c.level, active: c.active, triggered: c.triggered })),
+          effective_stop: effectiveStop,
+          effective_stop_type: effectiveStopType,
+          stop_type_hit: stopTypeHit,
+          stop_level_hit: stopLevelHit,
+          selection_method: position.side === 'LONG' ? 'MAX' : 'MIN',
+          
           original_stop_loss: hardStopLoss,
           break_even_active: breakEvenActivatedState,
           trailing_active: trailingStopActive && trailingValidThisCycle,
+          peak_lock_active: peakLockActive,
           exit_reason: slHit
-            ? 'HARD_SL_PCT_HIT'
-            : beHit
-              ? 'BREAK_EVEN_HIT'
-              : tsHit
-                ? (isLegacyPosition ? 'LEGACY_TRAILING_STOP_HIT' : 'TRAILING_STOP_HIT')
-                : maxSlAfterMfeHit
-                  ? 'MAX_SL_AFTER_MFE_HIT'
-                  : null,
+            ? 'HARD_STOP_LOSS_HIT'
+            : maxSlAfterMfeHit
+              ? 'MAX_SL_AFTER_MFE_HIT'
+              : beHit
+                ? 'BREAK_EVEN_HIT'
+                : peakLockHit
+                  ? 'PEAK_LOCK_HIT'
+                  : tsHit
+                    ? (isLegacyPosition ? 'LEGACY_TRAILING_STOP_HIT' : 'TRAILING_STOP_HIT')
+                    : null,
           resulting_stop_level: resultingStopLevel,
           
           // 🔴 EXPECTED vs EFFECTIVE audit
           expected_stop_loss_price: snapshotExpectedSL,
           expected_trailing_stop_price: expectedTrailingAtExit,
           effective_stop_loss_at_exit: slHit ? hardStopLoss : null,
-          effective_trailing_at_exit: tsHit ? trailingStop : null,
+          effective_trailing_at_exit: tsHit || peakLockHit ? trailingStop : null,
           effective_max_sl_after_mfe_cap: maxSlAfterMfeHit ? maxSlAfterMfeCap : null,
           effective_exit_level: effectiveStopAtExit,
           exit_price: currentPrice,
@@ -1533,7 +1635,7 @@ serve(async (req) => {
           profit_threshold_passed: breakEvenProfitThresholdPassed,
           break_even_trigger_mode: breakEvenTriggerMode,
           ts_activated_reason: trailingActivationReason,
-          sl_be_ts_priority: { slHit, beHit, tsHit, maxSlAfterMfeHit, selected: selectedExit },
+          sl_be_ts_priority: { slHit, beHit, tsHit, peakLockHit, maxSlAfterMfeHit, selected: selectedExit },
         };
         
         // 🔴 CLAMP INVARIANT VALIDATION - Log ERROR if clamp violates invariants
@@ -1574,45 +1676,61 @@ serve(async (req) => {
         // @ts-ignore - gem audit på position context så vi kan inkludere det i result payload
         position._exitAudit = exitAudit;
 
-        if (slHit || beHit || tsHit || maxSlAfterMfeHit) {
+        if (slHit || beHit || tsHit || peakLockHit || maxSlAfterMfeHit) {
           shouldClose = true;
 
           // KRAV 4: Beregn om PnL vil være negativ ved denne exit
           // Bruges til at overstyre BREAK_EVEN_HIT -> STOP_LOSS_HIT hvis PnL er negativ
-          const exitAtPrice = slHit ? hardStopLoss : beHit ? breakEvenStop : tsHit ? trailingStop : maxSlAfterMfeCap;
+          const exitAtPrice = slHit ? hardStopLoss : maxSlAfterMfeHit ? maxSlAfterMfeCap : beHit ? breakEvenStop : trailingStop;
           const estimatedPnl = position.side === 'LONG'
             ? (exitAtPrice! - position.entry_price) * position.quantity
             : (position.entry_price - exitAtPrice!) * position.quantity;
           const pnlIsNegative = estimatedPnl < 0;
 
+          // 🔴 KRAV 5: Exit reasons skal være entydige
+          // Mulige værdier: HARD_STOP_LOSS_HIT, MAX_SL_AFTER_MFE_HIT, STOP_LOSS_HIT, BREAK_EVEN_HIT, PEAK_LOCK_HIT, TRAILING_STOP_HIT, TIMEOUT
           if (slHit) {
-            closeReason = 'STOP_LOSS_HIT';
-            console.log(`STOP LOSS HIT (PRIORITY) | ${position.symbol} | price=${currentPrice} <= hardSL=${hardStopLoss}`);
+            closeReason = 'HARD_STOP_LOSS_HIT';
+            console.log(`HARD_STOP_LOSS_HIT | ${position.symbol} | price=${currentPrice} | stop_level_hit=${hardStopLoss} | stop_type_hit=HARD_STOP_LOSS_HIT`);
           } else if (maxSlAfterMfeHit) {
-            // MAX SL AFTER MFE - altid negativ PnL da det er en cap på tabet
             closeReason = 'MAX_SL_AFTER_MFE_HIT';
-            console.log(`MAX SL AFTER MFE HIT | ${position.symbol} | price=${currentPrice} ${position.side === 'LONG' ? '<=' : '>='} cap=${maxSlAfterMfeCap} | entry=${position.entry_price} | max_dist=${maxSlAfterMfeMaxDistPct}%`);
+            console.log(`MAX_SL_AFTER_MFE_HIT | ${position.symbol} | price=${currentPrice} | stop_level_hit=${maxSlAfterMfeCap} | stop_type_hit=MAX_SL_AFTER_MFE_HIT`);
           } else if (beHit) {
             // KRAV: En handel må ALDRIG få exit_reason = 'BREAK_EVEN_HIT' hvis PnL er negativ
             if (pnlIsNegative) {
               closeReason = 'STOP_LOSS_HIT';
-              console.log(`BREAK-EVEN HIT → REKLASSIFICERET TIL STOP_LOSS_HIT (negativ PnL) | ${position.symbol} | price=${currentPrice} <= be=${breakEvenStop} | estimatedPnl=${estimatedPnl.toFixed(2)}`);
+              console.log(`BREAK_EVEN_HIT → REKLASSIFICERET TIL STOP_LOSS_HIT (negativ PnL) | ${position.symbol} | price=${currentPrice} | stop_level_hit=${breakEvenStop} | estimatedPnl=${estimatedPnl.toFixed(2)}`);
             } else {
               closeReason = 'BREAK_EVEN_HIT';
-              console.log(`BREAK-EVEN HIT | ${position.symbol} | price=${currentPrice} <= be=${breakEvenStop}`);
+              console.log(`BREAK_EVEN_HIT | ${position.symbol} | price=${currentPrice} | stop_level_hit=${breakEvenStop} | stop_type_hit=BREAK_EVEN_HIT`);
             }
-          } else {
-            // KRAV: Trailing stop må heller ikke give negativ PnL exit som TRAILING_STOP_HIT
+          } else if (peakLockHit) {
+            // Peak-lock trailing stop hit
             if (pnlIsNegative) {
               closeReason = 'STOP_LOSS_HIT';
-              console.log(`TRAILING HIT → REKLASSIFICERET TIL STOP_LOSS_HIT (negativ PnL) | ${position.symbol} | price=${currentPrice} <= ts=${trailingStop} | estimatedPnl=${estimatedPnl.toFixed(2)}`);
+              console.log(`PEAK_LOCK_HIT → REKLASSIFICERET TIL STOP_LOSS_HIT (negativ PnL) | ${position.symbol} | price=${currentPrice} | stop_level_hit=${trailingStop} | estimatedPnl=${estimatedPnl.toFixed(2)}`);
+            } else {
+              closeReason = 'PEAK_LOCK_HIT';
+              console.log(`PEAK_LOCK_HIT | ${position.symbol} | price=${currentPrice} | stop_level_hit=${trailingStop} | stop_type_hit=PEAK_LOCK_HIT`);
+            }
+          } else {
+            // ATR Trailing stop hit
+            if (pnlIsNegative) {
+              closeReason = 'STOP_LOSS_HIT';
+              console.log(`TRAILING_STOP_HIT → REKLASSIFICERET TIL STOP_LOSS_HIT (negativ PnL) | ${position.symbol} | price=${currentPrice} | stop_level_hit=${trailingStop} | estimatedPnl=${estimatedPnl.toFixed(2)}`);
             } else {
               closeReason = isLegacyPosition ? 'LEGACY_TRAILING_STOP_HIT' : 'TRAILING_STOP_HIT';
-              console.log(`TRAILING HIT | ${position.symbol} | price=${currentPrice} <= ts=${trailingStop}`);
+              console.log(`TRAILING_STOP_HIT | ${position.symbol} | price=${currentPrice} | stop_level_hit=${trailingStop} | stop_type_hit=TRAILING_STOP_HIT`);
             }
           }
 
-          console.log(`EXIT AUDIT | ${position.symbol} | estimatedPnl=${estimatedPnl.toFixed(2)} | pnlIsNegative=${pnlIsNegative} | ${JSON.stringify(exitAudit)}`);
+          console.log(`\n📊 EXIT AUDIT SUMMARY | ${position.symbol}`);
+          console.log(`   stop_type_hit: ${stopTypeHit}`);
+          console.log(`   stop_level_hit: ${stopLevelHit}`);
+          console.log(`   effective_stop: ${effectiveStop}`);
+          console.log(`   estimatedPnl: ${estimatedPnl.toFixed(2)}`);
+          console.log(`   pnlIsNegative: ${pnlIsNegative}`);
+          console.log(`   closeReason: ${closeReason}`);
         }
 
         // Definer tidspunkt variabler (bruges til både timeout check og duration beregning)
