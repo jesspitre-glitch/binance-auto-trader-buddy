@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -102,30 +102,29 @@ type DecimalInputProps = {
 };
 
 function DecimalInput({ value, onValueChange, disabled, className }: DecimalInputProps) {
-  const [text, setText] = useState<string>(() => String(value ?? 0));
+  const [text, setText] = useState<string>(String(value ?? 0));
   const [focused, setFocused] = useState(false);
+  const valueRef = useRef(value);
 
+  // Only sync from parent when not focused AND value actually changed externally
   useEffect(() => {
-    if (!focused) setText(String(value ?? 0));
+    if (!focused && value !== valueRef.current) {
+      valueRef.current = value;
+      setText(String(value ?? 0));
+    }
   }, [value, focused]);
 
   const handleChange = (raw: string) => {
     // Allow partial values while typing: "", "0,", "0.", "-", "-0," etc.
     const isAllowed = /^-?\d*(?:[.,]\d*)?$/.test(raw);
     if (!isAllowed) return;
-
     setText(raw);
-
-    const normalized = raw.replace(",", ".");
-    if (normalized === "" || normalized === "-" || normalized === "." || normalized === "-.") return;
-
-    const parsed = Number(normalized);
-    if (!Number.isNaN(parsed)) onValueChange(parsed);
   };
 
   const handleBlur = () => {
     setFocused(false);
     const finalValue = safeParseFloat(text);
+    valueRef.current = finalValue;
     onValueChange(finalValue);
     setText(String(finalValue));
   };
