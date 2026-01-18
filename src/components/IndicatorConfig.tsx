@@ -2012,6 +2012,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                   type="number"
                   value={formData.adx_period}
                   onChange={(e) => setFormData({ ...formData, adx_period: safeParseInt(e.target.value) })}
+                  onFocus={(e) => e.target.select()}
                 />
                 <p className="text-xs text-muted-foreground">Antal bars til ADX (standard 14)</p>
               </div>
@@ -2023,6 +2024,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                   step="0.1"
                   value={formData.adx_floor}
                   onChange={(e) => setFormData({ ...formData, adx_floor: safeParseFloat(e.target.value) })}
+                  onFocus={(e) => e.target.select()}
                 />
                 <p className="text-xs text-muted-foreground">Minimum ADX værdi krævet for trade</p>
               </div>
@@ -2034,6 +2036,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                   step="0.1"
                   value={formData.adx_ceiling}
                   onChange={(e) => setFormData({ ...formData, adx_ceiling: safeParseFloat(e.target.value) })}
+                  onFocus={(e) => e.target.select()}
                 />
                 <p className="text-xs text-muted-foreground">Maksimum ADX værdi tilladt for trade</p>
               </div>
@@ -2065,6 +2068,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                     step="0.1"
                     value={formData.adx_base_min}
                     onChange={(e) => setFormData({ ...formData, adx_base_min: safeParseFloat(e.target.value) })}
+                    onFocus={(e) => e.target.select()}
                   />
                   <p className="text-xs text-muted-foreground">Base værdi for adaptive beregning</p>
                 </div>
@@ -2410,6 +2414,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               step="0.1"
               value={formData.daily_loss_limit_percent}
               onChange={(e) => setFormData({ ...formData, daily_loss_limit_percent: safeParseFloat(e.target.value) })}
+              onFocus={(e) => e.target.select()}
             />
             <p className="text-xs text-muted-foreground">Stop trading hvis tab når denne % på en dag</p>
           </div>
@@ -2445,6 +2450,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               type="number"
               value={formData.max_position_duration_minutes || ''}
               onChange={(e) => setFormData({ ...formData, max_position_duration_minutes: e.target.value ? safeParseInt(e.target.value) : null })}
+              onFocus={(e) => e.target.select()}
               placeholder="0 = deaktiveret"
               disabled={!formData.auto_exit_enabled}
             />
