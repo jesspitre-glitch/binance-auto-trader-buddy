@@ -571,22 +571,34 @@ export const formatTradeForExport = (t: any) => {
     trend_medium: trendMedium,
     trend_higher: trendHigher,
 
-    // 🔴 REGIME ROUTER - Exit profile selection
+    // 🔴 REGIME ROUTER CONFIG - Komplet status for AI-analyse
+    // Viser om Regime Router var TÆNDT/SLUKKET og alle indstillinger
     regime_router_enabled: snap.regime_router_enabled ?? false,
+    regime_router_status: snap.regime_router_enabled ? 'ON' : 'OFF',
     regime_method: snap.regime_method ?? null,
+    regime_method_display: snap.regime_method === 'ADX_AND_ATR' ? 'ADX + ATR%' 
+      : snap.regime_method === 'ADX_ONLY' ? 'ADX Only'
+      : snap.regime_method === 'ATR_ONLY' ? 'ATR% Only'
+      : snap.regime_method ?? null,
     regime_operator: snap.regime_operator ?? null,
     regime_adx_threshold: snap.regime_adx_threshold ?? null,
     regime_atr_pct_threshold: snap.regime_atr_pct_threshold ?? null,
-    regime_adx_value_at_entry: snap.regime_adx_value_at_entry ?? null,
-    regime_atr_pct_at_entry: snap.regime_atr_pct_at_entry ?? null,
-    regime_label: snap.regime_label ?? null,
-    regime_reason: snap.regime_reason ?? null,
     regime_lock_at_entry: snap.regime_lock_at_entry ?? null,
     
-    // Exit profile identity
+    // 🔴 REGIME DETECTION - Hvilket regime blev detekteret ved entry
+    regime_adx_value_at_entry: snap.regime_adx_value_at_entry != null ? +Number(snap.regime_adx_value_at_entry).toFixed(2) : null,
+    regime_atr_pct_at_entry: snap.regime_atr_pct_at_entry != null ? +Number(snap.regime_atr_pct_at_entry).toFixed(4) : null,
+    regime_label: snap.regime_label ?? null,
+    regime_reason: snap.regime_reason ?? null,
+    
+    // 🔴 EXIT PROFILE SELECTION - Hvilken exit-profil blev valgt baseret på regime
     exit_profile_id: snap.exit_profile_id ?? null,
     exit_profile_name: snap.exit_profile_name ?? null,
     exit_profile_version: snap.exit_profile_version ?? null,
+    // Human-readable summary
+    regime_exit_summary: snap.regime_router_enabled 
+      ? `Regime: ${snap.regime_label ?? 'UNKNOWN'} → Exit Profile: ${snap.exit_profile_name ?? 'DEFAULT'}`
+      : 'Regime Router OFF',
     
     // 🔴 EXIT PROFILE TOGGLES - Eksplicit ON/OFF status for alle exit-funktioner
     // Disse viser hvilke exit-mekanismer der var aktive på tidspunktet for traden
