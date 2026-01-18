@@ -482,6 +482,16 @@ export const formatTradeForExport = (t: any) => {
     stoch_rsi_k: stochRsiK != null ? +Number(stochRsiK).toFixed(2) : null,
     stoch_rsi_d: stochRsiD != null ? +Number(stochRsiD).toFixed(2) : null,
     stoch_rsi_zone_passed: isLegacy ? (snap.stochrsi_zone_passed ?? softStoch) : snap.stochrsi_zone_passed,
+    
+    // 🔴 STOCHRSI ENTRY MODE AUDIT (KRAV 1 - bearish cross logik)
+    stochrsi_entry_mode: snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_entry_mode ?? snap.stochrsi_entry_mode ?? null,
+    stochrsi_cross_down: snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_cross_down ?? snap.stochrsi_cross_down ?? null,
+    stochrsi_overbought_at_signal: snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_overbought_at_signal ?? snap.stochrsi_overbought_at_signal ?? null,
+    stochrsi_rollover_d_min_used: snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_rollover_d_min_used ?? snap.stochrsi_rollover_d_min_used ?? null,
+    stochrsi_prev_k: snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_prev_k ?? snap.stochrsi_prev_k ?? null,
+    stochrsi_prev_d: snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_prev_d ?? snap.stochrsi_prev_d ?? null,
+    stochrsi_overbought_threshold: snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_overbought_threshold ?? snap.stochrsi_overbought_threshold ?? null,
+    stochrsi_rollover_d_min_setting: snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_rollover_d_min ?? snap.stochrsi_rollover_d_min ?? null,
 
     // Bollinger Bands
     bollinger_upper: bbUpper != null ? +Number(bbUpper).toFixed(4) : null,
