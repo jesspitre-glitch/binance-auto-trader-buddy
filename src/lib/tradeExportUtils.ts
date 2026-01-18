@@ -581,13 +581,38 @@ export const formatTradeForExport = (t: any) => {
     regime_atr_pct_at_entry: snap.regime_atr_pct_at_entry ?? null,
     regime_label: snap.regime_label ?? null,
     regime_reason: snap.regime_reason ?? null,
+    regime_lock_at_entry: snap.regime_lock_at_entry ?? null,
     
     // Exit profile identity
     exit_profile_id: snap.exit_profile_id ?? null,
     exit_profile_name: snap.exit_profile_name ?? null,
     exit_profile_version: snap.exit_profile_version ?? null,
     
-    // Exit profile snapshot (all params from selected profile)
+    // 🔴 EXIT PROFILE TOGGLES - Eksplicit ON/OFF status for alle exit-funktioner
+    // Disse viser hvilke exit-mekanismer der var aktive på tidspunktet for traden
+    exit_be_enabled: snap.exit_profile_snapshot?.be_enabled ?? snap.break_even_enabled ?? null,
+    exit_be_trigger_profit_pct: snap.exit_profile_snapshot?.be_trigger_profit_pct ?? snap.break_even_profit_pct_trigger ?? null,
+    exit_be_stop_over_entry_pct: snap.exit_profile_snapshot?.be_stop_over_entry_pct ?? snap.break_even_profit_pct_stop_over_entry ?? null,
+    exit_be_ratchet_only: snap.exit_profile_snapshot?.be_ratchet_only ?? snap.break_even_ratchet_only ?? null,
+    
+    exit_peaklock_enabled: snap.exit_profile_snapshot?.peaklock_enabled ?? snap.peak_lock_enabled ?? null,
+    exit_peaklock_activate_profit_pct: snap.exit_profile_snapshot?.peaklock_activate_profit_pct ?? snap.peak_lock_activate_profit_pct ?? null,
+    exit_peaklock_distance_from_peak_pct: snap.exit_profile_snapshot?.peaklock_distance_from_peak_pct ?? snap.peak_lock_distance_pct ?? null,
+    exit_peaklock_min_profit_floor_pct: snap.exit_profile_snapshot?.peaklock_min_profit_floor_pct ?? snap.peak_lock_min_profit_floor_pct ?? null,
+    exit_peaklock_ratchet_only: snap.exit_profile_snapshot?.peaklock_ratchet_only ?? snap.peak_lock_ratchet_only ?? null,
+    
+    exit_trailing_enabled: snap.exit_profile_snapshot?.trailing_enabled ?? (snap.trailing_stop_activation_enabled !== undefined ? snap.trailing_stop_activation_enabled : null),
+    exit_trailing_stop_atr_mult: snap.exit_profile_snapshot?.trailing_stop_atr_mult ?? snap.atr_trailing_stop_multiplier ?? null,
+    exit_trailing_activation_enabled: snap.exit_profile_snapshot?.trailing_activation_enabled ?? snap.trailing_stop_activation_enabled ?? null,
+    exit_trailing_activation_atr_mult: snap.exit_profile_snapshot?.trailing_activation_atr_mult ?? snap.trailing_stop_activation_atr ?? null,
+    
+    exit_max_duration_enabled: snap.exit_profile_snapshot?.max_duration_enabled ?? snap.conditional_time_exit_enabled ?? null,
+    exit_max_duration_minutes: snap.exit_profile_snapshot?.max_duration_minutes ?? snap.max_position_duration_minutes ?? null,
+    
+    exit_hard_sl_override_enabled: snap.exit_profile_snapshot?.hard_sl_override_enabled ?? snap.hard_sl_pct_enabled ?? null,
+    exit_hard_sl_pct: snap.exit_profile_snapshot?.hard_sl_pct ?? snap.hard_sl_pct ?? null,
+    
+    // Exit profile snapshot (all params from selected profile) - raw data
     exit_profile_snapshot: snap.exit_profile_snapshot ?? null,
 
     // Timestamps
