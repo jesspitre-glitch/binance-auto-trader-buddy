@@ -417,8 +417,22 @@ export const formatTradeForExport = (t: any) => {
     } : null,
 
     // ADX - med audit felter (v2 garanterer adx_audit hvis ADX enabled)
+    // 🔴 NYE FELTER: adx_enabled, adx_hard_filter, adx_min, adx_max, adx_min_source, dynamic_min_adx
+    ADX_enabled: snap.adx_enabled ?? filterModeSettings.adx_enabled ?? null,
+    ADX_hard_filter: snap.adx_hard_filter ?? filterModeSettings.adx_hard_filter ?? null,
+    ADX_filter_mode: (snap.adx_hard_filter ?? filterModeSettings.adx_hard_filter) === true 
+      ? 'HARD' 
+      : (snap.adx_hard_filter ?? filterModeSettings.adx_hard_filter) === false 
+        ? 'SOFT' 
+        : null,
     ADX_value: snap.adx != null ? +Number(snap.adx).toFixed(4) : null,
     ADX_filter_passed: adxFilterPassed,
+    // 🔴 NYE RUNTIME FELTER - fra hard filter status i snapshot
+    ADX_min: snap.filterStatus?.hard?.adx?.adx_min ?? snap.adx_audit?.adx_floor_used ?? null,
+    ADX_max: snap.filterStatus?.hard?.adx?.adx_max ?? snap.adx_audit?.adx_ceiling_used ?? null,
+    ADX_min_source: snap.filterStatus?.hard?.adx?.adx_min_source ?? null, // 'UI' eller 'ADAPTIVE'
+    ADX_dynamic_min: snap.filterStatus?.hard?.adx?.dynamic_min_adx ?? null,
+    ADX_adaptive_adx_computed: snap.filterStatus?.hard?.adx?.adaptive_adx_computed ?? null,
     ADX_audit: snap.adx_audit ? {
       adx_value: snap.adx_audit.adx_value != null ? +Number(snap.adx_audit.adx_value).toFixed(4) : null,
       adx_period: snap.adx_audit.adx_period,
@@ -443,6 +457,7 @@ export const formatTradeForExport = (t: any) => {
       minus_di: snap.adx_filter_audit.minus_di != null ? +Number(snap.adx_filter_audit.minus_di).toFixed(4) : null,
       adx_timeframe: snap.adx_filter_audit.adx_timeframe,
       adx_period: snap.adx_filter_audit.adx_period,
+      adx_min_source: snap.adx_filter_audit.adx_min_source ?? null, // 'UI' eller 'ADAPTIVE'
     } : null,
 
     // Volume
