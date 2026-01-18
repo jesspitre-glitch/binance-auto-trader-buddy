@@ -27,7 +27,16 @@ async function createSignature(queryString: string, apiSecret: string): Promise<
 
 async function getBinanceServerTime(): Promise<number> {
   const response = await fetch('https://fapi.binance.com/fapi/v1/time');
+  if (!response.ok) {
+    console.error('Binance server time API error:', response.status, await response.text());
+    // Fallback to local time if server time fails
+    return Date.now();
+  }
   const data = await response.json();
+  if (!data || typeof data.serverTime !== 'number') {
+    console.error('Invalid server time response:', JSON.stringify(data));
+    return Date.now();
+  }
   return data.serverTime;
 }
 
