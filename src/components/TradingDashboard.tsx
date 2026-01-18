@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SectionErrorBoundary } from "./SectionErrorBoundary";
 
 export const TradingDashboard = () => {
   const [isActive, setIsActive] = useState(false);
@@ -261,7 +262,7 @@ export const TradingDashboard = () => {
           <div className="flex items-center gap-4">
             <div className="flex-1">
               <Label>Vælg Aktiv Strategi</Label>
-              <Select value={activeConfigId || undefined} onValueChange={setActiveConfigId}>
+              <Select value={activeConfigId ?? ""} onValueChange={(v) => setActiveConfigId(v || null)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Vælg en strategi" />
                 </SelectTrigger>
@@ -352,10 +353,12 @@ export const TradingDashboard = () => {
         </TabsContent>
         
         <TabsContent value="config">
-          <IndicatorConfig
-            config={configs.find((c) => c.id === activeConfigId)}
-            onSave={fetchConfigs}
-          />
+          <SectionErrorBoundary title="Indikator Konfiguration" resetKey={activeConfigId}>
+            <IndicatorConfig
+              config={configs.find((c) => c.id === activeConfigId)}
+              onSave={fetchConfigs}
+            />
+          </SectionErrorBoundary>
         </TabsContent>
       </Tabs>
     </div>

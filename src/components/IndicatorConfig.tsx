@@ -26,9 +26,17 @@ const safeParseInt = (value: string, fallback = 0): number => {
 };
 
 const safeParseFloat = (value: string, fallback = 0): number => {
-  if (value === '' || value === '-' || value === '.') return fallback;
-  const parsed = parseFloat(value);
-  return isNaN(parsed) ? fallback : parsed;
+  const normalized = value.replace(",", ".").trim();
+  if (
+    normalized === "" ||
+    normalized === "-" ||
+    normalized === "." ||
+    normalized === "-."
+  ) {
+    return fallback;
+  }
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : fallback;
 };
 
 export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
