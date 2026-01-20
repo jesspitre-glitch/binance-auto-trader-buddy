@@ -5,6 +5,29 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// In-memory cache to avoid Binance rate limits
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+}
+
+const cache: Map<string, CacheEntry> = new Map();
+const CACHE_TTL_MS = 60_000; // 60 seconds
+
+function getCached(key: string): any | null {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+    cache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCache(key: string, data: any): void {
+  cache.set(key, { data, timestamp: Date.now() });
+}
+
 async function createSignature(queryString: string, apiSecret: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
@@ -162,6 +185,17 @@ serve(async (req) => {
       endTime = now.getTime();
     }
 
+    // Check cache first to avoid rate limits
+    const cacheKey = `pnl_${startTime}_${Math.floor(endTime / 60000)}`; // Round endTime to minute for better cache hits
+    const cached = getCached(cacheKey);
+    if (cached) {
+      console.log('Returning cached PNL data');
+      return new Response(
+        JSON.stringify({ ...cached, fromCache: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log(`Fetching Binance income from ${new Date(startTime).toISOString()} to ${new Date(endTime).toISOString()}`);
 
     // Binance API limits: max 7 days per request, max 1000 records
@@ -224,29 +258,34 @@ serve(async (req) => {
       allTypes: incomeByType,
     });
 
+    const responseData = {
+      success: true,
+      // Time boundaries used
+      startTime: new Date(startTime).toISOString(),
+      endTime: new Date(endTime).toISOString(),
+      
+      // Main P&L figures (matching Binance display)
+      todaysRealizedPnl,           // "Today's Realized PNL" as shown in Binance
+      commission,                   // Trading fees (negative)
+      fundingFee,                   // Funding fees (can be + or -)
+      netPnl,                       // Net after all fees
+      
+      // Current account state
+      unrealizedPnl: accountData.totalUnrealizedProfit,
+      walletBalance: accountData.totalWalletBalance,
+      marginBalance: accountData.totalMarginBalance,
+      
+      // Detailed breakdown
+      incomeByType,
+      incomeCount: allIncome.length,
+      rawIncome: allIncome,         // Full income records for debugging
+    };
+
+    // Cache the response
+    setCache(cacheKey, responseData);
+
     return new Response(
-      JSON.stringify({
-        success: true,
-        // Time boundaries used
-        startTime: new Date(startTime).toISOString(),
-        endTime: new Date(endTime).toISOString(),
-        
-        // Main P&L figures (matching Binance display)
-        todaysRealizedPnl,           // "Today's Realized PNL" as shown in Binance
-        commission,                   // Trading fees (negative)
-        fundingFee,                   // Funding fees (can be + or -)
-        netPnl,                       // Net after all fees
-        
-        // Current account state
-        unrealizedPnl: accountData.totalUnrealizedProfit,
-        walletBalance: accountData.totalWalletBalance,
-        marginBalance: accountData.totalMarginBalance,
-        
-        // Detailed breakdown
-        incomeByType,
-        incomeCount: allIncome.length,
-        rawIncome: allIncome,         // Full income records for debugging
-      }),
+      JSON.stringify(responseData),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
