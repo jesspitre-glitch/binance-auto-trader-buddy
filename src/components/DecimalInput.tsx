@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 
 type Props = {
+  id?: string;
   value: number | null | undefined;
   onValueChange: (value: number) => void;
   fallback?: number;
@@ -35,6 +36,7 @@ const safeParseDecimal = (raw: string, fallback: number): number => {
  * Keeps free-form text while focused and commits a numeric value on blur.
  */
 export function DecimalInput({
+  id,
   value,
   onValueChange,
   fallback = 0,
@@ -76,6 +78,7 @@ export function DecimalInput({
 
   return (
     <Input
+      id={id}
       type="text"
       inputMode="decimal"
       placeholder={placeholder}
