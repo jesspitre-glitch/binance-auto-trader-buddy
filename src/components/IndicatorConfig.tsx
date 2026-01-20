@@ -12,6 +12,8 @@ import { Loader2, Copy, Check } from "lucide-react";
 import { FilterModeToggle } from "./FilterModeToggle";
 import { RegimeRouter } from "./RegimeRouter";
 import { ExitProfiles, ExitProfile } from "./ExitProfiles";
+import { DecimalInput } from "./DecimalInput";
+import { IntegerInput } from "./IntegerInput";
 
 interface IndicatorConfigProps {
   config?: any;
@@ -795,52 +797,46 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="ema_fast">Hurtig EMA</Label>
-                <Input
-                  id="ema_fast"
-                  type="number"
+                <IntegerInput
                   value={formData.ema_fast}
-                  onChange={(e) => setFormData({ ...formData, ema_fast: safeParseInt(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, ema_fast: v })}
+                  fallback={9}
                 />
                 <p className="text-xs text-muted-foreground">Antal bars - lavere = hurtigere reaktion</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="ema_medium">Medium EMA</Label>
-                <Input
-                  id="ema_medium"
-                  type="number"
+                <IntegerInput
                   value={formData.ema_medium}
-                  onChange={(e) => setFormData({ ...formData, ema_medium: safeParseInt(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, ema_medium: v })}
+                  fallback={21}
                 />
                 <p className="text-xs text-muted-foreground">Mellemperiode for trend bekræftelse</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="ema_slow">Langsom EMA</Label>
-                <Input
-                  id="ema_slow"
-                  type="number"
+                <IntegerInput
                   value={formData.ema_slow}
-                  onChange={(e) => setFormData({ ...formData, ema_slow: safeParseInt(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, ema_slow: v })}
+                  fallback={50}
                 />
                 <p className="text-xs text-muted-foreground">Langsom linje - mere stabil trend</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="ema_medium_trend">Medium Trend EMA</Label>
-                <Input
-                  id="ema_medium_trend"
-                  type="number"
+                <IntegerInput
                   value={formData.ema_medium_trend}
-                  onChange={(e) => setFormData({ ...formData, ema_medium_trend: safeParseInt(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, ema_medium_trend: v })}
+                  fallback={50}
                 />
                 <p className="text-xs text-muted-foreground">EMA for medium trend analyse (f.eks. 50)</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="min_ema_spread_percent">⚠️ Minimum EMA Spread (%) - HARD FILTER</Label>
-                <Input
-                  id="min_ema_spread_percent"
-                  type="number"
-                  step="0.01"
+                <DecimalInput
                   value={formData.min_ema_spread_percent}
-                  onChange={(e) => setFormData({ ...formData, min_ema_spread_percent: safeParseFloat(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, min_ema_spread_percent: v })}
+                  fallback={0.2}
                 />
                 <p className="text-xs text-muted-foreground">
                   <strong className="text-warning">HARD FILTER:</strong> Blokerer trades hvis (Fast-Slow)/Price &lt; dette % (sidelæns marked filter)
@@ -848,12 +844,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="max_ema_spread_percent">⚠️ Maksimum EMA Spread (%) - HARD FILTER</Label>
-                <Input
-                  id="max_ema_spread_percent"
-                  type="number"
-                  step="0.1"
+                <DecimalInput
                   value={formData.max_ema_spread_percent}
-                  onChange={(e) => setFormData({ ...formData, max_ema_spread_percent: safeParseFloat(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, max_ema_spread_percent: v })}
+                  fallback={5.0}
                 />
                 <p className="text-xs text-muted-foreground">
                   <strong className="text-warning">HARD FILTER:</strong> Blokerer trades hvis (Fast-Slow)/Price &gt; dette % (forhindrer for sene entries i stærkt udvidede trends)
@@ -895,44 +889,37 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <>
               <div className="space-y-2">
                 <Label htmlFor="rsi_period">RSI Periode</Label>
-                <Input
-                  id="rsi_period"
-                  type="number"
+                <IntegerInput
                   value={formData.rsi_period}
-                  onChange={(e) => setFormData({ ...formData, rsi_period: safeParseInt(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, rsi_period: v })}
+                  fallback={14}
                 />
                 <p className="text-xs text-muted-foreground">Antal bars til RSI beregning (standard 14)</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="rsi_min_long">RSI for LONG</Label>
-                <Input
-                  id="rsi_min_long"
-                  type="number"
-                  step="0.01"
+                <DecimalInput
                   value={formData.rsi_min_long}
-                  onChange={(e) => setFormData({ ...formData, rsi_min_long: safeParseFloat(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, rsi_min_long: v })}
+                  fallback={30}
                 />
                 <p className="text-xs text-muted-foreground">LONG når RSI krydser OP over denne værdi</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="rsi_max_short">RSI for SHORT</Label>
-                <Input
-                  id="rsi_max_short"
-                  type="number"
-                  step="0.01"
+                <DecimalInput
                   value={formData.rsi_max_short}
-                  onChange={(e) => setFormData({ ...formData, rsi_max_short: safeParseFloat(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, rsi_max_short: v })}
+                  fallback={70}
                 />
                 <p className="text-xs text-muted-foreground">SHORT når RSI krydser NED under denne værdi</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="rsi_zone_width">RSI Zone Bredde</Label>
-                <Input
-                  id="rsi_zone_width"
-                  type="number"
-                  step="1"
+                <DecimalInput
                   value={formData.rsi_zone_width}
-                  onChange={(e) => setFormData({ ...formData, rsi_zone_width: safeParseFloat(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, rsi_zone_width: v })}
+                  fallback={5}
                 />
                 <p className="text-xs text-muted-foreground">
                   {formData.rsi_zone_width === 0 
@@ -942,14 +929,12 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="rsi_momentum_periods">RSI Momentum Perioder</Label>
-                <Input
-                  id="rsi_momentum_periods"
-                  type="number"
-                  min="2"
-                  max="5"
-                  step="1"
+                <IntegerInput
                   value={formData.rsi_momentum_periods}
-                  onChange={(e) => setFormData({ ...formData, rsi_momentum_periods: safeParseInt(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, rsi_momentum_periods: v })}
+                  fallback={3}
+                  min={2}
+                  max={5}
                 />
                 <p className="text-xs text-muted-foreground">
                   Antal perioder der checkes for momentum. {formData.rsi_momentum_periods === 2 ? 'RSI₀ > RSI₁' : formData.rsi_momentum_periods === 3 ? 'RSI₀ > RSI₁ > RSI₂' : formData.rsi_momentum_periods === 4 ? 'RSI₀ > RSI₁ > RSI₂ > RSI₃' : 'RSI₀ > RSI₁ > ... > RSIₙ'}
@@ -991,31 +976,28 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <>
               <div className="space-y-2">
                 <Label htmlFor="stochrsi_period">RSI Periode</Label>
-                <Input
-                  id="stochrsi_period"
-                  type="number"
+                <IntegerInput
                   value={formData.stochrsi_period}
-                  onChange={(e) => setFormData({ ...formData, stochrsi_period: safeParseInt(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, stochrsi_period: v })}
+                  fallback={14}
                 />
                 <p className="text-xs text-muted-foreground">RSI periode for StochRSI (standard 14)</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="stochrsi_k_period">%K Periode</Label>
-                <Input
-                  id="stochrsi_k_period"
-                  type="number"
+                <IntegerInput
                   value={formData.stochrsi_k_period}
-                  onChange={(e) => setFormData({ ...formData, stochrsi_k_period: safeParseInt(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, stochrsi_k_period: v })}
+                  fallback={3}
                 />
                 <p className="text-xs text-muted-foreground">%K smoothing periode (standard 3)</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="stochrsi_d_period">%D Periode</Label>
-                <Input
-                  id="stochrsi_d_period"
-                  type="number"
+                <IntegerInput
                   value={formData.stochrsi_d_period}
-                  onChange={(e) => setFormData({ ...formData, stochrsi_d_period: safeParseInt(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, stochrsi_d_period: v })}
+                  fallback={3}
                 />
                 <p className="text-xs text-muted-foreground">%D smoothing periode (standard 3)</p>
               </div>
@@ -1046,13 +1028,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                   {formData.stochrsi_short_mode === 'REVERSAL_ROLLOVER' && (
                     <div className="space-y-2">
                       <Label htmlFor="rollover_d_min_short">Rollover D Min (SHORT)</Label>
-                      <Input
-                        id="rollover_d_min_short"
-                        type="number"
-                        step="1"
+                      <DecimalInput
                         value={formData.rollover_d_min_short}
-                        onChange={(e) => setFormData({ ...formData, rollover_d_min_short: safeParseFloat(e.target.value) })}
-                        onFocus={(e) => e.target.select()}
+                        onValueChange={(v) => setFormData({ ...formData, rollover_d_min_short: v })}
+                        fallback={50}
                       />
                       <p className="text-xs text-muted-foreground">Ekstra filter: D skal være ≤ denne værdi ved cross (0=deaktiveret)</p>
                     </div>
@@ -1068,13 +1047,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="stochrsi_overbought_k">Overkøbt Threshold</Label>
-                    <Input
-                      id="stochrsi_overbought_k"
-                      type="number"
-                      step="0.01"
+                    <DecimalInput
                       value={formData.stochrsi_overbought_k}
-                      onChange={(e) => setFormData({ ...formData, stochrsi_overbought_k: safeParseFloat(e.target.value) })}
-                      onFocus={(e) => e.target.select()}
+                      onValueChange={(v) => setFormData({ ...formData, stochrsi_overbought_k: v })}
+                      fallback={80}
                     />
                     <p className="text-xs text-muted-foreground">
                       {formData.stochrsi_short_mode === 'ZONE_ONLY' 
@@ -1084,13 +1060,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="stochrsi_overbought_d">Overkøbt D</Label>
-                    <Input
-                      id="stochrsi_overbought_d"
-                      type="number"
-                      step="0.01"
+                    <DecimalInput
                       value={formData.stochrsi_overbought_d}
-                      onChange={(e) => setFormData({ ...formData, stochrsi_overbought_d: safeParseFloat(e.target.value) })}
-                      onFocus={(e) => e.target.select()}
+                      onValueChange={(v) => setFormData({ ...formData, stochrsi_overbought_d: v })}
+                      fallback={80}
                     />
                     <p className="text-xs text-muted-foreground">
                       {formData.stochrsi_short_mode === 'ZONE_ONLY' 
@@ -1107,25 +1080,19 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="stochrsi_oversold_k">Oversolgt K</Label>
-                    <Input
-                      id="stochrsi_oversold_k"
-                      type="number"
-                      step="0.01"
+                    <DecimalInput
                       value={formData.stochrsi_oversold_k}
-                      onChange={(e) => setFormData({ ...formData, stochrsi_oversold_k: safeParseFloat(e.target.value) })}
-                      onFocus={(e) => e.target.select()}
+                      onValueChange={(v) => setFormData({ ...formData, stochrsi_oversold_k: v })}
+                      fallback={20}
                     />
                     <p className="text-xs text-muted-foreground">K ≤ denne værdi for LONG</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="stochrsi_oversold_d">Oversolgt D</Label>
-                    <Input
-                      id="stochrsi_oversold_d"
-                      type="number"
-                      step="0.01"
+                    <DecimalInput
                       value={formData.stochrsi_oversold_d}
-                      onChange={(e) => setFormData({ ...formData, stochrsi_oversold_d: safeParseFloat(e.target.value) })}
-                      onFocus={(e) => e.target.select()}
+                      onValueChange={(v) => setFormData({ ...formData, stochrsi_oversold_d: v })}
+                      fallback={20}
                     />
                     <p className="text-xs text-muted-foreground">D ≤ denne værdi for LONG</p>
                   </div>
