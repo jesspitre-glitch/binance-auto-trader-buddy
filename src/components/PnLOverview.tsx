@@ -117,13 +117,29 @@ export const PnLOverview = () => {
             },
           });
           
-          if (response.data && !response.error) {
+          if (response.error) {
+            const errorMsg = typeof response.error === 'object' 
+              ? JSON.stringify(response.error) 
+              : String(response.error);
+            // Check for rate limit / IP ban errors
+            if (errorMsg.includes('banned') || errorMsg.includes('-1003') || errorMsg.includes('rate limit')) {
+              console.warn("[PnL] Binance API rate limited, using trade-based fallback");
+            } else {
+              console.warn("[PnL] Binance API error:", errorMsg);
+            }
+          } else if (response.data) {
             binancePnl = response.data;
             console.log(`[PnL] Binance income ledger (${range}):`, binancePnl);
           }
         }
-      } catch (err) {
-        console.warn("[PnL] Failed to fetch Binance P&L:", err);
+      } catch (err: any) {
+        // Non-blocking: log error but continue with trade-based fallback
+        const errMsg = err?.message || String(err);
+        if (errMsg.includes('banned') || errMsg.includes('-1003') || errMsg.includes('rate limit')) {
+          console.warn("[PnL] Binance API rate limited, using trade-based fallback");
+        } else {
+          console.warn("[PnL] Failed to fetch Binance P&L:", err);
+        }
       }
 
       // Fetch ALL trades using pagination
