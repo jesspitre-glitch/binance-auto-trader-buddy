@@ -10,31 +10,25 @@ type Props = {
   placeholder?: string;
   min?: number;
   max?: number;
-  step?: number;
 };
 
-const safeParseDecimal = (raw: string, fallback: number): number => {
-  const normalized = raw.replace(",", ".").trim();
+const safeParseInt = (raw: string, fallback: number): number => {
+  const trimmed = raw.trim();
 
   // transient states while typing
-  if (
-    normalized === "" ||
-    normalized === "-" ||
-    normalized === "." ||
-    normalized === "-."
-  ) {
+  if (trimmed === "" || trimmed === "-") {
     return fallback;
   }
 
-  const parsed = Number(normalized);
+  const parsed = parseInt(trimmed, 10);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
 /**
- * Decimal input that supports Danish/EU comma decimals.
- * Keeps free-form text while focused and commits a numeric value on blur.
+ * Integer input that allows free-form text while focused.
+ * Commits a numeric value on blur.
  */
-export function DecimalInput({
+export function IntegerInput({
   value,
   onValueChange,
   fallback = 0,
@@ -56,14 +50,14 @@ export function DecimalInput({
   }, [value, focused, fallback]);
 
   const handleChange = (raw: string) => {
-    // Allow partial values while typing: "", "0,", "0.", "-" ...
-    const isAllowed = /^-?\d*(?:[.,]\d*)?$/.test(raw);
+    // Allow partial values while typing: "", "-", digits only
+    const isAllowed = /^-?\d*$/.test(raw);
     if (!isAllowed) return;
     setText(raw);
   };
 
   const commit = () => {
-    let finalValue = safeParseDecimal(text, fallback);
+    let finalValue = safeParseInt(text, fallback);
     
     // Apply min/max constraints
     if (min !== undefined && finalValue < min) finalValue = min;
@@ -77,7 +71,7 @@ export function DecimalInput({
   return (
     <Input
       type="text"
-      inputMode="decimal"
+      inputMode="numeric"
       placeholder={placeholder}
       value={text}
       onChange={(e) => handleChange(e.target.value)}
