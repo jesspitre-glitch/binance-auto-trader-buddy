@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { IntegerInput } from "./IntegerInput";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -451,14 +452,14 @@ export function ExitProfiles({ profiles, onProfilesChange }: ExitProfilesProps) 
                       <div className={`${!profile.max_duration_enabled ? "opacity-50" : ""}`}>
                         <div className="space-y-1">
                           <Label className="text-xs">Max Duration (minutes)</Label>
-                          <Input
-                            type="number"
-                            inputMode="numeric"
+                          <IntegerInput
+                            id={`max_duration_minutes_${profile.id}`}
                             value={profile.max_duration_minutes}
-                            onChange={(e) => handleProfileChange(profile.id, "max_duration_minutes", parseInt(e.target.value) || 0)}
-                            onFocus={(e) => e.target.select()}
+                            onValueChange={(v) => handleProfileChange(profile.id, "max_duration_minutes", v)}
+                            fallback={120}
                             className="h-8 w-32"
                             disabled={!profile.max_duration_enabled}
+                            min={0}
                           />
                         </div>
                       </div>

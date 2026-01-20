@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 
 type Props = {
+  id?: string;
   value: number | null | undefined;
   onValueChange: (value: number) => void;
   fallback?: number;
@@ -29,6 +30,7 @@ const safeParseInt = (raw: string, fallback: number): number => {
  * Commits a numeric value on blur.
  */
 export function IntegerInput({
+  id,
   value,
   onValueChange,
   fallback = 0,
@@ -70,6 +72,7 @@ export function IntegerInput({
 
   return (
     <Input
+      id={id}
       type="text"
       inputMode="numeric"
       placeholder={placeholder}
