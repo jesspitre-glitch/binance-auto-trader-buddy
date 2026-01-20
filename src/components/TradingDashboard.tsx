@@ -337,19 +337,27 @@ export const TradingDashboard = () => {
         </TabsList>
         
         <TabsContent value="pnl">
-          <PnLOverview />
+          <SectionErrorBoundary title="P&L Oversigt">
+            <PnLOverview />
+          </SectionErrorBoundary>
         </TabsContent>
 
         <TabsContent value="strategy">
-          <StrategyAnalysis />
+          <SectionErrorBoundary title="Strategi Analyse">
+            <StrategyAnalysis />
+          </SectionErrorBoundary>
         </TabsContent>
 
         <TabsContent value="scan">
-          <ScanResults />
+          <SectionErrorBoundary title="Scan Resultater">
+            <ScanResults />
+          </SectionErrorBoundary>
         </TabsContent>
 
         <TabsContent value="history" className="space-y-4">
-          <TradeHistoryTable />
+          <SectionErrorBoundary title="Trade Historik">
+            <TradeHistoryTable />
+          </SectionErrorBoundary>
         </TabsContent>
         
         <TabsContent value="config">
