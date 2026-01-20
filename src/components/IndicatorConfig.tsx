@@ -1152,22 +1152,21 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="pivot_points_lookback">Lookback Periode</Label>
-                <Input
+                <IntegerInput
                   id="pivot_points_lookback"
-                  type="number"
                   value={formData.pivot_points_lookback}
-                  onChange={(e) => setFormData({ ...formData, pivot_points_lookback: safeParseInt(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, pivot_points_lookback: v })}
+                  fallback={24}
                 />
                 <p className="text-xs text-muted-foreground">Antal bars tilbage til pivot beregning (f.eks. 24)</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="pivot_points_near_threshold">Near Threshold</Label>
-                <Input
+                <DecimalInput
                   id="pivot_points_near_threshold"
-                  type="number"
-                  step="0.0001"
                   value={formData.pivot_points_near_threshold}
-                  onChange={(e) => setFormData({ ...formData, pivot_points_near_threshold: safeParseFloat(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, pivot_points_near_threshold: v })}
+                  fallback={0.002}
                 />
                 <p className="text-xs text-muted-foreground">Tærskel for "tæt på" pivot (0.002 = 0.2%)</p>
               </div>
@@ -1207,42 +1206,41 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <>
               <div className="space-y-2">
                 <Label htmlFor="macd_fast">Hurtig</Label>
-                <Input
+                <IntegerInput
                   id="macd_fast"
-                  type="number"
                   value={formData.macd_fast}
-                  onChange={(e) => setFormData({ ...formData, macd_fast: safeParseInt(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, macd_fast: v })}
+                  fallback={12}
                 />
                 <p className="text-xs text-muted-foreground">Hurtig EMA periode (standard 12)</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="macd_slow">Langsom</Label>
-                <Input
+                <IntegerInput
                   id="macd_slow"
-                  type="number"
                   value={formData.macd_slow}
-                  onChange={(e) => setFormData({ ...formData, macd_slow: safeParseInt(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, macd_slow: v })}
+                  fallback={26}
                 />
                 <p className="text-xs text-muted-foreground">Langsom EMA periode (standard 26)</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="macd_signal">Signal</Label>
-                <Input
+                <IntegerInput
                   id="macd_signal"
-                  type="number"
                   value={formData.macd_signal}
-                  onChange={(e) => setFormData({ ...formData, macd_signal: safeParseInt(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, macd_signal: v })}
+                  fallback={9}
                 />
                 <p className="text-xs text-muted-foreground">Signal linje EMA (standard 9)</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="macd_histogram_threshold">Histogram Tærskel</Label>
-                <Input
+                <DecimalInput
                   id="macd_histogram_threshold"
-                  type="number"
-                  step="0.000001"
                   value={formData.macd_histogram_threshold}
-                  onChange={(e) => setFormData({ ...formData, macd_histogram_threshold: safeParseFloat(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, macd_histogram_threshold: v })}
+                  fallback={0}
                 />
                 <p className="text-xs text-muted-foreground">Min histogram for signal (0 = alle)</p>
               </div>
@@ -1288,13 +1286,13 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
               <div className="space-y-2">
                 <Label htmlFor="histogram_momentum_periods">Momentum Perioder</Label>
-                <Input
+                <IntegerInput
                   id="histogram_momentum_periods"
-                  type="number"
-                  min="2"
-                  max="10"
                   value={formData.histogram_momentum_periods}
-                  onChange={(e) => setFormData({...formData, histogram_momentum_periods: safeParseInt(e.target.value)})}
+                  onValueChange={(v) => setFormData({...formData, histogram_momentum_periods: v})}
+                  fallback={3}
+                  min={2}
+                  max={10}
                 />
                 <p className="text-xs text-muted-foreground">
                   Antal perioder til momentum-beregning (2-10)
@@ -1336,22 +1334,21 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <>
               <div className="space-y-2">
                 <Label htmlFor="bb_period">Periode</Label>
-                <Input
+                <IntegerInput
                   id="bb_period"
-                  type="number"
                   value={formData.bb_period}
-                  onChange={(e) => setFormData({ ...formData, bb_period: safeParseInt(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, bb_period: v })}
+                  fallback={20}
                 />
                 <p className="text-xs text-muted-foreground">SMA periode for midt-båndet (standard 20)</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="bb_std_dev">Standard Afvigelse</Label>
-                <Input
+                <DecimalInput
                   id="bb_std_dev"
-                  type="number"
-                  step="0.1"
                   value={formData.bb_std_dev}
-                  onChange={(e) => setFormData({ ...formData, bb_std_dev: safeParseFloat(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, bb_std_dev: v })}
+                  fallback={2}
                 />
                 <p className="text-xs text-muted-foreground">Hvor bredt båndet er (standard 2.0)</p>
               </div>
@@ -1390,13 +1387,13 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           {formData.vwap_enabled && (
             <div className="space-y-2">
               <Label htmlFor="vwap_period">VWAP Periode (antal candles)</Label>
-              <Input
+              <IntegerInput
                 id="vwap_period"
-                type="number"
-                min="10"
-                max="500"
                 value={formData.vwap_period}
-                onChange={(e) => setFormData({ ...formData, vwap_period: safeParseInt(e.target.value) })}
+                onValueChange={(v) => setFormData({ ...formData, vwap_period: v })}
+                fallback={50}
+                min={10}
+                max={500}
               />
               <p className="text-xs text-muted-foreground">
                 Antal bars til VWAP beregning (standard 50, 288 ≈ 24h på 5m)
@@ -1437,23 +1434,22 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <>
               <div className="space-y-2">
                 <Label htmlFor="atr_period">ATR Periode</Label>
-                <Input
+                <IntegerInput
                   id="atr_period"
-                  type="number"
                   value={formData.atr_period}
-                  onChange={(e) => setFormData({ ...formData, atr_period: safeParseInt(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, atr_period: v })}
+                  fallback={14}
                 />
                 <p className="text-xs text-muted-foreground">Antal bars til volatilitet (standard 14)</p>
               </div>
               {/* min_atr (raw) er DEPRECATED og skjult - kun ATR% bruges nu */}
               <div className="space-y-2">
                 <Label htmlFor="min_atr_percent">Minimum ATR (%) – HARD FILTER</Label>
-                <Input
+                <DecimalInput
                   id="min_atr_percent"
-                  type="number"
-                  step="0.01"
                   value={formData.min_atr_percent}
-                  onChange={(e) => setFormData({ ...formData, min_atr_percent: safeParseFloat(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, min_atr_percent: v })}
+                  fallback={0.5}
                 />
                 <p className="text-xs text-muted-foreground">Bloker trade hvis (ATR/Price × 100) &lt; Minimum ATR (%)</p>
               </div>
@@ -1480,36 +1476,33 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 <>
                   <div className="space-y-2">
                     <Label htmlFor="atr_base_min">ATR Base Minimum (%)</Label>
-                    <Input
+                    <DecimalInput
                       id="atr_base_min"
-                      type="number"
-                      step="0.01"
                       value={formData.atr_base_min}
-                      onChange={(e) => setFormData({ ...formData, atr_base_min: safeParseFloat(e.target.value) })}
+                      onValueChange={(v) => setFormData({ ...formData, atr_base_min: v })}
+                      fallback={1.0}
                     />
                     <p className="text-xs text-muted-foreground">Base værdi for adaptive beregning</p>
                   </div>
                   
                   <div className="space-y-2">
                     <Label htmlFor="atr_floor">ATR Floor (%)</Label>
-                    <Input
+                    <DecimalInput
                       id="atr_floor"
-                      type="number"
-                      step="0.01"
                       value={formData.atr_floor}
-                      onChange={(e) => setFormData({ ...formData, atr_floor: safeParseFloat(e.target.value) })}
+                      onValueChange={(v) => setFormData({ ...formData, atr_floor: v })}
+                      fallback={0.7}
                     />
                     <p className="text-xs text-muted-foreground">Minimum værdi (floor)</p>
                   </div>
                   
                   <div className="space-y-2">
                     <Label htmlFor="atr_ceiling">ATR Ceiling (%)</Label>
-                    <Input
+                    <DecimalInput
                       id="atr_ceiling"
-                      type="number"
-                      step="0.01"
                       value={formData.atr_ceiling}
-                      onChange={(e) => setFormData({ ...formData, atr_ceiling: safeParseFloat(e.target.value) })}
+                      onValueChange={(v) => setFormData({ ...formData, atr_ceiling: v })}
+                      fallback={2.0}
                     />
                     <p className="text-xs text-muted-foreground">Maksimum værdi (ceiling)</p>
                   </div>
@@ -1517,23 +1510,21 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               )}
               <div className="space-y-2">
                 <Label htmlFor="atr_stop_loss_multiplier">Stop-Loss Multiplikator</Label>
-                <Input
+                <DecimalInput
                   id="atr_stop_loss_multiplier"
-                  type="number"
-                  step="0.1"
                   value={formData.atr_stop_loss_multiplier}
-                  onChange={(e) => setFormData({ ...formData, atr_stop_loss_multiplier: safeParseFloat(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, atr_stop_loss_multiplier: v })}
+                  fallback={2}
                 />
                 <p className="text-xs text-muted-foreground">Højere = løsere SL (2.0 = 2×ATR)</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="atr_trailing_stop_multiplier">ATR Trailing Stop Multiplier</Label>
-                <Input
+                <DecimalInput
                   id="atr_trailing_stop_multiplier"
-                  type="number"
-                  step="0.1"
                   value={formData.atr_trailing_stop_multiplier}
-                  onChange={(e) => setFormData({ ...formData, atr_trailing_stop_multiplier: safeParseFloat(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, atr_trailing_stop_multiplier: v })}
+                  fallback={1.5}
                 />
                 <p className="text-xs text-muted-foreground">Trailing stop afstand fra peak (× ATR)</p>
               </div>
@@ -1555,12 +1546,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               
               <div className="space-y-2">
                 <Label htmlFor="trailing_stop_activation_atr">Trailing Stop Aktiverings-Threshold (× ATR)</Label>
-                <Input
+                <DecimalInput
                   id="trailing_stop_activation_atr"
-                  type="number"
-                  step="0.1"
                   value={formData.trailing_stop_activation_atr}
-                  onChange={(e) => setFormData({ ...formData, trailing_stop_activation_atr: safeParseFloat(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, trailing_stop_activation_atr: v })}
+                  fallback={1.0}
                 />
                 <p className="text-xs text-muted-foreground">Trailing stop aktiveres først når profit ≥ (× ATR). Standard: 1.0 ATR</p>
               </div>
@@ -1633,24 +1623,22 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                   <div className="grid gap-4 sm:grid-cols-2 pl-4 border-l-2 border-primary/20">
                     <div className="space-y-2">
                       <Label htmlFor="break_even_atr">Trigger ATR Multiplier</Label>
-                      <Input
+                      <DecimalInput
                         id="break_even_atr"
-                        type="number"
-                        step="0.1"
                         value={formData.break_even_atr}
-                        onChange={(e) => setFormData({ ...formData, break_even_atr: safeParseFloat(e.target.value) })}
+                        onValueChange={(v) => setFormData({ ...formData, break_even_atr: v })}
+                        fallback={1.0}
                       />
                       <p className="text-xs text-muted-foreground">Aktiver BE når profit ≥ X × ATR</p>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="break_even_atr_stop_offset">Stop Offset (× ATR)</Label>
-                      <Input
+                      <DecimalInput
                         id="break_even_atr_stop_offset"
-                        type="number"
-                        step="0.1"
-                        min="0"
                         value={formData.break_even_atr_stop_offset}
-                        onChange={(e) => setFormData({ ...formData, break_even_atr_stop_offset: safeParseFloat(e.target.value) })}
+                        onValueChange={(v) => setFormData({ ...formData, break_even_atr_stop_offset: v })}
+                        fallback={0}
+                        min={0}
                       />
                       <p className="text-xs text-muted-foreground">Stop placeres entry ± (offset × ATR). 0 = præcis entry.</p>
                     </div>
@@ -1683,16 +1671,12 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                   <div className="grid gap-4 sm:grid-cols-2 pl-4 border-l-2 border-primary/20">
                     <div className="space-y-2">
                       <Label htmlFor="break_even_profit_pct_trigger">Trigger Profit %</Label>
-                      <Input
+                      <DecimalInput
                         id="break_even_profit_pct_trigger"
-                        type="number"
-                        step="0.1"
-                        min="0"
                         value={formData.break_even_profit_pct_trigger}
-                        onChange={(e) => {
-                          const val = safeParseFloat(e.target.value);
-                          setFormData({ ...formData, break_even_profit_pct_trigger: val });
-                        }}
+                        onValueChange={(v) => setFormData({ ...formData, break_even_profit_pct_trigger: v })}
+                        fallback={1.5}
+                        min={0}
                       />
                       <p className="text-xs text-muted-foreground">
                         Aktiver BE når profit ≥ X% af entry
@@ -1703,19 +1687,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="break_even_profit_pct_stop_over_entry">Stop Over Entry %</Label>
-                      <Input
+                      <DecimalInput
                         id="break_even_profit_pct_stop_over_entry"
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max={formData.break_even_profit_pct_trigger}
                         value={formData.break_even_profit_pct_stop_over_entry}
-                        onChange={(e) => {
-                          const val = safeParseFloat(e.target.value);
+                        onValueChange={(v) => {
                           // Validering: stop_over_entry_pct <= trigger_profit_pct
-                          const clampedVal = Math.min(val, formData.break_even_profit_pct_trigger);
+                          const clampedVal = Math.min(v, formData.break_even_profit_pct_trigger);
                           setFormData({ ...formData, break_even_profit_pct_stop_over_entry: clampedVal });
                         }}
+                        fallback={0.1}
+                        min={0}
+                        max={formData.break_even_profit_pct_trigger}
                       />
                       <p className="text-xs text-muted-foreground">
                         Stop placeres X% over entry (LONG) / under entry (SHORT). Skal være ≤ Trigger %.
@@ -1770,13 +1752,12 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <>
               <div className="space-y-2">
                 <Label htmlFor="peak_lock_activate_profit_pct">Aktivér ved Profit %</Label>
-                <Input
+                <DecimalInput
                   id="peak_lock_activate_profit_pct"
-                  type="number"
-                  step="0.05"
-                  min="0"
                   value={formData.peak_lock_activate_profit_pct}
-                  onChange={(e) => setFormData({ ...formData, peak_lock_activate_profit_pct: safeParseFloat(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, peak_lock_activate_profit_pct: v })}
+                  fallback={0.60}
+                  min={0}
                 />
                 <p className="text-xs text-muted-foreground">
                   Peak-lock aktiveres når profit ≥ X% fra entry. Eks: 0.60 = 0.6% profit
@@ -1785,13 +1766,12 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
               <div className="space-y-2">
                 <Label htmlFor="peak_lock_distance_pct">Afstand fra Peak %</Label>
-                <Input
+                <DecimalInput
                   id="peak_lock_distance_pct"
-                  type="number"
-                  step="0.05"
-                  min="0"
                   value={formData.peak_lock_distance_pct}
-                  onChange={(e) => setFormData({ ...formData, peak_lock_distance_pct: safeParseFloat(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, peak_lock_distance_pct: v })}
+                  fallback={0.35}
+                  min={0}
                 />
                 <p className="text-xs text-muted-foreground">
                   Stop placeres X% under peak (LONG) / over peak (SHORT). Eks: 0.35 = 0.35% fra peak
@@ -1800,13 +1780,12 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
 
               <div className="space-y-2">
                 <Label htmlFor="peak_lock_min_profit_floor_pct">Min Profit Floor %</Label>
-                <Input
+                <DecimalInput
                   id="peak_lock_min_profit_floor_pct"
-                  type="number"
-                  step="0.05"
-                  min="0"
                   value={formData.peak_lock_min_profit_floor_pct}
-                  onChange={(e) => setFormData({ ...formData, peak_lock_min_profit_floor_pct: safeParseFloat(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, peak_lock_min_profit_floor_pct: v })}
+                  fallback={0.15}
+                  min={0}
                 />
                 <p className="text-xs text-muted-foreground">
                   Stop må aldrig være under minimumsgevinst. Eks: 0.15 = stop altid ≥ 0.15% over entry
@@ -1862,14 +1841,13 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="hard_sl_pct">Hard SL %</Label>
-              <Input
+              <DecimalInput
                 id="hard_sl_pct"
-                type="number"
-                step="0.1"
-                min="0.1"
-                max="20"
                 value={formData.hard_sl_pct}
-                onChange={(e) => setFormData({ ...formData, hard_sl_pct: safeParseFloat(e.target.value, 3.0) })}
+                onValueChange={(v) => setFormData({ ...formData, hard_sl_pct: v })}
+                fallback={3.0}
+                min={0.1}
+                max={20}
               />
               <p className="text-xs text-muted-foreground">
                 Maksimalt tab fra entry i % (fx 3.0 = max 3% tab)
@@ -1912,14 +1890,13 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="max_sl_after_mfe_activate_pct">Aktivér ved MFE (%)</Label>
-            <Input
+            <DecimalInput
               id="max_sl_after_mfe_activate_pct"
-              type="number"
-              step="0.05"
-              min="0"
-              max="5"
               value={formData.max_sl_after_mfe_activate_pct}
-              onChange={(e) => setFormData({ ...formData, max_sl_after_mfe_activate_pct: safeParseFloat(e.target.value) })}
+              onValueChange={(v) => setFormData({ ...formData, max_sl_after_mfe_activate_pct: v })}
+              fallback={0.60}
+              min={0}
+              max={5}
               disabled={!formData.max_sl_after_mfe_enabled}
             />
             <p className="text-xs text-muted-foreground">
@@ -1929,14 +1906,13 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           
           <div className="space-y-2">
             <Label htmlFor="max_sl_after_mfe_max_dist_pct">Max SL afstand fra entry (%)</Label>
-            <Input
+            <DecimalInput
               id="max_sl_after_mfe_max_dist_pct"
-              type="number"
-              step="0.05"
-              min="0"
-              max="5"
               value={formData.max_sl_after_mfe_max_dist_pct}
-              onChange={(e) => setFormData({ ...formData, max_sl_after_mfe_max_dist_pct: safeParseFloat(e.target.value) })}
+              onValueChange={(v) => setFormData({ ...formData, max_sl_after_mfe_max_dist_pct: v })}
+              fallback={1.0}
+              min={0}
+              max={5}
               disabled={!formData.max_sl_after_mfe_enabled}
             />
             <p className="text-xs text-muted-foreground">
@@ -1990,36 +1966,31 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <>
               <div className="space-y-2">
                 <Label htmlFor="adx_period">ADX Periode</Label>
-                <Input
+                <IntegerInput
                   id="adx_period"
-                  type="number"
                   value={formData.adx_period}
-                  onChange={(e) => setFormData({ ...formData, adx_period: safeParseInt(e.target.value) })}
-                  onFocus={(e) => e.target.select()}
+                  onValueChange={(v) => setFormData({ ...formData, adx_period: v })}
+                  fallback={14}
                 />
                 <p className="text-xs text-muted-foreground">Antal bars til ADX (standard 14)</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="adx_floor">ADX Min</Label>
-                <Input
+                <DecimalInput
                   id="adx_floor"
-                  type="number"
-                  step="0.1"
                   value={formData.adx_floor}
-                  onChange={(e) => setFormData({ ...formData, adx_floor: safeParseFloat(e.target.value) })}
-                  onFocus={(e) => e.target.select()}
+                  onValueChange={(v) => setFormData({ ...formData, adx_floor: v })}
+                  fallback={20}
                 />
                 <p className="text-xs text-muted-foreground">Minimum ADX værdi krævet for trade</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="adx_ceiling">ADX Max</Label>
-                <Input
+                <DecimalInput
                   id="adx_ceiling"
-                  type="number"
-                  step="0.1"
                   value={formData.adx_ceiling}
-                  onChange={(e) => setFormData({ ...formData, adx_ceiling: safeParseFloat(e.target.value) })}
-                  onFocus={(e) => e.target.select()}
+                  onValueChange={(v) => setFormData({ ...formData, adx_ceiling: v })}
+                  fallback={40}
                 />
                 <p className="text-xs text-muted-foreground">Maksimum ADX værdi tilladt for trade</p>
               </div>
@@ -2045,13 +2016,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               {formData.adaptive_adx_enabled && (
                 <div className="space-y-2">
                   <Label htmlFor="adx_base_min">ADX Base (Adaptive)</Label>
-                  <Input
+                  <DecimalInput
                     id="adx_base_min"
-                    type="number"
-                    step="0.1"
                     value={formData.adx_base_min}
-                    onChange={(e) => setFormData({ ...formData, adx_base_min: safeParseFloat(e.target.value) })}
-                    onFocus={(e) => e.target.select()}
+                    onValueChange={(v) => setFormData({ ...formData, adx_base_min: v })}
+                    fallback={25}
                   />
                   <p className="text-xs text-muted-foreground">Base værdi for adaptive beregning</p>
                 </div>
@@ -2092,22 +2061,21 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <>
               <div className="space-y-2">
                 <Label htmlFor="volume_avg_period">Volumen Gennemsnit Periode</Label>
-                <Input
+                <IntegerInput
                   id="volume_avg_period"
-                  type="number"
                   value={formData.volume_avg_period}
-                  onChange={(e) => setFormData({ ...formData, volume_avg_period: safeParseInt(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, volume_avg_period: v })}
+                  fallback={20}
                 />
                 <p className="text-xs text-muted-foreground">Antal bars for gennemsnit</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="volume_multiplier">Volumen Multiplier (LONG)</Label>
-                <Input
+                <DecimalInput
                   id="volume_multiplier"
-                  type="number"
-                  step="0.1"
                   value={formData.volume_multiplier}
-                  onChange={(e) => setFormData({ ...formData, volume_multiplier: safeParseFloat(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, volume_multiplier: v })}
+                  fallback={1.2}
                 />
                 <p className="text-xs text-muted-foreground">
                   LONG kræver vol ≥ avg×{formData.volume_multiplier}
@@ -2144,13 +2112,12 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               
               <div className="space-y-2">
                 <Label htmlFor="volume_multiplier_short">Volumen Multiplier (SHORT)</Label>
-                <Input
+                <DecimalInput
                   id="volume_multiplier_short"
-                  type="number"
-                  step="0.05"
-                  min="0"
                   value={formData.volume_multiplier_short}
-                  onChange={(e) => setFormData({ ...formData, volume_multiplier_short: safeParseFloat(e.target.value, 0.50) })}
+                  onValueChange={(v) => setFormData({ ...formData, volume_multiplier_short: v })}
+                  fallback={0.50}
+                  min={0}
                   disabled={formData.volume_mode_short === 'OFF'}
                 />
                 <p className="text-xs text-muted-foreground">
@@ -2317,11 +2284,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="klines_limit">Klines Limit</Label>
-                <Input
+                <IntegerInput
                   id="klines_limit"
-                  type="number"
                   value={formData.klines_limit}
-                  onChange={(e) => setFormData({ ...formData, klines_limit: safeParseInt(e.target.value) })}
+                  onValueChange={(v) => setFormData({ ...formData, klines_limit: v })}
+                  fallback={100}
                 />
                 <p className="text-xs text-muted-foreground">Antal bars at hente til analyse (f.eks. 100)</p>
               </div>
@@ -2338,66 +2305,61 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="leverage">Leverage</Label>
-            <Input
+            <IntegerInput
               id="leverage"
-              type="number"
               value={formData.leverage}
-              onChange={(e) => setFormData({ ...formData, leverage: safeParseInt(e.target.value) })}
+              onValueChange={(v) => setFormData({ ...formData, leverage: v })}
+              fallback={10}
             />
             <p className="text-xs text-muted-foreground">Gearing - højere = større position med samme kapital</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="position_size_percent">% pr Trade</Label>
-            <Input
+            <DecimalInput
               id="position_size_percent"
-              type="number"
-              step="0.1"
               value={formData.position_size_percent}
-              onChange={(e) => setFormData({ ...formData, position_size_percent: safeParseFloat(e.target.value) })}
+              onValueChange={(v) => setFormData({ ...formData, position_size_percent: v })}
+              fallback={5}
             />
             <p className="text-xs text-muted-foreground">Direkte position størrelse i % af balance</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="risk_per_trade_percent">Max Risiko pr. Trade (%)</Label>
-            <Input
+            <DecimalInput
               id="risk_per_trade_percent"
-              type="number"
-              step="0.1"
               value={formData.risk_per_trade_percent}
-              onChange={(e) => setFormData({ ...formData, risk_per_trade_percent: safeParseFloat(e.target.value) })}
+              onValueChange={(v) => setFormData({ ...formData, risk_per_trade_percent: v })}
+              fallback={1}
             />
             <p className="text-xs text-muted-foreground">Max tab hvis stop loss rammes</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="max_open_positions">Max Åbne Positioner</Label>
-            <Input
+            <IntegerInput
               id="max_open_positions"
-              type="number"
               value={formData.max_open_positions}
-              onChange={(e) => setFormData({ ...formData, max_open_positions: safeParseInt(e.target.value) })}
+              onValueChange={(v) => setFormData({ ...formData, max_open_positions: v })}
+              fallback={3}
             />
             <p className="text-xs text-muted-foreground">Antal samtidige trades tilladt</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="max_exposure_percent">Max Eksponering (%)</Label>
-            <Input
+            <DecimalInput
               id="max_exposure_percent"
-              type="number"
-              step="0.1"
               value={formData.max_exposure_percent}
-              onChange={(e) => setFormData({ ...formData, max_exposure_percent: safeParseFloat(e.target.value) })}
+              onValueChange={(v) => setFormData({ ...formData, max_exposure_percent: v })}
+              fallback={5}
             />
             <p className="text-xs text-muted-foreground">Total eksponering max i % af balance</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="daily_loss_limit_percent">Dagligt Tab Limit (%)</Label>
-            <Input
+            <DecimalInput
               id="daily_loss_limit_percent"
-              type="number"
-              step="0.1"
               value={formData.daily_loss_limit_percent}
-              onChange={(e) => setFormData({ ...formData, daily_loss_limit_percent: safeParseFloat(e.target.value) })}
-              onFocus={(e) => e.target.select()}
+              onValueChange={(v) => setFormData({ ...formData, daily_loss_limit_percent: v })}
+              fallback={5}
             />
             <p className="text-xs text-muted-foreground">Stop trading hvis tab når denne % på en dag</p>
           </div>
@@ -2428,14 +2390,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           </div>
           <div className="space-y-2">
             <Label htmlFor="max_position_duration_minutes">Max Position Varighed (min)</Label>
-            <Input
+            <IntegerInput
               id="max_position_duration_minutes"
-              type="number"
-              value={formData.max_position_duration_minutes || ''}
-              onChange={(e) => setFormData({ ...formData, max_position_duration_minutes: e.target.value ? safeParseInt(e.target.value) : null })}
-              onFocus={(e) => e.target.select()}
+              value={formData.max_position_duration_minutes}
+              onValueChange={(v) => setFormData({ ...formData, max_position_duration_minutes: v })}
+              fallback={240}
               placeholder="0 = deaktiveret"
               disabled={!formData.auto_exit_enabled}
+              min={0}
             />
             <p className="text-xs text-muted-foreground">
               Sæt til 0 eller lad være tom for at deaktivere timeout. Positioner lukkes kun på stop loss/trailing stop. (240 = 4 timer)
