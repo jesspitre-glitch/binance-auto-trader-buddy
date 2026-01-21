@@ -8,6 +8,7 @@ import { Loader2, TrendingUp, TrendingDown, X, BarChart2 } from "lucide-react";
 import { useBinanceFuturesPrices } from "@/hooks/useBinanceFuturesPrices";
 import { getBinanceTimeAgo } from "@/lib/timeUtils";
 import { TradeDetailsDialog } from "./TradeDetailsDialog";
+import { RegimeIndicator } from "./RegimeIndicator";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,7 +26,23 @@ export const PositionManager = () => {
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [selectedPosition, setSelectedPosition] = useState<any>(null);
   const [positionToClose, setPositionToClose] = useState<any>(null);
+  const [config, setConfig] = useState<any>(null);
   const { toast } = useToast();
+
+  const fetchConfig = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("indicator_config")
+        .select("*")
+        .eq("enabled", true)
+        .maybeSingle();
+      
+      if (error) throw error;
+      setConfig(data);
+    } catch (error) {
+      console.error("Error fetching config:", error);
+    }
+  };
 
   const fetchPositions = async () => {
     try {
@@ -50,6 +67,7 @@ export const PositionManager = () => {
 
   useEffect(() => {
     fetchPositions();
+    fetchConfig();
     
     // Realtime subscription for DB changes - updates state directly without refetching
     const channel = supabase
@@ -211,9 +229,26 @@ export const PositionManager = () => {
                         )}
                         <div>
                           <div className="font-semibold text-base md:text-sm">{position.symbol}</div>
-                          <Badge variant={position.side === "LONG" ? "default" : "secondary"} className="text-xs">
-                            {position.side}
-                          </Badge>
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant={position.side === "LONG" ? "default" : "secondary"} className="text-xs">
+                              {position.side}
+                            </Badge>
+                            {config?.regime_router_enabled && position.indicators_snapshot && (
+                              <RegimeIndicator
+                                adx={position.indicators_snapshot.adx}
+                                atrPercent={position.indicators_snapshot.atr && position.indicators_snapshot.price 
+                                  ? (position.indicators_snapshot.atr / position.indicators_snapshot.price) * 100 
+                                  : position.indicators_snapshot.atr_percent}
+                                adxThreshold={config?.regime_adx_threshold}
+                                atrPctThreshold={config?.regime_atr_pct_threshold}
+                                method={config?.regime_method}
+                                operator={config?.regime_operator}
+                                enabled={config?.regime_router_enabled}
+                                size="sm"
+                                showDetails
+                              />
+                            )}
+                          </div>
                         </div>
                       </div>
                       
