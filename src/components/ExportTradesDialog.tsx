@@ -31,7 +31,7 @@ export const ExportTradesDialog = ({
   const [open, setOpen] = useState(false);
   const [filterType, setFilterType] = useState<"count" | "days" | "hours">("count");
   const [filterValue, setFilterValue] = useState("50");
-  const [exportMode, setExportMode] = useState<"COMPACT" | "FULL">("COMPACT");
+  const [exportMode, setExportMode] = useState<"COMPACT" | "FULL_DEBUG">("COMPACT");
   const [exportedData, setExportedData] = useState<string>("");
   const [showFallback, setShowFallback] = useState(false);
   const { toast } = useToast();
@@ -71,7 +71,7 @@ export const ExportTradesDialog = ({
         return;
       }
 
-      // Use COMPACT or FULL format based on selection
+      // Use COMPACT or FULL_DEBUG format based on selection
       const compressed = exportMode === "COMPACT" 
         ? compressTradeDataCompact(trades)
         : compressTradeData(trades);
@@ -130,21 +130,21 @@ export const ExportTradesDialog = ({
                 <Label className="text-sm font-medium">Eksport format</Label>
                 <RadioGroup 
                   value={exportMode} 
-                  onValueChange={(v) => setExportMode(v as "COMPACT" | "FULL")}
+                  onValueChange={(v) => setExportMode(v as "COMPACT" | "FULL_DEBUG")}
                   className="flex gap-4"
                 >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="COMPACT" id="compact" />
                     <Label htmlFor="compact" className="cursor-pointer">
                       <span className="font-medium">COMPACT</span>
-                      <span className="text-xs text-muted-foreground ml-1">(AI-venlig)</span>
+                      <span className="text-xs text-muted-foreground ml-1">(kun aktive)</span>
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="FULL" id="full" />
-                    <Label htmlFor="full" className="cursor-pointer">
-                      <span className="font-medium">FULL</span>
-                      <span className="text-xs text-muted-foreground ml-1">(debug)</span>
+                    <RadioGroupItem value="FULL_DEBUG" id="full_debug" />
+                    <Label htmlFor="full_debug" className="cursor-pointer">
+                      <span className="font-medium">FULL_DEBUG</span>
+                      <span className="text-xs text-muted-foreground ml-1">(alt)</span>
                     </Label>
                   </div>
                 </RadioGroup>
@@ -182,20 +182,20 @@ export const ExportTradesDialog = ({
               {/* Mode-specific descriptions */}
               {exportMode === "COMPACT" ? (
                 <div className="text-xs text-muted-foreground space-y-1 p-2 bg-muted/50 rounded">
-                  <p className="font-medium text-foreground">COMPACT indeholder:</p>
-                  <p>• Trade info (symbol, side, prices, pnl, duration)</p>
-                  <p>• Entry filters: ADX, ATR%, StochRSI, volume_ratio</p>
-                  <p>• Regime, trend, exit summary</p>
-                  <p className="text-green-600 dark:text-green-400">✓ Optimeret til ChatGPT</p>
+                  <p className="font-medium text-foreground">COMPACT = kun aktive indikatorer:</p>
+                  <p>• Trade: symbol, pnl, duration, exit_reason</p>
+                  <p>• Hver aktiv indikator: value, threshold, passed, mode</p>
+                  <p>• Ingen null, ingen disabled, ingen dubletter</p>
+                  <p className="text-green-600 dark:text-green-400">✓ Flad struktur til hurtig analyse</p>
                 </div>
               ) : (
                 <div className="text-xs text-muted-foreground space-y-1 p-2 bg-muted/50 rounded">
-                  <p className="font-medium text-foreground">FULL indeholder:</p>
+                  <p className="font-medium text-foreground">FULL_DEBUG = komplet audit:</p>
                   <p>• Alle gate_audit detaljer</p>
                   <p>• Komplet *_audit objekter</p>
                   <p>• candidate_stops arrays</p>
-                  <p>• Filter mode settings</p>
-                  <p className="text-amber-600 dark:text-amber-400">⚠ Stor fil - til deep debug</p>
+                  <p>• Alle mellemregninger og fallbacks</p>
+                  <p className="text-amber-600 dark:text-amber-400">⚠ Stor fil - kun til deep debug</p>
                 </div>
               )}
 

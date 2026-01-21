@@ -702,13 +702,15 @@ export const formatTradeForExport = (t: any) => {
 };
 
 // ============= COMPACT EXPORT FORMAT =============
-// Reduced format for ChatGPT analysis - stable field names, no null fields
+// Only includes ENABLED indicators with flat audit structure
+// No null values, no filter_disabled flags, no duplicates
 
 export const formatTradeForCompactExport = (t: any) => {
   const snap = t.indicators_snapshot || {};
   const openedAt = new Date(t.opened_at);
   const closedAt = new Date(t.closed_at);
   const durationSec = Math.round((closedAt.getTime() - openedAt.getTime()) / 1000);
+  const side = t.side?.toLowerCase() || 'long';
 
   // Standardize exit_reason
   const exitReasonMap: Record<string, string> = {
@@ -733,50 +735,11 @@ export const formatTradeForCompactExport = (t: any) => {
     'take_profit': 'TAKE_PROFIT'
   };
   const exitReason = exitReasonMap[t.close_reason] || t.close_reason?.toUpperCase() || 'UNKNOWN';
-  const side = t.side?.toLowerCase() || 'long';
 
-  // Extract values with fallbacks
-  const stochRsiK = snap.stochRSI_k ?? snap.stochRSI?.k ?? null;
-  const stochRsiD = snap.stochRSI_d ?? snap.stochRSI?.d ?? null;
-  const adxValue = snap.adx ?? null;
-  const atrPct = snap.atr_percent ?? (snap.atr && snap.price ? (snap.atr / snap.price) * 100 : null);
-  const volumeCurrent = snap.volume_current ?? snap.volume ?? null;
-  const volumeAvg = snap.volume_avg ?? snap.avgVolume ?? null;
-  const volumeRatio = volumeCurrent && volumeAvg ? +(volumeCurrent / volumeAvg).toFixed(2) : null;
-  
-  // StochRSI entry mode
-  const stochRsiEntryMode = snap.stochrsi_audit?.entry_mode 
-    ?? snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_entry_mode 
-    ?? snap.stochrsi_entry_mode 
-    ?? null;
-  
-  // Trend data
-  const trendMedium = snap.trend_medium ?? snap.trend ?? null;
-  const trendHigher = snap.trend_higher ?? null;
-  
-  // Regime
-  const regimeLabel = snap.regime_label ?? null;
-  const regimeReason = snap.regime_reason ?? null;
-  
-  // Exit summary
-  const stopTypeHit = snap.exit_audit?.stop_type_hit ?? null;
-  const stopLevelHit = snap.exit_audit?.stop_level_hit ?? null;
-  const exitProfileName = snap.exit_profile_name ?? null;
-  
-  // MFE/MAE
-  const mfePct = snap.mfe_percent != null ? +Number(snap.mfe_percent).toFixed(4) : 
-    (snap.peak_price != null && side === 'long' 
-      ? +((+snap.peak_price - +t.entry_price) / +t.entry_price * 100).toFixed(4)
-      : snap.peak_price != null && side === 'short'
-        ? +(( +t.entry_price - +snap.peak_price) / +t.entry_price * 100).toFixed(4)
-        : null);
-  const maePct = t.mae_percent != null ? +Number(t.mae_percent).toFixed(4) :
-    (snap.mae_percent != null ? +Number(snap.mae_percent).toFixed(4) : null);
-
-  // Build compact object - only include non-null values
+  // Build compact object
   const compact: Record<string, any> = {};
-  
-  // Trade info (always included)
+
+  // === CORE TRADE INFO (always included) ===
   compact.symbol = t.symbol;
   compact.side = t.side;
   compact.entry_price = +t.entry_price;
@@ -785,36 +748,212 @@ export const formatTradeForCompactExport = (t: any) => {
   compact.pnl_abs = +(t.pnl?.toFixed(4) || 0);
   compact.duration_seconds = durationSec;
   compact.exit_reason = exitReason;
-  
-  // MFE/MAE (if available)
-  if (mfePct != null) compact.mfe_pct = mfePct;
-  if (maePct != null) compact.mae_pct = maePct;
-  
-  // Regime (if available)
-  if (regimeLabel) compact.regime_label = regimeLabel;
-  if (regimeReason) compact.regime_reason = regimeReason;
-  
-  // Entry filters (only values that were used)
-  if (adxValue != null) compact.ADX_value = +Number(adxValue).toFixed(2);
-  if (atrPct != null) compact.ATR_pct = +Number(atrPct).toFixed(4);
-  if (stochRsiK != null) compact.stoch_rsi_k = +Number(stochRsiK).toFixed(2);
-  if (stochRsiD != null) compact.stoch_rsi_d = +Number(stochRsiD).toFixed(2);
-  if (stochRsiEntryMode) compact.stochrsi_entry_mode = stochRsiEntryMode;
-  if (volumeRatio != null) compact.volume_ratio = volumeRatio;
-  
-  // Trend context
-  if (trendMedium) compact.trend_medium = trendMedium;
-  if (trendHigher) compact.trend_higher = trendHigher;
-  
-  // Exit summary
-  if (stopTypeHit) compact.stop_type_hit = stopTypeHit;
-  if (stopLevelHit != null) compact.stop_level_hit = +Number(stopLevelHit).toFixed(8);
-  if (exitProfileName) compact.exit_profile_name = exitProfileName;
-  
-  // Timestamps
   compact.timestamp_open = openedAt.toISOString();
   compact.timestamp_close = closedAt.toISOString();
-  
+
+  // === MFE/MAE ===
+  const mfePct = snap.mfe_percent != null ? +Number(snap.mfe_percent).toFixed(4) : 
+    (snap.peak_price != null && side === 'long' 
+      ? +((+snap.peak_price - +t.entry_price) / +t.entry_price * 100).toFixed(4)
+      : snap.peak_price != null && side === 'short'
+        ? +(( +t.entry_price - +snap.peak_price) / +t.entry_price * 100).toFixed(4)
+        : null);
+  const maePct = t.mae_percent != null ? +Number(t.mae_percent).toFixed(4) :
+    (snap.mae_percent != null ? +Number(snap.mae_percent).toFixed(4) : null);
+  if (mfePct != null) compact.mfe_pct = mfePct;
+  if (maePct != null) compact.mae_pct = maePct;
+
+  // === REGIME (if router enabled) ===
+  if (snap.regime_label) compact.regime_label = snap.regime_label;
+  if (snap.regime_reason) compact.regime_reason = snap.regime_reason;
+
+  // === TREND CONTEXT ===
+  const trendMedium = snap.trend_medium ?? snap.trend;
+  const trendHigher = snap.trend_higher;
+  if (trendMedium) compact.trend_medium = trendMedium;
+  if (trendHigher) compact.trend_higher = trendHigher;
+
+  // === EXIT SUMMARY ===
+  if (snap.exit_audit?.stop_type_hit) compact.stop_type_hit = snap.exit_audit.stop_type_hit;
+  if (snap.exit_audit?.stop_level_hit != null) compact.stop_level_hit = +Number(snap.exit_audit.stop_level_hit).toFixed(6);
+  if (snap.exit_profile_name) compact.exit_profile_name = snap.exit_profile_name;
+
+  // === INDICATOR AUDITS (only if ENABLED at entry) ===
+  // Each indicator gets a flat audit with: value(s), threshold(s), passed, mode (if relevant)
+
+  // --- ADX ---
+  const adxEnabled = snap.adx_enabled === true || snap.filterStatus?.hard?.adx?.enabled === true;
+  if (adxEnabled) {
+    const adxVal = snap.adx ?? snap.filterStatus?.hard?.adx?.value;
+    const adxAudit = snap.adx_audit ?? snap.filterStatus?.hard?.adx?.audit;
+    const adxPassed = snap.adx_filter_passed ?? snap.filterStatus?.hard?.adx?.passed;
+    if (adxVal != null) {
+      compact.adx = {
+        value: +Number(adxVal).toFixed(2),
+        ...(adxAudit?.dynamic_min_adx != null && { threshold_min: +Number(adxAudit.dynamic_min_adx).toFixed(2) }),
+        ...(adxAudit?.adx_ceiling_used != null && { threshold_max: +Number(adxAudit.adx_ceiling_used).toFixed(2) }),
+        ...(adxPassed != null && { passed: adxPassed }),
+        ...(adxAudit?.adx_min_source && { mode: adxAudit.adx_min_source })
+      };
+    }
+  }
+
+  // --- ATR ---
+  const atrEnabled = snap.atr_enabled === true || snap.atr != null;
+  if (atrEnabled && snap.atr != null) {
+    const atrPct = snap.atr_percent ?? (snap.price ? (snap.atr / snap.price) * 100 : null);
+    const atrPassed = snap.atr_filter_passed ?? snap.filterStatus?.hard?.atr?.passed;
+    compact.atr = {
+      value: +Number(snap.atr).toFixed(6),
+      ...(atrPct != null && { pct: +Number(atrPct).toFixed(4) }),
+      ...(atrPassed != null && { passed: atrPassed })
+    };
+  }
+
+  // --- STOCHRSI ---
+  const stochEnabled = snap.stochrsi_enabled === true || snap.filterStatus?.hard?.stochrsi?.enabled === true;
+  if (stochEnabled) {
+    const stochK = snap.stochRSI_k ?? snap.stochRSI?.k ?? snap.filterStatus?.hard?.stochrsi?.value?.k;
+    const stochD = snap.stochRSI_d ?? snap.stochRSI?.d ?? snap.filterStatus?.hard?.stochrsi?.value?.d;
+    const stochAudit = snap.stochrsi_audit ?? snap.filterStatus?.hard?.stochrsi?.audit;
+    const stochPassed = snap.stochrsi_filter_passed ?? snap.filterStatus?.hard?.stochrsi?.passed;
+    if (stochK != null || stochD != null) {
+      compact.stochrsi = {
+        ...(stochK != null && { k: +Number(stochK).toFixed(2) }),
+        ...(stochD != null && { d: +Number(stochD).toFixed(2) }),
+        ...(stochAudit?.stochrsi_prev_k != null && { prev_k: +Number(stochAudit.stochrsi_prev_k).toFixed(2) }),
+        ...(stochAudit?.stochrsi_prev_d != null && { prev_d: +Number(stochAudit.stochrsi_prev_d).toFixed(2) }),
+        ...(stochAudit?.stochrsi_entry_mode && { mode: stochAudit.stochrsi_entry_mode }),
+        ...(stochAudit?.stochrsi_overbought_k_setting != null && { ob_k: +Number(stochAudit.stochrsi_overbought_k_setting).toFixed(0) }),
+        ...(stochAudit?.stochrsi_overbought_d_setting != null && { ob_d: +Number(stochAudit.stochrsi_overbought_d_setting).toFixed(0) }),
+        ...(stochAudit?.stochrsi_oversold_k_setting != null && { os_k: +Number(stochAudit.stochrsi_oversold_k_setting).toFixed(0) }),
+        ...(stochAudit?.stochrsi_oversold_d_setting != null && { os_d: +Number(stochAudit.stochrsi_oversold_d_setting).toFixed(0) }),
+        ...(stochAudit?.stochrsi_overbought_at_signal != null && { overbought: stochAudit.stochrsi_overbought_at_signal }),
+        ...(stochAudit?.stochrsi_oversold_at_signal != null && { oversold: stochAudit.stochrsi_oversold_at_signal }),
+        ...(stochAudit?.stochrsi_cross_down != null && { cross_down: stochAudit.stochrsi_cross_down }),
+        ...(stochAudit?.stochrsi_cross_up != null && { cross_up: stochAudit.stochrsi_cross_up }),
+        ...(stochPassed != null && { passed: stochPassed })
+      };
+    }
+  }
+
+  // --- VOLUME ---
+  const volumeEnabled = snap.volume_enabled === true || snap.filterStatus?.hard?.volume?.enabled === true;
+  if (volumeEnabled) {
+    const volCurrent = snap.volume_current ?? snap.volume;
+    const volAvg = snap.volume_avg ?? snap.avgVolume;
+    const volPassed = snap.volume_filter_passed ?? snap.filterStatus?.hard?.volume?.passed;
+    const volAudit = snap.volume_audit ?? snap.filterStatus?.hard?.volume?.audit;
+    if (volCurrent != null && volAvg != null) {
+      const ratio = +(volCurrent / volAvg).toFixed(2);
+      compact.volume = {
+        ratio,
+        ...(volAudit?.threshold != null && { threshold: +Number(volAudit.threshold).toFixed(2) }),
+        ...(volAudit?.mode && { mode: volAudit.mode }),
+        ...(volPassed != null && { passed: volPassed })
+      };
+    }
+  }
+
+  // --- MACD ---
+  const macdEnabled = snap.macd_enabled === true || snap.filterStatus?.hard?.macd?.enabled === true;
+  if (macdEnabled) {
+    const macdLine = snap.macd_line ?? snap.macdLine;
+    const macdHist = snap.macd_histogram ?? snap.macdHistogram ?? snap.macd;
+    const macdPassed = snap.macd_direction_passed ?? snap.filterStatus?.hard?.macd?.passed;
+    if (macdLine != null || macdHist != null) {
+      compact.macd = {
+        ...(macdLine != null && { line: +Number(macdLine).toFixed(8) }),
+        ...(macdHist != null && { histogram: +Number(macdHist).toFixed(8) }),
+        ...(snap.macd_histogram_threshold != null && { hist_threshold: +Number(snap.macd_histogram_threshold).toFixed(8) }),
+        ...(macdPassed != null && { direction_passed: macdPassed })
+      };
+    }
+  }
+
+  // --- EMA ---
+  const emaEnabled = snap.ema_enabled === true || snap.filterStatus?.hard?.ema?.enabled === true;
+  if (emaEnabled) {
+    const emaSpread = snap.ema_spread_percent ?? snap.emaSpreadPercent;
+    const emaPassed = snap.ema_filter_passed ?? snap.filterStatus?.hard?.ema?.passed;
+    if (emaSpread != null) {
+      compact.ema = {
+        spread_pct: +Number(emaSpread).toFixed(4),
+        ...(snap.min_ema_spread_percent != null && { min_spread: +Number(snap.min_ema_spread_percent).toFixed(4) }),
+        ...(snap.max_ema_spread_percent != null && { max_spread: +Number(snap.max_ema_spread_percent).toFixed(4) }),
+        ...(emaPassed != null && { passed: emaPassed })
+      };
+    }
+  }
+
+  // --- RSI ---
+  const rsiEnabled = snap.rsi_enabled === true || snap.filterStatus?.hard?.rsi?.enabled === true;
+  if (rsiEnabled) {
+    const rsiVal = snap.rsi ?? snap.filterStatus?.hard?.rsi?.value;
+    const rsiPassed = snap.rsi_filter_passed ?? snap.filterStatus?.hard?.rsi?.passed;
+    if (rsiVal != null) {
+      compact.rsi = {
+        value: +Number(rsiVal).toFixed(2),
+        ...(rsiPassed != null && { passed: rsiPassed })
+      };
+    }
+  }
+
+  // --- HIGHER TREND ---
+  const higherTrendEnabled = snap.higher_trend_enabled === true || snap.filterStatus?.hard?.higher_trend?.enabled === true;
+  if (higherTrendEnabled && trendHigher) {
+    const htPassed = snap.higher_trend_filter_passed ?? snap.filterStatus?.hard?.higher_trend?.passed;
+    compact.higher_trend = {
+      value: trendHigher,
+      ...(snap.higher_trend_timeframe && { timeframe: snap.higher_trend_timeframe }),
+      ...(htPassed != null && { passed: htPassed })
+    };
+  }
+
+  // --- BOLLINGER BANDS ---
+  const bbEnabled = snap.bb_enabled === true || snap.filterStatus?.soft?.bb?.enabled === true;
+  if (bbEnabled) {
+    const bbUpper = snap.bb_upper ?? snap.bb?.upper;
+    const bbLower = snap.bb_lower ?? snap.bb?.lower;
+    const bbPassed = snap.soft_bb_passed ?? snap.filterStatus?.soft?.bb?.passed;
+    if (bbUpper != null || bbLower != null) {
+      compact.bb = {
+        ...(bbUpper != null && { upper: +Number(bbUpper).toFixed(6) }),
+        ...(bbLower != null && { lower: +Number(bbLower).toFixed(6) }),
+        ...(bbPassed != null && { passed: bbPassed })
+      };
+    }
+  }
+
+  // --- VWAP ---
+  const vwapEnabled = snap.vwap_enabled === true || snap.filterStatus?.soft?.vwap?.enabled === true;
+  if (vwapEnabled && snap.vwap != null) {
+    const vwapPassed = snap.soft_vwap_passed ?? snap.filterStatus?.soft?.vwap?.passed;
+    compact.vwap = {
+      value: +Number(snap.vwap).toFixed(6),
+      ...(vwapPassed != null && { passed: vwapPassed })
+    };
+  }
+
+  // --- PIVOT POINTS ---
+  const pivotEnabled = snap.pivot_points_enabled === true || snap.filterStatus?.soft?.pivot?.enabled === true;
+  if (pivotEnabled) {
+    const pivotPassed = snap.soft_pivot_passed ?? snap.filterStatus?.soft?.pivot?.passed;
+    if (pivotPassed != null) {
+      compact.pivot = { passed: pivotPassed };
+    }
+  }
+
+  // === SOFT CONDITIONS SUMMARY ===
+  const softTotal = snap.soft_conditions_total ?? snap.conditionsMet;
+  const softRequired = snap.soft_conditions_required ?? snap.signal_conditions_required;
+  if (softTotal != null) {
+    compact.soft_conditions = {
+      met: softTotal,
+      ...(softRequired != null && { required: softRequired })
+    };
+  }
+
   return compact;
 };
 
@@ -829,6 +968,7 @@ export const compressTradeDataCompact = (trades: any[]) => {
   };
 
   return {
+    export_mode: "COMPACT",
     summary,
     trades: trades.map(formatTradeForCompactExport)
   };
