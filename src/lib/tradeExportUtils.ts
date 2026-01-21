@@ -483,15 +483,31 @@ export const formatTradeForExport = (t: any) => {
     stoch_rsi_d: stochRsiD != null ? +Number(stochRsiD).toFixed(2) : null,
     stoch_rsi_zone_passed: isLegacy ? (snap.stochrsi_zone_passed ?? softStoch) : snap.stochrsi_zone_passed,
     
-    // 🔴 STOCHRSI ENTRY MODE AUDIT (KRAV 1 - bearish cross logik)
-    stochrsi_entry_mode: snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_entry_mode ?? snap.stochrsi_entry_mode ?? null,
-    stochrsi_cross_down: snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_cross_down ?? snap.stochrsi_cross_down ?? null,
-    stochrsi_overbought_at_signal: snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_overbought_at_signal ?? snap.stochrsi_overbought_at_signal ?? null,
-    stochrsi_rollover_d_min_used: snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_rollover_d_min_used ?? snap.stochrsi_rollover_d_min_used ?? null,
-    stochrsi_prev_k: snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_prev_k ?? snap.stochrsi_prev_k ?? null,
-    stochrsi_prev_d: snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_prev_d ?? snap.stochrsi_prev_d ?? null,
-    stochrsi_overbought_threshold: snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_overbought_threshold ?? snap.stochrsi_overbought_threshold ?? null,
-    stochrsi_rollover_d_min_setting: snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_rollover_d_min ?? snap.stochrsi_rollover_d_min ?? null,
+    // 🔴 FULL STOCHRSI AUDIT - Previous values for cross detection
+    stochrsi_prev_k: snap.stochrsi_audit?.prev_k ?? snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_prev_k ?? snap.stochrsi_prev_k ?? null,
+    stochrsi_prev_d: snap.stochrsi_audit?.prev_d ?? snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_prev_d ?? snap.stochrsi_prev_d ?? null,
+    
+    // 🔴 Entry mode
+    stochrsi_entry_mode: snap.stochrsi_audit?.entry_mode ?? snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_entry_mode ?? snap.stochrsi_entry_mode ?? null,
+    
+    // 🔴 Threshold settings - all 4 K/D overbought/oversold
+    stochrsi_overbought_k_setting: snap.stochrsi_audit?.threshold_overbought_k ?? snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_overbought_k_setting ?? null,
+    stochrsi_overbought_d_setting: snap.stochrsi_audit?.threshold_overbought_d ?? snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_overbought_d_setting ?? null,
+    stochrsi_oversold_k_setting: snap.stochrsi_audit?.threshold_oversold_k ?? snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_oversold_k_setting ?? null,
+    stochrsi_oversold_d_setting: snap.stochrsi_audit?.threshold_oversold_d ?? snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_oversold_d_setting ?? null,
+    
+    // 🔴 Zone signals at entry
+    stochrsi_overbought_at_signal: snap.stochrsi_audit?.overbought_at_signal ?? snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_overbought_at_signal ?? snap.stochrsi_overbought_at_signal ?? null,
+    stochrsi_oversold_at_signal: snap.stochrsi_audit?.oversold_at_signal ?? snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_oversold_at_signal ?? snap.stochrsi_oversold_at_signal ?? null,
+    
+    // 🔴 Cross signals
+    stochrsi_cross_down: snap.stochrsi_audit?.cross_down ?? snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_cross_down ?? snap.stochrsi_cross_down ?? null,
+    stochrsi_cross_up: snap.stochrsi_audit?.cross_up ?? snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_cross_up ?? snap.stochrsi_cross_up ?? null,
+    
+    // 🔴 Rollover settings
+    stochrsi_rollover_d_min_used: snap.stochrsi_audit?.rollover_d_min_used ?? snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_rollover_d_min_used ?? snap.stochrsi_rollover_d_min_used ?? null,
+    stochrsi_rollover_d_min_setting: snap.stochrsi_audit?.rollover_d_min_setting ?? snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_rollover_d_min ?? snap.stochrsi_rollover_d_min ?? null,
+    stochrsi_overbought_threshold: snap.stochrsi_audit?.threshold_overbought_k ?? snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_overbought_threshold ?? snap.stochrsi_overbought_threshold ?? null,
 
     // Bollinger Bands
     bollinger_upper: bbUpper != null ? +Number(bbUpper).toFixed(4) : null,

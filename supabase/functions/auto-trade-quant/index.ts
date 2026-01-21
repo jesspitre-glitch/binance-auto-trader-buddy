@@ -1462,15 +1462,20 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     const shortMode = config.stochrsi_short_mode ?? 'ZONE_ONLY';
     const rolloverDMin = config.rollover_d_min_short ?? 0; // 0 = disabled
     
-    // LONG: K <= oversold_k AND D <= oversold_d (UNCHANGED)
-    const stochRSILong = stochRSI.k <= oversoldK && stochRSI.d <= oversoldD;
-    
-    // SHORT: Afhænger af SHORT_MODE
+    // SHORT: Afhænger af SHORT_MODE - erklær alle variabler først
     let stochRSIShort = false;
     let shortConditionType: 'ZONE_ONLY' | 'BEARISH_CROSS' | 'NONE' = 'NONE';
     let crossDown = false;
+    let crossUp = false;  // 🔴 For LONG signal audit
     let overboughtAtSignal = false;
+    let oversoldAtSignal = false;  // 🔴 For LONG signal audit
     let rolloverDMinUsed = false;
+    
+    // LONG: K <= oversold_k AND D <= oversold_d (UNCHANGED)
+    const stochRSILong = stochRSI.k <= oversoldK && stochRSI.d <= oversoldD;
+    
+    // 🔴 Calculate oversold_at_signal for LONG audit
+    oversoldAtSignal = stochRSI.k <= oversoldK && stochRSI.d <= oversoldD;
     
     // Calculate previous K and D for cross detection
     let prevK: number | null = null;
@@ -1537,14 +1542,26 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     filterStatus.hard.stochrsi.short = stochRSIShort;
     filterStatus.hard.stochrsi.value = `K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)}, SHORT_MODE=${shortMode}, SHORT_TYPE=${shortConditionType}`;
     
-    // 🔴 EKSPORT AUDIT FELTER
+    // 🔴 Calculate cross_up for LONG audit (bullish cross: K crossing above D)
+    if (prevK !== null && prevD !== null) {
+      crossUp = prevK < prevD && stochRSI.k > stochRSI.d;
+    }
+    
+    // 🔴 EKSPORT AUDIT FELTER - Full StochRSI audit
     filterStatus.hard.stochrsi.audit = {
       stochrsi_entry_mode: shortMode,
       stochrsi_cross_down: crossDown,
+      stochrsi_cross_up: crossUp,
       stochrsi_overbought_at_signal: overboughtAtSignal,
+      stochrsi_oversold_at_signal: oversoldAtSignal,
       stochrsi_rollover_d_min_used: rolloverDMinUsed,
       stochrsi_prev_k: prevK,
       stochrsi_prev_d: prevD,
+      // 🔴 All threshold settings for complete audit
+      stochrsi_overbought_k_setting: overboughtK,
+      stochrsi_overbought_d_setting: overboughtD,
+      stochrsi_oversold_k_setting: oversoldK,
+      stochrsi_oversold_d_setting: oversoldD,
       stochrsi_overbought_threshold: overboughtThreshold,
       stochrsi_rollover_d_min: rolloverDMin,
     };
@@ -3460,17 +3477,36 @@ serve(async (req) => {
           console.log(`   GATE_AUDIT: ${gateAudit.hard_filters_enabled}/${gateAudit.hard_filters_total} hard filters enabled, ${gateAudit.soft_conditions_met}/${gateAudit.soft_conditions_required} soft conditions met`);
           
           // 🔴 BUILD INDICATOR SNAPSHOT med null_reason for manglende værdier
+          // 🔴 Full StochRSI audit from filterStatus
+          const stochrsiFilterAudit = fs?.hard?.stochrsi?.audit ?? {};
           const stochRsiAudit = {
+            // Current values
             k: analysis.indicators.stochRSI_k ?? null,
             d: analysis.indicators.stochRSI_d ?? null,
+            // Previous values for cross detection
+            prev_k: stochrsiFilterAudit.stochrsi_prev_k ?? null,
+            prev_d: stochrsiFilterAudit.stochrsi_prev_d ?? null,
+            // Entry mode
             mode: config.stochrsi_short_mode ?? 'REVERSAL_OVERBOUGHT',
+            entry_mode: stochrsiFilterAudit.stochrsi_entry_mode ?? null,
+            // Cross signals
+            cross_down: stochrsiFilterAudit.stochrsi_cross_down ?? null,
+            cross_up: stochrsiFilterAudit.stochrsi_cross_up ?? null,
+            // Zone signals
+            overbought_at_signal: stochrsiFilterAudit.stochrsi_overbought_at_signal ?? null,
+            oversold_at_signal: stochrsiFilterAudit.stochrsi_oversold_at_signal ?? null,
+            // Threshold settings - all 4 K/D overbought/oversold
+            threshold_overbought_k: stochrsiFilterAudit.stochrsi_overbought_k_setting ?? config.stochrsi_overbought_k ?? config.stochrsi_overbought ?? 80,
+            threshold_overbought_d: stochrsiFilterAudit.stochrsi_overbought_d_setting ?? config.stochrsi_overbought_d ?? config.stochrsi_overbought ?? 80,
+            threshold_oversold_k: stochrsiFilterAudit.stochrsi_oversold_k_setting ?? config.stochrsi_oversold_k ?? config.stochrsi_oversold ?? 20,
+            threshold_oversold_d: stochrsiFilterAudit.stochrsi_oversold_d_setting ?? config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20,
+            // Rollover settings
+            rollover_d_min_used: stochrsiFilterAudit.stochrsi_rollover_d_min_used ?? null,
+            rollover_d_min_setting: stochrsiFilterAudit.stochrsi_rollover_d_min ?? config.rollover_d_min_short ?? null,
+            // Pass status
             passed: signal === 'LONG' 
               ? analysis.indicators.conditionDetails?.stochRSI?.long === true || fs?.hard?.stochrsi?.long === true
               : analysis.indicators.conditionDetails?.stochRSI?.short === true || fs?.hard?.stochrsi?.short === true,
-            threshold_overbought_k: config.stochrsi_overbought_k ?? config.stochrsi_overbought ?? 80,
-            threshold_overbought_d: config.stochrsi_overbought_d ?? config.stochrsi_overbought ?? 80,
-            threshold_oversold_k: config.stochrsi_oversold_k ?? config.stochrsi_oversold ?? 20,
-            threshold_oversold_d: config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20,
             null_reason: (analysis.indicators.stochRSI_k === null || analysis.indicators.stochRSI_d === null)
               ? 'insufficient_data_for_stochrsi' : null,
           };
