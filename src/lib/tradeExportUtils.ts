@@ -701,6 +701,142 @@ export const formatTradeForExport = (t: any) => {
   };
 };
 
+// ============= COMPACT EXPORT FORMAT =============
+// Reduced format for ChatGPT analysis - stable field names, no null fields
+
+export const formatTradeForCompactExport = (t: any) => {
+  const snap = t.indicators_snapshot || {};
+  const openedAt = new Date(t.opened_at);
+  const closedAt = new Date(t.closed_at);
+  const durationSec = Math.round((closedAt.getTime() - openedAt.getTime()) / 1000);
+
+  // Standardize exit_reason
+  const exitReasonMap: Record<string, string> = {
+    'TRAILING_STOP': 'TRAILING_STOP_HIT',
+    'TRAILING_STOP_HIT': 'TRAILING_STOP_HIT',
+    'trailing_stop': 'TRAILING_STOP_HIT',
+    'LEGACY_TRAILING_STOP_HIT': 'TRAILING_STOP_HIT',
+    'BREAK_EVEN': 'BREAK_EVEN_HIT',
+    'BREAK_EVEN_HIT': 'BREAK_EVEN_HIT',
+    'break_even': 'BREAK_EVEN_HIT',
+    'STOP_LOSS': 'STOP_LOSS_HIT',
+    'STOP_LOSS_HIT': 'STOP_LOSS_HIT',
+    'stop_loss': 'STOP_LOSS_HIT',
+    'HARD_STOP_LOSS_HIT': 'HARD_STOP_LOSS_HIT',
+    'PEAK_LOCK_HIT': 'PEAK_LOCK_HIT',
+    'MAX_SL_AFTER_MFE_HIT': 'MAX_SL_AFTER_MFE_HIT',
+    'TIMEOUT': 'TIMEOUT',
+    'timeout': 'TIMEOUT',
+    'MANUAL': 'MANUAL',
+    'manual': 'MANUAL',
+    'TAKE_PROFIT': 'TAKE_PROFIT',
+    'take_profit': 'TAKE_PROFIT'
+  };
+  const exitReason = exitReasonMap[t.close_reason] || t.close_reason?.toUpperCase() || 'UNKNOWN';
+  const side = t.side?.toLowerCase() || 'long';
+
+  // Extract values with fallbacks
+  const stochRsiK = snap.stochRSI_k ?? snap.stochRSI?.k ?? null;
+  const stochRsiD = snap.stochRSI_d ?? snap.stochRSI?.d ?? null;
+  const adxValue = snap.adx ?? null;
+  const atrPct = snap.atr_percent ?? (snap.atr && snap.price ? (snap.atr / snap.price) * 100 : null);
+  const volumeCurrent = snap.volume_current ?? snap.volume ?? null;
+  const volumeAvg = snap.volume_avg ?? snap.avgVolume ?? null;
+  const volumeRatio = volumeCurrent && volumeAvg ? +(volumeCurrent / volumeAvg).toFixed(2) : null;
+  
+  // StochRSI entry mode
+  const stochRsiEntryMode = snap.stochrsi_audit?.entry_mode 
+    ?? snap.filterStatus?.hard?.stochrsi?.audit?.stochrsi_entry_mode 
+    ?? snap.stochrsi_entry_mode 
+    ?? null;
+  
+  // Trend data
+  const trendMedium = snap.trend_medium ?? snap.trend ?? null;
+  const trendHigher = snap.trend_higher ?? null;
+  
+  // Regime
+  const regimeLabel = snap.regime_label ?? null;
+  const regimeReason = snap.regime_reason ?? null;
+  
+  // Exit summary
+  const stopTypeHit = snap.exit_audit?.stop_type_hit ?? null;
+  const stopLevelHit = snap.exit_audit?.stop_level_hit ?? null;
+  const exitProfileName = snap.exit_profile_name ?? null;
+  
+  // MFE/MAE
+  const mfePct = snap.mfe_percent != null ? +Number(snap.mfe_percent).toFixed(4) : 
+    (snap.peak_price != null && side === 'long' 
+      ? +((+snap.peak_price - +t.entry_price) / +t.entry_price * 100).toFixed(4)
+      : snap.peak_price != null && side === 'short'
+        ? +(( +t.entry_price - +snap.peak_price) / +t.entry_price * 100).toFixed(4)
+        : null);
+  const maePct = t.mae_percent != null ? +Number(t.mae_percent).toFixed(4) :
+    (snap.mae_percent != null ? +Number(snap.mae_percent).toFixed(4) : null);
+
+  // Build compact object - only include non-null values
+  const compact: Record<string, any> = {};
+  
+  // Trade info (always included)
+  compact.symbol = t.symbol;
+  compact.side = t.side;
+  compact.entry_price = +t.entry_price;
+  compact.exit_price = +t.exit_price;
+  compact.pnl_pct = +(t.pnl_percent?.toFixed(4) || 0);
+  compact.pnl_abs = +(t.pnl?.toFixed(4) || 0);
+  compact.duration_seconds = durationSec;
+  compact.exit_reason = exitReason;
+  
+  // MFE/MAE (if available)
+  if (mfePct != null) compact.mfe_pct = mfePct;
+  if (maePct != null) compact.mae_pct = maePct;
+  
+  // Regime (if available)
+  if (regimeLabel) compact.regime_label = regimeLabel;
+  if (regimeReason) compact.regime_reason = regimeReason;
+  
+  // Entry filters (only values that were used)
+  if (adxValue != null) compact.ADX_value = +Number(adxValue).toFixed(2);
+  if (atrPct != null) compact.ATR_pct = +Number(atrPct).toFixed(4);
+  if (stochRsiK != null) compact.stoch_rsi_k = +Number(stochRsiK).toFixed(2);
+  if (stochRsiD != null) compact.stoch_rsi_d = +Number(stochRsiD).toFixed(2);
+  if (stochRsiEntryMode) compact.stochrsi_entry_mode = stochRsiEntryMode;
+  if (volumeRatio != null) compact.volume_ratio = volumeRatio;
+  
+  // Trend context
+  if (trendMedium) compact.trend_medium = trendMedium;
+  if (trendHigher) compact.trend_higher = trendHigher;
+  
+  // Exit summary
+  if (stopTypeHit) compact.stop_type_hit = stopTypeHit;
+  if (stopLevelHit != null) compact.stop_level_hit = +Number(stopLevelHit).toFixed(8);
+  if (exitProfileName) compact.exit_profile_name = exitProfileName;
+  
+  // Timestamps
+  compact.timestamp_open = openedAt.toISOString();
+  compact.timestamp_close = closedAt.toISOString();
+  
+  return compact;
+};
+
+export const compressTradeDataCompact = (trades: any[]) => {
+  const summary = {
+    total_trades: trades.length,
+    win_rate: ((trades.filter(t => t.pnl > 0).length / trades.length) * 100).toFixed(2) + "%",
+    total_pnl: +trades.reduce((sum, t) => sum + t.pnl, 0).toFixed(4),
+    avg_pnl: +(trades.reduce((sum, t) => sum + t.pnl, 0) / trades.length).toFixed(4),
+    period_from: new Date(trades[trades.length - 1].closed_at).toISOString(),
+    period_to: new Date(trades[0].closed_at).toISOString()
+  };
+
+  return {
+    summary,
+    trades: trades.map(formatTradeForCompactExport)
+  };
+};
+
+// ============= FULL EXPORT FORMAT =============
+// Complete format with all audit data for deep debugging
+
 export const compressTradeData = (trades: any[]) => {
   const summary = {
     total_trades: trades.length,
