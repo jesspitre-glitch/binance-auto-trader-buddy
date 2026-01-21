@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Search, TrendingUp, TrendingDown, RefreshCw, Activity } from "lucide-react";
 import { ScanResultVisual } from "./ScanResultVisual";
 import { LiveScanMonitor } from "./LiveScanMonitor";
+import { RegimeIndicator } from "./RegimeIndicator";
 
 export const ScanResults = () => {
   const [results, setResults] = useState<any[]>([]);
@@ -202,19 +203,36 @@ export const ScanResults = () => {
                   </Badge>
 
                   {result.indicators && (
-                    <div className="text-sm space-y-1">
-                      <div>
-                        Pris:{" "}
-                        <span className="font-mono">
-                          ${result.indicators.price?.toFixed(2)}
-                        </span>
+                    <div className="flex items-center gap-3">
+                      <div className="text-sm space-y-1">
+                        <div>
+                          Pris:{" "}
+                          <span className="font-mono">
+                            ${result.indicators.price?.toFixed(2)}
+                          </span>
+                        </div>
+                        <div>
+                          RSI:{" "}
+                          <span className="font-mono">
+                            {result.indicators.rsi?.toFixed(1)}
+                          </span>
+                        </div>
                       </div>
-                      <div>
-                        RSI:{" "}
-                        <span className="font-mono">
-                          {result.indicators.rsi?.toFixed(1)}
-                        </span>
-                      </div>
+                      {config?.regime_router_enabled && (
+                        <RegimeIndicator
+                          adx={result.indicators.adx}
+                          atrPercent={result.indicators.atr && result.indicators.price 
+                            ? (result.indicators.atr / result.indicators.price) * 100 
+                            : undefined}
+                          adxThreshold={config?.regime_adx_threshold}
+                          atrPctThreshold={config?.regime_atr_pct_threshold}
+                          method={config?.regime_method}
+                          operator={config?.regime_operator}
+                          enabled={config?.regime_router_enabled}
+                          size="sm"
+                          showDetails
+                        />
+                      )}
                     </div>
                   )}
                 </div>
