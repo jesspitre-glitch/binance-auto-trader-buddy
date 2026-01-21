@@ -2691,6 +2691,7 @@ serve(async (req) => {
           // 4. Volume - RETNINGS-SPECIFIK (LONG og SHORT har separate toggles!)
           // 🔴 BUG FIX v2: LONG bruger volume_enabled, SHORT bruger volume_mode_short
           // Disse er UAFHÆNGIGE - må ikke kræve at begge er aktiveret
+          let volumeDecisionRecord: any = null;
           if (!gateBlocked) {
             const volCurrent = analysis.indicators?.volume;
             const volAvg = analysis.indicators?.avgVolume;
@@ -2700,20 +2701,44 @@ serve(async (req) => {
             let volThreshold: number = 0;
             let shouldCheckVolume = false;
             
+            // Build decision record for invariant verification
+            const volumeModeLong = config.volume_enabled === true ? 'HARD' : 'OFF';
+            const volumeModeShort = config.volume_mode_short ?? 'HARD';
+            
+            volumeDecisionRecord = {
+              symbol,
+              side: signal,
+              volume_mode_long: volumeModeLong,
+              volume_mode_short: volumeModeShort,
+              volume_enabled_long: config.volume_enabled === true,
+              volume_hard_filter_long: config.volume_hard_filter !== false,
+              volume_ratio: volRatio?.toFixed(2) ?? 'N/A',
+              volume_threshold: 0,
+              volume_required: false,
+              volume_passed: null as boolean | null,
+              hard_fail_reasons: [] as string[],
+              decision: 'PENDING'
+            };
+            
             if (signal === 'LONG') {
               // LONG: Uses volume_enabled + volume_hard_filter + volume_multiplier
               if (config.volume_enabled === true && config.volume_hard_filter !== false) {
                 shouldCheckVolume = true;
                 volPassed = fs?.hard?.volumeLong?.passed;
                 volThreshold = config.volume_multiplier ?? 1.2;
+                volumeDecisionRecord.volume_required = true;
+                volumeDecisionRecord.volume_passed = volPassed;
+                volumeDecisionRecord.volume_threshold = volThreshold;
               }
             } else if (signal === 'SHORT') {
               // SHORT: Uses volume_mode_short (completely independent of volume_enabled!)
-              const volumeModeShort = config.volume_mode_short ?? 'HARD';
               if (volumeModeShort === 'HARD') {
                 shouldCheckVolume = true;
                 volPassed = fs?.hard?.volumeShort?.passed;
                 volThreshold = config.volume_multiplier_short ?? 0.50;
+                volumeDecisionRecord.volume_required = true;
+                volumeDecisionRecord.volume_passed = volPassed;
+                volumeDecisionRecord.volume_threshold = volThreshold;
               }
               // If SOFT or OFF mode - not a hard filter, skip check
             }
@@ -2722,10 +2747,12 @@ serve(async (req) => {
               if (volPassed !== true && volPassed !== null) {
                 gateBlocked = true;
                 blockReason = `REJECT: VOLUME_FILTER_FAILED_${signal} → ratio=${volRatio?.toFixed(2) ?? 'N/A'}x < ${volThreshold}x required (current=${volCurrent?.toFixed(2) ?? 'N/A'}, avg=${volAvg?.toFixed(2) ?? 'N/A'})`;
+                volumeDecisionRecord.hard_fail_reasons.push(blockReason);
               } else if (volPassed === null && volRatio === null) {
                 // Data mangler - bloker for sikkerhed når volume er påkrævet
                 gateBlocked = true;
                 blockReason = `REJECT: VOLUME_DATA_MISSING_${signal} → Cannot evaluate required volume filter`;
+                volumeDecisionRecord.hard_fail_reasons.push(blockReason);
               }
             }
           }
@@ -2814,11 +2841,42 @@ serve(async (req) => {
           
           // LOG AND BLOCK IF GATE FAILED
           if (gateBlocked) {
+            // Update volume decision record
+            if (volumeDecisionRecord) {
+              volumeDecisionRecord.decision = 'BLOCKED';
+              // 🔍 INVARIANT VERIFICATION LOG
+              console.log(`\n📋 VOLUME_DECISION_RECORD: ${JSON.stringify(volumeDecisionRecord)}`);
+              
+              // 🚨 INVARIANT CHECK: If volume_required=true AND volume_passed=false, decision MUST be BLOCKED
+              if (volumeDecisionRecord.volume_required === true && volumeDecisionRecord.volume_passed === false) {
+                console.log(`✅ INVARIANT_OK: volume_required=true, volume_passed=false → decision=BLOCKED`);
+              }
+            }
+            
             console.log(`\n🚨 TRADE_BLOCKED:${blockReason.split(' ')[0]}`);
             console.log(`   Symbol: ${symbol}, Signal: ${signal}, Strength: ${selectedSignal.strength.toFixed(1)}`);
             console.log(`   Full Reason: ${blockReason}`);
             continue;
           }
+          
+          // Gate passed - update decision record and check invariant
+          if (volumeDecisionRecord) {
+            volumeDecisionRecord.decision = 'ORDER_SENT';
+            // 🔍 INVARIANT VERIFICATION LOG
+            console.log(`\n📋 VOLUME_DECISION_RECORD: ${JSON.stringify(volumeDecisionRecord)}`);
+            
+            // 🚨 INVARIANT VIOLATION CHECK
+            if (volumeDecisionRecord.volume_required === true && volumeDecisionRecord.volume_passed === false) {
+              console.log(`\n🚨🚨🚨 INVARIANT_VIOLATION 🚨🚨🚨`);
+              console.log(`❌ volume_required=true AND volume_passed=false BUT decision=ORDER_SENT`);
+              console.log(`❌ FULL DECISION RECORD:`);
+              console.log(JSON.stringify(volumeDecisionRecord, null, 2));
+              console.log(`🚨🚨🚨 THIS SHOULD NEVER HAPPEN 🚨🚨🚨\n`);
+            } else {
+              console.log(`✅ INVARIANT_OK: Gate passed correctly`);
+            }
+          }
+          
           console.log(`✅ UNIFIED GATE PASSED for ${symbol} ${signal}`);
           // ═══════════════════════════════════════════════════════════════════
           
