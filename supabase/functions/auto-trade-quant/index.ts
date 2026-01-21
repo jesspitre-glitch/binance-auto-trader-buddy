@@ -2688,42 +2688,45 @@ serve(async (req) => {
               : `ADX_OUT_OF_RANGE (${val?.toFixed(2)} not in [${config.adx_floor}, ${config.adx_ceiling}])`;
           }
           
-          // 4. Volume (if volume_enabled AND volume_hard_filter) - RETNINGS-SPECIFIK
-          // 🔴 BUG FIX: Bruger volumeLong/volumeShort, IKKE volume.passed
-          if (!gateBlocked && config.volume_enabled === true && config.volume_hard_filter !== false) {
+          // 4. Volume - RETNINGS-SPECIFIK (LONG og SHORT har separate toggles!)
+          // 🔴 BUG FIX v2: LONG bruger volume_enabled, SHORT bruger volume_mode_short
+          // Disse er UAFHÆNGIGE - må ikke kræve at begge er aktiveret
+          if (!gateBlocked) {
             const volCurrent = analysis.indicators?.volume;
             const volAvg = analysis.indicators?.avgVolume;
             const volRatio = (volCurrent && volAvg && volAvg > 0) ? volCurrent / volAvg : null;
             
-            // 🔴 FIX: Check retnings-specifik volume baseret på signal
-            let volPassed: boolean | null;
-            let volThreshold: number;
+            let volPassed: boolean | null = null;
+            let volThreshold: number = 0;
+            let shouldCheckVolume = false;
             
             if (signal === 'LONG') {
-              volPassed = fs?.hard?.volumeLong?.passed;
-              volThreshold = config.volume_multiplier ?? 1.2;
+              // LONG: Uses volume_enabled + volume_hard_filter + volume_multiplier
+              if (config.volume_enabled === true && config.volume_hard_filter !== false) {
+                shouldCheckVolume = true;
+                volPassed = fs?.hard?.volumeLong?.passed;
+                volThreshold = config.volume_multiplier ?? 1.2;
+              }
             } else if (signal === 'SHORT') {
-              // SHORT bruger volume_mode_short - hvis HARD, så check volumeShort
+              // SHORT: Uses volume_mode_short (completely independent of volume_enabled!)
               const volumeModeShort = config.volume_mode_short ?? 'HARD';
               if (volumeModeShort === 'HARD') {
+                shouldCheckVolume = true;
                 volPassed = fs?.hard?.volumeShort?.passed;
                 volThreshold = config.volume_multiplier_short ?? 0.50;
-              } else {
-                // SOFT eller OFF mode - ikke et hard filter for SHORT
-                volPassed = true; // Passerer hard filter (kan stadig give soft point)
-                volThreshold = 0;
               }
-            } else {
-              volPassed = null;
-              volThreshold = config.volume_multiplier ?? 1.2;
+              // If SOFT or OFF mode - not a hard filter, skip check
             }
             
-            if (volPassed !== true && volPassed !== null) {
-              gateBlocked = true;
-              blockReason = `REJECT: VOLUME_FILTER_FAILED_${signal} → ratio=${volRatio?.toFixed(2) ?? 'N/A'}x < ${volThreshold}x required (current=${volCurrent?.toFixed(2) ?? 'N/A'}, avg=${volAvg?.toFixed(2) ?? 'N/A'})`;
-            } else if (volPassed === null && volRatio === null) {
-              // Data mangler - bloker kun hvis det er kritisk
-              console.log(`⚠️ VOLUME DATA MISSING for ${symbol} - continuing with caution`);
+            if (shouldCheckVolume) {
+              if (volPassed !== true && volPassed !== null) {
+                gateBlocked = true;
+                blockReason = `REJECT: VOLUME_FILTER_FAILED_${signal} → ratio=${volRatio?.toFixed(2) ?? 'N/A'}x < ${volThreshold}x required (current=${volCurrent?.toFixed(2) ?? 'N/A'}, avg=${volAvg?.toFixed(2) ?? 'N/A'})`;
+              } else if (volPassed === null && volRatio === null) {
+                // Data mangler - bloker for sikkerhed når volume er påkrævet
+                gateBlocked = true;
+                blockReason = `REJECT: VOLUME_DATA_MISSING_${signal} → Cannot evaluate required volume filter`;
+              }
             }
           }
           
