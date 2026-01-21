@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { Copy, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { formatTradeForExport, compressTradeData, formatWithLineBreaks } from "@/lib/tradeExportUtils";
+import { compressTradeData, compressTradeDataCompact, formatWithLineBreaks } from "@/lib/tradeExportUtils";
 
 interface ExportTradesDialogProps {
   strategyHash?: string;
@@ -31,11 +31,10 @@ export const ExportTradesDialog = ({
   const [open, setOpen] = useState(false);
   const [filterType, setFilterType] = useState<"count" | "days" | "hours">("count");
   const [filterValue, setFilterValue] = useState("50");
+  const [exportMode, setExportMode] = useState<"COMPACT" | "FULL">("COMPACT");
   const [exportedData, setExportedData] = useState<string>("");
   const [showFallback, setShowFallback] = useState(false);
   const { toast } = useToast();
-
-  // Note: formatTradeForExport, compressTradeData, formatWithLineBreaks are now imported from @/lib/tradeExportUtils
 
   const fetchAndExport = async () => {
     try {
@@ -51,12 +50,10 @@ export const ExportTradesDialog = ({
       if (filterType === "count") {
         query = query.limit(parseInt(filterValue));
       } else if (filterType === "days") {
-        // Use UTC time to match database timestamps
         const cutoffMs = Date.now() - (parseInt(filterValue) * 24 * 60 * 60 * 1000);
         const cutoff = new Date(cutoffMs);
         query = query.gte("closed_at", cutoff.toISOString());
       } else if (filterType === "hours") {
-        // Use UTC time to match database timestamps
         const cutoffMs = Date.now() - (parseInt(filterValue) * 60 * 60 * 1000);
         const cutoff = new Date(cutoffMs);
         query = query.gte("closed_at", cutoff.toISOString());
@@ -74,7 +71,10 @@ export const ExportTradesDialog = ({
         return;
       }
 
-      const compressed = compressTradeData(trades);
+      // Use COMPACT or FULL format based on selection
+      const compressed = exportMode === "COMPACT" 
+        ? compressTradeDataCompact(trades)
+        : compressTradeData(trades);
       const jsonStr = formatWithLineBreaks(compressed);
       
       // Try clipboard first, fallback to textarea on iOS/Safari
@@ -82,13 +82,12 @@ export const ExportTradesDialog = ({
         await navigator.clipboard.writeText(jsonStr);
         
         toast({
-          title: "Eksporteret til clipboard! ✓",
-          description: `${trades.length} handler kopieret i kompakt format`,
+          title: `Eksporteret til clipboard! (${exportMode})`,
+          description: `${trades.length} handler kopieret`,
         });
         
         setOpen(false);
       } catch (clipboardError) {
-        // Clipboard failed (common on iOS) - show fallback
         console.log('Clipboard failed, showing fallback:', clipboardError);
         setExportedData(jsonStr);
         setShowFallback(true);
@@ -126,6 +125,32 @@ export const ExportTradesDialog = ({
         <div className="space-y-4 py-4">
           {!showFallback ? (
             <>
+              {/* Export Mode Toggle */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Eksport format</Label>
+                <RadioGroup 
+                  value={exportMode} 
+                  onValueChange={(v) => setExportMode(v as "COMPACT" | "FULL")}
+                  className="flex gap-4"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="COMPACT" id="compact" />
+                    <Label htmlFor="compact" className="cursor-pointer">
+                      <span className="font-medium">COMPACT</span>
+                      <span className="text-xs text-muted-foreground ml-1">(AI-venlig)</span>
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="FULL" id="full" />
+                    <Label htmlFor="full" className="cursor-pointer">
+                      <span className="font-medium">FULL</span>
+                      <span className="text-xs text-muted-foreground ml-1">(debug)</span>
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              {/* Filter Type */}
               <RadioGroup value={filterType} onValueChange={(v) => setFilterType(v as any)}>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="count" id="count" />
@@ -154,15 +179,29 @@ export const ExportTradesDialog = ({
                 />
               </div>
 
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p>• Kompakt JSON med alle indikator-data</p>
-                <p>• Inkluderer filter-status og soft conditions</p>
-                <p>• Break-even, trailing stop, multi-TF ATR%</p>
-              </div>
+              {/* Mode-specific descriptions */}
+              {exportMode === "COMPACT" ? (
+                <div className="text-xs text-muted-foreground space-y-1 p-2 bg-muted/50 rounded">
+                  <p className="font-medium text-foreground">COMPACT indeholder:</p>
+                  <p>• Trade info (symbol, side, prices, pnl, duration)</p>
+                  <p>• Entry filters: ADX, ATR%, StochRSI, volume_ratio</p>
+                  <p>• Regime, trend, exit summary</p>
+                  <p className="text-green-600 dark:text-green-400">✓ Optimeret til ChatGPT</p>
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground space-y-1 p-2 bg-muted/50 rounded">
+                  <p className="font-medium text-foreground">FULL indeholder:</p>
+                  <p>• Alle gate_audit detaljer</p>
+                  <p>• Komplet *_audit objekter</p>
+                  <p>• candidate_stops arrays</p>
+                  <p>• Filter mode settings</p>
+                  <p className="text-amber-600 dark:text-amber-400">⚠ Stor fil - til deep debug</p>
+                </div>
+              )}
 
               <Button onClick={fetchAndExport} className="w-full">
                 <Download className="h-4 w-4 mr-2" />
-                Kopier til Clipboard
+                Kopier {exportMode} til Clipboard
               </Button>
             </>
           ) : (
