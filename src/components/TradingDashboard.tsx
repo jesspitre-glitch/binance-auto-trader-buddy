@@ -31,10 +31,11 @@ export const TradingDashboard = () => {
   const [configs, setConfigs] = useState<any[]>([]);
   const [activeConfigId, setActiveConfigId] = useState<string | null>(null);
   const [selectedConfig, setSelectedConfig] = useState<any>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const { toast } = useToast();
 
-  const updateTimestamp = () => setLastUpdated(new Date());
+  // Get the updated_at timestamp from the active config
+  const activeConfig = configs.find((c) => c.id === activeConfigId);
+  const lastUpdated = activeConfig?.updated_at ? new Date(activeConfig.updated_at) : null;
 
   const fetchConfigs = async () => {
     try {
@@ -59,7 +60,6 @@ export const TradingDashboard = () => {
   };
 
   const handleConfigSave = () => {
-    updateTimestamp();
     fetchConfigs();
   };
 
@@ -225,10 +225,12 @@ export const TradingDashboard = () => {
             <h1 className="text-2xl md:text-3xl font-bold">Trading Dashboard</h1>
             <ThemeToggle />
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Clock className="h-3 w-3" />
-            <span>Sidst opdateret: {lastUpdated.toLocaleString("da-DK", { timeZone: "Europe/Copenhagen", hour: "2-digit", minute: "2-digit", second: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" })}</span>
-          </div>
+          {lastUpdated && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Clock className="h-3 w-3" />
+              <span>Sidst opdateret: {lastUpdated.toLocaleString("da-DK", { timeZone: "Europe/Copenhagen", hour: "2-digit", minute: "2-digit", second: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" })}</span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-3 md:gap-4 w-full md:w-auto">
           <Button
