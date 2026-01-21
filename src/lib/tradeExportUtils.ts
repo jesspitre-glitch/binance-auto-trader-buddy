@@ -779,7 +779,8 @@ export const formatTradeForCompactExport = (t: any) => {
   if (snap.exit_profile_name) compact.exit_profile_name = snap.exit_profile_name;
 
   // === INDICATOR AUDITS (only if ENABLED at entry) ===
-  // Each indicator gets a flat audit with: value(s), threshold(s), passed, mode (if relevant)
+  // Each indicator: value(s) + ALL thresholds from UI + passed
+  // Designed for "what-if" threshold tuning analysis
 
   // --- ADX ---
   const adxEnabled = snap.adx_enabled === true || snap.filterStatus?.hard?.adx?.enabled === true;
@@ -790,11 +791,16 @@ export const formatTradeForCompactExport = (t: any) => {
     if (adxVal != null) {
       compact.adx = {
         value: +Number(adxVal).toFixed(2),
-        ...(adxAudit?.dynamic_min_adx != null && { threshold_min: +Number(adxAudit.dynamic_min_adx).toFixed(2) }),
-        ...(adxAudit?.adx_ceiling_used != null && { threshold_max: +Number(adxAudit.adx_ceiling_used).toFixed(2) }),
-        ...(adxPassed != null && { passed: adxPassed }),
-        ...(adxAudit?.adx_min_source && { mode: adxAudit.adx_min_source })
+        min: adxAudit?.dynamic_min_adx != null ? +Number(adxAudit.dynamic_min_adx).toFixed(2) : 
+             (snap.adx_floor != null ? +Number(snap.adx_floor).toFixed(2) : null),
+        max: adxAudit?.adx_ceiling_used != null ? +Number(adxAudit.adx_ceiling_used).toFixed(2) :
+             (snap.adx_ceiling != null ? +Number(snap.adx_ceiling).toFixed(2) : null),
+        passed: adxPassed ?? null
       };
+      // Remove null values
+      if (compact.adx.min === null) delete compact.adx.min;
+      if (compact.adx.max === null) delete compact.adx.max;
+      if (compact.adx.passed === null) delete compact.adx.passed;
     }
   }
 
@@ -803,11 +809,22 @@ export const formatTradeForCompactExport = (t: any) => {
   if (atrEnabled && snap.atr != null) {
     const atrPct = snap.atr_percent ?? (snap.price ? (snap.atr / snap.price) * 100 : null);
     const atrPassed = snap.atr_filter_passed ?? snap.filterStatus?.hard?.atr?.passed;
+    const atrAudit = snap.atr_audit ?? snap.filterStatus?.hard?.atr?.audit;
     compact.atr = {
       value: +Number(snap.atr).toFixed(6),
-      ...(atrPct != null && { pct: +Number(atrPct).toFixed(4) }),
-      ...(atrPassed != null && { passed: atrPassed })
+      pct: atrPct != null ? +Number(atrPct).toFixed(4) : null,
+      min_pct: snap.min_atr_percent != null ? +Number(snap.min_atr_percent).toFixed(4) :
+               (atrAudit?.min_atr_percent != null ? +Number(atrAudit.min_atr_percent).toFixed(4) : null),
+      floor: snap.atr_floor != null ? +Number(snap.atr_floor).toFixed(4) :
+             (atrAudit?.atr_floor != null ? +Number(atrAudit.atr_floor).toFixed(4) : null),
+      ceiling: snap.atr_ceiling != null ? +Number(snap.atr_ceiling).toFixed(4) :
+               (atrAudit?.atr_ceiling != null ? +Number(atrAudit.atr_ceiling).toFixed(4) : null),
+      passed: atrPassed ?? null
     };
+    // Remove null values
+    Object.keys(compact.atr).forEach(k => {
+      if (compact.atr[k] === null) delete compact.atr[k];
+    });
   }
 
   // --- STOCHRSI ---
@@ -819,21 +836,30 @@ export const formatTradeForCompactExport = (t: any) => {
     const stochPassed = snap.stochrsi_filter_passed ?? snap.filterStatus?.hard?.stochrsi?.passed;
     if (stochK != null || stochD != null) {
       compact.stochrsi = {
-        ...(stochK != null && { k: +Number(stochK).toFixed(2) }),
-        ...(stochD != null && { d: +Number(stochD).toFixed(2) }),
-        ...(stochAudit?.stochrsi_prev_k != null && { prev_k: +Number(stochAudit.stochrsi_prev_k).toFixed(2) }),
-        ...(stochAudit?.stochrsi_prev_d != null && { prev_d: +Number(stochAudit.stochrsi_prev_d).toFixed(2) }),
-        ...(stochAudit?.stochrsi_entry_mode && { mode: stochAudit.stochrsi_entry_mode }),
-        ...(stochAudit?.stochrsi_overbought_k_setting != null && { ob_k: +Number(stochAudit.stochrsi_overbought_k_setting).toFixed(0) }),
-        ...(stochAudit?.stochrsi_overbought_d_setting != null && { ob_d: +Number(stochAudit.stochrsi_overbought_d_setting).toFixed(0) }),
-        ...(stochAudit?.stochrsi_oversold_k_setting != null && { os_k: +Number(stochAudit.stochrsi_oversold_k_setting).toFixed(0) }),
-        ...(stochAudit?.stochrsi_oversold_d_setting != null && { os_d: +Number(stochAudit.stochrsi_oversold_d_setting).toFixed(0) }),
-        ...(stochAudit?.stochrsi_overbought_at_signal != null && { overbought: stochAudit.stochrsi_overbought_at_signal }),
-        ...(stochAudit?.stochrsi_oversold_at_signal != null && { oversold: stochAudit.stochrsi_oversold_at_signal }),
-        ...(stochAudit?.stochrsi_cross_down != null && { cross_down: stochAudit.stochrsi_cross_down }),
-        ...(stochAudit?.stochrsi_cross_up != null && { cross_up: stochAudit.stochrsi_cross_up }),
-        ...(stochPassed != null && { passed: stochPassed })
+        k: stochK != null ? +Number(stochK).toFixed(2) : null,
+        d: stochD != null ? +Number(stochD).toFixed(2) : null,
+        prev_k: stochAudit?.stochrsi_prev_k != null ? +Number(stochAudit.stochrsi_prev_k).toFixed(2) : null,
+        prev_d: stochAudit?.stochrsi_prev_d != null ? +Number(stochAudit.stochrsi_prev_d).toFixed(2) : null,
+        mode: stochAudit?.stochrsi_entry_mode ?? snap.stochrsi_short_mode ?? null,
+        overbought_k: stochAudit?.stochrsi_overbought_k_setting ?? snap.stochrsi_overbought_k ?? null,
+        overbought_d: stochAudit?.stochrsi_overbought_d_setting ?? snap.stochrsi_overbought_d ?? null,
+        oversold_k: stochAudit?.stochrsi_oversold_k_setting ?? snap.stochrsi_oversold_k ?? null,
+        oversold_d: stochAudit?.stochrsi_oversold_d_setting ?? snap.stochrsi_oversold_d ?? null,
+        rollover_d_min: snap.rollover_d_min_short ?? stochAudit?.stochrsi_rollover_d_min_used ?? null,
+        cross_down: stochAudit?.stochrsi_cross_down ?? null,
+        cross_up: stochAudit?.stochrsi_cross_up ?? null,
+        overbought_at_signal: stochAudit?.stochrsi_overbought_at_signal ?? null,
+        oversold_at_signal: stochAudit?.stochrsi_oversold_at_signal ?? null,
+        passed: stochPassed ?? null
       };
+      // Remove null values and convert thresholds to integers
+      Object.keys(compact.stochrsi).forEach(k => {
+        if (compact.stochrsi[k] === null) {
+          delete compact.stochrsi[k];
+        } else if (['overbought_k', 'overbought_d', 'oversold_k', 'oversold_d', 'rollover_d_min'].includes(k) && typeof compact.stochrsi[k] === 'number') {
+          compact.stochrsi[k] = Math.round(compact.stochrsi[k]);
+        }
+      });
     }
   }
 
@@ -848,10 +874,16 @@ export const formatTradeForCompactExport = (t: any) => {
       const ratio = +(volCurrent / volAvg).toFixed(2);
       compact.volume = {
         ratio,
-        ...(volAudit?.threshold != null && { threshold: +Number(volAudit.threshold).toFixed(2) }),
-        ...(volAudit?.mode && { mode: volAudit.mode }),
-        ...(volPassed != null && { passed: volPassed })
+        multiplier_long: snap.volume_multiplier ?? volAudit?.multiplier_long ?? null,
+        multiplier_short: snap.volume_multiplier_short ?? volAudit?.multiplier_short ?? null,
+        mode: snap.volume_mode_short ?? volAudit?.mode ?? null,
+        avg_period: snap.volume_avg_period ?? volAudit?.avg_period ?? null,
+        passed: volPassed ?? null
       };
+      // Remove null values
+      Object.keys(compact.volume).forEach(k => {
+        if (compact.volume[k] === null) delete compact.volume[k];
+      });
     }
   }
 
@@ -859,15 +891,26 @@ export const formatTradeForCompactExport = (t: any) => {
   const macdEnabled = snap.macd_enabled === true || snap.filterStatus?.hard?.macd?.enabled === true;
   if (macdEnabled) {
     const macdLine = snap.macd_line ?? snap.macdLine;
+    const macdSignal = snap.macd_signal_line ?? snap.macdSignalLine;
     const macdHist = snap.macd_histogram ?? snap.macdHistogram ?? snap.macd;
-    const macdPassed = snap.macd_direction_passed ?? snap.filterStatus?.hard?.macd?.passed;
+    const macdDirPassed = snap.macd_direction_passed ?? snap.filterStatus?.hard?.macd?.passed;
+    const macdHistPassed = snap.soft_macd_histogram_passed;
     if (macdLine != null || macdHist != null) {
       compact.macd = {
-        ...(macdLine != null && { line: +Number(macdLine).toFixed(8) }),
-        ...(macdHist != null && { histogram: +Number(macdHist).toFixed(8) }),
-        ...(snap.macd_histogram_threshold != null && { hist_threshold: +Number(snap.macd_histogram_threshold).toFixed(8) }),
-        ...(macdPassed != null && { direction_passed: macdPassed })
+        line: macdLine != null ? +Number(macdLine).toFixed(8) : null,
+        signal: macdSignal != null ? +Number(macdSignal).toFixed(8) : null,
+        histogram: macdHist != null ? +Number(macdHist).toFixed(8) : null,
+        hist_threshold: snap.macd_histogram_threshold ?? null,
+        fast: snap.macd_fast ?? null,
+        slow: snap.macd_slow ?? null,
+        signal_period: snap.macd_signal ?? snap.macd_signal_period ?? null,
+        direction_passed: macdDirPassed ?? null,
+        histogram_passed: macdHistPassed ?? null
       };
+      // Remove null values
+      Object.keys(compact.macd).forEach(k => {
+        if (compact.macd[k] === null) delete compact.macd[k];
+      });
     }
   }
 
@@ -879,10 +922,17 @@ export const formatTradeForCompactExport = (t: any) => {
     if (emaSpread != null) {
       compact.ema = {
         spread_pct: +Number(emaSpread).toFixed(4),
-        ...(snap.min_ema_spread_percent != null && { min_spread: +Number(snap.min_ema_spread_percent).toFixed(4) }),
-        ...(snap.max_ema_spread_percent != null && { max_spread: +Number(snap.max_ema_spread_percent).toFixed(4) }),
-        ...(emaPassed != null && { passed: emaPassed })
+        min_spread: snap.min_ema_spread_percent ?? null,
+        max_spread: snap.max_ema_spread_percent ?? null,
+        fast: snap.ema_fast ?? null,
+        medium: snap.ema_medium ?? null,
+        slow: snap.ema_slow ?? null,
+        passed: emaPassed ?? null
       };
+      // Remove null values
+      Object.keys(compact.ema).forEach(k => {
+        if (compact.ema[k] === null) delete compact.ema[k];
+      });
     }
   }
 
@@ -894,8 +944,17 @@ export const formatTradeForCompactExport = (t: any) => {
     if (rsiVal != null) {
       compact.rsi = {
         value: +Number(rsiVal).toFixed(2),
-        ...(rsiPassed != null && { passed: rsiPassed })
+        period: snap.rsi_period ?? null,
+        overbought: snap.rsi_overbought ?? null,
+        oversold: snap.rsi_oversold ?? null,
+        min_long: snap.rsi_min_long ?? null,
+        max_short: snap.rsi_max_short ?? null,
+        passed: rsiPassed ?? null
       };
+      // Remove null values
+      Object.keys(compact.rsi).forEach(k => {
+        if (compact.rsi[k] === null) delete compact.rsi[k];
+      });
     }
   }
 
@@ -905,23 +964,35 @@ export const formatTradeForCompactExport = (t: any) => {
     const htPassed = snap.higher_trend_filter_passed ?? snap.filterStatus?.hard?.higher_trend?.passed;
     compact.higher_trend = {
       value: trendHigher,
-      ...(snap.higher_trend_timeframe && { timeframe: snap.higher_trend_timeframe }),
-      ...(htPassed != null && { passed: htPassed })
+      timeframe: snap.higher_trend_timeframe ?? null,
+      passed: htPassed ?? null
     };
+    // Remove null values
+    Object.keys(compact.higher_trend).forEach(k => {
+      if (compact.higher_trend[k] === null) delete compact.higher_trend[k];
+    });
   }
 
   // --- BOLLINGER BANDS ---
   const bbEnabled = snap.bb_enabled === true || snap.filterStatus?.soft?.bb?.enabled === true;
   if (bbEnabled) {
     const bbUpper = snap.bb_upper ?? snap.bb?.upper;
+    const bbMiddle = snap.bb_middle ?? snap.bb?.middle;
     const bbLower = snap.bb_lower ?? snap.bb?.lower;
     const bbPassed = snap.soft_bb_passed ?? snap.filterStatus?.soft?.bb?.passed;
     if (bbUpper != null || bbLower != null) {
       compact.bb = {
-        ...(bbUpper != null && { upper: +Number(bbUpper).toFixed(6) }),
-        ...(bbLower != null && { lower: +Number(bbLower).toFixed(6) }),
-        ...(bbPassed != null && { passed: bbPassed })
+        upper: bbUpper != null ? +Number(bbUpper).toFixed(6) : null,
+        middle: bbMiddle != null ? +Number(bbMiddle).toFixed(6) : null,
+        lower: bbLower != null ? +Number(bbLower).toFixed(6) : null,
+        period: snap.bb_period ?? null,
+        std_dev: snap.bb_std_dev ?? null,
+        passed: bbPassed ?? null
       };
+      // Remove null values
+      Object.keys(compact.bb).forEach(k => {
+        if (compact.bb[k] === null) delete compact.bb[k];
+      });
     }
   }
 
@@ -931,8 +1002,13 @@ export const formatTradeForCompactExport = (t: any) => {
     const vwapPassed = snap.soft_vwap_passed ?? snap.filterStatus?.soft?.vwap?.passed;
     compact.vwap = {
       value: +Number(snap.vwap).toFixed(6),
-      ...(vwapPassed != null && { passed: vwapPassed })
+      period: snap.vwap_period ?? null,
+      passed: vwapPassed ?? null
     };
+    // Remove null values
+    Object.keys(compact.vwap).forEach(k => {
+      if (compact.vwap[k] === null) delete compact.vwap[k];
+    });
   }
 
   // --- PIVOT POINTS ---
@@ -940,7 +1016,16 @@ export const formatTradeForCompactExport = (t: any) => {
   if (pivotEnabled) {
     const pivotPassed = snap.soft_pivot_passed ?? snap.filterStatus?.soft?.pivot?.passed;
     if (pivotPassed != null) {
-      compact.pivot = { passed: pivotPassed };
+      compact.pivot = {
+        passed: pivotPassed,
+        timeframe: snap.pivot_points_timeframe ?? null,
+        lookback: snap.pivot_points_lookback ?? null,
+        near_threshold: snap.pivot_points_near_threshold ?? null
+      };
+      // Remove null values
+      Object.keys(compact.pivot).forEach(k => {
+        if (compact.pivot[k] === null) delete compact.pivot[k];
+      });
     }
   }
 
@@ -950,8 +1035,37 @@ export const formatTradeForCompactExport = (t: any) => {
   if (softTotal != null) {
     compact.soft_conditions = {
       met: softTotal,
-      ...(softRequired != null && { required: softRequired })
+      required: softRequired ?? null
     };
+    if (compact.soft_conditions.required === null) delete compact.soft_conditions.required;
+  }
+
+  // === EXIT THRESHOLDS SNAPSHOT (for re-simulation) ===
+  const hasExitThresholds = snap.atr_stop_loss_multiplier != null || 
+                            snap.atr_trailing_stop_multiplier != null || 
+                            snap.break_even_atr != null ||
+                            snap.hard_sl_pct != null;
+  if (hasExitThresholds) {
+    compact.exit_thresholds = {
+      sl_atr_mult: snap.atr_stop_loss_multiplier ?? null,
+      trailing_atr_mult: snap.atr_trailing_stop_multiplier ?? null,
+      trailing_activation_atr: snap.trailing_stop_activation_atr ?? null,
+      be_atr: snap.break_even_atr ?? null,
+      be_profit_pct_trigger: snap.break_even_profit_pct_trigger ?? null,
+      be_stop_over_entry: snap.break_even_profit_pct_stop_over_entry ?? null,
+      hard_sl_pct: snap.hard_sl_pct ?? null,
+      peak_lock_activate_pct: snap.peak_lock_activate_profit_pct ?? null,
+      peak_lock_distance_pct: snap.peak_lock_distance_pct ?? null,
+      max_duration_minutes: snap.max_position_duration_minutes ?? null
+    };
+    // Remove null values
+    Object.keys(compact.exit_thresholds).forEach(k => {
+      if (compact.exit_thresholds[k] === null) delete compact.exit_thresholds[k];
+    });
+    // Only include if we have at least one value
+    if (Object.keys(compact.exit_thresholds).length === 0) {
+      delete compact.exit_thresholds;
+    }
   }
 
   return compact;
