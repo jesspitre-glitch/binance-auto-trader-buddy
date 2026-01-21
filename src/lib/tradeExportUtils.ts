@@ -751,6 +751,14 @@ export const formatTradeForCompactExport = (t: any) => {
   compact.timestamp_open = openedAt.toISOString();
   compact.timestamp_close = closedAt.toISOString();
 
+  // === POSITION SIZING & RISK ===
+  const positionSizePct = snap.position_size_percent ?? snap.position_size_pct;
+  const riskPerTradePct = snap.risk_per_trade_percent ?? snap.risk_per_trade_pct;
+  const leverageUsed = t.leverage_used ?? snap.leverage ?? snap.leverage_used;
+  if (positionSizePct != null) compact.position_size_pct = +Number(positionSizePct).toFixed(2);
+  if (riskPerTradePct != null) compact.risk_per_trade_pct = +Number(riskPerTradePct).toFixed(2);
+  if (leverageUsed != null) compact.leverage_used = Math.round(leverageUsed);
+
   // === MFE/MAE ===
   const mfePct = snap.mfe_percent != null ? +Number(snap.mfe_percent).toFixed(4) : 
     (snap.peak_price != null && side === 'long' 
@@ -766,6 +774,15 @@ export const formatTradeForCompactExport = (t: any) => {
   // === REGIME (if router enabled) ===
   if (snap.regime_label) compact.regime_label = snap.regime_label;
   if (snap.regime_reason) compact.regime_reason = snap.regime_reason;
+  
+  // Regime router thresholds for what-if analysis
+  const regimeRouterEnabled = snap.regime_router_enabled === true;
+  if (regimeRouterEnabled) {
+    const regimeAdxThreshold = snap.regime_adx_threshold;
+    const regimeAtrPctThreshold = snap.regime_atr_pct_threshold;
+    if (regimeAdxThreshold != null) compact.regime_adx_threshold = +Number(regimeAdxThreshold).toFixed(2);
+    if (regimeAtrPctThreshold != null) compact.regime_atr_pct_threshold = +Number(regimeAtrPctThreshold).toFixed(4);
+  }
 
   // === TREND CONTEXT ===
   const trendMedium = snap.trend_medium ?? snap.trend;
