@@ -223,17 +223,9 @@ export const TradingDashboard = () => {
   return (
     <div className="container mx-auto p-3 md:p-6 space-y-4 md:space-y-6 pb-20 md:pb-6">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl md:text-3xl font-bold">Trading Dashboard</h1>
-            <ThemeToggle />
-          </div>
-          {lastUpdated && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Clock className="h-3 w-3" />
-              <span>Sidst opdateret: {lastUpdated.toLocaleString("da-DK", { timeZone: "Europe/Copenhagen", hour: "2-digit", minute: "2-digit", second: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" })}</span>
-            </div>
-          )}
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl md:text-3xl font-bold">Trading Dashboard</h1>
+          <ThemeToggle />
         </div>
         <div className="flex items-center gap-3 md:gap-4 w-full md:w-auto">
           <Button
@@ -279,8 +271,14 @@ export const TradingDashboard = () => {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle>Strategi Indstillinger</CardTitle>
+          {lastUpdated && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Clock className="h-3 w-3" />
+              <span>Gemt: {lastUpdated.toLocaleString("da-DK", { timeZone: "Europe/Copenhagen", hour: "2-digit", minute: "2-digit", second: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" })}</span>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4">
