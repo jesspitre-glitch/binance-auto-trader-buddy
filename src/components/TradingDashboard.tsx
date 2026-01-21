@@ -5,7 +5,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Play, Square, Settings2, History, TrendingUp, Search, BarChart3, Radio } from "lucide-react";
+import { Play, Square, Settings2, History, TrendingUp, Search, BarChart3, Radio, Clock } from "lucide-react";
+import { formatBinanceDate } from "@/lib/timeUtils";
 import { ThemeToggle } from "./ThemeToggle";
 import { PositionManager } from "./PositionManager";
 import { PortfolioBalance } from "./PortfolioBalance";
@@ -30,7 +31,10 @@ export const TradingDashboard = () => {
   const [configs, setConfigs] = useState<any[]>([]);
   const [activeConfigId, setActiveConfigId] = useState<string | null>(null);
   const [selectedConfig, setSelectedConfig] = useState<any>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const { toast } = useToast();
+
+  const updateTimestamp = () => setLastUpdated(new Date());
 
   const fetchConfigs = async () => {
     try {
@@ -41,6 +45,7 @@ export const TradingDashboard = () => {
 
       if (error) throw error;
       setConfigs(data || []);
+      updateTimestamp();
       
       if (data && data.length > 0 && !activeConfigId) {
         setActiveConfigId(data[0].id);
@@ -211,9 +216,15 @@ export const TradingDashboard = () => {
   return (
     <div className="container mx-auto p-3 md:p-6 space-y-4 md:space-y-6 pb-20 md:pb-6">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl md:text-3xl font-bold">Trading Dashboard</h1>
-          <ThemeToggle />
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl md:text-3xl font-bold">Trading Dashboard</h1>
+            <ThemeToggle />
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            <span>Sidst opdateret: {formatBinanceDate(lastUpdated, { includeTime: true, includeSeconds: true })}</span>
+          </div>
         </div>
         <div className="flex items-center gap-3 md:gap-4 w-full md:w-auto">
           <Button
