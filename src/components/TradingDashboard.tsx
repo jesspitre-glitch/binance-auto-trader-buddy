@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Play, Square, Settings2, History, TrendingUp, Search, BarChart3, Radio, Clock } from "lucide-react";
-import { formatBinanceDate } from "@/lib/timeUtils";
+
 import { ThemeToggle } from "./ThemeToggle";
 import { PositionManager } from "./PositionManager";
 import { PortfolioBalance } from "./PortfolioBalance";
@@ -223,7 +223,7 @@ export const TradingDashboard = () => {
           </div>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Clock className="h-3 w-3" />
-            <span>Sidst opdateret: {formatBinanceDate(lastUpdated, { includeTime: true, includeSeconds: true })}</span>
+            <span>Sidst opdateret: {lastUpdated.toLocaleString("da-DK", { timeZone: "Europe/Copenhagen", hour: "2-digit", minute: "2-digit", second: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" })}</span>
           </div>
         </div>
         <div className="flex items-center gap-3 md:gap-4 w-full md:w-auto">
