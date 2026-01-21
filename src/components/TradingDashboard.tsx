@@ -36,6 +36,9 @@ export const TradingDashboard = () => {
   // Get the updated_at timestamp from the active config
   const activeConfig = configs.find((c) => c.id === activeConfigId);
   const lastUpdated = activeConfig?.updated_at ? new Date(activeConfig.updated_at) : null;
+  
+  // Debug logging for timestamp
+  console.log("[TradingDashboard] activeConfigId:", activeConfigId, "| updated_at from DB:", activeConfig?.updated_at, "| lastUpdated:", lastUpdated?.toISOString());
 
   const fetchConfigs = async () => {
     try {
