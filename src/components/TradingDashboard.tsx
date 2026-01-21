@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Play, Square, Settings2, History, TrendingUp, Search, BarChart3, Radio } from "lucide-react";
+import { ThemeToggle } from "./ThemeToggle";
 import { PositionManager } from "./PositionManager";
 import { PortfolioBalance } from "./PortfolioBalance";
 import { IndicatorConfig } from "./IndicatorConfig";
@@ -210,7 +211,10 @@ export const TradingDashboard = () => {
   return (
     <div className="container mx-auto p-3 md:p-6 space-y-4 md:space-y-6 pb-20 md:pb-6">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <h1 className="text-2xl md:text-3xl font-bold">Trading Dashboard</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl md:text-3xl font-bold">Trading Dashboard</h1>
+          <ThemeToggle />
+        </div>
         <div className="flex items-center gap-3 md:gap-4 w-full md:w-auto">
           <Button
             onClick={toggleTrading}
