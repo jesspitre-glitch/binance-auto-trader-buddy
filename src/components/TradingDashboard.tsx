@@ -45,7 +45,6 @@ export const TradingDashboard = () => {
 
       if (error) throw error;
       setConfigs(data || []);
-      updateTimestamp();
       
       if (data && data.length > 0 && !activeConfigId) {
         setActiveConfigId(data[0].id);
@@ -57,6 +56,11 @@ export const TradingDashboard = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const handleConfigSave = () => {
+    updateTimestamp();
+    fetchConfigs();
   };
 
   const fetchSession = async () => {
@@ -379,7 +383,7 @@ export const TradingDashboard = () => {
           <SectionErrorBoundary title="Indikator Konfiguration" resetKey={activeConfigId}>
             <IndicatorConfig
               config={configs.find((c) => c.id === activeConfigId)}
-              onSave={fetchConfigs}
+              onSave={handleConfigSave}
             />
           </SectionErrorBoundary>
         </TabsContent>
