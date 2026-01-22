@@ -1035,14 +1035,24 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       Number.isFinite(atrPercent) &&
       atrPercent >= effective_min_atr_percent_used;
 
-    // 🔴 FIX: ATR CEILING ENFORCEMENT - ALTID håndhævet uanset adaptive mode
-    // Ceiling er en HARD MAX grænse: ATR% > ceiling = BLOKER
-    const ceilingOk = typeof ui_adaptive_ceiling_percent === 'number' && 
-                      Number.isFinite(ui_adaptive_ceiling_percent) && 
-                      ui_adaptive_ceiling_percent > 0;
-    const atr_ceiling_passed_boolean = !ceilingOk || atrPercent <= ui_adaptive_ceiling_percent;
+    // 🔴 FIX: ATR CEILING kun håndhævet når adaptive_atr_enabled = ON
+    // Når adaptive = OFF: kun min_atr_percent bruges, ceiling ignoreres
+    let atr_ceiling_passed_boolean = true;
+    let atr_ceiling_active = false;
     
-    // ATR filter passes if BOTH floor AND ceiling are satisfied
+    if (ui_adaptive_enabled) {
+      // Adaptive mode ON: ceiling/floor fra adaptive config
+      const ceilingOk = typeof ui_adaptive_ceiling_percent === 'number' && 
+                        Number.isFinite(ui_adaptive_ceiling_percent) && 
+                        ui_adaptive_ceiling_percent > 0;
+      if (ceilingOk) {
+        atr_ceiling_active = true;
+        atr_ceiling_passed_boolean = atrPercent <= ui_adaptive_ceiling_percent;
+      }
+    }
+    // Adaptive mode OFF: ceiling check skipped entirely
+    
+    // ATR filter passes if floor is satisfied (ceiling only matters when adaptive is ON)
     const atrFilterPassed = atr_floor_passed_boolean && atr_ceiling_passed_boolean;
 
     console.log(`ATR FILTER EFFECTIVE`);
@@ -1060,7 +1070,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     console.log(`  atr_floor_used: ${atr_floor_used === null ? 'null' : `${atr_floor_used.toFixed(4)}%`}`);
     console.log(`  atr_floor_source: ${atr_floor_source}`);
     console.log(`  atr_floor_passed_boolean: ${atr_floor_passed_boolean}`);
-    console.log(`  🔴 atr_ceiling_used: ${ceilingOk ? `${ui_adaptive_ceiling_percent.toFixed(4)}%` : 'disabled/invalid'}`);
+    console.log(`  🔴 atr_ceiling_active: ${atr_ceiling_active} (only when adaptive=ON)`);
+    console.log(`  🔴 atr_ceiling_used: ${atr_ceiling_active && ui_adaptive_ceiling_percent ? `${ui_adaptive_ceiling_percent.toFixed(4)}%` : 'SKIPPED (adaptive=OFF)'}`);
     console.log(`  🔴 atr_ceiling_passed_boolean: ${atr_ceiling_passed_boolean}`);
     console.log(`  ATR_filter_passed: ${atrFilterPassed}`);
     console.log(`  volume_current: ${volumeCurrentValid ? currentVolume : null}`);
@@ -1071,7 +1082,8 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     filterStatus.hard.atr.atr_floor_source = atr_floor_source;
     filterStatus.hard.atr.atr_floor_passed_boolean = atr_floor_passed_boolean;
     filterStatus.hard.atr.effective_min_atr_percent_used = effective_min_atr_percent_used;
-    (filterStatus.hard.atr as any).atr_ceiling_used = ceilingOk ? ui_adaptive_ceiling_percent : null;
+    (filterStatus.hard.atr as any).atr_ceiling_active = atr_ceiling_active;
+    (filterStatus.hard.atr as any).atr_ceiling_used = atr_ceiling_active ? ui_adaptive_ceiling_percent : null;
     (filterStatus.hard.atr as any).atr_ceiling_passed_boolean = atr_ceiling_passed_boolean;
 
     if (effective_min_atr_percent_used === null) {
@@ -1082,12 +1094,13 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       filterStatus.hard.atr.passed = false;
       filterStatus.hard.atr.reason = `ATR% ${atrPercent.toFixed(4)}% < ${effective_min_atr_percent_used.toFixed(4)}% floor (floor_source=${atr_floor_source})`;
       console.log(`   ❌ ATR% BLOKERER (FLOOR): ${atrPercent.toFixed(4)}% < ${effective_min_atr_percent_used.toFixed(4)}% (floor=${atr_floor_used?.toFixed(4)}%, source=${atr_floor_source})`);
-    } else if (!atr_ceiling_passed_boolean) {
+    } else if (!atr_ceiling_passed_boolean && atr_ceiling_active && ui_adaptive_ceiling_percent) {
       filterStatus.hard.atr.passed = false;
       filterStatus.hard.atr.reason = `ATR% ${atrPercent.toFixed(4)}% > ${ui_adaptive_ceiling_percent.toFixed(4)}% ceiling (for volatil marked)`;
       console.log(`   ❌ ATR% BLOKERER (CEILING): ${atrPercent.toFixed(4)}% > ${ui_adaptive_ceiling_percent.toFixed(4)}% ceiling (for volatil marked)`);
     } else {
-      console.log(`   ✅ ATR% PASSERER: ${effective_min_atr_percent_used.toFixed(4)}% <= ${atrPercent.toFixed(4)}% <= ${ceilingOk ? ui_adaptive_ceiling_percent.toFixed(4) + '%' : 'no_ceiling'}`);
+      const ceilingStr = atr_ceiling_active && ui_adaptive_ceiling_percent ? `${ui_adaptive_ceiling_percent.toFixed(4)}%` : 'no_ceiling';
+      console.log(`   ✅ ATR% PASSERER: ${effective_min_atr_percent_used.toFixed(4)}% <= ${atrPercent.toFixed(4)}% <= ${ceilingStr}`);
     }
 
     console.log(`   ═══════════════════════════════════════════════════════════════════\n`);
@@ -4292,10 +4305,12 @@ serve(async (req) => {
         if (atrPct < atrMinThreshold) {
           blockers.push(`ATR_BELOW_MIN:${atrPct.toFixed(2)}%<${atrMinThreshold.toFixed(2)}%`);
         }
-        // Ceiling check (atr_ceiling only, not atr_max_percent which doesn't exist)
-        const atrMaxThreshold = config.atr_ceiling ?? 5;
-        if (atrPct > atrMaxThreshold) {
-          blockers.push(`ATR_ABOVE_MAX:${atrPct.toFixed(2)}%>${atrMaxThreshold.toFixed(2)}%`);
+        // Ceiling check - KUN når adaptive_atr_enabled = true
+        if (config?.adaptive_atr_enabled) {
+          const atrMaxThreshold = config.atr_ceiling ?? 5;
+          if (atrPct > atrMaxThreshold) {
+            blockers.push(`ATR_ABOVE_MAX:${atrPct.toFixed(2)}%>${atrMaxThreshold.toFixed(2)}%`);
+          }
         }
       }
       
