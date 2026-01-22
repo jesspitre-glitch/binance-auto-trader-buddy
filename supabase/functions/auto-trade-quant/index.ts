@@ -1035,7 +1035,15 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       Number.isFinite(atrPercent) &&
       atrPercent >= effective_min_atr_percent_used;
 
-    const atrFilterPassed = atr_floor_passed_boolean;
+    // 🔴 FIX: ATR CEILING ENFORCEMENT - ALTID håndhævet uanset adaptive mode
+    // Ceiling er en HARD MAX grænse: ATR% > ceiling = BLOKER
+    const ceilingOk = typeof ui_adaptive_ceiling_percent === 'number' && 
+                      Number.isFinite(ui_adaptive_ceiling_percent) && 
+                      ui_adaptive_ceiling_percent > 0;
+    const atr_ceiling_passed_boolean = !ceilingOk || atrPercent <= ui_adaptive_ceiling_percent;
+    
+    // ATR filter passes if BOTH floor AND ceiling are satisfied
+    const atrFilterPassed = atr_floor_passed_boolean && atr_ceiling_passed_boolean;
 
     console.log(`ATR FILTER EFFECTIVE`);
     console.log(`  atr_percent_raw: ${atrPercent.toFixed(4)}%`);
@@ -1052,26 +1060,34 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     console.log(`  atr_floor_used: ${atr_floor_used === null ? 'null' : `${atr_floor_used.toFixed(4)}%`}`);
     console.log(`  atr_floor_source: ${atr_floor_source}`);
     console.log(`  atr_floor_passed_boolean: ${atr_floor_passed_boolean}`);
+    console.log(`  🔴 atr_ceiling_used: ${ceilingOk ? `${ui_adaptive_ceiling_percent.toFixed(4)}%` : 'disabled/invalid'}`);
+    console.log(`  🔴 atr_ceiling_passed_boolean: ${atr_ceiling_passed_boolean}`);
     console.log(`  ATR_filter_passed: ${atrFilterPassed}`);
     console.log(`  volume_current: ${volumeCurrentValid ? currentVolume : null}`);
     console.log(`  volume_avg: ${volumeAvgValid ? avgVolume : null}`);
 
-    // 🔴 Gem ATR floor audit data til filterStatus for snapshot
+    // 🔴 Gem ATR floor + ceiling audit data til filterStatus for snapshot
     filterStatus.hard.atr.atr_floor_used = atr_floor_used;
     filterStatus.hard.atr.atr_floor_source = atr_floor_source;
     filterStatus.hard.atr.atr_floor_passed_boolean = atr_floor_passed_boolean;
     filterStatus.hard.atr.effective_min_atr_percent_used = effective_min_atr_percent_used;
+    (filterStatus.hard.atr as any).atr_ceiling_used = ceilingOk ? ui_adaptive_ceiling_percent : null;
+    (filterStatus.hard.atr as any).atr_ceiling_passed_boolean = atr_ceiling_passed_boolean;
 
     if (effective_min_atr_percent_used === null) {
       filterStatus.hard.atr.passed = false;
       filterStatus.hard.atr.reason = `ATR config missing/invalid (adaptive=${ui_adaptive_enabled}, source=${atr_floor_source})`;
       console.log(`   ❌ ATR% BLOKERER: config missing/invalid (source=${atr_floor_source})`);
-    } else if (!atrFilterPassed) {
+    } else if (!atr_floor_passed_boolean) {
       filterStatus.hard.atr.passed = false;
-      filterStatus.hard.atr.reason = `ATR% ${atrPercent.toFixed(4)}% < ${effective_min_atr_percent_used.toFixed(4)}% (floor_source=${atr_floor_source})`;
-      console.log(`   ❌ ATR% BLOKERER: ${atrPercent.toFixed(4)}% < ${effective_min_atr_percent_used.toFixed(4)}% (floor=${atr_floor_used?.toFixed(4)}%, source=${atr_floor_source})`);
+      filterStatus.hard.atr.reason = `ATR% ${atrPercent.toFixed(4)}% < ${effective_min_atr_percent_used.toFixed(4)}% floor (floor_source=${atr_floor_source})`;
+      console.log(`   ❌ ATR% BLOKERER (FLOOR): ${atrPercent.toFixed(4)}% < ${effective_min_atr_percent_used.toFixed(4)}% (floor=${atr_floor_used?.toFixed(4)}%, source=${atr_floor_source})`);
+    } else if (!atr_ceiling_passed_boolean) {
+      filterStatus.hard.atr.passed = false;
+      filterStatus.hard.atr.reason = `ATR% ${atrPercent.toFixed(4)}% > ${ui_adaptive_ceiling_percent.toFixed(4)}% ceiling (for volatil marked)`;
+      console.log(`   ❌ ATR% BLOKERER (CEILING): ${atrPercent.toFixed(4)}% > ${ui_adaptive_ceiling_percent.toFixed(4)}% ceiling (for volatil marked)`);
     } else {
-      console.log(`   ✅ ATR% PASSERER: ${atrPercent.toFixed(4)}% >= ${effective_min_atr_percent_used.toFixed(4)}%`);
+      console.log(`   ✅ ATR% PASSERER: ${effective_min_atr_percent_used.toFixed(4)}% <= ${atrPercent.toFixed(4)}% <= ${ceilingOk ? ui_adaptive_ceiling_percent.toFixed(4) + '%' : 'no_ceiling'}`);
     }
 
     console.log(`   ═══════════════════════════════════════════════════════════════════\n`);
@@ -1229,7 +1245,12 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
       console.log(`   📊 VOL_SHORT=disabled (mode: OFF)`);
     } else {
       filterStatus.hard.volumeShort.value = volumeRatioStr;
-      const shortPassed = volumeRatio >= volumeMultiplierShort;
+      // 🔴 FIX: Eksplicit >= sammenligning med korrekt precision
+      // Tidligere bug: floating-point sammenligning kunne give false for 0.92 >= 0.9
+      const shortPassed = (Math.round(volumeRatio * 10000) / 10000) >= (Math.round(volumeMultiplierShort * 10000) / 10000);
+      
+      // 🔴 DEBUG LOG for volume comparison
+      console.log(`   📊 VOL_SHORT DEBUG: ratio=${volumeRatio}, multiplier=${volumeMultiplierShort}, raw_compare=${volumeRatio >= volumeMultiplierShort}, fixed_compare=${shortPassed}`);
       
       if (volumeModeShort === 'HARD') {
         // HARD mode: Volume is required for SHORT
@@ -2343,8 +2364,52 @@ serve(async (req) => {
 
       // Calculate strategy identifier for this config
       const strategyHash = await getStrategyIdentifier(config);
-      console.warn(`[RUNTIME_CONFIG] config_id=${config.id} | name="${config.name}" | updated_at=${config.updated_at} | strategy_hash=${strategyHash}`);
-      console.warn(`[RUNTIME_CONFIG_DETAIL] required_conds=${config.signal_conditions_required} | adx_floor=${config.adx_floor} | adx_ceiling=${config.adx_ceiling} | vol_long=${config.volume_multiplier} | vol_short=${config.volume_multiplier_short}`);
+      
+      // 🔴 RUNTIME CONFIG VERIFICATION LOG - Logs ALLE kritiske værdier for at verificere UI-sync
+      console.warn(`╔═══════════════════════════════════════════════════════════════════════════════╗`);
+      console.warn(`║ 🔴 RUNTIME CONFIG VERIFICATION - Bot bruger følgende værdier fra DB:         ║`);
+      console.warn(`╠═══════════════════════════════════════════════════════════════════════════════╣`);
+      console.warn(`║ config_id: ${config.id}`);
+      console.warn(`║ config_name: "${config.name}"`);
+      console.warn(`║ updated_at: ${config.updated_at}`);
+      console.warn(`║ strategy_hash: ${strategyHash}`);
+      console.warn(`╠═══════════════════════════════════════════════════════════════════════════════╣`);
+      console.warn(`║ 📊 CORE SETTINGS:`);
+      console.warn(`║   signal_conditions_required: ${config.signal_conditions_required}`);
+      console.warn(`║   leverage: ${config.leverage}x`);
+      console.warn(`║   position_size_percent: ${config.position_size_percent}%`);
+      console.warn(`║   max_open_positions: ${config.max_open_positions}`);
+      console.warn(`╠═══════════════════════════════════════════════════════════════════════════════╣`);
+      console.warn(`║ 📈 ATR FILTER:`);
+      console.warn(`║   atr_enabled: ${config.atr_enabled}`);
+      console.warn(`║   adaptive_atr_enabled: ${config.adaptive_atr_enabled}`);
+      console.warn(`║   min_atr_percent (floor static): ${config.min_atr_percent}%`);
+      console.warn(`║   atr_floor (adaptive floor): ${config.atr_floor}%`);
+      console.warn(`║   atr_ceiling (adaptive ceiling): ${config.atr_ceiling}%`);
+      console.warn(`║   atr_base_min (adaptive base): ${config.atr_base_min}%`);
+      console.warn(`╠═══════════════════════════════════════════════════════════════════════════════╣`);
+      console.warn(`║ 📊 ADX FILTER:`);
+      console.warn(`║   adx_enabled: ${config.adx_enabled}`);
+      console.warn(`║   adx_floor: ${config.adx_floor}`);
+      console.warn(`║   adx_ceiling: ${config.adx_ceiling}`);
+      console.warn(`║   adaptive_adx_enabled: ${config.adaptive_adx_enabled}`);
+      console.warn(`╠═══════════════════════════════════════════════════════════════════════════════╣`);
+      console.warn(`║ 📊 VOLUME FILTER:`);
+      console.warn(`║   volume_enabled (LONG): ${config.volume_enabled}`);
+      console.warn(`║   volume_multiplier (LONG threshold): ${config.volume_multiplier}x`);
+      console.warn(`║   volume_mode_short: ${config.volume_mode_short}`);
+      console.warn(`║   volume_multiplier_short: ${config.volume_multiplier_short}x`);
+      console.warn(`╠═══════════════════════════════════════════════════════════════════════════════╣`);
+      console.warn(`║ 📊 STOCHRSI FILTER:`);
+      console.warn(`║   stochrsi_enabled: ${config.stochrsi_enabled}`);
+      console.warn(`║   stochrsi_hard_filter: ${config.stochrsi_hard_filter}`);
+      console.warn(`║   stochrsi_short_mode: ${config.stochrsi_short_mode}`);
+      console.warn(`║   rollover_d_min_short: ${config.rollover_d_min_short}`);
+      console.warn(`║   stochrsi_overbought_k: ${config.stochrsi_overbought_k}`);
+      console.warn(`║   stochrsi_overbought_d: ${config.stochrsi_overbought_d}`);
+      console.warn(`║   stochrsi_oversold_k: ${config.stochrsi_oversold_k}`);
+      console.warn(`║   stochrsi_oversold_d: ${config.stochrsi_oversold_d}`);
+      console.warn(`╚═══════════════════════════════════════════════════════════════════════════════╝`);
       
       // Track scan count for debug logging (first 50)
       let scanDebugCount = 0;
