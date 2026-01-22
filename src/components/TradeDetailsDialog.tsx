@@ -69,38 +69,40 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle className="flex items-center gap-2">
-              {trade.side === "LONG" ? (
-                <TrendingUp className="h-5 w-5 text-profit" />
-              ) : (
-                <TrendingDown className="h-5 w-5 text-loss" />
-              )}
-              <span>{trade.symbol}</span>
-              <Badge variant={trade.side === "LONG" ? "default" : "secondary"}>
-                {trade.side}
+          <DialogTitle className="flex items-center gap-2">
+            {trade.side === "LONG" ? (
+              <TrendingUp className="h-5 w-5 text-profit" />
+            ) : (
+              <TrendingDown className="h-5 w-5 text-loss" />
+            )}
+            <span>{trade.symbol}</span>
+            <Badge variant={trade.side === "LONG" ? "default" : "secondary"}>
+              {trade.side}
+            </Badge>
+            {isPositionOpen ? (
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                LIVE
               </Badge>
-              {isPositionOpen ? (
-                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-                  LIVE
-                </Badge>
-              ) : (
-                <div className="flex items-center justify-center h-6 w-6 rounded-full bg-loss/20 border border-loss/40">
-                  <X className="h-3.5 w-3.5 text-loss" />
-                </div>
-              )}
-            </DialogTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportTrade}
-              className="flex items-center gap-2"
-            >
-              {copied ? <Check className="h-4 w-4 text-profit" /> : <Copy className="h-4 w-4" />}
-              {copied ? "Kopieret" : "Eksporter til AI"}
-            </Button>
-          </div>
+            ) : (
+              <div className="flex items-center justify-center h-6 w-6 rounded-full bg-loss/20 border border-loss/40">
+                <X className="h-3.5 w-3.5 text-loss" />
+              </div>
+            )}
+          </DialogTitle>
         </DialogHeader>
+
+        {/* Export button - separated from close button */}
+        <div className="flex justify-end -mt-2 mb-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportTrade}
+            className="flex items-center gap-2"
+          >
+            {copied ? <Check className="h-4 w-4 text-profit" /> : <Copy className="h-4 w-4" />}
+            {copied ? "Kopieret" : "Eksporter til AI"}
+          </Button>
+        </div>
 
         <div className="space-y-6">
           {/* Live Status - Only show for open positions */}
