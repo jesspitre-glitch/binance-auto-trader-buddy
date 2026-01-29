@@ -274,6 +274,25 @@ function analyzeHigherTrend(klines: any[], config: IndicatorConfig): 'BULLISH' |
   return 'NEUTRAL';
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🎯 HTF SIDE-GATE v2.2.5 - Helper Functions
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Calculate minimum klines required for HTF trend analysis based on UI config
+function getMinimumKlinesForHTF(config: IndicatorConfig): number {
+  const emaFast = config.ema_fast ?? 9;
+  const emaMedium = config.ema_medium ?? 21;
+  const emaSlow = config.ema_slow ?? 55;
+  
+  const minRequired = Math.max(emaFast, emaMedium, emaSlow);
+  const buffer = Math.ceil(minRequired * 0.5);
+  
+  return minRequired + buffer;
+}
+
+// Type alias for allowed trading sides
+type AllowedSide = 'LONG' | 'SHORT';
+
 // Technical indicator calculations
 function calculateEMA(data: number[], period: number): number[] {
   const k = 2 / (period + 1);
@@ -746,7 +765,22 @@ function intervalToMs(interval: string): number {
   }
 }
 
-function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfig) {
+function analyzeSignal(
+  klines: any[], 
+  trendKlines: any[], 
+  config: IndicatorConfig,
+  allowedSides: AllowedSide[] = ['LONG', 'SHORT'],
+  sideGateInfo: { higherTrend: 'BULLISH' | 'BEARISH' | 'NEUTRAL', sideGateReason: string, minKlinesRequired: number, actualKlines: number } = { higherTrend: 'NEUTRAL', sideGateReason: 'HTF disabled', minKlinesRequired: 0, actualKlines: 0 }
+) {
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 🎯 HTF SIDE-GATE v2.2.5 - Side-Specific Evaluation
+  // ═══════════════════════════════════════════════════════════════════════════════
+  const longAllowed = allowedSides.includes('LONG');
+  const shortAllowed = allowedSides.includes('SHORT');
+  
+  console.log(`\n🎯 SIDE-GATE: longAllowed=${longAllowed}, shortAllowed=${shortAllowed}`);
+  console.log(`   Reason: ${sideGateInfo.sideGateReason}`);
+  
   const closes = klines.map(k => k.close);
   const highs = klines.map(k => k.high);
   const lows = klines.map(k => k.low);
@@ -1764,17 +1798,68 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
   const longConditionsMet = longConditions.filter(c => c).length;
   const shortConditionsMet = shortConditions.filter(c => c).length;
 
-  // 🚨 FINAL SIGNAL BESLUTNING - Bløde betingelser + MACD hårde filtre
-  // MACD retningsfilter blokerer ALLE trades i forkert retning (evalueret FØR bløde betingelser)
-  // MACD farveskift filter blokerer trades hvis histogram ikke skifter farve i trade retningen
-  const longSignal = longConditionsMet >= requiredConditions && macdLongOK && macdColorChangeLongOK; // LONG kræver macdLine > signalLine OG rød→grøn skift (hvis aktiveret)
-  const shortSignal = shortConditionsMet >= requiredConditions && macdShortOK && macdColorChangeShortOK; // SHORT kræver macdLine < signalLine OG grøn→rød skift (hvis aktiveret)
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 🎯 HTF SIDE-GATE v2.2.5 - FINAL SIGNAL BESLUTNING med Side-Gating og Tie-Breaker
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // KRITISK: Gated side signal = false (ikke null) - short-circuit evaluering
+  // longAllowed=false → longSignal=false uanset betingelser
+  // shortAllowed=false → shortSignal=false uanset betingelser
+  
+  const longSignal = longAllowed && 
+                     longConditionsMet >= requiredConditions && 
+                     macdLongOK && 
+                     macdColorChangeLongOK;
+  
+  const shortSignal = shortAllowed && 
+                      shortConditionsMet >= requiredConditions && 
+                      macdShortOK && 
+                      macdColorChangeShortOK;
+  
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 🎯 DETERMINISTISK TIE-BREAKER - Når begge signaler er true
+  // ═══════════════════════════════════════════════════════════════════════════════
+  let finalSignal: 'LONG' | 'SHORT' | 'NONE' = 'NONE';
+  let tieBreakerUsed: string | null = null;
+  
+  if (longSignal && shortSignal) {
+    // Begge signaler er true - brug soft conditions til at vælge
+    if (longConditionsMet > shortConditionsMet) {
+      finalSignal = 'LONG';
+      tieBreakerUsed = 'LONG_MORE_CONDITIONS';
+      console.log(`🎯 TIE-BREAKER: LONG valgt (${longConditionsMet} > ${shortConditionsMet} conditions)`);
+    } else if (shortConditionsMet > longConditionsMet) {
+      finalSignal = 'SHORT';
+      tieBreakerUsed = 'SHORT_MORE_CONDITIONS';
+      console.log(`🎯 TIE-BREAKER: SHORT valgt (${shortConditionsMet} > ${longConditionsMet} conditions)`);
+    } else {
+      // Tie - ingen signal for sikkerhed
+      finalSignal = 'NONE';
+      tieBreakerUsed = 'TIE_NO_SIGNAL';
+      console.warn(`⚠️ TIE-BREAKER: Begge signaler true med samme conditions (${longConditionsMet}/${shortConditionsMet}) → NONE`);
+    }
+  } else if (longSignal) {
+    finalSignal = 'LONG';
+  } else if (shortSignal) {
+    finalSignal = 'SHORT';
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 🛡️ INVARIANT CLAMP - Sikrer at gated side aldrig kan returnere signal
+  // ═══════════════════════════════════════════════════════════════════════════════
+  if (finalSignal === 'LONG' && !longAllowed) {
+    console.error(`🚨 INVARIANT VIOLATION: LONG signal men side er gated! Tvinger til NONE.`);
+    finalSignal = 'NONE';
+  }
+  if (finalSignal === 'SHORT' && !shortAllowed) {
+    console.error(`🚨 INVARIANT VIOLATION: SHORT signal men side er gated! Tvinger til NONE.`);
+    finalSignal = 'NONE';
+  }
   
   // Calculate conditions met for signal strength
   const conditionsMet = Math.max(longConditionsMet, shortConditionsMet);
   
-  // Determine final signal side for logging
-  const finalSide = longSignal ? 'LONG' : shortSignal ? 'SHORT' : 'NONE';
+  // Determine final signal side for logging (use finalSignal now)
+  const finalSide = finalSignal;
   
   // 🔎 MACD DIRECTION AUDIT LOG (verificerer side-baseret logik)
   // Denne log viser præcis hvad der bestemmer MACD_direction_filter_passed
@@ -2097,32 +2182,70 @@ function analyzeSignal(klines: any[], trendKlines: any[], config: IndicatorConfi
     },
     // OBV (On Balance Volume) - beregnes altid for logging, ikke som filter
     obv: (() => {
-      const finalSignalSide = longSignal ? 'LONG' : shortSignal ? 'SHORT' : 'LONG'; // Default til LONG for NONE signaler
+      const finalSignalSide = finalSignal !== 'NONE' ? finalSignal : 'LONG'; // Default til LONG for NONE signaler
       const obvResult = calculateOBV(closes, volumes, finalSignalSide);
       if (obvResult) {
         console.log(`📊 OBV: current=${obvResult.current.toFixed(0)}, prev5=${obvResult.previous5.toFixed(0)}, trend=${obvResult.trend}, confirmation=${obvResult.confirmation}`);
       }
       return obvResult;
-    })()
+    })(),
+    
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 🎯 HTF SIDE-GATE v2.2.5 - Signal Decision Audit
+    // ═══════════════════════════════════════════════════════════════════════════════
+    signal_decision: {
+      longSignal: longSignal,                    // boolean: true/false (aldrig null)
+      shortSignal: shortSignal,                  // boolean: true/false (aldrig null)
+      longConditionsMet: longConditionsMet,
+      shortConditionsMet: shortConditionsMet,
+      requiredConditions: requiredConditions,
+      finalSignal: finalSignal,                  // 'LONG' | 'SHORT' | 'NONE'
+      tieBreaker: tieBreakerUsed,                // null | 'LONG_MORE_CONDITIONS' | 'SHORT_MORE_CONDITIONS' | 'TIE_NO_SIGNAL'
+      longAllowed: longAllowed,
+      shortAllowed: shortAllowed,
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 🎯 HTF SIDE-GATE v2.2.5 - Side Gate Audit
+    // ═══════════════════════════════════════════════════════════════════════════════
+    side_gate: {
+      higher_trend_enabled: config.higher_trend_enabled,
+      higher_trend_timeframe: config.higher_trend_timeframe,
+      higher_trend_result: sideGateInfo.higherTrend,
+      gate_reason: sideGateInfo.sideGateReason,
+      allowed_sides: allowedSides,
+      htf_min_klines_required: sideGateInfo.minKlinesRequired,
+      htf_actual_klines: sideGateInfo.actualKlines,
+      htf_klines_sufficient: sideGateInfo.actualKlines >= sideGateInfo.minKlinesRequired,
+    },
   };
   
   console.log(`Indicators being saved: stochRSI_k=${indicators.stochRSI_k}, rsi=${indicators.rsi}, macd=${indicators.macd}, conditionsMet=${conditionsMet}`);
+  console.log(`🎯 Signal Decision: longSignal=${longSignal}, shortSignal=${shortSignal}, finalSignal=${finalSignal}, tieBreaker=${tieBreakerUsed}`);
   
   // 🔴 KRITISK: stopLoss beregnes kun hvis ATR er gyldig
   // Hvis ATR er null/0/invalid, bliver stopLoss NaN - dette fanger vi senere
   const stopLoss = (atrValue && isFinite(atrValue) && atrValue > 0)
-    ? (longSignal 
+    ? (finalSignal === 'LONG' 
         ? currentPrice - (atrValue * config.atr_stop_loss_multiplier)
         : currentPrice + (atrValue * config.atr_stop_loss_multiplier))
     : NaN; // Vil blokere trade senere
   
   return {
-    signal: longSignal ? 'LONG' : shortSignal ? 'SHORT' : 'NONE',
+    signal: finalSignal,
     indicators,
     stopLoss,
     takeProfit: null,
     hardFiltersPassed: hardFiltersPass,
     filterStatus,
+    // Expose side-gate info for serve() function
+    sideGateInfo: {
+      longAllowed,
+      shortAllowed,
+      longSignal,
+      shortSignal,
+      tieBreakerUsed,
+    },
   };
 }
 
@@ -2471,15 +2594,42 @@ serve(async (req) => {
           // Determine trend on medium timeframe (always)
           const trend = analyzeMediumTrend(trendKlines, config);
           
-          // Only fetch and analyze higher trend if enabled
-          let higherTrend = 'NEUTRAL'; // Default til NEUTRAL hvis disabled
+          // ═══════════════════════════════════════════════════════════════════════════════
+          // 🎯 HTF SIDE-GATE v2.2.5 - Beregn HTF FØR analyzeSignal
+          // ═══════════════════════════════════════════════════════════════════════════════
+          let allowedSides: AllowedSide[] = ['LONG', 'SHORT'];
+          let higherTrend: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = 'NEUTRAL';
+          let sideGateReason: string = 'HTF disabled';
+          let minKlinesRequired = 0;
+          let actualKlines = 0;
+          
           if (config.higher_trend_enabled) {
+            minKlinesRequired = getMinimumKlinesForHTF(config);
             const higherTrendKlines = await fetchKlines(symbol, config.higher_trend_timeframe, config.klines_limit);
-            higherTrend = analyzeHigherTrend(higherTrendKlines, config);
+            actualKlines = higherTrendKlines?.length ?? 0;
+            
+            if (!higherTrendKlines || higherTrendKlines.length < minKlinesRequired) {
+              console.warn(`⚠️ SIDE-GATE FALLBACK: ${symbol} - HTF klines < required: got ${actualKlines}, need ${minKlinesRequired}`);
+              higherTrend = 'NEUTRAL';
+              sideGateReason = `HTF fallback NEUTRAL (insufficient data: ${actualKlines}/${minKlinesRequired})`;
+              // allowedSides forbliver ['LONG', 'SHORT'] ved fallback
+            } else {
+              higherTrend = analyzeHigherTrend(higherTrendKlines, config);
+              if (higherTrend === 'BULLISH') {
+                allowedSides = ['LONG'];
+                sideGateReason = `HTF ${config.higher_trend_timeframe} = BULLISH → kun LONG tilladt`;
+              } else if (higherTrend === 'BEARISH') {
+                allowedSides = ['SHORT'];
+                sideGateReason = `HTF ${config.higher_trend_timeframe} = BEARISH → kun SHORT tilladt`;
+              } else {
+                sideGateReason = `HTF ${config.higher_trend_timeframe} = NEUTRAL → begge sider tilladt`;
+              }
+            }
           }
           
-          // Analyze signal on scan interval (men ADX beregnes på trend timeframe)
-          const analysis = analyzeSignal(scanKlines, trendKlines, config);
+          // Kald analyzeSignal med side-gate info
+          const sideGateInfo = { higherTrend, sideGateReason, minKlinesRequired, actualKlines };
+          const analysis = analyzeSignal(scanKlines, trendKlines, config, allowedSides, sideGateInfo);
           
           // DEBUG LOG (first 50 scans) - simplified for log visibility
           scanDebugCount++;
@@ -2522,7 +2672,11 @@ serve(async (req) => {
             }
           }
           
-          // Filter signal based on trend timeframes
+          // ═══════════════════════════════════════════════════════════════════════════════
+          // 🎯 HTF SIDE-GATE v2.2.5 - Post-Analysis Signal Filtering
+          // ═══════════════════════════════════════════════════════════════════════════════
+          // HTF filtering is now done PRE-analysis via allowedSides parameter.
+          // Here we only filter on medium trend (which is still done post-analysis).
           let filteredSignal = analysis.signal;
           
           if (filteredSignal === 'LONG') {
@@ -2530,11 +2684,10 @@ serve(async (req) => {
             if (trend !== 'BULLISH') {
               filteredSignal = 'NONE';
               console.log(`Blocked LONG on ${symbol}: Medium trend (${config.trend_timeframe}) not BULLISH (is ${trend})`);
-            } 
-            // Tjek også higher trend hvis enabled
+            }
+            // HTF blocking er nu håndteret via side-gate i analyzeSignal - kun audit log
             else if (config.higher_trend_enabled && higherTrend !== 'BULLISH') {
-              filteredSignal = 'NONE';
-              console.log(`Blocked LONG on ${symbol}: Higher trend (${config.higher_trend_timeframe}) not BULLISH (is ${higherTrend})`);
+              console.log(`📋 AUDIT: LONG on ${symbol} - HTF already blocked via side-gate (trend=${higherTrend})`);
             }
           } else if (filteredSignal === 'SHORT') {
             // SHORT kræver BEARISH på medium timeframe
@@ -2542,10 +2695,9 @@ serve(async (req) => {
               filteredSignal = 'NONE';
               console.log(`Blocked SHORT on ${symbol}: Medium trend (${config.trend_timeframe}) not BEARISH (is ${trend})`);
             }
-            // Tjek også higher trend hvis enabled
+            // HTF blocking er nu håndteret via side-gate i analyzeSignal - kun audit log
             else if (config.higher_trend_enabled && higherTrend !== 'BEARISH') {
-              filteredSignal = 'NONE';
-              console.log(`Blocked SHORT on ${symbol}: Higher trend (${config.higher_trend_timeframe}) not BEARISH (is ${higherTrend})`);
+              console.log(`📋 AUDIT: SHORT on ${symbol} - HTF already blocked via side-gate (trend=${higherTrend})`);
             }
           }
 
@@ -2872,14 +3024,30 @@ serve(async (req) => {
           }
           
           // 8. Higher Trend Filter (if higher_trend_enabled AND higher_trend_hard_filter)
+          // 🎯 HTF SIDE-GATE v2.2.5: HTF blocking now happens PRE-analysis via allowedSides.
+          // This check is kept as a SAFETY NET and for audit purposes only.
           if (!gateBlocked && config.higher_trend_enabled && config.higher_trend_hard_filter !== false) {
-            const higherTrend = selectedSignal.higherTrend;
-            if (signal === 'LONG' && higherTrend !== 'BULLISH') {
-              gateBlocked = true;
-              blockReason = `HIGHER_TREND_FAILED_LONG (${config.higher_trend_timeframe} trend=${higherTrend}, required=BULLISH)`;
-            } else if (signal === 'SHORT' && higherTrend !== 'BEARISH') {
-              gateBlocked = true;
-              blockReason = `HIGHER_TREND_FAILED_SHORT (${config.higher_trend_timeframe} trend=${higherTrend}, required=BEARISH)`;
+            const sideGateData = analysis.sideGateInfo;
+            const htfTrend = selectedSignal.higherTrend;
+            
+            // Check if this signal should have been blocked by side-gate
+            if (signal === 'LONG' && htfTrend !== 'BULLISH') {
+              // This should never happen with proper side-gating, but check anyway
+              if (sideGateData?.longAllowed === false) {
+                console.log(`✅ HTF GATE AUDIT: LONG correctly blocked by side-gate (trend=${htfTrend})`);
+              } else {
+                gateBlocked = true;
+                blockReason = `HIGHER_TREND_FAILED_LONG (${config.higher_trend_timeframe} trend=${htfTrend}, required=BULLISH) - SAFETY NET`;
+                console.error(`🚨 HTF GATE SAFETY: LONG should have been blocked by side-gate!`);
+              }
+            } else if (signal === 'SHORT' && htfTrend !== 'BEARISH') {
+              if (sideGateData?.shortAllowed === false) {
+                console.log(`✅ HTF GATE AUDIT: SHORT correctly blocked by side-gate (trend=${htfTrend})`);
+              } else {
+                gateBlocked = true;
+                blockReason = `HIGHER_TREND_FAILED_SHORT (${config.higher_trend_timeframe} trend=${htfTrend}, required=BEARISH) - SAFETY NET`;
+                console.error(`🚨 HTF GATE SAFETY: SHORT should have been blocked by side-gate!`);
+              }
             }
           }
           
