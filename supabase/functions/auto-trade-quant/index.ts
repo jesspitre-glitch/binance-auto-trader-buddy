@@ -2224,6 +2224,29 @@ function analyzeSignal(
   console.log(`Indicators being saved: stochRSI_k=${indicators.stochRSI_k}, rsi=${indicators.rsi}, macd=${indicators.macd}, conditionsMet=${conditionsMet}`);
   console.log(`🎯 Signal Decision: longSignal=${longSignal}, shortSignal=${shortSignal}, finalSignal=${finalSignal}, tieBreaker=${tieBreakerUsed}`);
   
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 🔴 SHORT BLOCK SUMMARY - Kompakt one-liner når shortSignal=false
+  // ═══════════════════════════════════════════════════════════════════════════════
+  if (!shortSignal) {
+    // Beregn trend_medium value fra sideGateInfo eller trendKlines
+    const trendMediumValue = sideGateInfo?.higherTrend ?? 'N/A';
+    
+    // Hent filter status for SHORT
+    const stochrsiShortPassed = filterStatus.hard?.stochrsi?.short ?? null;
+    const volumeShortPassed = filterStatus.hard?.volumeShort?.passed ?? null;
+    const adxPassed = filterStatus.hard?.adx?.passed ?? null;
+    const atrPassed = filterStatus.hard?.atr?.passed ?? null;
+    const emaSpreadPassed = filterStatus.hard?.emaSpread?.passed ?? null;
+    const macdShortDirectionOK = macdShortOK;
+    const macdShortColorOK = macdColorChangeShortOK;
+    
+    // Medium trend for SHORT (BEARISH required)
+    // Note: Vi kan ikke beregne trend_medium direkte her, men vi har HTF
+    const mediumTrendPassedShort = trendMediumValue === 'BEARISH' || !config.ema_trend_hard_filter;
+    
+    console.log(`📉 SHORT_BLOCK_SUMMARY | shortAllowed=${shortAllowed} | htf=${trendMediumValue} | medium_trend_ok=${mediumTrendPassedShort} | stochrsi=${stochrsiShortPassed} | vol=${volumeShortPassed} | adx=${adxPassed} | atr=${atrPassed} | emaSpread=${emaSpreadPassed} | macdDir=${macdShortDirectionOK} | macdColor=${macdShortColorOK} | shortConds=${shortConditionsMet}/${requiredConditions}`);
+  }
+  
   // 🔴 KRITISK: stopLoss beregnes kun hvis ATR er gyldig
   // Hvis ATR er null/0/invalid, bliver stopLoss NaN - dette fanger vi senere
   const stopLoss = (atrValue && isFinite(atrValue) && atrValue > 0)
