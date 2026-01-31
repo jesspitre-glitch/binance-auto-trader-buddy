@@ -2674,32 +2674,43 @@ serve(async (req) => {
           }
           
           // ═══════════════════════════════════════════════════════════════════════════════
-          // 🎯 HTF SIDE-GATE v2.2.5 - Post-Analysis Signal Filtering
+          // 🎯 HTF SIDE-GATE v2.2.5 - Post-Analysis Signal Filtering FJERNET
           // ═══════════════════════════════════════════════════════════════════════════════
-          // HTF filtering is now done PRE-analysis via allowedSides parameter.
-          // Here we only filter on medium trend (which is still done post-analysis).
+          // 🔴 FIX: Medium trend gate er nu SIDE-SPECIFIK og håndteres i UNIFIED GATE (linje 3055-3072)
+          // - LONG: kræver BULLISH via ema_trend_hard_filter (side-specifik gate)
+          // - SHORT: kræver BEARISH via ema_trend_hard_filter (side-specifik gate)
+          // 
+          // TIDLIGERE BUG: Der var en post-selection gate her der kaldtes EFTER analyzeSignal,
+          // som krævede trend match for begge sider. Det var UKORREKT fordi:
+          // 1. Det blokerede SHORT selvom SHORT-specifikke gates var opfyldt
+          // 2. Medium trend gate skal IKKE blokere hvis ema_trend_hard_filter=false
+          //
+          // NU: Signal filtrering sker KUN via UNIFIED GATE ved order placering.
           let filteredSignal = analysis.signal;
           
-          if (filteredSignal === 'LONG') {
-            // LONG kræver BULLISH på medium timeframe
-            if (trend !== 'BULLISH') {
-              filteredSignal = 'NONE';
-              console.log(`Blocked LONG on ${symbol}: Medium trend (${config.trend_timeframe}) not BULLISH (is ${trend})`);
+          // 📊 AUDIT LOG for signal decision (kun for LONG/SHORT signaler)
+          if (filteredSignal !== 'NONE') {
+            const signalDecision = analysis.indicators?.signal_decision;
+            const sideGate = analysis.indicators?.side_gate;
+            console.log(`\n📊 SIGNAL_DECISION_AUDIT ${symbol}:`);
+            console.log(`   signal: ${filteredSignal}`);
+            console.log(`   trend_medium: ${trend}`);
+            console.log(`   longSignal: ${signalDecision?.longSignal ?? 'N/A'}, shortSignal: ${signalDecision?.shortSignal ?? 'N/A'}`);
+            console.log(`   longConditionsMet: ${signalDecision?.longConditionsMet ?? 0}, shortConditionsMet: ${signalDecision?.shortConditionsMet ?? 0}`);
+            console.log(`   tieBreaker: ${signalDecision?.tieBreaker ?? 'null'}`);
+            if (sideGate) {
+              console.log(`   allowedSides: [${sideGate.allowed_sides?.join(', ') ?? 'LONG, SHORT'}]`);
+              console.log(`   gate_reason: ${sideGate.gate_reason ?? 'N/A'}`);
             }
-            // HTF blocking er nu håndteret via side-gate i analyzeSignal - kun audit log
-            else if (config.higher_trend_enabled && higherTrend !== 'BULLISH') {
-              console.log(`📋 AUDIT: LONG on ${symbol} - HTF already blocked via side-gate (trend=${higherTrend})`);
-            }
-          } else if (filteredSignal === 'SHORT') {
-            // SHORT kræver BEARISH på medium timeframe
-            if (trend !== 'BEARISH') {
-              filteredSignal = 'NONE';
-              console.log(`Blocked SHORT on ${symbol}: Medium trend (${config.trend_timeframe}) not BEARISH (is ${trend})`);
-            }
-            // HTF blocking er nu håndteret via side-gate i analyzeSignal - kun audit log
-            else if (config.higher_trend_enabled && higherTrend !== 'BEARISH') {
-              console.log(`📋 AUDIT: SHORT on ${symbol} - HTF already blocked via side-gate (trend=${higherTrend})`);
-            }
+            console.log(`   ✅ NO POST-SELECTION GATE BLOCKING - signal passerer til UNIFIED GATE`);
+          }
+          
+          // HTF audit logs (informational only, no blocking)
+          if (filteredSignal === 'LONG' && config.higher_trend_enabled && higherTrend !== 'BULLISH') {
+            console.log(`📋 AUDIT: LONG on ${symbol} - HTF trend=${higherTrend} (if blocked, it's via UNIFIED GATE)`);
+          }
+          if (filteredSignal === 'SHORT' && config.higher_trend_enabled && higherTrend !== 'BEARISH') {
+            console.log(`📋 AUDIT: SHORT on ${symbol} - HTF trend=${higherTrend} (if blocked, it's via UNIFIED GATE)`);
           }
 
           // Log scan result to database
@@ -2845,6 +2856,47 @@ serve(async (req) => {
         console.log(`   Symbol: ${blocked.symbol}, Signal: ${blocked.signal}, Strength: ${blocked.strength.toFixed(1)}`);
         console.log(`   ADX: ${blocked.analysis.indicators.adx?.toFixed(2) ?? 'N/A'}, Floor: ${config.adx_floor}, Ceiling: ${config.adx_ceiling}`);
         console.log(`   Reason: Hard filter(s) blocked this trade`);
+      }
+      
+      // 📊 SHORT REJECTION SUMMARY - Vis top 3 blockers for SHORT signaler
+      const shortSignals = validSignals.filter(s => s.analysis.indicators?.signal_decision?.shortSignal === false || 
+        (s.signal !== 'SHORT' && s.analysis.indicators?.conditionDetails?.shortConditionsMet > 0));
+      if (shortSignals.length > 0) {
+        console.log(`\n📊 SHORT REJECTION SUMMARY (top 3 blockers):`);
+        const rejectionReasons: Record<string, number> = {};
+        
+        for (const sig of shortSignals.slice(0, 10)) {
+          const fs = sig.analysis.filterStatus;
+          const ind = sig.analysis.indicators;
+          
+          // Tæl rejection reasons
+          if (fs?.hard?.stochrsi?.short !== true && config.stochrsi_hard_filter) {
+            rejectionReasons['stochrsi_hard=false'] = (rejectionReasons['stochrsi_hard=false'] || 0) + 1;
+          }
+          if (fs?.hard?.volumeShort?.passed !== true && config.volume_mode_short === 'HARD') {
+            rejectionReasons['volume_short=false'] = (rejectionReasons['volume_short=false'] || 0) + 1;
+          }
+          if (fs?.hard?.adx?.passed !== true && config.adx_hard_filter !== false) {
+            rejectionReasons['adx=false'] = (rejectionReasons['adx=false'] || 0) + 1;
+          }
+          if (fs?.hard?.atr?.passed !== true && config.atr_hard_filter !== false) {
+            rejectionReasons['atr=false'] = (rejectionReasons['atr=false'] || 0) + 1;
+          }
+          if (fs?.hard?.emaSpread?.passed !== true && config.ema_hard_filter !== false) {
+            rejectionReasons['ema_spread=false'] = (rejectionReasons['ema_spread=false'] || 0) + 1;
+          }
+          if ((ind.conditionDetails?.shortConditionsMet ?? 0) < config.signal_conditions_required) {
+            rejectionReasons['soft_conds_insufficient'] = (rejectionReasons['soft_conds_insufficient'] || 0) + 1;
+          }
+        }
+        
+        // Log top 3 blockers
+        const sortedReasons = Object.entries(rejectionReasons)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3);
+        for (const [reason, count] of sortedReasons) {
+          console.log(`   ${reason}: ${count} symboler blokeret`);
+        }
       }
       
       // 🛡️ KRITISK: Tag KUN det stærkeste signal for at undgå race conditions
