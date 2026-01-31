@@ -15,6 +15,7 @@ interface IndicatorConfig {
   min_ema_spread_percent: number;
   max_ema_spread_percent?: number;
   ema_hard_filter?: boolean;
+  ema_trend_hard_filter?: boolean; // 🔴 Medium trend side-specifik hard filter
   rsi_enabled: boolean;
   rsi_period: number;
   rsi_min_long: number;
@@ -3051,15 +3052,22 @@ serve(async (req) => {
             }
           }
           
-          // 9. Medium Trend Filter (always required if EMA enabled AND ema_hard_filter)
-          if (!gateBlocked && config.ema_enabled && config.ema_hard_filter !== false) {
+          // 9. Medium Trend Filter (SIDE-SPECIFIK: LONG kræver BULLISH, SHORT kræver BEARISH)
+          // 🔴 FIX: Medium trend er nu SIDE-SPECIFIK som HTF
+          // - LONG: blokeres KUN hvis trend !== BULLISH (NEUTRAL tillader LONG at fortsætte)
+          // - SHORT: blokeres KUN hvis trend !== BEARISH (NEUTRAL tillader SHORT at fortsætte)
+          // - NEUTRAL trend: Begge sider kan evalueres (ingen medium trend gate)
+          if (!gateBlocked && config.ema_enabled && config.ema_trend_hard_filter === true) {
             const mediumTrend = selectedSignal.trend;
+            // LONG: kræver BULLISH (NEUTRAL eller BEARISH blokerer)
             if (signal === 'LONG' && mediumTrend !== 'BULLISH') {
               gateBlocked = true;
-              blockReason = `MEDIUM_TREND_FAILED_LONG (${config.trend_timeframe} trend=${mediumTrend}, required=BULLISH)`;
-            } else if (signal === 'SHORT' && mediumTrend !== 'BEARISH') {
+              blockReason = `MEDIUM_TREND_FAILED_LONG (${config.trend_timeframe} trend=${mediumTrend}, required=BULLISH for LONG)`;
+            }
+            // SHORT: kræver BEARISH (NEUTRAL eller BULLISH blokerer)
+            if (signal === 'SHORT' && mediumTrend !== 'BEARISH') {
               gateBlocked = true;
-              blockReason = `MEDIUM_TREND_FAILED_SHORT (${config.trend_timeframe} trend=${mediumTrend}, required=BEARISH)`;
+              blockReason = `MEDIUM_TREND_FAILED_SHORT (${config.trend_timeframe} trend=${mediumTrend}, required=BEARISH for SHORT)`;
             }
           }
           
@@ -3704,10 +3712,21 @@ serve(async (req) => {
               timeframe: config.higher_trend_timeframe ?? null,
             },
             medium_trend: {
-              enabled: config.ema_enabled === true && config.ema_hard_filter !== false,
-              passed: (signal === 'LONG' && selectedSignal.trend === 'BULLISH') 
-                || (signal === 'SHORT' && selectedSignal.trend === 'BEARISH'),
-              reason: `${config.trend_timeframe} trend=${selectedSignal.trend}, required=${signal === 'LONG' ? 'BULLISH' : 'BEARISH'}`,
+              enabled: config.ema_enabled === true && config.ema_trend_hard_filter === true,
+              // 🔴 FIX: Side-specifik evaluering
+              // LONG: passed=true hvis trend=BULLISH
+              // SHORT: passed=true hvis trend=BEARISH
+              // Hvis disabled: passed=null
+              passed: config.ema_trend_hard_filter !== true 
+                ? null 
+                : signal === 'LONG' 
+                  ? selectedSignal.trend === 'BULLISH' 
+                  : signal === 'SHORT' 
+                    ? selectedSignal.trend === 'BEARISH' 
+                    : null,
+              reason: config.ema_trend_hard_filter !== true 
+                ? 'filter_disabled' 
+                : `${config.trend_timeframe} trend=${selectedSignal.trend}, required=${signal === 'LONG' ? 'BULLISH' : signal === 'SHORT' ? 'BEARISH' : 'N/A'}`,
               trend_value: selectedSignal.trend,
               timeframe: config.trend_timeframe ?? null,
             },
@@ -3759,7 +3778,7 @@ serve(async (req) => {
             // ═══════════════════════════════════════════════════════
             hard_filters_total: 10,
             hard_filters_enabled: [
-              config.ema_enabled && config.ema_hard_filter !== false,
+              config.ema_enabled && config.ema_hard_filter !== false, // EMA spread filter
               config.atr_enabled && config.atr_hard_filter !== false,
               config.adx_enabled && config.adx_hard_filter !== false,
               config.volume_enabled && config.volume_hard_filter !== false,
@@ -3768,7 +3787,7 @@ serve(async (req) => {
               config.macd_direction_enabled,
               config.macd_color_change_hard_filter,
               config.higher_trend_enabled && config.higher_trend_hard_filter !== false,
-              config.ema_enabled && config.ema_hard_filter !== false, // medium trend
+              config.ema_enabled && config.ema_trend_hard_filter === true, // 🔴 FIX: medium trend bruger ema_trend_hard_filter
             ].filter(Boolean).length,
             soft_conditions_required: config.signal_conditions_required,
             soft_conditions_met: signal === 'LONG' 
