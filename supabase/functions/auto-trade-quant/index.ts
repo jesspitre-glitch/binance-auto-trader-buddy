@@ -2711,29 +2711,39 @@ serve(async (req) => {
           // NU: Signal filtrering sker KUN via UNIFIED GATE ved order placering.
           let filteredSignal = analysis.signal;
           
-          // 📊 AUDIT LOG for signal decision (kun for LONG/SHORT signaler)
-          if (filteredSignal !== 'NONE') {
-            const signalDecision = analysis.indicators?.signal_decision;
-            const sideGate = analysis.indicators?.side_gate;
-            console.log(`\n📊 SIGNAL_DECISION_AUDIT ${symbol}:`);
-            console.log(`   signal: ${filteredSignal}`);
-            console.log(`   trend_medium: ${trend}`);
-            console.log(`   longSignal: ${signalDecision?.longSignal ?? 'N/A'}, shortSignal: ${signalDecision?.shortSignal ?? 'N/A'}`);
-            console.log(`   longConditionsMet: ${signalDecision?.longConditionsMet ?? 0}, shortConditionsMet: ${signalDecision?.shortConditionsMet ?? 0}`);
-            console.log(`   tieBreaker: ${signalDecision?.tieBreaker ?? 'null'}`);
-            if (sideGate) {
-              console.log(`   allowedSides: [${sideGate.allowed_sides?.join(', ') ?? 'LONG, SHORT'}]`);
-              console.log(`   gate_reason: ${sideGate.gate_reason ?? 'N/A'}`);
-            }
-            console.log(`   ✅ NO POST-SELECTION GATE BLOCKING - signal passerer til UNIFIED GATE`);
+          // 📊 KOMPAKT VERIFICATION LOG - ÉN LINJE PR SYMBOL
+          const sd = analysis.indicators?.signal_decision;
+          const hard = (analysis.filterStatus?.hard || {}) as Record<string, { passed?: boolean }>;
+          const emaTrendHard = config.ema_trend_hard_filter ?? false;
+          
+          // Identificér primær blocker
+          let primaryBlocker = 'NONE';
+          if (filteredSignal === 'NONE' || (sd && !sd.longSignal && !sd.shortSignal)) {
+            if (hard['adx']?.passed === false) primaryBlocker = 'ADX';
+            else if (hard['atr']?.passed === false) primaryBlocker = 'ATR';
+            else if (hard['medium_trend']?.passed === false) primaryBlocker = 'EMA_TREND';
+            else if (hard['volume_long']?.passed === false || hard['volume_short']?.passed === false) primaryBlocker = 'VOLUME';
+            else if (hard['stochrsi']?.passed === false) primaryBlocker = 'STOCHRSI';
+            else if (hard['emaSpread']?.passed === false) primaryBlocker = 'EMA_SPREAD';
+            else if (hard['ema_quality']?.passed === false) primaryBlocker = 'EMA_QUALITY';
+            else primaryBlocker = 'CONDITIONS';
           }
           
-          // HTF audit logs (informational only, no blocking)
-          if (filteredSignal === 'LONG' && config.higher_trend_enabled && higherTrend !== 'BULLISH') {
-            console.log(`📋 AUDIT: LONG on ${symbol} - HTF trend=${higherTrend} (if blocked, it's via UNIFIED GATE)`);
-          }
-          if (filteredSignal === 'SHORT' && config.higher_trend_enabled && higherTrend !== 'BEARISH') {
-            console.log(`📋 AUDIT: SHORT on ${symbol} - HTF trend=${higherTrend} (if blocked, it's via UNIFIED GATE)`);
+          // ÉN KOMPAKT LOG-LINJE PR SYMBOL
+          console.log(`📋 VERIFY|${symbol}|trend=${trend}|ema_hard=${emaTrendHard}|L=${sd?.longSignal ?? false}|S=${sd?.shortSignal ?? false}|final=${filteredSignal}|blocker=${primaryBlocker}`);
+          
+          // Track SHORT-specifik statistik når shortSignal=false
+          if (sd?.shortSignal === false) {
+            const shortBlocks: string[] = [];
+            if (hard['adx']?.passed === false) shortBlocks.push('ADX');
+            if (hard['atr']?.passed === false) shortBlocks.push('ATR');
+            if (hard['medium_trend']?.passed === false) shortBlocks.push('EMA_TREND');
+            if (hard['volume_short']?.passed === false) shortBlocks.push('VOLUME');
+            if (hard['stochrsi']?.passed === false) shortBlocks.push('STOCHRSI');
+            if (hard['emaSpread']?.passed === false) shortBlocks.push('EMA_SPREAD');
+            if (hard['ema_quality']?.passed === false) shortBlocks.push('EMA_QUALITY');
+            if (shortBlocks.length === 0) shortBlocks.push('CONDITIONS');
+            console.log(`📋 SHORT_BLOCKED|${symbol}|${shortBlocks.join(',')}`);
           }
 
           // Log scan result to database
