@@ -163,7 +163,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     volume_multiplier: config?.volume_multiplier ?? 1.2,
     volume_mode_short: config?.volume_mode_short || 'HARD',
     volume_multiplier_short: config?.volume_multiplier_short ?? 0.50,
-    signal_conditions_required: config?.signal_conditions_required || 5,
+    // IMPORTANT: use ?? so a saved value of 0 is respected
+    signal_conditions_required: config?.signal_conditions_required ?? 5,
     
     // Timeframes
     scan_interval: config?.scan_interval || "5m",

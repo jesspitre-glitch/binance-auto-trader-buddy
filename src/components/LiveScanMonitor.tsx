@@ -142,7 +142,9 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     }
 
     const indicators = result.indicators;
-    const conditionsRequired = config?.signal_conditions_required || 2;
+    // IMPORTANT: use ?? (not ||) so a config value of 0 is respected.
+    // We intentionally DO NOT fall back to snapshot here; UI should reflect current config.
+    const conditionsRequired = (config?.signal_conditions_required ?? 0) as number;
     
     // 🔍 DIAGNOSTIC: Log MACD and Higher Trend keys for N/A debugging
     console.log(`📊 [${result.symbol}] MACD keys:`, {
@@ -516,7 +518,10 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     const actualConditionsMet = trend === 'long' ? longConditionsMet : 
                                 trend === 'short' ? shortConditionsMet : 
                                 Math.max(longConditionsMet, shortConditionsMet);
-    const strength = Math.min((actualConditionsMet / conditionsRequired) * 100, 100);
+    const strength =
+      conditionsRequired === 0
+        ? 100
+        : Math.min((actualConditionsMet / conditionsRequired) * 100, 100);
 
     console.log(`Updating ${result.symbol}: strength=${strength.toFixed(1)}%, trend=${trend}, conditions=${actualConditionsMet}/${conditionsRequired} (long:${longConditionsMet}, short:${shortConditionsMet}), hardFilters=${JSON.stringify(hardFilters)}`);
 
