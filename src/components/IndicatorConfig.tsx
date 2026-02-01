@@ -777,7 +777,15 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               <Switch
                 id="ema_enabled"
                 checked={formData.ema_enabled}
-                onCheckedChange={(checked) => setFormData({ ...formData, ema_enabled: checked })}
+                onCheckedChange={(checked) => setFormData({ 
+                  ...formData, 
+                  ema_enabled: checked,
+                  // Sluk alle child-toggles når parent slukkes
+                  ...(checked === false && {
+                    ema_trend_hard_filter: false,
+                    ema_hard_filter: false,
+                  })
+                })}
               />
             </div>
           </div>
@@ -880,7 +888,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               <Switch
                 id="rsi_enabled"
                 checked={formData.rsi_enabled}
-                onCheckedChange={(checked) => setFormData({ ...formData, rsi_enabled: checked })}
+                onCheckedChange={(checked) => setFormData({ 
+                  ...formData, 
+                  rsi_enabled: checked,
+                  ...(checked === false && { rsi_hard_filter: false })
+                })}
               />
             </div>
           </div>
@@ -967,7 +979,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               <Switch
                 id="stochrsi_enabled"
                 checked={formData.stochrsi_enabled}
-                onCheckedChange={(checked) => setFormData({ ...formData, stochrsi_enabled: checked })}
+                onCheckedChange={(checked) => setFormData({ 
+                  ...formData, 
+                  stochrsi_enabled: checked,
+                  ...(checked === false && { stochrsi_hard_filter: false })
+                })}
               />
             </div>
           </div>
@@ -1126,7 +1142,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               <Switch
                 id="pivot_points_enabled"
                 checked={formData.pivot_points_enabled}
-                onCheckedChange={(checked) => setFormData({ ...formData, pivot_points_enabled: checked })}
+                onCheckedChange={(checked) => setFormData({ 
+                  ...formData, 
+                  pivot_points_enabled: checked,
+                  ...(checked === false && { pivot_points_hard_filter: false })
+                })}
               />
             </div>
           </div>
@@ -1197,7 +1217,17 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               <Switch
                 id="macd_enabled"
                 checked={formData.macd_enabled}
-                onCheckedChange={(checked) => setFormData({ ...formData, macd_enabled: checked })}
+                onCheckedChange={(checked) => setFormData({ 
+                  ...formData, 
+                  macd_enabled: checked,
+                  // Sluk alle child-toggles når parent slukkes
+                  ...(checked === false && {
+                    macd_direction_enabled: false,
+                    macd_color_change_hard_filter: false,
+                    histogram_momentum_enabled: false,
+                    macd_hard_filter: false,
+                  })
+                })}
               />
             </div>
           </div>
@@ -1325,7 +1355,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               <Switch
                 id="bb_enabled"
                 checked={formData.bb_enabled}
-                onCheckedChange={(checked) => setFormData({ ...formData, bb_enabled: checked })}
+                onCheckedChange={(checked) => setFormData({ 
+                  ...formData, 
+                  bb_enabled: checked,
+                  ...(checked === false && { bb_hard_filter: false })
+                })}
               />
             </div>
           </div>
@@ -1379,7 +1413,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               <Switch
                 id="vwap_enabled"
                 checked={formData.vwap_enabled}
-                onCheckedChange={(checked) => setFormData({ ...formData, vwap_enabled: checked })}
+                onCheckedChange={(checked) => setFormData({ 
+                  ...formData, 
+                  vwap_enabled: checked,
+                  ...(checked === false && { vwap_hard_filter: false })
+                })}
               />
             </div>
           </div>
@@ -1425,7 +1463,16 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               <Switch
                 id="atr_enabled"
                 checked={formData.atr_enabled}
-                onCheckedChange={(checked) => setFormData({ ...formData, atr_enabled: checked })}
+                onCheckedChange={(checked) => setFormData({ 
+                  ...formData, 
+                  atr_enabled: checked,
+                  // Sluk alle child-toggles når parent slukkes
+                  ...(checked === false && {
+                    adaptive_atr_enabled: false,
+                    trailing_stop_activation_enabled: false,
+                    atr_hard_filter: false,
+                  })
+                })}
               />
             </div>
           </div>
@@ -1579,7 +1626,16 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               <Switch
                 id="break_even_enabled"
                 checked={formData.break_even_enabled}
-                onCheckedChange={(checked) => setFormData({ ...formData, break_even_enabled: checked })}
+                onCheckedChange={(checked) => setFormData({ 
+                  ...formData, 
+                  break_even_enabled: checked,
+                  // Sluk alle child-toggles når parent slukkes
+                  ...(checked === false && {
+                    break_even_ratchet_only: false,
+                    break_even_atr_enabled: false,
+                    break_even_profit_pct_enabled: false,
+                  })
+                })}
               />
             </div>
           </div>
@@ -1743,7 +1799,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               <Switch
                 id="peak_lock_enabled"
                 checked={formData.peak_lock_enabled}
-                onCheckedChange={(checked) => setFormData({ ...formData, peak_lock_enabled: checked })}
+                onCheckedChange={(checked) => setFormData({ 
+                  ...formData, 
+                  peak_lock_enabled: checked,
+                  ...(checked === false && { peak_lock_ratchet_only: false })
+                })}
               />
             </div>
           </div>
@@ -1957,7 +2017,15 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               <Switch
                 id="adx_enabled"
                 checked={formData.adx_enabled}
-                onCheckedChange={(checked) => setFormData({ ...formData, adx_enabled: checked })}
+                onCheckedChange={(checked) => setFormData({ 
+                  ...formData, 
+                  adx_enabled: checked,
+                  // Sluk alle child-toggles når parent slukkes
+                  ...(checked === false && {
+                    adaptive_adx_enabled: false,
+                    adx_hard_filter: false,
+                  })
+                })}
               />
             </div>
           </div>
@@ -2052,7 +2120,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               <Switch
                 id="volume_enabled"
                 checked={formData.volume_enabled}
-                onCheckedChange={(checked) => setFormData({ ...formData, volume_enabled: checked })}
+                onCheckedChange={(checked) => setFormData({ 
+                  ...formData, 
+                  volume_enabled: checked,
+                  ...(checked === false && { volume_hard_filter: false })
+                })}
               />
             </div>
           </div>
@@ -2249,7 +2321,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               <Switch
                 id="higher_trend_enabled"
                 checked={formData.higher_trend_enabled}
-                onCheckedChange={(checked) => setFormData({ ...formData, higher_trend_enabled: checked })}
+                onCheckedChange={(checked) => setFormData({ 
+                  ...formData, 
+                  higher_trend_enabled: checked,
+                  ...(checked === false && { higher_trend_hard_filter: false })
+                })}
               />
             </div>
           </div>
