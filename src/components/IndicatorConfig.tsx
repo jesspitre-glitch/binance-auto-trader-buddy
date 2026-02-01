@@ -169,6 +169,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     // Timeframes
     scan_interval: config?.scan_interval || "5m",
     signal_timing_mode: config?.signal_timing_mode || "LIVE",
+    candle_close_entry_window_seconds: config?.candle_close_entry_window_seconds ?? 120,
     trend_timeframe: config?.trend_timeframe || config?.mtf_timeframe || "15m",
     trend_timeframe_enabled: config?.trend_timeframe_enabled !== undefined ? config?.trend_timeframe_enabled : true,
     higher_trend_enabled: config?.higher_trend_enabled !== undefined ? config?.higher_trend_enabled : true,
@@ -329,6 +330,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       // Timeframes
       scan_interval: config.scan_interval ?? "5m",
       signal_timing_mode: config.signal_timing_mode ?? "LIVE",
+      candle_close_entry_window_seconds: config.candle_close_entry_window_seconds ?? 120,
       trend_timeframe: config.trend_timeframe ?? config.mtf_timeframe ?? "15m",
       trend_timeframe_enabled: config.trend_timeframe_enabled !== undefined ? config.trend_timeframe_enabled : true,
       higher_trend_enabled: config.higher_trend_enabled !== undefined ? config.higher_trend_enabled : true,
@@ -490,6 +492,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       signal_conditions_required: config.signal_conditions_required ?? 5,
       scan_interval: config.scan_interval ?? "5m",
       signal_timing_mode: config.signal_timing_mode ?? "LIVE",
+      candle_close_entry_window_seconds: config.candle_close_entry_window_seconds ?? 120,
       trend_timeframe: config.trend_timeframe ?? config.mtf_timeframe ?? "15m",
       trend_timeframe_enabled: config.trend_timeframe_enabled !== undefined ? config.trend_timeframe_enabled : true,
       higher_trend_enabled: config.higher_trend_enabled !== undefined ? config.higher_trend_enabled : true,
@@ -2333,6 +2336,30 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 : "Signaler kvalificeres kun ved candle close, entry på næste candle"}
             </p>
           </div>
+          
+          {/* Entry Window - kun synlig i CANDLE_CLOSE mode */}
+          {formData.signal_timing_mode === 'CANDLE_CLOSE' && (
+            <div className="space-y-2">
+              <Label htmlFor="candle_close_entry_window_seconds">Entry Window (sekunder)</Label>
+              <Select
+                value={String(formData.candle_close_entry_window_seconds)}
+                onValueChange={(value) => setFormData({ ...formData, candle_close_entry_window_seconds: parseInt(value) })}
+              >
+                <SelectTrigger id="candle_close_entry_window_seconds">
+                  <SelectValue placeholder="Vælg vindue" />
+                </SelectTrigger>
+                <SelectContent className="bg-background">
+                  <SelectItem value="60">60 sek (1 min)</SelectItem>
+                  <SelectItem value="120">120 sek (2 min)</SelectItem>
+                  <SelectItem value="180">180 sek (3 min)</SelectItem>
+                  <SelectItem value="300">300 sek (5 min)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Tid fra candle-start hvor entry er tilladt. Øg ved cron-jitter.
+              </p>
+            </div>
+          )}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="trend_timeframe">Trend Timeframe</Label>
