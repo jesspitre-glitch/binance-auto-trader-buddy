@@ -1522,143 +1522,199 @@ function analyzeSignal(
   // RSI er nu en hård regel som filtrerer før evaluering
   // Ingen flexible conditions her længere
   
-  // StochRSI (hvis enabled) - kan være HARD eller SOFT filter baseret på config
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 🔴 StochRSI v3.0 - STRICT CROSSOVER LOGIC
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // REGEL: Ingen fallbacks! Afvis signal hvis threshold mangler.
+  // LONG: D krydser over K i oversolgt zone
+  // SHORT: D krydser under K i overkøbt zone
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
   if (config.stochrsi_enabled && stochRSI) {
-    // Get thresholds - use new K/D specific thresholds, falling back to legacy values
-    const oversoldK = config.stochrsi_oversold_k ?? config.stochrsi_oversold ?? 20;
-    const oversoldD = config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20;
-    const overboughtK = config.stochrsi_overbought_k ?? config.stochrsi_overbought ?? 80;
-    const overboughtD = config.stochrsi_overbought_d ?? config.stochrsi_overbought ?? 80;
-    const overboughtThreshold = Math.max(overboughtK, overboughtD); // Use max for cross check
-    const shortMode = config.stochrsi_short_mode ?? 'ZONE_ONLY';
-    const rolloverDMin = config.rollover_d_min_short ?? 0; // 0 = disabled
+    // 🔴 STRICT THRESHOLD EXTRACTION - NO FALLBACKS
+    // Check if thresholds are explicitly set (not null/undefined)
+    const oversoldK_raw = config.stochrsi_oversold_k;
+    const oversoldD_raw = config.stochrsi_oversold_d;
+    const overboughtK_raw = config.stochrsi_overbought_k;
+    const overboughtD_raw = config.stochrsi_overbought_d;
     
-    // SHORT: Afhænger af SHORT_MODE - erklær alle variabler først
-    let stochRSIShort = false;
-    let shortConditionType: 'ZONE_ONLY' | 'BEARISH_CROSS' | 'NONE' = 'NONE';
-    let crossDown = false;
-    let crossUp = false;  // 🔴 For LONG signal audit
-    let overboughtAtSignal = false;
-    let oversoldAtSignal = false;  // 🔴 For LONG signal audit
-    let rolloverDMinUsed = false;
+    // Validate all thresholds are present
+    const thresholdsMissing: string[] = [];
+    if (oversoldK_raw === null || oversoldK_raw === undefined) thresholdsMissing.push('stochrsi_oversold_k');
+    if (oversoldD_raw === null || oversoldD_raw === undefined) thresholdsMissing.push('stochrsi_oversold_d');
+    if (overboughtK_raw === null || overboughtK_raw === undefined) thresholdsMissing.push('stochrsi_overbought_k');
+    if (overboughtD_raw === null || overboughtD_raw === undefined) thresholdsMissing.push('stochrsi_overbought_d');
     
-    // LONG: K <= oversold_k AND D <= oversold_d (UNCHANGED)
-    const stochRSILong = stochRSI.k <= oversoldK && stochRSI.d <= oversoldD;
-    
-    // 🔴 Calculate oversold_at_signal for LONG audit
-    oversoldAtSignal = stochRSI.k <= oversoldK && stochRSI.d <= oversoldD;
-    
-    // Calculate previous K and D for cross detection
-    let prevK: number | null = null;
-    let prevD: number | null = null;
-    
-    if (closes.length >= config.stochrsi_period + config.stochrsi_k_period + config.stochrsi_d_period + 1) {
-      const slicedCloses = closes.slice(0, closes.length - 1);
-      if (slicedCloses.length >= config.stochrsi_period + config.stochrsi_k_period + config.stochrsi_d_period) {
-        const prevStochRSI = calculateStochRSI(slicedCloses, config.stochrsi_period, config.stochrsi_k_period, config.stochrsi_d_period);
-        prevK = prevStochRSI.k;
-        prevD = prevStochRSI.d;
+    if (thresholdsMissing.length > 0) {
+      // 🔴 REJECT SIGNAL - Missing config values
+      filterStatus.hard.stochrsi.passed = false;
+      filterStatus.hard.stochrsi.long = false;
+      filterStatus.hard.stochrsi.short = false;
+      filterStatus.hard.stochrsi.reason = `MISSING_CONFIG_VALUES: ${thresholdsMissing.join(', ')}`;
+      filterStatus.hard.stochrsi.value = `K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)}`;
+      filterStatus.hard.stochrsi.audit = {
+        stochrsi_config_error: true,
+        stochrsi_missing_thresholds: thresholdsMissing,
+        stochrsi_oversold_k_raw: oversoldK_raw,
+        stochrsi_oversold_d_raw: oversoldD_raw,
+        stochrsi_overbought_k_raw: overboughtK_raw,
+        stochrsi_overbought_d_raw: overboughtD_raw,
+      };
+      
+      console.log(`\n   ❌ StochRSI CONFIG ERROR: Missing thresholds - ${thresholdsMissing.join(', ')}`);
+      console.log(`   ❌ Signal REJECTED due to missing configuration values`);
+      console.log(`   📋 Raw values: oversold_k=${oversoldK_raw}, oversold_d=${oversoldD_raw}, overbought_k=${overboughtK_raw}, overbought_d=${overboughtD_raw}`);
+      
+      // Set condition details to false (blocked)
+      conditionDetails.stochRSI.long = false;
+      conditionDetails.stochRSI.short = false;
+    } else {
+      // ✅ All thresholds present - proceed with crossover logic
+      const oversoldK = oversoldK_raw as number;
+      const oversoldD = oversoldD_raw as number;
+      const overboughtK = overboughtK_raw as number;
+      const overboughtD = overboughtD_raw as number;
+      
+      // Variables for signal evaluation
+      let stochRSILong = false;
+      let stochRSIShort = false;
+      let longConditionType: 'BULLISH_CROSS_OVERSOLD' | 'NONE' = 'NONE';
+      let shortConditionType: 'BEARISH_CROSS_OVERBOUGHT' | 'NONE' = 'NONE';
+      let crossDown = false;
+      let crossUp = false;
+      let overboughtAtSignal = false;
+      let oversoldAtSignal = false;
+      
+      // Calculate previous K and D for cross detection
+      let prevK: number | null = null;
+      let prevD: number | null = null;
+      
+      if (closes.length >= config.stochrsi_period + config.stochrsi_k_period + config.stochrsi_d_period + 1) {
+        const slicedCloses = closes.slice(0, closes.length - 1);
+        if (slicedCloses.length >= config.stochrsi_period + config.stochrsi_k_period + config.stochrsi_d_period) {
+          const prevStochRSI = calculateStochRSI(slicedCloses, config.stochrsi_period, config.stochrsi_k_period, config.stochrsi_d_period);
+          prevK = prevStochRSI.k;
+          prevD = prevStochRSI.d;
+        }
       }
-    }
-    
-    if (shortMode === 'ZONE_ONLY') {
-      // MODE A: ZONE_ONLY - K >= overbought_k AND D >= overbought_d
-      const shortZone = stochRSI.k >= overboughtK && stochRSI.d >= overboughtD;
-      stochRSIShort = shortZone;
-      shortConditionType = shortZone ? 'ZONE_ONLY' : 'NONE';
       
-      console.log(`   📊 StochRSI SHORT_MODE=${shortMode}`);
-      console.log(`   📊 StochRSI Values: K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)}`);
-      console.log(`   📊 StochRSI SHORT ZONE_ONLY: K>=${overboughtK} (${stochRSI.k >= overboughtK}), D>=${overboughtD} (${stochRSI.d >= overboughtD}) → ${shortZone ? '✅ PASS' : '❌ FAIL'}`);
+      console.log(`\n   ═══════════════════════════════════════════════════════════════════`);
+      console.log(`   📊 StochRSI v3.0 STRICT CROSSOVER EVALUATION`);
+      console.log(`   📋 Thresholds from UI config (NO FALLBACKS):`);
+      console.log(`      Oversold K: ${oversoldK}, Oversold D: ${oversoldD}`);
+      console.log(`      Overbought K: ${overboughtK}, Overbought D: ${overboughtD}`);
+      console.log(`   📊 Current Values: K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)}`);
+      if (prevK !== null && prevD !== null) {
+        console.log(`   📊 Previous Values: K=${prevK.toFixed(2)}, D=${prevD.toFixed(2)}`);
+      } else {
+        console.log(`   ⚠️ Previous K/D not available (insufficient data)`);
+      }
       
-    } else if (shortMode === 'REVERSAL_ROLLOVER') {
-      // MODE B: REVERSAL_ROLLOVER - Bearish cross in overbought zone
-      // Krav 1: K_prev > D_prev AND K_now < D_now (bearish cross)
-      // Krav 2: max(K_now, D_now) >= Overbought_threshold
-      // Valgfrit: D_now <= Rollover_D_Min (hvis > 0)
+      // ═══════════════════════════════════════════════════════════════════
+      // 🔴 LONG SIGNAL: D crosses OVER K in oversold zone
+      // Krav 1: prev_D < prev_K AND D >= K (bullish cross - D crossing above K)
+      // Krav 2: K <= oversoldK AND D <= oversoldD (in oversold zone)
+      // ═══════════════════════════════════════════════════════════════════
+      oversoldAtSignal = stochRSI.k <= oversoldK && stochRSI.d <= oversoldD;
       
       if (prevK !== null && prevD !== null) {
-        crossDown = prevK > prevD && stochRSI.k < stochRSI.d;
-        overboughtAtSignal = Math.max(stochRSI.k, stochRSI.d) >= overboughtThreshold;
+        // Bullish cross: D was below K, now D >= K (D crossing over K)
+        crossUp = prevD < prevK && stochRSI.d >= stochRSI.k;
         
-        // Rollover D Min check (kun hvis > 0)
-        let rolloverCheck = true;
-        if (rolloverDMin > 0) {
-          rolloverCheck = stochRSI.d <= rolloverDMin;
-          rolloverDMinUsed = true;
-        }
+        // LONG = bullish cross + in oversold zone
+        stochRSILong = crossUp && oversoldAtSignal;
+        longConditionType = stochRSILong ? 'BULLISH_CROSS_OVERSOLD' : 'NONE';
         
-        const shortBearishCross = crossDown && overboughtAtSignal && rolloverCheck;
-        stochRSIShort = shortBearishCross;
-        shortConditionType = shortBearishCross ? 'BEARISH_CROSS' : 'NONE';
-        
-        console.log(`   📊 StochRSI SHORT_MODE=${shortMode}`);
-        console.log(`   📊 StochRSI Values: K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)}, prev_K=${prevK.toFixed(2)}, prev_D=${prevD.toFixed(2)}`);
-        console.log(`   📊 StochRSI BEARISH_CROSS: prev_K>${prevD} (${prevK > prevD}), K<D (${stochRSI.k < stochRSI.d}) → cross_down=${crossDown}`);
-        console.log(`   📊 StochRSI OVERBOUGHT_AT_SIGNAL: max(K,D)=${Math.max(stochRSI.k, stochRSI.d).toFixed(2)} >= ${overboughtThreshold} → ${overboughtAtSignal ? '✅' : '❌'}`);
-        if (rolloverDMin > 0) {
-          console.log(`   📊 StochRSI ROLLOVER_D_MIN: D=${stochRSI.d.toFixed(2)} <= ${rolloverDMin} → ${rolloverCheck ? '✅' : '❌'}`);
-        }
-        console.log(`   📊 StochRSI SHORT FINAL: ${shortBearishCross ? '✅ PASS' : '❌ FAIL'}`);
+        console.log(`\n   🟢 LONG EVALUATION (D crosses over K in oversold):`);
+        console.log(`      prev_D < prev_K: ${prevD.toFixed(2)} < ${prevK.toFixed(2)} = ${prevD < prevK}`);
+        console.log(`      D >= K (now): ${stochRSI.d.toFixed(2)} >= ${stochRSI.k.toFixed(2)} = ${stochRSI.d >= stochRSI.k}`);
+        console.log(`      → crossUp (D crosses over K): ${crossUp}`);
+        console.log(`      K <= ${oversoldK}: ${stochRSI.k.toFixed(2)} <= ${oversoldK} = ${stochRSI.k <= oversoldK}`);
+        console.log(`      D <= ${oversoldD}: ${stochRSI.d.toFixed(2)} <= ${oversoldD} = ${stochRSI.d <= oversoldD}`);
+        console.log(`      → oversoldAtSignal: ${oversoldAtSignal}`);
+        console.log(`      ★ LONG SIGNAL: ${stochRSILong ? '✅ PASS' : '❌ FAIL'} (${longConditionType})`);
       } else {
-        console.log(`   📊 StochRSI SHORT_MODE=${shortMode} - Ikke nok data til at beregne previous K/D`);
+        console.log(`\n   🟢 LONG EVALUATION: ❌ FAIL (insufficient data for cross detection)`);
       }
-    }
-    
-    console.log(`   📊 StochRSI LONG: K<=${oversoldK}, D<=${oversoldD} → ${stochRSILong ? '✅ PASS' : '❌ FAIL'}`);
-    console.log(`   📊 StochRSI SHORT FINAL: ${stochRSIShort ? '✅ PASS' : '❌ FAIL'} (SHORT_MODE=${shortMode}, SHORT_TYPE=${shortConditionType})`);
-    
-    // Gem i filterStatus.hard for hard filter evaluering
-    filterStatus.hard.stochrsi.long = stochRSILong;
-    filterStatus.hard.stochrsi.short = stochRSIShort;
-    filterStatus.hard.stochrsi.value = `K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)}, SHORT_MODE=${shortMode}, SHORT_TYPE=${shortConditionType}`;
-    
-    // 🔴 Calculate cross_up for LONG audit (bullish cross: K crossing above D)
-    if (prevK !== null && prevD !== null) {
-      crossUp = prevK < prevD && stochRSI.k > stochRSI.d;
-    }
-    
-    // 🔴 EKSPORT AUDIT FELTER - Full StochRSI audit
-    filterStatus.hard.stochrsi.audit = {
-      stochrsi_entry_mode: shortMode,
-      stochrsi_cross_down: crossDown,
-      stochrsi_cross_up: crossUp,
-      stochrsi_overbought_at_signal: overboughtAtSignal,
-      stochrsi_oversold_at_signal: oversoldAtSignal,
-      stochrsi_rollover_d_min_used: rolloverDMinUsed,
-      stochrsi_prev_k: prevK,
-      stochrsi_prev_d: prevD,
-      // 🔴 All threshold settings for complete audit
-      stochrsi_overbought_k_setting: overboughtK,
-      stochrsi_overbought_d_setting: overboughtD,
-      stochrsi_oversold_k_setting: oversoldK,
-      stochrsi_oversold_d_setting: oversoldD,
-      stochrsi_overbought_threshold: overboughtThreshold,
-      stochrsi_rollover_d_min: rolloverDMin,
-    };
-    
-    // Hvis stochrsi_hard_filter=true, evaluér som hard filter
-    if (config.stochrsi_hard_filter === true) {
-      // For hard filter: mindst én retning skal passe
-      if (!stochRSILong && !stochRSIShort) {
-        filterStatus.hard.stochrsi.passed = false;
-        filterStatus.hard.stochrsi.reason = shortMode === 'ZONE_ONLY' 
-          ? `K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)} - LONG kræver K<=${oversoldK} AND D<=${oversoldD}, SHORT kræver K>=${overboughtK} AND D>=${overboughtD}`
-          : `K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)} - LONG kræver K<=${oversoldK} AND D<=${oversoldD}, SHORT kræver bearish cross (K under D) i overbought zone`;
-      }
-      console.log(`   📊 StochRSI (HARD): Long: ${stochRSILong ? '✅' : '❌'}, Short: ${stochRSIShort ? '✅' : '❌'} (${shortConditionType})`);
-    } else {
-      console.log(`   📊 StochRSI (SOFT): Long: ${stochRSILong ? '✅' : '❌'}, Short: ${stochRSIShort ? '✅' : '❌'} (${shortConditionType})`);
       
-      // 🔴 FIX: Kun tilføj til soft conditions hvis det IKKE er hard filter
-      // Ellers tælles det dobbelt (som hard OG soft)
-      longConditions.push(stochRSILong);
-      shortConditions.push(stochRSIShort);
+      // ═══════════════════════════════════════════════════════════════════
+      // 🔴 SHORT SIGNAL: D crosses UNDER K in overbought zone
+      // Krav 1: prev_D > prev_K AND D <= K (bearish cross - D crossing below K)
+      // Krav 2: K >= overboughtK AND D >= overboughtD (in overbought zone)
+      // ═══════════════════════════════════════════════════════════════════
+      overboughtAtSignal = stochRSI.k >= overboughtK && stochRSI.d >= overboughtD;
+      
+      if (prevK !== null && prevD !== null) {
+        // Bearish cross: D was above K, now D <= K (D crossing under K)
+        crossDown = prevD > prevK && stochRSI.d <= stochRSI.k;
+        
+        // SHORT = bearish cross + in overbought zone
+        stochRSIShort = crossDown && overboughtAtSignal;
+        shortConditionType = stochRSIShort ? 'BEARISH_CROSS_OVERBOUGHT' : 'NONE';
+        
+        console.log(`\n   🔴 SHORT EVALUATION (D crosses under K in overbought):`);
+        console.log(`      prev_D > prev_K: ${prevD.toFixed(2)} > ${prevK.toFixed(2)} = ${prevD > prevK}`);
+        console.log(`      D <= K (now): ${stochRSI.d.toFixed(2)} <= ${stochRSI.k.toFixed(2)} = ${stochRSI.d <= stochRSI.k}`);
+        console.log(`      → crossDown (D crosses under K): ${crossDown}`);
+        console.log(`      K >= ${overboughtK}: ${stochRSI.k.toFixed(2)} >= ${overboughtK} = ${stochRSI.k >= overboughtK}`);
+        console.log(`      D >= ${overboughtD}: ${stochRSI.d.toFixed(2)} >= ${overboughtD} = ${stochRSI.d >= overboughtD}`);
+        console.log(`      → overboughtAtSignal: ${overboughtAtSignal}`);
+        console.log(`      ★ SHORT SIGNAL: ${stochRSIShort ? '✅ PASS' : '❌ FAIL'} (${shortConditionType})`);
+      } else {
+        console.log(`\n   🔴 SHORT EVALUATION: ❌ FAIL (insufficient data for cross detection)`);
+      }
+      
+      console.log(`   ═══════════════════════════════════════════════════════════════════\n`);
+      
+      // Gem i filterStatus.hard for hard filter evaluering
+      filterStatus.hard.stochrsi.long = stochRSILong;
+      filterStatus.hard.stochrsi.short = stochRSIShort;
+      filterStatus.hard.stochrsi.value = `K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)}, LONG_TYPE=${longConditionType}, SHORT_TYPE=${shortConditionType}`;
+      
+      // 🔴 EKSPORT AUDIT FELTER - Full StochRSI audit with v3.0 crossover details
+      filterStatus.hard.stochrsi.audit = {
+        stochrsi_version: '3.0_STRICT_CROSSOVER',
+        stochrsi_config_error: false,
+        // Crossover data
+        stochrsi_cross_up: crossUp,
+        stochrsi_cross_down: crossDown,
+        stochrsi_oversold_at_signal: oversoldAtSignal,
+        stochrsi_overbought_at_signal: overboughtAtSignal,
+        // Previous values for audit
+        stochrsi_prev_k: prevK,
+        stochrsi_prev_d: prevD,
+        stochrsi_current_k: stochRSI.k,
+        stochrsi_current_d: stochRSI.d,
+        // Explicit thresholds from UI (no fallbacks)
+        stochrsi_oversold_k_setting: oversoldK,
+        stochrsi_oversold_d_setting: oversoldD,
+        stochrsi_overbought_k_setting: overboughtK,
+        stochrsi_overbought_d_setting: overboughtD,
+        // Signal types
+        long_condition_type: longConditionType,
+        short_condition_type: shortConditionType,
+      };
+      
+      // Hvis stochrsi_hard_filter=true, evaluér som hard filter
+      if (config.stochrsi_hard_filter === true) {
+        // For hard filter: mindst én retning skal passe
+        if (!stochRSILong && !stochRSIShort) {
+          filterStatus.hard.stochrsi.passed = false;
+          filterStatus.hard.stochrsi.reason = `K=${stochRSI.k.toFixed(2)}, D=${stochRSI.d.toFixed(2)} - LONG kræver D crosses over K i oversold (K≤${oversoldK}, D≤${oversoldD}), SHORT kræver D crosses under K i overbought (K≥${overboughtK}, D≥${overboughtD})`;
+        }
+        console.log(`   📊 StochRSI (HARD): Long: ${stochRSILong ? '✅' : '❌'} (${longConditionType}), Short: ${stochRSIShort ? '✅' : '❌'} (${shortConditionType})`);
+      } else {
+        console.log(`   📊 StochRSI (SOFT): Long: ${stochRSILong ? '✅' : '❌'} (${longConditionType}), Short: ${stochRSIShort ? '✅' : '❌'} (${shortConditionType})`);
+        
+        // 🔴 FIX: Kun tilføj til soft conditions hvis det IKKE er hard filter
+        longConditions.push(stochRSILong);
+        shortConditions.push(stochRSIShort);
+      }
+      
+      // Gem altid i conditionDetails til visning
+      conditionDetails.stochRSI.long = stochRSILong;
+      conditionDetails.stochRSI.short = stochRSIShort;
     }
-    
-    // Gem altid i conditionDetails til visning
-    conditionDetails.stochRSI.long = stochRSILong;
-    conditionDetails.stochRSI.short = stochRSIShort;
   } else if (config.stochrsi_enabled && !stochRSI) {
     filterStatus.hard.stochrsi.passed = false;
     filterStatus.hard.stochrsi.reason = 'StochRSI enabled men data mangler';
