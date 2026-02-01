@@ -265,6 +265,7 @@ export type Database = {
           rsi_zone_width: number | null
           scan_interval: string | null
           signal_conditions_required: number | null
+          signal_timing_mode: string
           stochrsi_d_period: number | null
           stochrsi_enabled: boolean | null
           stochrsi_hard_filter: boolean | null
@@ -402,6 +403,7 @@ export type Database = {
           rsi_zone_width?: number | null
           scan_interval?: string | null
           signal_conditions_required?: number | null
+          signal_timing_mode?: string
           stochrsi_d_period?: number | null
           stochrsi_enabled?: boolean | null
           stochrsi_hard_filter?: boolean | null
@@ -539,6 +541,7 @@ export type Database = {
           rsi_zone_width?: number | null
           scan_interval?: string | null
           signal_conditions_required?: number | null
+          signal_timing_mode?: string
           stochrsi_d_period?: number | null
           stochrsi_enabled?: boolean | null
           stochrsi_hard_filter?: boolean | null

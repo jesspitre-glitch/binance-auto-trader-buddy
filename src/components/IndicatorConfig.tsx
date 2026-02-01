@@ -168,6 +168,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     
     // Timeframes
     scan_interval: config?.scan_interval || "5m",
+    signal_timing_mode: config?.signal_timing_mode || "LIVE",
     trend_timeframe: config?.trend_timeframe || config?.mtf_timeframe || "15m",
     trend_timeframe_enabled: config?.trend_timeframe_enabled !== undefined ? config?.trend_timeframe_enabled : true,
     higher_trend_enabled: config?.higher_trend_enabled !== undefined ? config?.higher_trend_enabled : true,
@@ -327,6 +328,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       signal_conditions_required: config.signal_conditions_required ?? 5,
       // Timeframes
       scan_interval: config.scan_interval ?? "5m",
+      signal_timing_mode: config.signal_timing_mode ?? "LIVE",
       trend_timeframe: config.trend_timeframe ?? config.mtf_timeframe ?? "15m",
       trend_timeframe_enabled: config.trend_timeframe_enabled !== undefined ? config.trend_timeframe_enabled : true,
       higher_trend_enabled: config.higher_trend_enabled !== undefined ? config.higher_trend_enabled : true,
@@ -487,6 +489,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       volume_multiplier_short: config.volume_multiplier_short ?? 0.50,
       signal_conditions_required: config.signal_conditions_required ?? 5,
       scan_interval: config.scan_interval ?? "5m",
+      signal_timing_mode: config.signal_timing_mode ?? "LIVE",
       trend_timeframe: config.trend_timeframe ?? config.mtf_timeframe ?? "15m",
       trend_timeframe_enabled: config.trend_timeframe_enabled !== undefined ? config.trend_timeframe_enabled : true,
       higher_trend_enabled: config.higher_trend_enabled !== undefined ? config.higher_trend_enabled : true,
@@ -2308,6 +2311,27 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">Timeframe for trading signals</p>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="signal_timing_mode">Signal Timing</Label>
+            <Select
+              value={formData.signal_timing_mode}
+              onValueChange={(value) => setFormData({ ...formData, signal_timing_mode: value })}
+            >
+              <SelectTrigger id="signal_timing_mode">
+                <SelectValue placeholder="Vælg timing" />
+              </SelectTrigger>
+              <SelectContent className="bg-background">
+                <SelectItem value="LIVE">Live / Intra-candle</SelectItem>
+                <SelectItem value="CANDLE_CLOSE">Candle Close (bekræftet)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {formData.signal_timing_mode === 'LIVE' 
+                ? "Signaler evalueres og handles straks på ufærdige candles"
+                : "Signaler kvalificeres kun ved candle close, entry på næste candle"}
+            </p>
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">

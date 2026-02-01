@@ -91,6 +91,7 @@ interface IndicatorConfig {
   max_position_duration_minutes: number;
   leverage: number;
   scan_interval: string;
+  signal_timing_mode?: string; // 'LIVE' or 'CANDLE_CLOSE'
   trend_timeframe: string;
   trend_timeframe_enabled?: boolean;
   higher_trend_enabled: boolean;
@@ -210,6 +211,7 @@ async function getStrategyIdentifier(config: any): Promise<string> {
     leverage: config.leverage,
     // Timeframe & scan settings
     scan_interval: config.scan_interval,
+    signal_timing_mode: config.signal_timing_mode,
     trend_timeframe: config.trend_timeframe,
     higher_trend_enabled: config.higher_trend_enabled,
     higher_trend_timeframe: config.higher_trend_timeframe,
@@ -2955,7 +2957,34 @@ serve(async (req) => {
       // 📈 STEP 4: Tag top 3x slots, filtrer for hårde filtre + MACD retning
       // 🛡️ RACE CONDITION FIX: Kun behandl ÉT signal per scan-cyklus for at undgå race conditions
       const topCandidates = validSignals.slice(0, Math.min(slotsAvailable * 3, validSignals.length));
-      const eligibleSignals = topCandidates
+      
+      // 🕐 SIGNAL TIMING GATE: Hvis CANDLE_CLOSE mode, bloker signaler medmindre candle er lukket
+      const signalTimingMode = config.signal_timing_mode ?? 'LIVE';
+      let candleCloseGatedSignals: typeof topCandidates = [];
+      
+      if (signalTimingMode === 'CANDLE_CLOSE') {
+        // I CANDLE_CLOSE mode: Kun kvalificér signaler hvis candle er lukket
+        // Vi tjekker volumeCandleClosed fra analysen - alle symboler bruger samme scan_interval
+        const filteredByCandleClose = topCandidates.filter(s => {
+          const candleAudit = s.analysis?.indicators?.volumeCandleAudit;
+          const isClosed = candleAudit?.is_closed === true;
+          
+          if (!isClosed) {
+            console.log(`🕐 CANDLE_CLOSE_GATE: ${s.symbol} ${s.signal} BLOKERET - candle ikke lukket endnu`);
+          }
+          
+          return isClosed;
+        });
+        
+        candleCloseGatedSignals = filteredByCandleClose;
+        console.log(`\n🕐 SIGNAL_TIMING=CANDLE_CLOSE: ${filteredByCandleClose.length}/${topCandidates.length} signaler kvalificeret (candle lukket)`);
+      } else {
+        // LIVE mode: Alle signaler er gyldige (nuværende adfærd)
+        candleCloseGatedSignals = topCandidates;
+        console.log(`\n⚡ SIGNAL_TIMING=LIVE: Intra-candle signaler tilladt`);
+      }
+      
+      const eligibleSignals = candleCloseGatedSignals
         .filter(s => s.hardFiltersPassed && s.signal !== 'NONE'); // KRITISK: Bloker NONE signaler (MACD retningsfilter)
       
       // 🚨 LOG ALLE SIGNALS DER BLOKERES AF HÅRDE FILTRE
