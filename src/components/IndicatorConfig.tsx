@@ -2356,73 +2356,83 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 : "Slukket - ingen medium trend analyse"}
             </p>
           </div>
-          {formData.higher_trend_enabled && (
-            <>
-              <div className="flex items-center justify-between sm:col-span-2">
-                <div className="flex items-center gap-4">
-                  <div>
-                    <Label>Hard Filter Mode</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Blokerer trades mod trend (HARD) eller giver kun points (SOFT)
-                    </p>
-                  </div>
-                  <FilterModeToggle
-                    isHard={formData.higher_trend_hard_filter}
-                    onChange={(isHard) => setFormData({ ...formData, higher_trend_hard_filter: isHard })}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="higher_trend_timeframe">Overordnet Trend Timeframe</Label>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">{formData.higher_trend_enabled ? "Tændt" : "Slukket"}</span>
-                    <Switch
-                      checked={formData.higher_trend_enabled}
-                      onCheckedChange={(checked) => setFormData({ 
-                        ...formData, 
-                        higher_trend_enabled: checked,
-                        ...(checked === false && { higher_trend_hard_filter: false })
-                      })}
-                    />
-                  </div>
-                </div>
-                <Select
-                  value={formData.higher_trend_timeframe}
-                  onValueChange={(value) => setFormData({ ...formData, higher_trend_timeframe: value })}
-                >
-                  <SelectTrigger id="higher_trend_timeframe">
-                    <SelectValue placeholder="Vælg overordnet trend" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background">
-                    <SelectItem value="5m">5 minutter</SelectItem>
-                    <SelectItem value="10m">10 minutter</SelectItem>
-                    <SelectItem value="15m">15 minutter</SelectItem>
-                    <SelectItem value="30m">30 minutter</SelectItem>
-                    <SelectItem value="1h">1 time</SelectItem>
-                    <SelectItem value="2h">2 timer</SelectItem>
-                    <SelectItem value="4h">4 timer</SelectItem>
-                    <SelectItem value="6h">6 timer</SelectItem>
-                    <SelectItem value="8h">8 timer</SelectItem>
-                    <SelectItem value="12h">12 timer</SelectItem>
-                    <SelectItem value="1d">1 dag</SelectItem>
-                    <SelectItem value="3d">3 dage</SelectItem>
-                    <SelectItem value="1w">1 uge</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">Timeframe for overordnet trend analyse</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="klines_limit">Klines Limit</Label>
-                <IntegerInput
-                  id="klines_limit"
-                  value={formData.klines_limit}
-                  onValueChange={(v) => setFormData({ ...formData, klines_limit: v })}
-                  fallback={100}
+          
+          {/* Overordnet Trend Timeframe - altid synlig med toggle */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="higher_trend_timeframe">Overordnet Trend Timeframe</Label>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">{formData.higher_trend_enabled ? "Tændt" : "Slukket"}</span>
+                <Switch
+                  checked={formData.higher_trend_enabled}
+                  onCheckedChange={(checked) => setFormData({ 
+                    ...formData, 
+                    higher_trend_enabled: checked,
+                    ...(checked === false && { higher_trend_hard_filter: false })
+                  })}
                 />
-                <p className="text-xs text-muted-foreground">Antal bars at hente til analyse (f.eks. 100)</p>
               </div>
-            </>
+            </div>
+            <Select
+              value={formData.higher_trend_timeframe}
+              onValueChange={(value) => setFormData({ ...formData, higher_trend_timeframe: value })}
+              disabled={!formData.higher_trend_enabled}
+            >
+              <SelectTrigger id="higher_trend_timeframe" className={!formData.higher_trend_enabled ? "opacity-50" : ""}>
+                <SelectValue placeholder="Vælg overordnet trend" />
+              </SelectTrigger>
+              <SelectContent className="bg-background">
+                <SelectItem value="5m">5 minutter</SelectItem>
+                <SelectItem value="10m">10 minutter</SelectItem>
+                <SelectItem value="15m">15 minutter</SelectItem>
+                <SelectItem value="30m">30 minutter</SelectItem>
+                <SelectItem value="1h">1 time</SelectItem>
+                <SelectItem value="2h">2 timer</SelectItem>
+                <SelectItem value="4h">4 timer</SelectItem>
+                <SelectItem value="6h">6 timer</SelectItem>
+                <SelectItem value="8h">8 timer</SelectItem>
+                <SelectItem value="12h">12 timer</SelectItem>
+                <SelectItem value="1d">1 dag</SelectItem>
+                <SelectItem value="3d">3 dage</SelectItem>
+                <SelectItem value="1w">1 uge</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {formData.higher_trend_enabled 
+                ? "HTF Side-Gate: gater LONG/SHORT baseret på trend"
+                : "Slukket - begge sider tilladt"}
+            </p>
+          </div>
+
+          {/* Hard Filter Mode - kun synlig når higher_trend er tændt */}
+          {formData.higher_trend_enabled && (
+            <div className="flex items-center justify-between sm:col-span-2">
+              <div className="flex items-center gap-4">
+                <div>
+                  <Label>Hard Filter Mode</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Blokerer trades mod trend (HARD) eller giver kun points (SOFT)
+                  </p>
+                </div>
+                <FilterModeToggle
+                  isHard={formData.higher_trend_hard_filter}
+                  onChange={(isHard) => setFormData({ ...formData, higher_trend_hard_filter: isHard })}
+                />
+              </div>
+            </div>
+          )}
+          
+          {formData.higher_trend_enabled && (
+            <div className="space-y-2">
+              <Label htmlFor="klines_limit">Klines Limit</Label>
+              <IntegerInput
+                id="klines_limit"
+                value={formData.klines_limit}
+                onValueChange={(v) => setFormData({ ...formData, klines_limit: v })}
+                fallback={100}
+              />
+              <p className="text-xs text-muted-foreground">Antal bars at hente til analyse (f.eks. 100)</p>
+            </div>
           )}
         </CardContent>
       </Card>
