@@ -620,53 +620,70 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
   };
 
   // Soft rules list should ONLY include rules that are NOT configured as HARD filters.
+  // Alle mulige soft rule kandidater - vis ALLE, ikke kun de aktive
   const softRuleCandidates = [
     {
       key: "ema_trend",
       label: "EMA Trend",
-      enabled: Boolean(formData.ema_enabled),
+      enabled: Boolean(formData.ema_enabled && !formData.ema_trend_hard_filter),
+      parentEnabled: Boolean(formData.ema_enabled),
       isHard: Boolean(formData.ema_trend_hard_filter),
     },
     {
       key: "stochrsi",
       label: "StochRSI Zone",
-      enabled: Boolean(formData.stochrsi_enabled),
+      enabled: Boolean(formData.stochrsi_enabled && !formData.stochrsi_hard_filter),
+      parentEnabled: Boolean(formData.stochrsi_enabled),
       isHard: Boolean(formData.stochrsi_hard_filter),
+    },
+    {
+      key: "macd_histogram",
+      label: "MACD Histogram",
+      enabled: Boolean(formData.macd_enabled),
+      parentEnabled: Boolean(formData.macd_enabled),
+      isHard: false, // MACD histogram er altid soft
     },
     {
       key: "macd_hist_momentum",
       label: "MACD Histogram Momentum",
       enabled: Boolean(formData.histogram_momentum_enabled && formData.macd_enabled),
-      isHard: false,
+      parentEnabled: Boolean(formData.macd_enabled),
+      isHard: false, // Altid soft
     },
     {
       key: "bb",
       label: "Bollinger Bands",
-      enabled: Boolean(formData.bb_enabled),
+      enabled: Boolean(formData.bb_enabled && !formData.bb_hard_filter),
+      parentEnabled: Boolean(formData.bb_enabled),
       isHard: Boolean(formData.bb_hard_filter),
     },
     {
       key: "volume",
       label: "Volume Surge",
-      enabled: Boolean(formData.volume_enabled),
+      enabled: Boolean(formData.volume_enabled && !formData.volume_hard_filter),
+      parentEnabled: Boolean(formData.volume_enabled),
       isHard: Boolean(formData.volume_hard_filter),
     },
     {
       key: "pivot_points",
       label: "Pivot Points",
-      enabled: Boolean(formData.pivot_points_enabled),
+      enabled: Boolean(formData.pivot_points_enabled && !formData.pivot_points_hard_filter),
+      parentEnabled: Boolean(formData.pivot_points_enabled),
       isHard: Boolean(formData.pivot_points_hard_filter),
     },
     {
       key: "vwap",
       label: "VWAP",
-      enabled: Boolean(formData.vwap_enabled),
+      enabled: Boolean(formData.vwap_enabled && !formData.vwap_hard_filter),
+      parentEnabled: Boolean(formData.vwap_enabled),
       isHard: Boolean(formData.vwap_hard_filter),
     },
   ] as const;
 
+  // Vis ALLE soft rules (ikke-hard) - uanset om de er enabled eller ej
   const visibleSoftRules = softRuleCandidates.filter((r) => !r.isHard);
   const softRulesMax = visibleSoftRules.length;
+  // Kun tæl dem der faktisk er enabled som active
   const activeSoftRulesCount = visibleSoftRules.filter((r) => r.enabled).length;
 
   // Clamp required soft conditions so it never exceeds number of ACTIVE SOFT rules.
@@ -2216,14 +2233,28 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <p className="text-xs text-muted-foreground">
               Kræver minimum X af følgende betingelser (1 point hver) <span className="opacity-80">(kun SOFT)</span>:
               <br />
-              {visibleSoftRules.map((rule) => (
-                <span key={rule.key}>
-                  • {rule.label} ({rule.enabled ? "✅" : "❌"})
-                  <br />
-                </span>
-              ))}
+              {softRuleCandidates.map((rule) => {
+                let status: string;
+                let icon: string;
+                if (rule.isHard && rule.parentEnabled) {
+                  status = "HARD";
+                  icon = "🔒";
+                } else if (rule.enabled) {
+                  status = "SOFT ✅";
+                  icon = "✅";
+                } else {
+                  status = "Slukket";
+                  icon = "❌";
+                }
+                return (
+                  <span key={rule.key} className={rule.isHard ? "opacity-50" : ""}>
+                    • {rule.label} ({icon} {rule.isHard ? "HARD" : status})
+                    <br />
+                  </span>
+                );
+              })}
               <strong>
-                Aktive: {activeSoftRulesCount}/{softRulesMax}
+                Aktive SOFT: {activeSoftRulesCount}/{softRulesMax}
               </strong>
               {activeSoftRulesCount === 0 && (
                 <>
