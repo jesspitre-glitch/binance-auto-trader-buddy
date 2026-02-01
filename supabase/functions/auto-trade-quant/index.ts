@@ -881,15 +881,29 @@ function analyzeSignal(
   const currentVolume = (rawCurrentVolume == null || !Number.isFinite(rawCurrentVolume)) ? null : rawCurrentVolume;
   
   // 🔴 VOLUME CANDLE METADATA - gemmes i indicators for audit
+  // 🕐 CANDLE_CLOSE timing: Vi tracker både "is_closed" OG "is_first_scan_of_new_candle"
+  // For CANDLE_CLOSE mode: Signal kvalificeres ved close, men entry skal ske i NÆSTE candle
+  // Vi tjekker om vi er i de første sekunder af en ny candle (efter forrige close)
+  const scanIntervalMs = intervalToMs(config.scan_interval);
+  const msIntoCurrentCandle = volumeCandleOpenTime !== null 
+    ? nowMs - volumeCandleOpenTime 
+    : null;
+  // En candle betragtes som "ny" hvis vi er inden for de første 2 minutter af dens duration
+  // Dette giver rum til at scanneren kan køre og åbne trades i starten af candle N+1
+  const isNewCandleStart = msIntoCurrentCandle !== null && msIntoCurrentCandle < Math.min(120000, scanIntervalMs * 0.5);
+  
   const volumeCandleAudit = {
     candle_open_time: volumeCandleOpenTime,
     candle_close_time: volumeCandleCloseTime,
     candle_open_time_iso: volumeCandleOpenTime ? new Date(volumeCandleOpenTime).toISOString() : null,
     candle_close_time_iso: volumeCandleCloseTime ? new Date(volumeCandleCloseTime).toISOString() : null,
     is_closed: volumeCandleClosed,
+    is_new_candle_start: isNewCandleStart,
+    ms_into_current_candle: msIntoCurrentCandle,
     seconds_since_open: secondsSinceCandleOpen,
     minute_into_candle: minuteIntoCandleFraction,
     scan_tf: config.scan_interval,
+    scan_interval_ms: scanIntervalMs,
   };
   
   // ════════════════════════════════════════════════════════════════
@@ -2963,21 +2977,40 @@ serve(async (req) => {
       let candleCloseGatedSignals: typeof topCandidates = [];
       
       if (signalTimingMode === 'CANDLE_CLOSE') {
-        // I CANDLE_CLOSE mode: Kun kvalificér signaler hvis candle er lukket
-        // Vi tjekker volumeCandleClosed fra analysen - alle symboler bruger samme scan_interval
+        // I CANDLE_CLOSE mode: 
+        // 1. Signal kvalificeres KUN hvis forrige candle (den vi analyserer) er lukket
+        // 2. Entry må KUN ske i candle N+1 (dvs. vi skal være i starten af en NY candle)
+        // 
+        // Eksempel (15m timeframe):
+        // - Candle N: 10:00-10:15, lukker kl 10:15:00
+        // - Hvis scanneren kører kl 10:15:01, er vi stadig i "slutningen" af candle N's data
+        //   men vi er TEKNISK i candle N+1 (10:15-10:30)
+        // - Vi tjekker is_new_candle_start for at sikre vi er inde i candle N+1
+        
         const filteredByCandleClose = topCandidates.filter(s => {
           const candleAudit = s.analysis?.indicators?.volumeCandleAudit;
           const isClosed = candleAudit?.is_closed === true;
+          const isNewCandleStart = candleAudit?.is_new_candle_start === true;
+          const msIntoCurrent = candleAudit?.ms_into_current_candle;
           
+          // For CANDLE_CLOSE mode: Candle skal være lukket OG vi skal være i en ny candle
+          // is_new_candle_start sikrer at vi er i de første minutter af candle N+1
           if (!isClosed) {
             console.log(`🕐 CANDLE_CLOSE_GATE: ${s.symbol} ${s.signal} BLOKERET - candle ikke lukket endnu`);
+            return false;
           }
           
-          return isClosed;
+          if (!isNewCandleStart) {
+            console.log(`🕐 CANDLE_CLOSE_GATE: ${s.symbol} ${s.signal} BLOKERET - ikke i start af ny candle (ms_into_current: ${msIntoCurrent})`);
+            return false;
+          }
+          
+          console.log(`✅ CANDLE_CLOSE_GATE: ${s.symbol} ${s.signal} KVALIFICERET - candle lukket OG vi er i start af ny candle`);
+          return true;
         });
         
         candleCloseGatedSignals = filteredByCandleClose;
-        console.log(`\n🕐 SIGNAL_TIMING=CANDLE_CLOSE: ${filteredByCandleClose.length}/${topCandidates.length} signaler kvalificeret (candle lukket)`);
+        console.log(`\n🕐 SIGNAL_TIMING=CANDLE_CLOSE: ${filteredByCandleClose.length}/${topCandidates.length} signaler kvalificeret (candle lukket + ny candle start)`);
       } else {
         // LIVE mode: Alle signaler er gyldige (nuværende adfærd)
         candleCloseGatedSignals = topCandidates;
