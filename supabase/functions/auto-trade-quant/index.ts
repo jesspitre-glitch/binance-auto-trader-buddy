@@ -1504,8 +1504,9 @@ function analyzeSignal(
     vwap: { enabled: config.vwap_enabled ?? false, long: null, short: null, value: vwap }
   };
   
-  // EMA Trend (hvis enabled)
-  if (config.ema_enabled && emaFast && emaMedium && emaSlow && emaFastCurrent !== null && emaMediumCurrent !== null && emaSlowCurrent !== null) {
+  // EMA Trend (hvis enabled OG IKKE hard filter)
+  // Kun push til soft conditions hvis ema_trend_hard_filter === false
+  if (config.ema_enabled && emaFast && emaMedium && emaSlow && emaFastCurrent !== null && emaMediumCurrent !== null && emaSlowCurrent !== null && !config.ema_trend_hard_filter) {
     // LONG: Hurtig > Medium > Slow og prisen stiger
     const emaLongTrend = emaFastCurrent > emaMediumCurrent && emaMediumCurrent > emaSlowCurrent && currentPrice > closes[closes.length - 2];
     longConditions.push(emaLongTrend);
@@ -1727,8 +1728,9 @@ function analyzeSignal(
     }
   }
   
-  // Bollinger Bands (hvis enabled)
-  if (config.bb_enabled && bb) {
+  // Bollinger Bands (hvis enabled OG IKKE hard filter)
+  // Kun push til soft conditions hvis bb_hard_filter === false
+  if (config.bb_enabled && bb && !config.bb_hard_filter) {
     // LONG: Pris nær nedre bånd (køb når billigt)
     const nearLowerBand = currentPrice <= bb.lower * 1.01; // Inden for 1% af nedre bånd
     longConditions.push(nearLowerBand);
@@ -1755,8 +1757,8 @@ function analyzeSignal(
     conditionDetails.volume.short = filterStatus.soft.volumeShort.passed;
   }
   
-  // Pivot Points - Blokerer trades nær key levels (hvis enabled)
-  if (config.pivot_points_enabled && pivotPoints) {
+  // Pivot Points - Blokerer trades nær key levels (hvis enabled OG IKKE hard filter)
+  if (config.pivot_points_enabled && pivotPoints && !config.pivot_points_hard_filter) {
     const nearResistance = (
       Math.abs(currentPrice - pivotPoints.r1) / currentPrice < config.pivot_points_near_threshold ||
       Math.abs(currentPrice - pivotPoints.r2) / currentPrice < config.pivot_points_near_threshold
@@ -1778,10 +1780,10 @@ function analyzeSignal(
     conditionDetails.pivotPoints.short = shortPivotOk;
   }
   
-  // VWAP Soft Condition (hvis enabled)
+  // VWAP Soft Condition (hvis enabled OG IKKE hard filter)
   // LONG: Price > VWAP (bullish bias)
   // SHORT: Price < VWAP (bearish bias)
-  if (config.vwap_enabled && vwap !== null) {
+  if (config.vwap_enabled && vwap !== null && !config.vwap_hard_filter) {
     const vwapLong = currentPrice > vwap;
     const vwapShort = currentPrice < vwap;
     
