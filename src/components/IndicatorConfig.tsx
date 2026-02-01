@@ -169,6 +169,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     // Timeframes
     scan_interval: config?.scan_interval || "5m",
     trend_timeframe: config?.trend_timeframe || config?.mtf_timeframe || "15m",
+    trend_timeframe_enabled: config?.trend_timeframe_enabled !== undefined ? config?.trend_timeframe_enabled : true,
     higher_trend_enabled: config?.higher_trend_enabled !== undefined ? config?.higher_trend_enabled : true,
     higher_trend_timeframe: config?.higher_trend_timeframe || "1h",
     klines_limit: config?.klines_limit || 100,
@@ -327,6 +328,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       // Timeframes
       scan_interval: config.scan_interval ?? "5m",
       trend_timeframe: config.trend_timeframe ?? config.mtf_timeframe ?? "15m",
+      trend_timeframe_enabled: config.trend_timeframe_enabled !== undefined ? config.trend_timeframe_enabled : true,
       higher_trend_enabled: config.higher_trend_enabled !== undefined ? config.higher_trend_enabled : true,
       higher_trend_timeframe: config.higher_trend_timeframe ?? "1h",
       klines_limit: config.klines_limit ?? 100,
@@ -486,6 +488,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       signal_conditions_required: config.signal_conditions_required ?? 5,
       scan_interval: config.scan_interval ?? "5m",
       trend_timeframe: config.trend_timeframe ?? config.mtf_timeframe ?? "15m",
+      trend_timeframe_enabled: config.trend_timeframe_enabled !== undefined ? config.trend_timeframe_enabled : true,
       higher_trend_enabled: config.higher_trend_enabled !== undefined ? config.higher_trend_enabled : true,
       higher_trend_timeframe: config.higher_trend_timeframe ?? "1h",
       klines_limit: config.klines_limit ?? 100,
@@ -2310,14 +2313,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <div className="flex items-center justify-between">
               <Label htmlFor="trend_timeframe">Trend Timeframe</Label>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">{formData.higher_trend_enabled ? "Tændt" : "Slukket"}</span>
+                <span className="text-xs text-muted-foreground">{formData.trend_timeframe_enabled !== false ? "Tændt" : "Slukket"}</span>
                 <Switch
-                  id="higher_trend_enabled"
-                  checked={formData.higher_trend_enabled}
+                  id="trend_timeframe_enabled"
+                  checked={formData.trend_timeframe_enabled !== false}
                   onCheckedChange={(checked) => setFormData({ 
                     ...formData, 
-                    higher_trend_enabled: checked,
-                    ...(checked === false && { higher_trend_hard_filter: false })
+                    trend_timeframe_enabled: checked,
+                    ...(checked === false && { ema_trend_hard_filter: false })
                   })}
                 />
               </div>
@@ -2325,9 +2328,9 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <Select
               value={formData.trend_timeframe}
               onValueChange={(value) => setFormData({ ...formData, trend_timeframe: value })}
-              disabled={!formData.higher_trend_enabled}
+              disabled={formData.trend_timeframe_enabled === false}
             >
-              <SelectTrigger id="trend_timeframe" className={!formData.higher_trend_enabled ? "opacity-50" : ""}>
+              <SelectTrigger id="trend_timeframe" className={formData.trend_timeframe_enabled === false ? "opacity-50" : ""}>
                 <SelectValue placeholder="Vælg trend timeframe" />
               </SelectTrigger>
               <SelectContent className="bg-background">
@@ -2348,9 +2351,9 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              {formData.higher_trend_enabled 
-                ? "Højere TF for trend-retning (gater LONG/SHORT baseret på trend)"
-                : "Slukket - begge sider tilladt"}
+              {formData.trend_timeframe_enabled !== false 
+                ? "Medium TF for ADX og EMA trend analyse"
+                : "Slukket - ingen medium trend analyse"}
             </p>
           </div>
           {formData.higher_trend_enabled && (

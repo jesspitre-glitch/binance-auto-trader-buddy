@@ -280,6 +280,7 @@ export type Database = {
           trailing_stop_activation_atr: number | null
           trailing_stop_activation_enabled: boolean | null
           trend_timeframe: string | null
+          trend_timeframe_enabled: boolean | null
           updated_at: string | null
           user_id: string
           volume_avg_period: number | null
@@ -416,6 +417,7 @@ export type Database = {
           trailing_stop_activation_atr?: number | null
           trailing_stop_activation_enabled?: boolean | null
           trend_timeframe?: string | null
+          trend_timeframe_enabled?: boolean | null
           updated_at?: string | null
           user_id: string
           volume_avg_period?: number | null
@@ -552,6 +554,7 @@ export type Database = {
           trailing_stop_activation_atr?: number | null
           trailing_stop_activation_enabled?: boolean | null
           trend_timeframe?: string | null
+          trend_timeframe_enabled?: boolean | null
           updated_at?: string | null
           user_id?: string
           volume_avg_period?: number | null

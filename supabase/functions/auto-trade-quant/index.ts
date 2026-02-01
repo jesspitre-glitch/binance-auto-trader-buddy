@@ -92,6 +92,7 @@ interface IndicatorConfig {
   leverage: number;
   scan_interval: string;
   trend_timeframe: string;
+  trend_timeframe_enabled?: boolean;
   higher_trend_enabled: boolean;
   higher_trend_timeframe: string;
   higher_trend_hard_filter?: boolean;
@@ -2613,12 +2614,17 @@ serve(async (req) => {
           // Add 100ms delay between symbols to avoid Binance rate limits (418 errors)
           await new Promise(resolve => setTimeout(resolve, 100));
           
-          // Fetch klines for scan interval, trend timeframe, and higher trend timeframe (if enabled)
+          // Fetch klines for scan interval, trend timeframe (if enabled), and higher trend timeframe (if enabled)
           const scanKlines = await fetchKlines(symbol, config.scan_interval, config.klines_limit);
-          const trendKlines = await fetchKlines(symbol, config.trend_timeframe, config.klines_limit);
           
-          // Determine trend on medium timeframe (always)
-          const trend = analyzeMediumTrend(trendKlines, config);
+          // Only fetch trend klines and analyze medium trend if trend_timeframe_enabled
+          const trendTimeframeEnabled = config.trend_timeframe_enabled !== false; // Default true for backwards compatibility
+          const trendKlines = trendTimeframeEnabled 
+            ? await fetchKlines(symbol, config.trend_timeframe, config.klines_limit)
+            : null;
+          
+          // Determine trend on medium timeframe (only if enabled)
+          const trend = trendKlines ? analyzeMediumTrend(trendKlines, config) : 'NEUTRAL';
           
           // ═══════════════════════════════════════════════════════════════════════════════
           // 🎯 HTF SIDE-GATE v2.2.5 - Beregn HTF FØR analyzeSignal
@@ -2655,7 +2661,7 @@ serve(async (req) => {
           
           // Kald analyzeSignal med side-gate info
           const sideGateInfo = { higherTrend, sideGateReason, minKlinesRequired, actualKlines };
-          const analysis = analyzeSignal(scanKlines, trendKlines, config, allowedSides, sideGateInfo);
+          const analysis = analyzeSignal(scanKlines, trendKlines ?? scanKlines, config, allowedSides, sideGateInfo);
           
           // DEBUG LOG (first 50 scans) - simplified for log visibility
           scanDebugCount++;
