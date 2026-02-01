@@ -41,8 +41,8 @@ export const ScanResultVisual = ({ open, onOpenChange, result, config }: ScanRes
 
   const getSignalStrength = () => {
     const conditions = indicators.conditionsMet || 0;
-    const required = config.signal_conditions_required || 5;
-    return (conditions / required) * 100;
+    const required = (config.signal_conditions_required ?? 0) as number;
+    return required === 0 ? 100 : (conditions / required) * 100;
   };
 
   const isInRange = (value: number, min: number, max: number) => {
@@ -277,7 +277,8 @@ export const ScanResultVisual = ({ open, onOpenChange, result, config }: ScanRes
                   </div>
 
                   <div className="text-xs text-muted-foreground mt-3 pt-3 border-t">
-                    Påkrævet betingelser: {indicators.conditionDetails.requiredConditions || config.signal_conditions_required || 5}
+                    Påkrævet betingelser:{" "}
+                    {config.signal_conditions_required ?? 0}
                   </div>
                 </div>
               </CardContent>
@@ -294,7 +295,8 @@ export const ScanResultVisual = ({ open, onOpenChange, result, config }: ScanRes
                     <span className="text-sm font-medium">Signal Styrke</span>
                   </div>
                   <span className="text-sm text-muted-foreground">
-                    {indicators.conditionsMet || 0}/{config.signal_conditions_required || 5}
+                    {indicators.conditionsMet || 0}/
+                    {config.signal_conditions_required ?? 0}
                   </span>
                 </div>
                 <Progress value={getSignalStrength()} className="h-2" />

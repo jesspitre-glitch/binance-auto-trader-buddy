@@ -2844,7 +2844,8 @@ serve(async (req) => {
           // Conditions met bonus (0-20 points)
           if (analysis.indicators.conditionsMet !== undefined) {
             // conditionsMet / signal_conditions_required ratio
-            const ratio = analysis.indicators.conditionsMet / (config.signal_conditions_required || 2);
+            const denom = (config.signal_conditions_required ?? 0);
+            const ratio = denom === 0 ? 1 : (analysis.indicators.conditionsMet / denom);
             strength += Math.min(20, ratio * 20);
           }
           
