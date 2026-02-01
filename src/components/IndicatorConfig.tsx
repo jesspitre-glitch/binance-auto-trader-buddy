@@ -2370,7 +2370,20 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="higher_trend_timeframe">Overordnet Trend Timeframe</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="higher_trend_timeframe">Overordnet Trend Timeframe</Label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">{formData.higher_trend_enabled ? "Tændt" : "Slukket"}</span>
+                    <Switch
+                      checked={formData.higher_trend_enabled}
+                      onCheckedChange={(checked) => setFormData({ 
+                        ...formData, 
+                        higher_trend_enabled: checked,
+                        ...(checked === false && { higher_trend_hard_filter: false })
+                      })}
+                    />
+                  </div>
+                </div>
                 <Select
                   value={formData.higher_trend_timeframe}
                   onValueChange={(value) => setFormData({ ...formData, higher_trend_timeframe: value })}
