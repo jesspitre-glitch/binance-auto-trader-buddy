@@ -2316,7 +2316,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <p className="text-xs text-muted-foreground">Timeframe for trading signals</p>
           </div>
           
-          <div className="space-y-2">
+          <div className="space-y-3">
             <Label htmlFor="signal_timing_mode">Signal Timing</Label>
             <Select
               value={formData.signal_timing_mode}
@@ -2332,33 +2332,40 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             </Select>
             <p className="text-xs text-muted-foreground">
               {formData.signal_timing_mode === 'LIVE' 
-                ? "Signaler evalueres og handles straks på ufærdige candles"
-                : "Signaler kvalificeres kun ved candle close, entry på næste candle"}
+                ? "Evaluerer signaler på live candles. Hurtigere entries og flere trades."
+                : "Signaler kvalificeres kun ved candle close på scan-timeframe. Entry sker i starten af næste candle."}
             </p>
           </div>
           
           {/* Entry Window - kun synlig i CANDLE_CLOSE mode */}
           {formData.signal_timing_mode === 'CANDLE_CLOSE' && (
-            <div className="space-y-2">
-              <Label htmlFor="candle_close_entry_window_seconds">Entry Window (sekunder)</Label>
-              <Select
-                value={String(formData.candle_close_entry_window_seconds)}
-                onValueChange={(value) => setFormData({ ...formData, candle_close_entry_window_seconds: parseInt(value) })}
-              >
-                <SelectTrigger id="candle_close_entry_window_seconds">
-                  <SelectValue placeholder="Vælg vindue" />
-                </SelectTrigger>
-                <SelectContent className="bg-background">
-                  <SelectItem value="60">60 sek (1 min)</SelectItem>
-                  <SelectItem value="120">120 sek (2 min)</SelectItem>
-                  <SelectItem value="180">180 sek (3 min)</SelectItem>
-                  <SelectItem value="300">300 sek (5 min)</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Tid fra candle-start hvor entry er tilladt. Øg ved cron-jitter.
-              </p>
-            </div>
+            <>
+              <div className="space-y-3">
+                <Label htmlFor="candle_close_entry_window_seconds">Entry Window efter Candle Close</Label>
+                <Select
+                  value={String(formData.candle_close_entry_window_seconds)}
+                  onValueChange={(value) => setFormData({ ...formData, candle_close_entry_window_seconds: parseInt(value) })}
+                >
+                  <SelectTrigger id="candle_close_entry_window_seconds">
+                    <SelectValue placeholder="Vælg vindue" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background">
+                    <SelectItem value="60">60 sek (1 min)</SelectItem>
+                    <SelectItem value="120">120 sek (2 min)</SelectItem>
+                    <SelectItem value="180">180 sek (3 min)</SelectItem>
+                    <SelectItem value="300">300 sek (5 min)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Vælger hvor længe efter candle close en handel må åbnes.
+                  <br />
+                  <span className="text-muted-foreground/70">Bemærk: Entry window kan automatisk blive begrænset til max 50% af candle-længden.</span>
+                </p>
+              </div>
+              <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
+                💡 Candle Close reducerer støj og ghost signals, men giver færre handler end Live-mode.
+              </div>
+            </>
           )}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
