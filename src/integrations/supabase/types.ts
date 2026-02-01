@@ -188,6 +188,7 @@ export type Database = {
           break_even_profit_pct_stop_over_entry: number | null
           break_even_profit_pct_trigger: number | null
           break_even_ratchet_only: boolean | null
+          candle_close_entry_window_seconds: number | null
           candle_momentum_enabled: boolean | null
           conditional_time_exit_enabled: boolean | null
           created_at: string | null
@@ -326,6 +327,7 @@ export type Database = {
           break_even_profit_pct_stop_over_entry?: number | null
           break_even_profit_pct_trigger?: number | null
           break_even_ratchet_only?: boolean | null
+          candle_close_entry_window_seconds?: number | null
           candle_momentum_enabled?: boolean | null
           conditional_time_exit_enabled?: boolean | null
           created_at?: string | null
@@ -464,6 +466,7 @@ export type Database = {
           break_even_profit_pct_stop_over_entry?: number | null
           break_even_profit_pct_trigger?: number | null
           break_even_ratchet_only?: boolean | null
+          candle_close_entry_window_seconds?: number | null
           candle_momentum_enabled?: boolean | null
           conditional_time_exit_enabled?: boolean | null
           created_at?: string | null

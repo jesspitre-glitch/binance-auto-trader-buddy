@@ -888,9 +888,10 @@ function analyzeSignal(
   const msIntoCurrentCandle = volumeCandleOpenTime !== null 
     ? nowMs - volumeCandleOpenTime 
     : null;
-  // En candle betragtes som "ny" hvis vi er inden for de første 2 minutter af dens duration
-  // Dette giver rum til at scanneren kan køre og åbne trades i starten af candle N+1
-  const isNewCandleStart = msIntoCurrentCandle !== null && msIntoCurrentCandle < Math.min(120000, scanIntervalMs * 0.5);
+  // Entry-vindue i ms: Konfigurerbar via UI (default 120 sekunder = 2 minutter)
+  // Begrænset til max 50% af candle-længden for at undgå at åbne midt i en candle
+  const entryWindowMs = ((config as any).candle_close_entry_window_seconds ?? 120) * 1000;
+  const isNewCandleStart = msIntoCurrentCandle !== null && msIntoCurrentCandle < Math.min(entryWindowMs, scanIntervalMs * 0.5);
   
   const volumeCandleAudit = {
     candle_open_time: volumeCandleOpenTime,
@@ -899,6 +900,8 @@ function analyzeSignal(
     candle_close_time_iso: volumeCandleCloseTime ? new Date(volumeCandleCloseTime).toISOString() : null,
     is_closed: volumeCandleClosed,
     is_new_candle_start: isNewCandleStart,
+    entry_window_seconds: (config as any).candle_close_entry_window_seconds ?? 120,
+    entry_window_ms: entryWindowMs,
     ms_into_current_candle: msIntoCurrentCandle,
     seconds_since_open: secondsSinceCandleOpen,
     minute_into_candle: minuteIntoCandleFraction,
