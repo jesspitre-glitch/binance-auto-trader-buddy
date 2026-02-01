@@ -1809,15 +1809,26 @@ function analyzeSignal(
   // longAllowed=false → longSignal=false uanset betingelser
   // shortAllowed=false → shortSignal=false uanset betingelser
   
+  // 🔴 FIX: StochRSI HARD FILTER er SIDE-SPECIFIK og SKAL inkluderes i signal-beslutning!
+  // Hvis stochrsi_hard_filter=true og stochrsi_enabled=true, SKAL den respektive side passe
+  const stochrsiLongHardPassed = !(config.stochrsi_enabled && config.stochrsi_hard_filter === true) || 
+                                   filterStatus.hard.stochrsi.long === true;
+  const stochrsiShortHardPassed = !(config.stochrsi_enabled && config.stochrsi_hard_filter === true) || 
+                                    filterStatus.hard.stochrsi.short === true;
+  
+  console.log(`🎯 SIDE-SPECIFIK STOCHRSI HARD: longPassed=${stochrsiLongHardPassed}, shortPassed=${stochrsiShortHardPassed}`);
+  
   const longSignal = longAllowed && 
                      longConditionsMet >= requiredConditions && 
                      macdLongOK && 
-                     macdColorChangeLongOK;
+                     macdColorChangeLongOK &&
+                     stochrsiLongHardPassed;
   
   const shortSignal = shortAllowed && 
                       shortConditionsMet >= requiredConditions && 
                       macdShortOK && 
-                      macdColorChangeShortOK;
+                      macdColorChangeShortOK &&
+                      stochrsiShortHardPassed;
   
   // ═══════════════════════════════════════════════════════════════════════════════
   // 🎯 DETERMINISTISK TIE-BREAKER - Når begge signaler er true
