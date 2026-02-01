@@ -2307,12 +2307,27 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <p className="text-xs text-muted-foreground">Timeframe for trading signals</p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="trend_timeframe">Trend Timeframe</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="trend_timeframe">Trend Timeframe</Label>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">{formData.higher_trend_enabled ? "Tændt" : "Slukket"}</span>
+                <Switch
+                  id="higher_trend_enabled"
+                  checked={formData.higher_trend_enabled}
+                  onCheckedChange={(checked) => setFormData({ 
+                    ...formData, 
+                    higher_trend_enabled: checked,
+                    ...(checked === false && { higher_trend_hard_filter: false })
+                  })}
+                />
+              </div>
+            </div>
             <Select
               value={formData.trend_timeframe}
               onValueChange={(value) => setFormData({ ...formData, trend_timeframe: value })}
+              disabled={!formData.higher_trend_enabled}
             >
-              <SelectTrigger id="trend_timeframe">
+              <SelectTrigger id="trend_timeframe" className={!formData.higher_trend_enabled ? "opacity-50" : ""}>
                 <SelectValue placeholder="Vælg trend timeframe" />
               </SelectTrigger>
               <SelectContent className="bg-background">
@@ -2332,37 +2347,28 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 <SelectItem value="1w">1 uge</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">Højere TF for trend-retning</p>
-          </div>
-          <div className="flex items-center justify-between sm:col-span-2">
-            <div className="flex items-center gap-4">
-              <div>
-                <Label htmlFor="higher_trend_enabled">Overordnet Trend Filter</Label>
-                <p className="text-xs text-muted-foreground">
-                  Blokerer LONG hvis trend er bearish, SHORT hvis bullish
-                </p>
-              </div>
-              <FilterModeToggle
-                isHard={formData.higher_trend_hard_filter}
-                onChange={(isHard) => setFormData({ ...formData, higher_trend_hard_filter: isHard })}
-                disabled={!formData.higher_trend_enabled}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">{formData.higher_trend_enabled ? "Tændt" : "Slukket"}</span>
-              <Switch
-                id="higher_trend_enabled"
-                checked={formData.higher_trend_enabled}
-                onCheckedChange={(checked) => setFormData({ 
-                  ...formData, 
-                  higher_trend_enabled: checked,
-                  ...(checked === false && { higher_trend_hard_filter: false })
-                })}
-              />
-            </div>
+            <p className="text-xs text-muted-foreground">
+              {formData.higher_trend_enabled 
+                ? "Højere TF for trend-retning (gater LONG/SHORT baseret på trend)"
+                : "Slukket - begge sider tilladt"}
+            </p>
           </div>
           {formData.higher_trend_enabled && (
             <>
+              <div className="flex items-center justify-between sm:col-span-2">
+                <div className="flex items-center gap-4">
+                  <div>
+                    <Label>Hard Filter Mode</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Blokerer trades mod trend (HARD) eller giver kun points (SOFT)
+                    </p>
+                  </div>
+                  <FilterModeToggle
+                    isHard={formData.higher_trend_hard_filter}
+                    onChange={(isHard) => setFormData({ ...formData, higher_trend_hard_filter: isHard })}
+                  />
+                </div>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="higher_trend_timeframe">Overordnet Trend Timeframe</Label>
                 <Select
