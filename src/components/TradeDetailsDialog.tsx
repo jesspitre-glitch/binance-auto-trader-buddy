@@ -255,19 +255,41 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
             )}
 
             {/* Trailing Stop - use position data for live, snapshot for closed */}
-            {(trade.trailing_stop || trade.indicators_snapshot?.trailing_stop) && (
-              <div className="border rounded-lg p-3 border-warning/50 bg-warning/5">
-                <div className="text-xs text-muted-foreground mb-1">🎯 Trailing Stop</div>
-                <div className="font-mono font-semibold text-warning">
-                  ${Number(trade.trailing_stop || trade.indicators_snapshot?.trailing_stop).toFixed(2)}
-                </div>
-                {trade.trailing_stop_percent && (
-                  <div className="text-xs text-muted-foreground">
-                    {trade.trailing_stop_percent}% fra peak
+            {(trade.trailing_stop || trade.indicators_snapshot?.trailing_stop) && (() => {
+              const trailingStopValue = Number(trade.trailing_stop || trade.indicators_snapshot?.trailing_stop);
+              const entryPriceVal = Number(trade.entry_price);
+              // Trailing is active when stop is in profit zone (above entry for LONG, below for SHORT)
+              const trailingIsActive = trade.side === 'LONG' 
+                ? trailingStopValue >= entryPriceVal 
+                : trailingStopValue <= entryPriceVal;
+              
+              // Calculate distance from peak
+              const peakPrice = Number(trade.peak_price || trade.indicators_snapshot?.peak_price);
+              const distanceFromPeak = peakPrice > 0 
+                ? Math.abs(peakPrice - trailingStopValue) / peakPrice * 100 
+                : null;
+              
+              return (
+                <div className={`border rounded-lg p-3 ${trailingIsActive ? 'border-profit/50 bg-profit/5' : 'border-warning/50 bg-warning/5'}`}>
+                  <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                    🎯 Trailing Stop
+                    {trailingIsActive && (
+                      <Badge variant="outline" className="ml-1 text-xs bg-profit/20 text-profit border-profit/40">
+                        AKTIV
+                      </Badge>
+                    )}
                   </div>
-                )}
-              </div>
-            )}
+                  <div className={`font-mono font-semibold ${trailingIsActive ? 'text-profit' : 'text-warning'}`}>
+                    ${trailingStopValue.toFixed(2)}
+                  </div>
+                  {distanceFromPeak !== null && (
+                    <div className="text-xs text-muted-foreground">
+                      {distanceFromPeak.toFixed(2)}% fra peak
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Peak-Lock Status */}
             {(trade.indicators_snapshot?.peak_lock_enabled || trade.indicators_snapshot?.peak_lock_activated) && (
