@@ -3188,8 +3188,9 @@ serve(async (req) => {
                 volumeDecisionRecord.volume_threshold = volThreshold;
               }
             } else if (signal === 'SHORT') {
-              // SHORT: Uses volume_mode_short (completely independent of volume_enabled!)
-              if (volumeModeShort === 'HARD') {
+              // SHORT: Uses volume_mode_short BUT respects volume_enabled master toggle
+              // 🔧 FIX: If volume_enabled=false, SHORT volume gate is also disabled
+              if (config.volume_enabled === true && volumeModeShort === 'HARD') {
                 shouldCheckVolume = true;
                 volPassed = fs?.hard?.volumeShort?.passed;
                 volThreshold = config.volume_multiplier_short ?? 0.50;
@@ -3197,7 +3198,7 @@ serve(async (req) => {
                 volumeDecisionRecord.volume_passed = volPassed;
                 volumeDecisionRecord.volume_threshold = volThreshold;
               }
-              // If SOFT or OFF mode - not a hard filter, skip check
+              // If volume_enabled=false OR volume_mode_short=SOFT/OFF - not a hard filter, skip check
             }
             
             if (shouldCheckVolume) {
