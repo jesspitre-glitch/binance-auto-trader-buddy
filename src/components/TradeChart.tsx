@@ -52,9 +52,13 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         
         // Transform to chart data and calculate trailing stop dynamically
         const entryPrice = Number(trade.entry_price);
-        const trailingPercent = Number(trade.trailing_stop_percent) || 2.0;
         const side = trade.side as 'LONG' | 'SHORT';
         const stopLoss = Number(trade.stop_loss);
+        
+        // ATR-baseret trailing stop distance (matcher backend logik)
+        const atrTrailingMultiplier = Number(trade.indicators_snapshot?.atr_trailing_stop_multiplier) 
+          || Number(trade.indicators_snapshot?.trailing_stop_atr_multiplier) 
+          || 1.8; // Fallback matcher backend
         
         // Hent trailing stop aktiverings-parametre fra indicators_snapshot
         const trailingStopActivationEnabled = trade.indicators_snapshot?.trailing_stop_activation_enabled ?? true;
@@ -153,13 +157,20 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
                 trailingStopActivatedAt = timestamp;
               }
 
+              // 🔴 FIX: Brug ATR-baseret trailing distance (matcher backend monitor-positions)
+              // Backend: trailing = peak ± (ATR × multiplier), IKKE procent af peak
+              const trailingDistance = atrValue * atrTrailingMultiplier;
+
               if (side === 'LONG') {
-                const calculatedTrailing = peakPrice * (1 - trailingPercent / 100);
-                // Trailing må kun ratchete OP for LONG (aldrig ned)
+                // LONG: trailing stop er UNDER peak
+                const calculatedTrailing = peakPrice - trailingDistance;
+                // Clamp til mindst currentStopLoss (BE/SL beskyttelse)
                 trailingStop = currentStopLoss ? Math.max(calculatedTrailing, currentStopLoss) : calculatedTrailing;
               } else {
-                const calculatedTrailing = peakPrice * (1 + trailingPercent / 100);
-                // Trailing må kun ratchete NED for SHORT (aldrig op)
+                // SHORT: trailing stop er OVER peak (laveste pris)
+                // Peak for SHORT er den LAVESTE pris nået
+                const calculatedTrailing = peakPrice + trailingDistance;
+                // Clamp til højst currentStopLoss (BE/SL beskyttelse)
                 trailingStop = currentStopLoss ? Math.min(calculatedTrailing, currentStopLoss) : calculatedTrailing;
               }
 
