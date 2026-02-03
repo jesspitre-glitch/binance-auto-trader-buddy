@@ -73,12 +73,19 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         const peakLockMinProfitFloorPct = Number(trade.indicators_snapshot?.peak_lock_min_profit_floor_pct) || 0.15;
         const peakLockRatchetOnly = trade.indicators_snapshot?.peak_lock_ratchet_only ?? true;
         
-        console.log('Trailing Stop Activation Config:', {
-          enabled: trailingStopActivationEnabled,
-          activationAtr: trailingStopActivationAtr,
-          breakEvenAtr: breakEvenAtr,
-          atr: atrValue,
-          peakLockEnabled,
+        // 🔴 DEBUG: Log aktuelle værdier fra database
+        console.log('TradeChart Config Debug:', {
+          symbol: trade.symbol,
+          side,
+          entry: entryPrice,
+          dbTrailingStop: trade.trailing_stop,
+          dbPeakPrice: trade.peak_price,
+          atrValue,
+          atrTrailingMultiplier,
+          trailingDistance: atrValue * atrTrailingMultiplier,
+          expectedTrailing: side === 'LONG' 
+            ? (Number(trade.peak_price) - atrValue * atrTrailingMultiplier).toFixed(4)
+            : (Number(trade.peak_price) + atrValue * atrTrailingMultiplier).toFixed(4),
         });
         
         // Start altid fra entry price for at vise trailing stop evolution korrekt
@@ -162,16 +169,22 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
               const trailingDistance = atrValue * atrTrailingMultiplier;
 
               if (side === 'LONG') {
-                // LONG: trailing stop er UNDER peak
+                // LONG: trailing stop er UNDER peak (beskytter profit nedadtil)
                 const calculatedTrailing = peakPrice - trailingDistance;
-                // Clamp til mindst currentStopLoss (BE/SL beskyttelse)
-                trailingStop = currentStopLoss ? Math.max(calculatedTrailing, currentStopLoss) : calculatedTrailing;
+                // For LONG: trailing stop skal være OVER entry for at være i profit zone
+                // Clamp: trailing stop må ikke gå UNDER currentStopLoss (BE/SL beskyttelse)
+                trailingStop = Math.max(calculatedTrailing, currentStopLoss);
               } else {
-                // SHORT: trailing stop er OVER peak (laveste pris)
-                // Peak for SHORT er den LAVESTE pris nået
+                // SHORT: trailing stop er OVER peak (laveste pris - beskytter profit opadtil)
                 const calculatedTrailing = peakPrice + trailingDistance;
-                // Clamp til højst currentStopLoss (BE/SL beskyttelse)
-                trailingStop = currentStopLoss ? Math.min(calculatedTrailing, currentStopLoss) : calculatedTrailing;
+                // For SHORT: trailing stop skal være UNDER entry for at være i profit zone
+                // Clamp: trailing stop må ikke gå OVER currentStopLoss (BE/SL beskyttelse)
+                trailingStop = Math.min(calculatedTrailing, currentStopLoss);
+              }
+              
+              // Debug logging for first few activated candles
+              if (index < 5 || (index % 20 === 0)) {
+                console.log(`[TradeChart] Candle ${index}: side=${side}, peak=${peakPrice.toFixed(4)}, trailingDist=${trailingDistance.toFixed(4)}, calculated=${(side === 'LONG' ? peakPrice - trailingDistance : peakPrice + trailingDistance).toFixed(4)}, trailing=${trailingStop?.toFixed(4)}, currentSL=${currentStopLoss.toFixed(4)}`);
               }
 
               // KRAV: trailing skal være i profit-zonen (strikt)
@@ -188,6 +201,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
                 }
                 effectiveStop = currentStopLoss; // Altid vis det aktuelle (ratcheted) stop
               } else {
+                // Ikke i profit zone - vis trailing som null, men behold effectiveStop som currentStopLoss
                 trailingStop = null;
                 effectiveStop = currentStopLoss;
               }
