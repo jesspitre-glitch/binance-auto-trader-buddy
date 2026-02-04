@@ -1211,13 +1211,13 @@ export const PnLOverview = () => {
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <div className="text-sm text-muted-foreground">Total P&L</div>
+                <div className="text-sm text-muted-foreground">Total P&L (net)</div>
                 <div className={`text-xl font-bold ${
-                  selectedPeriodTrades.reduce((sum, t) => sum + Number(t.pnl), 0) >= 0 
+                  selectedPeriodTrades.reduce((sum, t) => sum + Number(t.net_pnl ?? (Number(t.pnl) - Number(t.total_fee || 0) + Number(t.funding_fee || 0))), 0) >= 0 
                     ? "text-profit" 
                     : "text-loss"
                 }`}>
-                  ${selectedPeriodTrades.reduce((sum, t) => sum + Number(t.pnl), 0).toFixed(2)}
+                  ${selectedPeriodTrades.reduce((sum, t) => sum + Number(t.net_pnl ?? (Number(t.pnl) - Number(t.total_fee || 0) + Number(t.funding_fee || 0))), 0).toFixed(2)}
                 </div>
               </div>
               <div>
@@ -1225,10 +1225,10 @@ export const PnLOverview = () => {
                 <div className="text-xl font-bold">{selectedPeriodTrades.length}</div>
               </div>
               <div>
-                <div className="text-sm text-muted-foreground">Win Rate</div>
+                <div className="text-sm text-muted-foreground">Win Rate (net)</div>
                 <div className="text-xl font-bold">
                   {selectedPeriodTrades.length > 0
-                    ? ((selectedPeriodTrades.filter(t => Number(t.pnl) > 0).length / selectedPeriodTrades.length) * 100).toFixed(1)
+                    ? ((selectedPeriodTrades.filter(t => Number(t.net_pnl ?? (Number(t.pnl) - Number(t.total_fee || 0) + Number(t.funding_fee || 0))) > 0).length / selectedPeriodTrades.length) * 100).toFixed(1)
                     : 0}%
                 </div>
               </div>
@@ -1259,8 +1259,8 @@ export const PnLOverview = () => {
                     <TableCell>${Number(trade.entry_price).toFixed(2)}</TableCell>
                     <TableCell>${Number(trade.exit_price).toFixed(2)}</TableCell>
                     <TableCell>{Number(trade.quantity).toFixed(4)}</TableCell>
-                    <TableCell className={Number(trade.pnl) >= 0 ? "text-profit" : "text-loss"}>
-                      {Number(trade.pnl) >= 0 ? "+" : ""}${Number(trade.pnl).toFixed(2)}
+                    <TableCell className={Number(trade.net_pnl ?? (Number(trade.pnl) - Number(trade.total_fee || 0) + Number(trade.funding_fee || 0))) >= 0 ? "text-profit" : "text-loss"}>
+                      {Number(trade.net_pnl ?? (Number(trade.pnl) - Number(trade.total_fee || 0) + Number(trade.funding_fee || 0))) >= 0 ? "+" : ""}${Number(trade.net_pnl ?? (Number(trade.pnl) - Number(trade.total_fee || 0) + Number(trade.funding_fee || 0))).toFixed(2)}
                     </TableCell>
                     <TableCell className={Number(trade.pnl_percent) >= 0 ? "text-profit" : "text-loss"}>
                       {Number(trade.pnl_percent) >= 0 ? "+" : ""}{Number(trade.pnl_percent).toFixed(2)}%
