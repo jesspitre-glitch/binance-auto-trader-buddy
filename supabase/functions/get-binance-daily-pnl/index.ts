@@ -73,7 +73,7 @@ async function getBinanceIncome(
   startTime: number, 
   endTime: number,
   incomeType?: string
-): Promise<any[]> {
+): Promise<{ data: any[]; rateLimited: boolean; error?: string }> {
   const serverTime = await getBinanceServerTime();
   
   const params: Record<string, string> = {
@@ -102,10 +102,17 @@ async function getBinanceIncome(
   if (!response.ok) {
     const error = await response.text();
     console.error('Binance income API error:', error);
-    throw new Error(`Failed to get income data: ${error}`);
+    
+    // Check for rate limit / IP ban
+    if (error.includes('-1003') || error.includes('banned')) {
+      return { data: [], rateLimited: true, error };
+    }
+    
+    return { data: [], rateLimited: false, error };
   }
 
-  return await response.json();
+  const data = await response.json();
+  return { data, rateLimited: false };
 }
 
 /**
@@ -202,6 +209,8 @@ serve(async (req) => {
     // For longer periods, we need to chunk the requests
     const MAX_CHUNK_MS = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
     const allIncome: any[] = [];
+    let isRateLimited = false;
+    let rateLimitError = '';
     
     let chunkStart = startTime;
     while (chunkStart < endTime) {
@@ -209,14 +218,62 @@ serve(async (req) => {
       
       console.log(`Fetching chunk: ${new Date(chunkStart).toISOString()} to ${new Date(chunkEnd).toISOString()}`);
       
-      const chunkIncome = await getBinanceIncome(apiKey, apiSecret, chunkStart, chunkEnd);
-      allIncome.push(...chunkIncome);
+      const result = await getBinanceIncome(apiKey, apiSecret, chunkStart, chunkEnd);
       
+      if (result.rateLimited) {
+        isRateLimited = true;
+        rateLimitError = result.error || 'Rate limited';
+        console.warn('Binance rate limited, returning cached/empty data');
+        break;
+      }
+      
+      if (result.error) {
+        console.error('Binance API error:', result.error);
+        break;
+      }
+      
+      allIncome.push(...result.data);
       chunkStart = chunkEnd;
     }
     
-    // Get current account data for unrealized PNL
-    const accountData = await getBinanceAccount(apiKey, apiSecret);
+    // If rate limited and no data, return a graceful response
+    if (isRateLimited && allIncome.length === 0) {
+      const rateLimitedResponse = {
+        success: false,
+        rateLimited: true,
+        message: 'Binance API rate limit reached. Please wait a few minutes.',
+        startTime: new Date(startTime).toISOString(),
+        endTime: new Date(endTime).toISOString(),
+        todaysRealizedPnl: 0,
+        commission: 0,
+        fundingFee: 0,
+        netPnl: 0,
+        unrealizedPnl: 0,
+        walletBalance: 0,
+        marginBalance: 0,
+        incomeByType: {},
+        incomeCount: 0,
+        rawIncome: [],
+      };
+      
+      // Cache even the rate-limited response briefly
+      setCache(cacheKey, rateLimitedResponse);
+      
+      return new Response(
+        JSON.stringify(rateLimitedResponse),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // Get current account data for unrealized PNL (might also fail if rate limited)
+    let accountData = { totalWalletBalance: 0, totalUnrealizedProfit: 0, totalMarginBalance: 0, availableBalance: 0 };
+    if (!isRateLimited) {
+      try {
+        accountData = await getBinanceAccount(apiKey, apiSecret);
+      } catch (e) {
+        console.warn('Could not fetch account data:', e);
+      }
+    }
 
     // Categorize income by type
     const incomeByType: Record<string, number> = {};
