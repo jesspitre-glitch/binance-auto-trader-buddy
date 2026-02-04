@@ -2408,7 +2408,8 @@ serve(async (req) => {
               // Calculate notional value and leverage
               notional = position.entry_price * actualQuantity;
               feesPctOfNotional = notional > 0 ? (totalFee / notional) * 100 : 0;
-              leverageUsed = (position.indicators_snapshot as any)?.leverage || 10;
+              // Only use leverage if actually present in snapshot - don't guess
+              leverageUsed = (position.indicators_snapshot as any)?.leverage ?? null;
               
               console.log(`📊 Fee logging for ${position.symbol}: entry=${entryFee.toFixed(4)}, exit=${exitFee.toFixed(4)}, total=${totalFee.toFixed(4)} (${feesPctOfNotional.toFixed(4)}% of notional), funding=${fundingFee.toFixed(4)}, gross=${actualPnl.toFixed(4)}, afterFees=${pnlAfterFees.toFixed(4)}, net=${netPnl.toFixed(4)}, notional=${notional.toFixed(2)}, leverage=${leverageUsed}`);
             }
