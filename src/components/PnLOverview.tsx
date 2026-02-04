@@ -418,9 +418,12 @@ export const PnLOverview = () => {
       });
 
       // Create cumulative P&L chart data (UTC/Binance time)
+      // Use NET P&L (after fees and funding) for accurate real P&L
       let cumulativePnL = 0;
       const cumulativeData = trades.map(trade => {
-        cumulativePnL += Number(trade.pnl);
+        // Calculate net P&L: use stored value or compute from pnl - fees + funding
+        const netPnl = Number(trade.net_pnl ?? (Number(trade.pnl) - Number(trade.total_fee || 0) + Number(trade.funding_fee || 0)));
+        cumulativePnL += netPnl;
         const date = new Date(trade.closed_at);
         return {
           time: date.toLocaleString("da-DK", {
@@ -430,7 +433,7 @@ export const PnLOverview = () => {
             minute: range === "24h" ? "2-digit" : undefined,
             timeZone: "UTC",
           }) + " UTC",
-          pnl: Number(Number(trade.pnl).toFixed(2)),
+          pnl: Number(netPnl.toFixed(2)),
           cumulative: Number(cumulativePnL.toFixed(2)),
         };
       });
@@ -528,16 +531,19 @@ export const PnLOverview = () => {
         const { key, label } = getKeyAndLabel(date, range);
         const existing = aggregatedPnL.get(key);
         
+        // Calculate net P&L: use stored value or compute from pnl - fees + funding
+        const netPnl = Number(trade.net_pnl ?? (Number(trade.pnl) - Number(trade.total_fee || 0) + Number(trade.funding_fee || 0)));
+        
         // Debug first few trades
         if (idx < 3) {
-          console.log(`Trade ${idx}: closed_at=${trade.closed_at}, key=${key}, label=${label}, exists=${!!existing}`);
+          console.log(`Trade ${idx}: closed_at=${trade.closed_at}, key=${key}, label=${label}, exists=${!!existing}, netPnl=${netPnl.toFixed(2)}`);
         }
         
         if (existing) {
-          existing.pnl += Number(trade.pnl);
+          existing.pnl += netPnl;
           matchedCount++;
         } else {
-          aggregatedPnL.set(key, { label, pnl: Number(trade.pnl) });
+          aggregatedPnL.set(key, { label, pnl: netPnl });
           unmatchedCount++;
         }
       });
