@@ -1006,7 +1006,13 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                               </span>
                             </div>
                             <span className="font-mono font-bold">
-                              K={coin.indicators.stochRSI_k?.toFixed(1) || 'N/A'}
+                              K={coin.indicators.stochRSI_k?.toFixed(1) || 'N/A'} D={coin.indicators.stochRSI_d?.toFixed(1) || 'N/A'}
+                              {coin.indicators.stochrsi_audit?.entry_mode && (
+                                <span className="ml-1 text-[7px] px-1 py-0.5 rounded bg-primary/20 text-primary">
+                                  {coin.indicators.stochrsi_audit.entry_mode.includes('ROLLOVER') ? 'ROLL' : 
+                                   coin.indicators.stochrsi_audit.entry_mode.includes('REVERSAL') ? 'REV' : ''}
+                                </span>
+                              )}
                             </span>
                           </div>
                         )}
@@ -1052,11 +1058,30 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                   )}
                   
                   {coin.indicators.stochRSI_k !== null && coin.indicators.stochRSI_k !== undefined && (
-                    <div className="flex justify-between">
-                      <span className="opacity-70">StochK:</span>
-                      <span className="font-mono font-bold transition-all duration-500">
-                        {coin.indicators.stochRSI_k.toFixed(1)}
-                      </span>
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex justify-between">
+                        <span className="opacity-70">Stoch K/D:</span>
+                        <span className="font-mono font-bold transition-all duration-500">
+                          {coin.indicators.stochRSI_k.toFixed(1)} / {coin.indicators.stochRSI_d?.toFixed(1) || 'N/A'}
+                        </span>
+                      </div>
+                      {coin.indicators.stochrsi_audit?.entry_mode && (
+                        <div className="flex justify-between">
+                          <span className="opacity-70">Mode:</span>
+                          <span className="font-mono text-[10px] font-semibold transition-all duration-500">
+                            {coin.indicators.stochrsi_audit.entry_mode.includes('ROLLOVER') && (
+                              <span className="text-amber-500">ROLLOVER</span>
+                            )}
+                            {coin.indicators.stochrsi_audit.entry_mode.includes('REVERSAL') && (
+                              <span className="text-cyan-500">REVERSAL</span>
+                            )}
+                            {!coin.indicators.stochrsi_audit.entry_mode.includes('ROLLOVER') && 
+                             !coin.indicators.stochrsi_audit.entry_mode.includes('REVERSAL') && (
+                              <span>{coin.indicators.stochrsi_audit.entry_mode}</span>
+                            )}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
