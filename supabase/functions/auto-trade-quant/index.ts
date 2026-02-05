@@ -1637,16 +1637,19 @@ function analyzeSignal(
       oversoldAtSignal = stochRSI.k <= oversoldK && stochRSI.d <= oversoldD;
       
       // Check for rollover potential: D is above threshold (meaning rollover mode is possible)
-      // For LONG: We check if D is above rollover_d_min threshold when in oversold zone
+      // For LONG: We check if D is above rollover_d_min_long threshold when in oversold zone
       // For SHORT: We check if D is below rollover_d_min_short when in overbought zone  
       const rolloverDMinShort = config.rollover_d_min_short ?? 60;
+      // For LONG: rollover_d_min_long default 40 - if D > 40 in oversold zone = rollover potential
+      const rolloverDMinLong = 40; // Could be config.rollover_d_min_long in future
       const longInZone = stochRSI.k <= oversoldK || stochRSI.d <= oversoldD;
       const shortInZone = stochRSI.k >= overboughtK || stochRSI.d >= overboughtD;
       
-      // For LONG rollover: D needs to be above some threshold to show "rollover potential"
-      // Using inverse logic: if D is very low (deep oversold), it's pure reversal territory
-      // If D is somewhat higher but still in zone, rollover might be brewing
-      const longRolloverPotential = longInZone && stochRSI.d > oversoldD * 1.5;
+      // LONG rollover: When in oversold zone (K or D low), but D is still relatively high (above 40)
+      // This means a "rollover" from above into oversold, not a deep reversal from bottom
+      // E.g. D=45 with K=18 = rollover potential (coming from above), D=15 with K=18 = reversal (deep)
+      const longRolloverPotential = longInZone && stochRSI.d >= rolloverDMinLong;
+      // SHORT rollover: When in overbought zone, but D is not too high (below rolloverDMinShort)
       const shortRolloverPotential = shortInZone && stochRSI.d <= rolloverDMinShort;
       
       if (prevK !== null && prevD !== null) {
