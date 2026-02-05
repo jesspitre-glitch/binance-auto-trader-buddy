@@ -254,6 +254,7 @@ export type Database = {
           regime_router_enabled: boolean | null
           regime_trend_exit_profile_id: string | null
           risk_per_trade_percent: number | null
+          rollover_d_min_long: number | null
           rollover_d_min_short: number | null
           rsi_enabled: boolean | null
           rsi_hard_filter: boolean | null
@@ -393,6 +394,7 @@ export type Database = {
           regime_router_enabled?: boolean | null
           regime_trend_exit_profile_id?: string | null
           risk_per_trade_percent?: number | null
+          rollover_d_min_long?: number | null
           rollover_d_min_short?: number | null
           rsi_enabled?: boolean | null
           rsi_hard_filter?: boolean | null
@@ -532,6 +534,7 @@ export type Database = {
           regime_router_enabled?: boolean | null
           regime_trend_exit_profile_id?: string | null
           risk_per_trade_percent?: number | null
+          rollover_d_min_long?: number | null
           rollover_d_min_short?: number | null
           rsi_enabled?: boolean | null
           rsi_hard_filter?: boolean | null

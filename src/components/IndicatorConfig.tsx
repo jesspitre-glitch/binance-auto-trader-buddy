@@ -81,6 +81,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     stochrsi_oversold_d: config?.stochrsi_oversold_d ?? config?.stochrsi_oversold ?? 20,
     stochrsi_short_mode: config?.stochrsi_short_mode || 'REVERSAL_OVERBOUGHT',
     rollover_d_min_short: config?.rollover_d_min_short ?? 50,
+    rollover_d_min_long: config?.rollover_d_min_long ?? 40,
     
     // Pivot Points
     pivot_points_enabled: config?.pivot_points_enabled !== undefined ? config?.pivot_points_enabled : true,
@@ -255,6 +256,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       stochrsi_oversold_d: config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20,
       stochrsi_short_mode: config.stochrsi_short_mode ?? 'REVERSAL_OVERBOUGHT',
       rollover_d_min_short: config.rollover_d_min_short ?? 50,
+      rollover_d_min_long: config.rollover_d_min_long ?? 40,
       // Pivot Points
       pivot_points_enabled: config.pivot_points_enabled !== undefined ? config.pivot_points_enabled : true,
       pivot_points_timeframe: config.pivot_points_timeframe ?? "1d",
@@ -426,6 +428,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       stochrsi_oversold_d: config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20,
       stochrsi_short_mode: config.stochrsi_short_mode ?? 'REVERSAL_OVERBOUGHT',
       rollover_d_min_short: config.rollover_d_min_short ?? 50,
+      rollover_d_min_long: config.rollover_d_min_long ?? 40,
       pivot_points_enabled: config.pivot_points_enabled !== undefined ? config.pivot_points_enabled : true,
       pivot_points_timeframe: config.pivot_points_timeframe ?? "1d",
       pivot_points_lookback: config.pivot_points_lookback ?? 24,
@@ -1138,6 +1141,19 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                       fallback={20}
                     />
                     <p className="text-xs text-muted-foreground">D ≤ denne værdi for LONG</p>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="rollover_d_min_long">Rollover D Min (LONG)</Label>
+                    <DecimalInput
+                      value={formData.rollover_d_min_long}
+                      onValueChange={(v) => setFormData({ ...formData, rollover_d_min_long: v })}
+                      fallback={40}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Rollover filter: D ≥ denne værdi ved bullish cross = ROLLOVER, ellers REVERSAL (0=deaktiveret)
+                    </p>
                   </div>
                 </div>
               </div>
