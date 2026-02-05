@@ -272,6 +272,7 @@ export type Database = {
           stochrsi_enabled: boolean | null
           stochrsi_hard_filter: boolean | null
           stochrsi_k_period: number | null
+          stochrsi_long_mode: string
           stochrsi_overbought: number | null
           stochrsi_overbought_d: number | null
           stochrsi_overbought_k: number | null
@@ -412,6 +413,7 @@ export type Database = {
           stochrsi_enabled?: boolean | null
           stochrsi_hard_filter?: boolean | null
           stochrsi_k_period?: number | null
+          stochrsi_long_mode?: string
           stochrsi_overbought?: number | null
           stochrsi_overbought_d?: number | null
           stochrsi_overbought_k?: number | null
@@ -552,6 +554,7 @@ export type Database = {
           stochrsi_enabled?: boolean | null
           stochrsi_hard_filter?: boolean | null
           stochrsi_k_period?: number | null
+          stochrsi_long_mode?: string
           stochrsi_overbought?: number | null
           stochrsi_overbought_d?: number | null
           stochrsi_overbought_k?: number | null

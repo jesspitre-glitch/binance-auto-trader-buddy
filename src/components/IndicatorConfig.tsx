@@ -79,7 +79,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     stochrsi_overbought_d: config?.stochrsi_overbought_d ?? config?.stochrsi_overbought ?? 80,
     stochrsi_oversold_k: config?.stochrsi_oversold_k ?? config?.stochrsi_oversold ?? 20,
     stochrsi_oversold_d: config?.stochrsi_oversold_d ?? config?.stochrsi_oversold ?? 20,
-    stochrsi_short_mode: config?.stochrsi_short_mode || 'REVERSAL_OVERBOUGHT',
+    stochrsi_short_mode: config?.stochrsi_short_mode || 'REVERSAL_ROLLOVER',
+    stochrsi_long_mode: config?.stochrsi_long_mode || 'REVERSAL_ROLLOVER',
     rollover_d_min_short: config?.rollover_d_min_short ?? 50,
     rollover_d_min_long: config?.rollover_d_min_long ?? 40,
     
@@ -254,7 +255,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       stochrsi_overbought_d: config.stochrsi_overbought_d ?? config.stochrsi_overbought ?? 80,
       stochrsi_oversold_k: config.stochrsi_oversold_k ?? config.stochrsi_oversold ?? 20,
       stochrsi_oversold_d: config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20,
-      stochrsi_short_mode: config.stochrsi_short_mode ?? 'REVERSAL_OVERBOUGHT',
+      stochrsi_short_mode: config.stochrsi_short_mode ?? 'REVERSAL_ROLLOVER',
+      stochrsi_long_mode: config.stochrsi_long_mode ?? 'REVERSAL_ROLLOVER',
       rollover_d_min_short: config.rollover_d_min_short ?? 50,
       rollover_d_min_long: config.rollover_d_min_long ?? 40,
       // Pivot Points
@@ -426,7 +428,8 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       stochrsi_overbought_d: config.stochrsi_overbought_d ?? config.stochrsi_overbought ?? 80,
       stochrsi_oversold_k: config.stochrsi_oversold_k ?? config.stochrsi_oversold ?? 20,
       stochrsi_oversold_d: config.stochrsi_oversold_d ?? config.stochrsi_oversold ?? 20,
-      stochrsi_short_mode: config.stochrsi_short_mode ?? 'REVERSAL_OVERBOUGHT',
+      stochrsi_short_mode: config.stochrsi_short_mode ?? 'REVERSAL_ROLLOVER',
+      stochrsi_long_mode: config.stochrsi_long_mode ?? 'REVERSAL_ROLLOVER',
       rollover_d_min_short: config.rollover_d_min_short ?? 50,
       rollover_d_min_long: config.rollover_d_min_long ?? 40,
       pivot_points_enabled: config.pivot_points_enabled !== undefined ? config.pivot_points_enabled : true,
@@ -1120,9 +1123,49 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 </div>
               </div>
               
+              {/* StochRSI LONG Mode */}
+              <div className="sm:col-span-5 border-t pt-4 mt-2">
+                <p className="text-sm font-medium text-muted-foreground mb-3">LONG Signal Mode</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="stochrsi_long_mode">StochRSI LONG Mode</Label>
+                    <Select
+                      value={formData.stochrsi_long_mode}
+                      onValueChange={(value) => setFormData({ ...formData, stochrsi_long_mode: value })}
+                    >
+                      <SelectTrigger id="stochrsi_long_mode">
+                        <SelectValue placeholder="Vælg LONG mode" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ZONE_ONLY">Zone Only (K/D oversold)</SelectItem>
+                        <SelectItem value="REVERSAL_ROLLOVER">Reversal Rollover (Bullish Cross)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {formData.stochrsi_long_mode === 'ZONE_ONLY' 
+                        ? 'LONG når K <= Oversold K OG D <= Oversold D' 
+                        : 'LONG ved bullish cross: D krydser over K i oversold zone'}
+                    </p>
+                  </div>
+                  {formData.stochrsi_long_mode === 'REVERSAL_ROLLOVER' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="rollover_d_min_long">Rollover D Min (LONG)</Label>
+                      <DecimalInput
+                        value={formData.rollover_d_min_long}
+                        onValueChange={(v) => setFormData({ ...formData, rollover_d_min_long: v })}
+                        fallback={40}
+                      />
+                      <p className="text-xs text-muted-foreground">Ekstra filter: D skal være ≥ denne værdi ved cross (0=deaktiveret)</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
               {/* Oversold thresholds for LONG */}
               <div className="sm:col-span-5 border-t pt-4 mt-2">
-                <p className="text-sm font-medium text-muted-foreground mb-3">Oversolgt (LONG tærskler)</p>
+                <p className="text-sm font-medium text-muted-foreground mb-3">
+                  Oversolgt (LONG tærskler{formData.stochrsi_long_mode === 'REVERSAL_ROLLOVER' ? ' - Bullish Cross kræver min(K,D) <= threshold' : ''})
+                </p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="stochrsi_oversold_k">Oversolgt K</Label>
@@ -1131,7 +1174,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                       onValueChange={(v) => setFormData({ ...formData, stochrsi_oversold_k: v })}
                       fallback={20}
                     />
-                    <p className="text-xs text-muted-foreground">K ≤ denne værdi for LONG</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formData.stochrsi_long_mode === 'ZONE_ONLY' 
+                        ? 'K ≤ denne værdi for LONG' 
+                        : 'min(K,D) ≤ denne værdi ved bullish cross'}
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="stochrsi_oversold_d">Oversolgt D</Label>
@@ -1140,19 +1187,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                       onValueChange={(v) => setFormData({ ...formData, stochrsi_oversold_d: v })}
                       fallback={20}
                     />
-                    <p className="text-xs text-muted-foreground">D ≤ denne værdi for LONG</p>
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="rollover_d_min_long">Rollover D Min (LONG)</Label>
-                    <DecimalInput
-                      value={formData.rollover_d_min_long}
-                      onValueChange={(v) => setFormData({ ...formData, rollover_d_min_long: v })}
-                      fallback={40}
-                    />
                     <p className="text-xs text-muted-foreground">
-                      Rollover filter: D ≥ denne værdi ved bullish cross = ROLLOVER, ellers REVERSAL (0=deaktiveret)
+                      {formData.stochrsi_long_mode === 'ZONE_ONLY' 
+                        ? 'D ≤ denne værdi for LONG' 
+                        : 'Bruges sammen med K til zone-check'}
                     </p>
                   </div>
                 </div>
