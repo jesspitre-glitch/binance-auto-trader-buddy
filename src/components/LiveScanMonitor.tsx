@@ -1007,10 +1007,15 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                             </div>
                             <span className="font-mono font-bold">
                               K={coin.indicators.stochRSI_k?.toFixed(1) || 'N/A'} D={coin.indicators.stochRSI_d?.toFixed(1) || 'N/A'}
-                              {coin.indicators.stochrsi_audit?.entry_mode && (
-                                <span className="ml-1 text-[7px] px-1 py-0.5 rounded bg-primary/20 text-primary">
-                                  {coin.indicators.stochrsi_audit.entry_mode.includes('ROLLOVER') ? 'ROLL' : 
-                                   coin.indicators.stochrsi_audit.entry_mode.includes('REVERSAL') ? 'REV' : ''}
+                              {/* Show cross status from filterStatus audit */}
+                              {(coin.indicators.filterStatus?.hard?.stochrsi?.audit?.stochrsi_cross_up || 
+                                coin.indicators.filterStatus?.hard?.stochrsi?.audit?.stochrsi_cross_down) && (
+                                <span className={`ml-1 text-[7px] px-1 py-0.5 rounded font-semibold ${
+                                  coin.indicators.filterStatus?.hard?.stochrsi?.audit?.stochrsi_cross_up 
+                                    ? 'bg-green-500/20 text-green-500' 
+                                    : 'bg-red-500/20 text-red-500'
+                                }`}>
+                                  {coin.indicators.filterStatus?.hard?.stochrsi?.audit?.stochrsi_cross_up ? '↑CROSS' : '↓CROSS'}
                                 </span>
                               )}
                             </span>
@@ -1065,23 +1070,57 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                           {coin.indicators.stochRSI_k.toFixed(1)} / {coin.indicators.stochRSI_d?.toFixed(1) || 'N/A'}
                         </span>
                       </div>
-                      {coin.indicators.stochrsi_audit?.entry_mode && (
+                      {/* Show condition type from filterStatus audit */}
+                      {(coin.indicators.filterStatus?.hard?.stochrsi?.audit?.long_condition_type !== 'NONE' || 
+                        coin.indicators.filterStatus?.hard?.stochrsi?.audit?.short_condition_type !== 'NONE') && (
                         <div className="flex justify-between">
-                          <span className="opacity-70">Mode:</span>
-                          <span className="font-mono text-[10px] font-semibold transition-all duration-500">
-                            {coin.indicators.stochrsi_audit.entry_mode.includes('ROLLOVER') && (
-                              <span className="text-amber-500">ROLLOVER</span>
+                          <span className="opacity-70">Signal:</span>
+                          <span className="font-mono text-[10px] font-semibold">
+                            {coin.indicators.filterStatus?.hard?.stochrsi?.audit?.long_condition_type !== 'NONE' && (
+                              <span className="text-green-500">
+                                L:{coin.indicators.filterStatus.hard.stochrsi.audit.long_condition_type}
+                              </span>
                             )}
-                            {coin.indicators.stochrsi_audit.entry_mode.includes('REVERSAL') && (
-                              <span className="text-cyan-500">REVERSAL</span>
-                            )}
-                            {!coin.indicators.stochrsi_audit.entry_mode.includes('ROLLOVER') && 
-                             !coin.indicators.stochrsi_audit.entry_mode.includes('REVERSAL') && (
-                              <span>{coin.indicators.stochrsi_audit.entry_mode}</span>
+                            {coin.indicators.filterStatus?.hard?.stochrsi?.audit?.short_condition_type !== 'NONE' && (
+                              <span className="text-red-500">
+                                S:{coin.indicators.filterStatus.hard.stochrsi.audit.short_condition_type}
+                              </span>
                             )}
                           </span>
                         </div>
                       )}
+                      {/* Cross indicators */}
+                      <div className="flex justify-between">
+                        <span className="opacity-70">Cross:</span>
+                        <span className="font-mono text-[10px] font-semibold">
+                          {coin.indicators.filterStatus?.hard?.stochrsi?.audit?.stochrsi_cross_up && (
+                            <span className="text-green-500 mr-1">↑UP</span>
+                          )}
+                          {coin.indicators.filterStatus?.hard?.stochrsi?.audit?.stochrsi_cross_down && (
+                            <span className="text-red-500 mr-1">↓DOWN</span>
+                          )}
+                          {!coin.indicators.filterStatus?.hard?.stochrsi?.audit?.stochrsi_cross_up && 
+                           !coin.indicators.filterStatus?.hard?.stochrsi?.audit?.stochrsi_cross_down && (
+                            <span className="opacity-50">-</span>
+                          )}
+                        </span>
+                      </div>
+                      {/* Zone status */}
+                      <div className="flex justify-between">
+                        <span className="opacity-70">Zone:</span>
+                        <span className="font-mono text-[10px] font-semibold">
+                          {coin.indicators.filterStatus?.hard?.stochrsi?.audit?.stochrsi_oversold_at_signal && (
+                            <span className="text-green-500">OVERSOLD</span>
+                          )}
+                          {coin.indicators.filterStatus?.hard?.stochrsi?.audit?.stochrsi_overbought_at_signal && (
+                            <span className="text-red-500">OVERBOUGHT</span>
+                          )}
+                          {!coin.indicators.filterStatus?.hard?.stochrsi?.audit?.stochrsi_oversold_at_signal && 
+                           !coin.indicators.filterStatus?.hard?.stochrsi?.audit?.stochrsi_overbought_at_signal && (
+                            <span className="opacity-50">NEUTRAL</span>
+                          )}
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>
