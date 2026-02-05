@@ -1070,25 +1070,44 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                           {coin.indicators.stochRSI_k.toFixed(1)} / {coin.indicators.stochRSI_d?.toFixed(1) || 'N/A'}
                         </span>
                       </div>
-                      {/* Show condition type from filterStatus audit */}
-                      {(coin.indicators.filterStatus?.hard?.stochrsi?.audit?.long_condition_type !== 'NONE' || 
-                        coin.indicators.filterStatus?.hard?.stochrsi?.audit?.short_condition_type !== 'NONE') && (
-                        <div className="flex justify-between">
-                          <span className="opacity-70">Signal:</span>
-                          <span className="font-mono text-[10px] font-semibold">
-                            {coin.indicators.filterStatus?.hard?.stochrsi?.audit?.long_condition_type !== 'NONE' && (
-                              <span className="text-green-500">
-                                L:{coin.indicators.filterStatus.hard.stochrsi.audit.long_condition_type}
+                      {/* Rollover status for LONG */}
+                      <div className="flex justify-between items-center">
+                        <span className="text-green-500 font-semibold text-[10px]">LONG:</span>
+                        <span className="font-mono text-[10px] font-semibold">
+                          {(() => {
+                            const audit = coin.indicators.filterStatus?.hard?.stochrsi?.audit;
+                            const condType = audit?.long_condition_type;
+                            if (!condType || condType === 'NONE') {
+                              return <span className="opacity-50">-</span>;
+                            }
+                            const isRollover = condType.includes('ROLLOVER');
+                            return (
+                              <span className={isRollover ? 'text-amber-500' : 'text-cyan-500'}>
+                                {isRollover ? '🔄 ROLLOVER' : '⚡ REVERSAL'}
                               </span>
-                            )}
-                            {coin.indicators.filterStatus?.hard?.stochrsi?.audit?.short_condition_type !== 'NONE' && (
-                              <span className="text-red-500">
-                                S:{coin.indicators.filterStatus.hard.stochrsi.audit.short_condition_type}
+                            );
+                          })()}
+                        </span>
+                      </div>
+                      {/* Rollover status for SHORT */}
+                      <div className="flex justify-between items-center">
+                        <span className="text-red-500 font-semibold text-[10px]">SHORT:</span>
+                        <span className="font-mono text-[10px] font-semibold">
+                          {(() => {
+                            const audit = coin.indicators.filterStatus?.hard?.stochrsi?.audit;
+                            const condType = audit?.short_condition_type;
+                            if (!condType || condType === 'NONE') {
+                              return <span className="opacity-50">-</span>;
+                            }
+                            const isRollover = condType.includes('ROLLOVER');
+                            return (
+                              <span className={isRollover ? 'text-amber-500' : 'text-cyan-500'}>
+                                {isRollover ? '🔄 ROLLOVER' : '⚡ REVERSAL'}
                               </span>
-                            )}
-                          </span>
-                        </div>
-                      )}
+                            );
+                          })()}
+                        </span>
+                      </div>
                       {/* Cross indicators */}
                       <div className="flex justify-between">
                         <span className="opacity-70">Cross:</span>
