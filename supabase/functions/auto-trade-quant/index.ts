@@ -1597,8 +1597,8 @@ function analyzeSignal(
       // Variables for signal evaluation
       let stochRSILong = false;
       let stochRSIShort = false;
-      let longConditionType: 'BULLISH_CROSS_OVERSOLD' | 'NONE' = 'NONE';
-      let shortConditionType: 'BEARISH_CROSS_OVERBOUGHT' | 'NONE' = 'NONE';
+      let longConditionType: 'BULLISH_CROSS_OVERSOLD' | 'REVERSAL_ROLLOVER' | 'ZONE_ROLLOVER' | 'ZONE_REVERSAL' | 'NONE' = 'NONE';
+      let shortConditionType: 'BEARISH_CROSS_OVERBOUGHT' | 'REVERSAL_ROLLOVER' | 'ZONE_ROLLOVER' | 'ZONE_REVERSAL' | 'NONE' = 'NONE';
       let crossDown = false;
       let crossUp = false;
       let overboughtAtSignal = false;
@@ -1636,13 +1636,33 @@ function analyzeSignal(
       // ═══════════════════════════════════════════════════════════════════
       oversoldAtSignal = stochRSI.k <= oversoldK && stochRSI.d <= oversoldD;
       
+      // Check for rollover potential: D is above threshold (meaning rollover mode is possible)
+      // For LONG: We check if D is above rollover_d_min threshold when in oversold zone
+      // For SHORT: We check if D is below rollover_d_min_short when in overbought zone  
+      const rolloverDMinShort = config.rollover_d_min_short ?? 60;
+      const longInZone = stochRSI.k <= oversoldK || stochRSI.d <= oversoldD;
+      const shortInZone = stochRSI.k >= overboughtK || stochRSI.d >= overboughtD;
+      
+      // For LONG rollover: D needs to be above some threshold to show "rollover potential"
+      // Using inverse logic: if D is very low (deep oversold), it's pure reversal territory
+      // If D is somewhat higher but still in zone, rollover might be brewing
+      const longRolloverPotential = longInZone && stochRSI.d > oversoldD * 1.5;
+      const shortRolloverPotential = shortInZone && stochRSI.d <= rolloverDMinShort;
+      
       if (prevK !== null && prevD !== null) {
         // Bullish cross: D was below K, now D >= K (D crossing over K)
         crossUp = prevD < prevK && stochRSI.d >= stochRSI.k;
         
         // LONG = bullish cross + in oversold zone
         stochRSILong = crossUp && oversoldAtSignal;
-        longConditionType = stochRSILong ? 'BULLISH_CROSS_OVERSOLD' : 'NONE';
+        if (stochRSILong) {
+          longConditionType = longRolloverPotential ? 'REVERSAL_ROLLOVER' : 'BULLISH_CROSS_OVERSOLD';
+        } else if (longInZone) {
+          // Show potential even without active crossover
+          longConditionType = longRolloverPotential ? 'ZONE_ROLLOVER' : 'ZONE_REVERSAL';
+        } else {
+          longConditionType = 'NONE';
+        }
         
         console.log(`\n   🟢 LONG EVALUATION (D crosses over K in oversold):`);
         console.log(`      prev_D < prev_K: ${prevD.toFixed(2)} < ${prevK.toFixed(2)} = ${prevD < prevK}`);
@@ -1651,6 +1671,7 @@ function analyzeSignal(
         console.log(`      K <= ${oversoldK}: ${stochRSI.k.toFixed(2)} <= ${oversoldK} = ${stochRSI.k <= oversoldK}`);
         console.log(`      D <= ${oversoldD}: ${stochRSI.d.toFixed(2)} <= ${oversoldD} = ${stochRSI.d <= oversoldD}`);
         console.log(`      → oversoldAtSignal: ${oversoldAtSignal}`);
+        console.log(`      → longInZone: ${longInZone}, rolloverPotential: ${longRolloverPotential}`);
         console.log(`      ★ LONG SIGNAL: ${stochRSILong ? '✅ PASS' : '❌ FAIL'} (${longConditionType})`);
       } else {
         console.log(`\n   🟢 LONG EVALUATION: ❌ FAIL (insufficient data for cross detection)`);
@@ -1669,7 +1690,14 @@ function analyzeSignal(
         
         // SHORT = bearish cross + in overbought zone
         stochRSIShort = crossDown && overboughtAtSignal;
-        shortConditionType = stochRSIShort ? 'BEARISH_CROSS_OVERBOUGHT' : 'NONE';
+        if (stochRSIShort) {
+          shortConditionType = shortRolloverPotential ? 'REVERSAL_ROLLOVER' : 'BEARISH_CROSS_OVERBOUGHT';
+        } else if (shortInZone) {
+          // Show potential even without active crossover
+          shortConditionType = shortRolloverPotential ? 'ZONE_ROLLOVER' : 'ZONE_REVERSAL';
+        } else {
+          shortConditionType = 'NONE';
+        }
         
         console.log(`\n   🔴 SHORT EVALUATION (D crosses under K in overbought):`);
         console.log(`      prev_D > prev_K: ${prevD.toFixed(2)} > ${prevK.toFixed(2)} = ${prevD > prevK}`);
@@ -1678,6 +1706,7 @@ function analyzeSignal(
         console.log(`      K >= ${overboughtK}: ${stochRSI.k.toFixed(2)} >= ${overboughtK} = ${stochRSI.k >= overboughtK}`);
         console.log(`      D >= ${overboughtD}: ${stochRSI.d.toFixed(2)} >= ${overboughtD} = ${stochRSI.d >= overboughtD}`);
         console.log(`      → overboughtAtSignal: ${overboughtAtSignal}`);
+        console.log(`      → shortInZone: ${shortInZone}, rolloverPotential: ${shortRolloverPotential}`);
         console.log(`      ★ SHORT SIGNAL: ${stochRSIShort ? '✅ PASS' : '❌ FAIL'} (${shortConditionType})`);
       } else {
         console.log(`\n   🔴 SHORT EVALUATION: ❌ FAIL (insufficient data for cross detection)`);
@@ -1699,6 +1728,11 @@ function analyzeSignal(
         stochrsi_cross_down: crossDown,
         stochrsi_oversold_at_signal: oversoldAtSignal,
         stochrsi_overbought_at_signal: overboughtAtSignal,
+        // Zone status (for display even without crossover)
+        stochrsi_long_in_zone: longInZone,
+        stochrsi_short_in_zone: shortInZone,
+        stochrsi_long_rollover_potential: longRolloverPotential,
+        stochrsi_short_rollover_potential: shortRolloverPotential,
         // Previous values for audit
         stochrsi_prev_k: prevK,
         stochrsi_prev_d: prevD,
@@ -1709,7 +1743,7 @@ function analyzeSignal(
         stochrsi_oversold_d_setting: oversoldD,
         stochrsi_overbought_k_setting: overboughtK,
         stochrsi_overbought_d_setting: overboughtD,
-        // Signal types
+        // Signal types - now shows zone status even without crossover
         long_condition_type: longConditionType,
         short_condition_type: shortConditionType,
       };

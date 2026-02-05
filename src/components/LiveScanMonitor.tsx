@@ -1081,6 +1081,14 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                               return <span className="opacity-50">-</span>;
                             }
                             const isRollover = condType.includes('ROLLOVER');
+                            const isZone = condType.includes('ZONE');
+                            if (isZone) {
+                              return (
+                                <span className={isRollover ? 'text-amber-500/60' : 'text-cyan-500/60'}>
+                                  {isRollover ? '⏳ ROLLOVER' : '⏳ REVERSAL'}
+                                </span>
+                              );
+                            }
                             return (
                               <span className={isRollover ? 'text-amber-500' : 'text-cyan-500'}>
                                 {isRollover ? '🔄 ROLLOVER' : '⚡ REVERSAL'}
@@ -1100,6 +1108,14 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
                               return <span className="opacity-50">-</span>;
                             }
                             const isRollover = condType.includes('ROLLOVER');
+                            const isZone = condType.includes('ZONE');
+                            if (isZone) {
+                              return (
+                                <span className={isRollover ? 'text-amber-500/60' : 'text-cyan-500/60'}>
+                                  {isRollover ? '⏳ ROLLOVER' : '⏳ REVERSAL'}
+                                </span>
+                              );
+                            }
                             return (
                               <span className={isRollover ? 'text-amber-500' : 'text-cyan-500'}>
                                 {isRollover ? '🔄 ROLLOVER' : '⚡ REVERSAL'}
