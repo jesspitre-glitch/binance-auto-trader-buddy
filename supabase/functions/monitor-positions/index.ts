@@ -1276,11 +1276,11 @@ serve(async (req) => {
               const dbTrailingStop = Number(position.trailing_stop);
               const beforeRatchet = newTrailingStop;
 
-              if (position.side === 'LONG') {
-                newTrailingStop = Math.max(newTrailingStop, dbTrailingStop);
-              } else {
-                newTrailingStop = Math.min(newTrailingStop, dbTrailingStop);
-              }
+              // Ratchet: stop må kun strammes (mere beskyttende)
+              // LONG: højere = strammere → Math.max
+              // SHORT: højere = strammere (tættere på price, triggers hurtigere) → Math.max
+              // BEGGE sider: mest beskyttende = HØJESTE stop level
+              newTrailingStop = Math.max(newTrailingStop, dbTrailingStop);
 
               if (newTrailingStop !== beforeRatchet) {
                 console.log(`   🔧 RATCHET: ${beforeRatchet.toFixed(8)} → ${newTrailingStop.toFixed(8)} (kept DB value)`);
