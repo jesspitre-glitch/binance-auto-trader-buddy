@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.scanner-keepalive]
 verify_jwt = false
+
+[functions.reconcile-trade-fees]
+verify_jwt = false

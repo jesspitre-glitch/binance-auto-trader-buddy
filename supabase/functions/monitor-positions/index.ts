@@ -2446,6 +2446,8 @@ serve(async (req) => {
               notional: notional,
               leverage_used: leverageUsed,
               fees_pct_of_notional: feesPctOfNotional,
+              fees_pending: true,
+              fees_reconciled_at: null,
             });
 
             if (historyError) {
