@@ -788,6 +788,8 @@ export type Database = {
           exit_price: number
           fees_data_missing: boolean | null
           fees_pct_of_notional: number | null
+          fees_pending: boolean | null
+          fees_reconciled_at: string | null
           funding_fee: number | null
           id: string
           indicators_snapshot: Json | null
@@ -820,6 +822,8 @@ export type Database = {
           exit_price: number
           fees_data_missing?: boolean | null
           fees_pct_of_notional?: number | null
+          fees_pending?: boolean | null
+          fees_reconciled_at?: string | null
           funding_fee?: number | null
           id?: string
           indicators_snapshot?: Json | null
@@ -852,6 +856,8 @@ export type Database = {
           exit_price?: number
           fees_data_missing?: boolean | null
           fees_pct_of_notional?: number | null
+          fees_pending?: boolean | null
+          fees_reconciled_at?: string | null
           funding_fee?: number | null
           id?: string
           indicators_snapshot?: Json | null

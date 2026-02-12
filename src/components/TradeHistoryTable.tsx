@@ -91,8 +91,9 @@ export const TradeHistoryTable = () => {
           ) : (
             <div className="space-y-2">
               {trades.map((trade) => {
-                const netPnl = trade.net_pnl ?? trade.pnl;
+                const netPnl = Number(trade.net_pnl ?? trade.pnl);
                 const isProfitable = netPnl >= 0;
+                const isPending = trade.fees_pending === true;
                 
                 return (
                   <div
@@ -122,15 +123,15 @@ export const TradeHistoryTable = () => {
                     
                     <div className="flex items-center gap-4">
                       <div className="text-xs space-y-1 text-right">
-                        <div>Entry: <span className="font-mono">${trade.entry_price}</span></div>
-                        <div>Exit: <span className="font-mono">${trade.exit_price}</span></div>
+                        <div>Entry: <span className="font-mono">${Number(trade.entry_price).toFixed(2)}</span></div>
+                        <div>Exit: <span className="font-mono">${Number(trade.exit_price).toFixed(2)}</span></div>
                       </div>
                       <div className="text-right">
                         <div className={`text-sm font-bold ${isProfitable ? "text-profit" : "text-loss"}`}>
                           {isProfitable ? "+" : ""}{netPnl.toFixed(2)} USDC
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          Net P&L
+                          Net P&L{isPending && " ⏳"}
                         </div>
                       </div>
                     </div>

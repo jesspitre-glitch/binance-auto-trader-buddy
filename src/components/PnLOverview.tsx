@@ -27,10 +27,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatTradeForExport, compressTradeData, formatWithLineBreaks } from "@/lib/tradeExportUtils";
 
 type TimeRange = "24h" | "7d" | "30d" | "90d" | "1y" | "all";
+type PnlTotalMode = "strict_trades" | "binance_overview";
 
 export const PnLOverview = () => {
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<TimeRange>("24h");
+  const [pnlMode, setPnlMode] = useState<PnlTotalMode>("binance_overview");
   const [chartType, setChartType] = useState<"line" | "bar">("line");
   const [stats, setStats] = useState<any>(null);
   const [chartData, setChartData] = useState<any[]>([]);
@@ -200,37 +202,47 @@ export const PnLOverview = () => {
 
       setAllTrades(trades);
 
-      // Calculate P&L
+      // Calculate P&L based on selected mode
       let totalPnL: number;
       let totalPnLGross: number;
       let totalPnLAfterFees: number;
       let totalPnLNet: number;
       let totalFees: number;
       let totalFunding: number;
+      let pnlSource: string;
       
-      // Use Binance income ledger data for all ranges when available
-      if (binancePnl) {
-        // Binance's exact figures from income ledger API
+      if (pnlMode === "binance_overview" && binancePnl) {
+        // Mode: binance_overview - sum income types from Binance API for the period
+        // Matches Binance "Futures PNL" view exactly
         totalPnLGross = binancePnl.todaysRealizedPnl;  // REALIZED_PNL
         totalFees = Math.abs(binancePnl.commission);   // COMMISSION (negative in API)
         totalFunding = binancePnl.fundingFee;          // FUNDING_FEE
-        totalPnLAfterFees = binancePnl.todaysRealizedPnl + binancePnl.commission; // Gross - fees
+        totalPnLAfterFees = binancePnl.todaysRealizedPnl + binancePnl.commission;
         totalPnLNet = binancePnl.netPnl;               // REALIZED_PNL + COMMISSION + FUNDING_FEE
         totalPnL = totalPnLNet;
+        pnlSource = "binance_income_api";
         
-        console.log(`[PnL] Binance income ledger (${range}): gross=${totalPnLGross.toFixed(2)}, fees=${totalFees.toFixed(2)}, funding=${totalFunding.toFixed(4)}, net=${totalPnLNet.toFixed(2)}`);
+        console.log(`[PnL] Mode: binance_overview | gross=${totalPnLGross} fees=${totalFees} funding=${totalFunding} net=${totalPnLNet}`);
       } else {
-        // Fallback to trade-based calculation if Binance API fails
-        const tradePnL = trades.reduce((sum, t) => sum + Number(t.pnl), 0);
-        totalFees = trades.reduce((sum, t) => sum + Number(t.total_fee || 0), 0);
-        totalFunding = trades.reduce((sum, t) => sum + Number(t.funding_fee || 0), 0);
+        // Mode: strict_trades - sum net_pnl from trade_history records only
+        // Full precision sum, round only at display
+        totalPnLGross = 0;
+        totalFees = 0;
+        totalFunding = 0;
+        totalPnLNet = 0;
         
-        totalPnLGross = tradePnL;
-        totalPnLAfterFees = tradePnL - totalFees;
-        totalPnLNet = totalPnLAfterFees + totalFunding;
+        for (const t of trades) {
+          totalPnLGross += Number(t.pnl);
+          totalFees += Number(t.total_fee || 0);
+          totalFunding += Number(t.funding_fee || 0);
+          totalPnLNet += Number(t.net_pnl ?? (Number(t.pnl) - Number(t.total_fee || 0) + Number(t.funding_fee || 0)));
+        }
+        
+        totalPnLAfterFees = totalPnLGross - totalFees;
         totalPnL = totalPnLNet;
+        pnlSource = "trade_history_db";
         
-        console.log(`[PnL] Trade-based fallback: gross=${totalPnLGross.toFixed(2)}, afterFees=${totalPnLAfterFees.toFixed(2)}, net=${totalPnLNet.toFixed(2)}`);
+        console.log(`[PnL] Mode: strict_trades | gross=${totalPnLGross} fees=${totalFees} funding=${totalFunding} net=${totalPnLNet}`);
       }
 
       if (trades.length === 0 && fundingFees.length === 0) {
@@ -393,6 +405,8 @@ export const PnLOverview = () => {
         largestLoss,
         profitFactor,
         fundingFees: totalFunding,
+        pnlSource,
+        pnlMode,
         // New fee stats
         totalPnLGross,
         totalPnLAfterFees,
@@ -594,7 +608,7 @@ export const PnLOverview = () => {
 
   useEffect(() => {
     fetchPnLData(timeRange);
-  }, [timeRange]);
+  }, [timeRange, pnlMode]);
 
   // Separate effect for realtime subscription - only set up once
   // Non-blocking: errors don't prevent the component from rendering
@@ -656,7 +670,27 @@ export const PnLOverview = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Profit & Loss Oversigt</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle>Profit & Loss Oversigt</CardTitle>
+          <div className="flex items-center gap-1 text-xs">
+            <Button
+              variant={pnlMode === "binance_overview" ? "default" : "outline"}
+              size="sm"
+              className="text-xs h-7 px-2"
+              onClick={() => setPnlMode("binance_overview")}
+            >
+              Binance
+            </Button>
+            <Button
+              variant={pnlMode === "strict_trades" ? "default" : "outline"}
+              size="sm"
+              className="text-xs h-7 px-2"
+              onClick={() => setPnlMode("strict_trades")}
+            >
+              Trades
+            </Button>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="space-y-6">
         <Tabs value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
