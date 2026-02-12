@@ -2396,19 +2396,20 @@ serve(async (req) => {
               const openedAtTime = position.opened_at ? new Date(position.opened_at).getTime() : now.getTime() - 3600000;
               const closedAtTime = now.getTime();
               
-              // Fetch fills for avg prices
+              // Fetch fills for avg entry/exit prices (for display only)
               const fills = await getPositionFills(position.symbol, position.side, apiKey, apiSecret, openedAtTime, closedAtTime);
               if (fills.avgEntry > 0) finalEntryPrice = fills.avgEntry;
               if (fills.avgExit > 0) finalExitPrice = fills.avgExit;
-              if (fills.avgEntry > 0) finalGrossPnl = fills.grossPnl;
               
-              // Fetch ALL income types for Binance-matched net P&L
+              // Fetch ALL income types → Binance ground truth P&L
               const income = await getPositionIncome(position.symbol, apiKey, apiSecret, openedAtTime, closedAtTime);
               totalFee = Math.abs(income.commission);
               fundingFee = income.fundingFee;
+              // Use Binance REALIZED_PNL as gross P&L (ground truth, not calculated)
+              if (income.realizedPnl !== 0) finalGrossPnl = income.realizedPnl;
               binanceNetPnl = income.binanceNetPnl;
-              pnlAfterFees = finalGrossPnl + income.commission;
-              netPnl = binanceNetPnl; // Use Binance-matched value
+              pnlAfterFees = income.realizedPnl + income.commission;
+              netPnl = binanceNetPnl; // REALIZED_PNL + COMMISSION + FUNDING_FEE
               
               notional = finalEntryPrice * actualQuantity;
               feesPctOfNotional = notional > 0 ? (totalFee / notional) * 100 : 0;
