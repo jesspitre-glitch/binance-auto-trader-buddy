@@ -133,7 +133,8 @@ serve(async (req) => {
 
         const finalEntry = fills.avgEntry > 0 ? fills.avgEntry : trade.entry_price;
         const finalExit = fills.avgExit > 0 ? fills.avgExit : trade.exit_price;
-        const grossPnl = fills.avgEntry > 0 ? fills.grossPnl
+        // Use Binance REALIZED_PNL as gross P&L (ground truth)
+        const grossPnl = income.realizedPnl !== 0 ? income.realizedPnl
           : (side === 'LONG' ? (finalExit - finalEntry) * trade.quantity : (finalEntry - finalExit) * trade.quantity);
         const pnlPercent = ((finalExit - finalEntry) / (finalEntry || 1)) * 100 * (side === 'LONG' ? 1 : -1);
         const totalFee = Math.abs(income.commission);

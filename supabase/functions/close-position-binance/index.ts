@@ -243,24 +243,24 @@ serve(async (req) => {
       const fills = await getPositionFills(symbol, side, apiKey, apiSecret, openedAtTime, closedAtTime);
       const income = await getPositionIncome(symbol, apiKey, apiSecret, openedAtTime, closedAtTime);
 
-      // Use fill-based avg prices if available, else fallback to position entry/exit
+      // Use fill-based avg prices for display, but Binance REALIZED_PNL as ground truth
       const finalAvgEntry = fills.avgEntry > 0 ? fills.avgEntry : entry;
       const finalAvgExit = fills.avgExit > 0 ? fills.avgExit : exitPrice;
-      const grossPnl = fills.avgEntry > 0 ? fills.grossPnl
+      // Use Binance REALIZED_PNL as gross P&L (ground truth, not calculated from prices)
+      const grossPnl = income.realizedPnl !== 0 ? income.realizedPnl
         : (side === 'LONG' ? (finalAvgExit - finalAvgEntry) * qty : (finalAvgEntry - finalAvgExit) * qty);
 
       const pnlPercent = ((finalAvgExit - finalAvgEntry) / (finalAvgEntry || 1)) * 100 * (side === 'LONG' ? 1 : -1);
 
-      // Binance-matched net P&L from income API
+      // Binance-matched net P&L: REALIZED_PNL + COMMISSION + FUNDING_FEE
       const binanceNetPnl = income.binanceNetPnl;
 
-      // Legacy fee fields for backwards compat
       const totalFee = Math.abs(income.commission);
       const notional = finalAvgEntry * qty;
       const feesPctOfNotional = notional > 0 ? (totalFee / notional) * 100 : 0;
       const leverageUsed = position.indicators_snapshot?.leverage ?? null;
 
-      console.log(`📊 BINANCE-MATCH | ${symbol} ${side} | grossPnl=${grossPnl.toFixed(4)} | binanceNetPnl=${binanceNetPnl.toFixed(4)} | realized=${income.realizedPnl.toFixed(4)} commission=${income.commission.toFixed(4)} funding=${income.fundingFee.toFixed(4)}`);
+      console.log(`📊 BINANCE-MATCH | ${symbol} ${side} | realized_pnl=${income.realizedPnl.toFixed(4)} | binanceNetPnl=${binanceNetPnl.toFixed(4)} | commission=${income.commission.toFixed(4)} funding=${income.fundingFee.toFixed(4)}`);
 
       await supabaseClient
         .from('positions')

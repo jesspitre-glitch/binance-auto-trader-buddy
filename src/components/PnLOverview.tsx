@@ -266,21 +266,23 @@ export const PnLOverview = () => {
       const totalPnLGrossPercent = portfolioBalance > 0 ? (totalPnLGross / portfolioBalance) * 100 : 0;
       const totalPnLAfterFeesPercent = portfolioBalance > 0 ? (totalPnLAfterFees / portfolioBalance) * 100 : 0;
       const totalPnLNetPercent = portfolioBalance > 0 ? (totalPnLNet / portfolioBalance) * 100 : 0;
-      const winners = trades.filter(t => Number(t.pnl) > 0);
-      const losers = trades.filter(t => Number(t.pnl) < 0);
+      // Use net_pnl (Binance ground truth) for ALL win/loss stats
+      const getNetPnl = (t: any) => Number(t.net_pnl ?? t.pnl);
+      const winners = trades.filter(t => getNetPnl(t) > 0);
+      const losers = trades.filter(t => getNetPnl(t) < 0);
       const winRate = trades.length > 0 ? (winners.length / trades.length) * 100 : 0;
       
-      const totalWins = winners.reduce((sum, t) => sum + Number(t.pnl), 0);
-      const totalLosses = Math.abs(losers.reduce((sum, t) => sum + Number(t.pnl), 0));
+      const totalWins = winners.reduce((sum, t) => sum + getNetPnl(t), 0);
+      const totalLosses = Math.abs(losers.reduce((sum, t) => sum + getNetPnl(t), 0));
       const avgWin = winners.length > 0 ? totalWins / winners.length : 0;
       const avgLoss = losers.length > 0 ? totalLosses / losers.length : 0;
       const profitFactor = totalLosses > 0 ? totalWins / totalLosses : totalWins > 0 ? Infinity : 0;
 
       const largestWin = winners.length > 0 
-        ? Math.max(...winners.map(t => Number(t.pnl))) 
+        ? Math.max(...winners.map(t => getNetPnl(t))) 
         : 0;
       const largestLoss = losers.length > 0 
-        ? Math.min(...losers.map(t => Number(t.pnl))) 
+        ? Math.min(...losers.map(t => getNetPnl(t))) 
         : 0;
 
       // Win counts for different P&L types
@@ -289,10 +291,7 @@ export const PnLOverview = () => {
         const pnlAfterFees = Number(t.pnl_after_fees ?? (Number(t.pnl) - Number(t.total_fee || 0)));
         return pnlAfterFees > 0;
       }).length;
-      const winsNet = trades.filter(t => {
-        const netPnl = Number(t.net_pnl ?? (Number(t.pnl) - Number(t.total_fee || 0) + Number(t.funding_fee || 0)));
-        return netPnl > 0;
-      }).length;
+      const winsNet = trades.filter(t => getNetPnl(t) > 0).length;
 
       // Calculate total hours in period for per-hour metrics
       const periodHours = (nowMs - startMs) / (1000 * 60 * 60);
