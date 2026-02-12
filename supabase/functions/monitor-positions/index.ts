@@ -147,78 +147,75 @@ async function cancelAllOpenOrders(symbol: string, apiKey: string, apiSecret: st
   return { cancelled: true, result };
 }
 
-// Fetch commission/fee from recent trades for a symbol
-async function getRecentTradeFees(symbol: string, apiKey: string, apiSecret: string, startTime: number): Promise<{ entryFee: number, exitFee: number }> {
+// Fetch all fills and compute avg entry/exit prices for Binance-matched P&L
+async function getPositionFills(
+  symbol: string, side: string,
+  apiKey: string, apiSecret: string,
+  startTime: number, endTime: number,
+): Promise<{ avgEntry: number; avgExit: number; totalQtyEntry: number; totalQtyExit: number; grossPnl: number }> {
   try {
     const timestamp = Date.now();
-    const queryString = `symbol=${symbol}&startTime=${startTime}&timestamp=${timestamp}&recvWindow=10000`;
+    const queryString = `symbol=${symbol}&startTime=${startTime}&endTime=${endTime}&timestamp=${timestamp}&recvWindow=10000`;
     const signature = await createSignature(queryString, apiSecret);
     const url = `https://fapi.binance.com/fapi/v1/userTrades?${queryString}&signature=${signature}`;
-    
     const res = await fetch(url, { headers: { 'X-MBX-APIKEY': apiKey } });
-    if (!res.ok) {
-      console.warn(`Failed to fetch trades for fee calculation: ${await res.text()}`);
-      return { entryFee: 0, exitFee: 0 };
-    }
-    
+    if (!res.ok) { console.warn(`Failed to fetch fills: ${await res.text()}`); return { avgEntry: 0, avgExit: 0, totalQtyEntry: 0, totalQtyExit: 0, grossPnl: 0 }; }
+
     const trades = await res.json();
-    if (!Array.isArray(trades) || trades.length === 0) {
-      return { entryFee: 0, exitFee: 0 };
+    if (!Array.isArray(trades) || trades.length === 0) return { avgEntry: 0, avgExit: 0, totalQtyEntry: 0, totalQtyExit: 0, grossPnl: 0 };
+
+    const entrySide = side === 'LONG' ? 'BUY' : 'SELL';
+    let entryNotional = 0, entryQty = 0, exitNotional = 0, exitQty = 0;
+
+    for (const t of trades) {
+      const price = parseFloat(t.price);
+      const qty = parseFloat(t.qty);
+      if (t.side === entrySide) { entryNotional += price * qty; entryQty += qty; }
+      else { exitNotional += price * qty; exitQty += qty; }
     }
-    
-    // Sort by time to separate entry and exit trades
-    trades.sort((a: any, b: any) => a.time - b.time);
-    
-    // First trade(s) are entry, last trade(s) are exit
-    let entryFee = 0;
-    let exitFee = 0;
-    const midpoint = Math.floor(trades.length / 2);
-    
-    for (let i = 0; i < trades.length; i++) {
-      const fee = Math.abs(parseFloat(trades[i].commission || 0));
-      if (i < midpoint || trades.length === 1) {
-        entryFee += fee;
-      } else {
-        exitFee += fee;
-      }
-    }
-    
-    // If only 2 trades, first is entry, second is exit
-    if (trades.length === 2) {
-      entryFee = Math.abs(parseFloat(trades[0].commission || 0));
-      exitFee = Math.abs(parseFloat(trades[1].commission || 0));
-    }
-    
-    return { entryFee, exitFee };
-  } catch (e) {
-    console.error('Error fetching trade fees:', e);
-    return { entryFee: 0, exitFee: 0 };
-  }
+
+    const avgEntry = entryQty > 0 ? entryNotional / entryQty : 0;
+    const avgExit = exitQty > 0 ? exitNotional / exitQty : 0;
+    const posQty = Math.min(entryQty, exitQty);
+    const grossPnl = side === 'LONG' ? (avgExit - avgEntry) * posQty : (avgEntry - avgExit) * posQty;
+
+    console.log(`📋 FILLS | ${symbol} ${side} | entries=${entryQty} avgEntry=${avgEntry.toFixed(6)} | exits=${exitQty} avgExit=${avgExit.toFixed(6)} | grossPnl=${grossPnl.toFixed(4)}`);
+    return { avgEntry, avgExit, totalQtyEntry: entryQty, totalQtyExit: exitQty, grossPnl };
+  } catch (e) { console.error('Error fetching fills:', e); return { avgEntry: 0, avgExit: 0, totalQtyEntry: 0, totalQtyExit: 0, grossPnl: 0 }; }
 }
 
-// Fetch accumulated funding fees for a symbol during position lifetime
-async function getPositionFundingFees(symbol: string, apiKey: string, apiSecret: string, startTime: number, endTime: number): Promise<number> {
+// Fetch ALL income for a symbol → Binance-matched Net P&L
+// Net P&L = Σ(REALIZED_PNL) + Σ(COMMISSION) + Σ(FUNDING_FEE) + Σ(other)
+async function getPositionIncome(
+  symbol: string, apiKey: string, apiSecret: string,
+  startTime: number, endTime: number,
+): Promise<{ realizedPnl: number; commission: number; fundingFee: number; otherIncome: number; binanceNetPnl: number }> {
+  const result = { realizedPnl: 0, commission: 0, fundingFee: 0, otherIncome: 0, binanceNetPnl: 0 };
   try {
     const timestamp = Date.now();
-    const queryString = `symbol=${symbol}&incomeType=FUNDING_FEE&startTime=${startTime}&endTime=${endTime}&timestamp=${timestamp}&recvWindow=10000`;
+    const queryString = `symbol=${symbol}&startTime=${startTime}&endTime=${endTime}&timestamp=${timestamp}&recvWindow=10000&limit=1000`;
     const signature = await createSignature(queryString, apiSecret);
     const url = `https://fapi.binance.com/fapi/v1/income?${queryString}&signature=${signature}`;
-    
     const res = await fetch(url, { headers: { 'X-MBX-APIKEY': apiKey } });
-    if (!res.ok) {
-      console.warn(`Failed to fetch funding fees: ${await res.text()}`);
-      return 0;
-    }
-    
+    if (!res.ok) { console.warn(`Failed to fetch income: ${await res.text()}`); return result; }
+
     const incomes = await res.json();
-    if (!Array.isArray(incomes)) return 0;
-    
-    // Sum all funding fee incomes (can be positive or negative)
-    return incomes.reduce((sum: number, inc: any) => sum + parseFloat(inc.income || 0), 0);
-  } catch (e) {
-    console.error('Error fetching funding fees:', e);
-    return 0;
-  }
+    if (!Array.isArray(incomes)) return result;
+
+    for (const inc of incomes) {
+      const amount = parseFloat(inc.income || 0);
+      switch (inc.incomeType) {
+        case 'REALIZED_PNL': result.realizedPnl += amount; break;
+        case 'COMMISSION': result.commission += amount; break;
+        case 'FUNDING_FEE': result.fundingFee += amount; break;
+        default: result.otherIncome += amount; break;
+      }
+    }
+
+    result.binanceNetPnl = result.realizedPnl + result.commission + result.fundingFee + result.otherIncome;
+    console.log(`📋 INCOME | ${symbol} | REALIZED=${result.realizedPnl.toFixed(4)} COMMISSION=${result.commission.toFixed(4)} FUNDING=${result.fundingFee.toFixed(4)} OTHER=${result.otherIncome.toFixed(4)} | binanceNetPnl=${result.binanceNetPnl.toFixed(4)}`);
+    return result;
+  } catch (e) { console.error('Error fetching income:', e); return result; }
 }
 
 async function closePositionOnBinance(symbol: string, side: string, quantity: number) {
@@ -2380,50 +2377,55 @@ serve(async (req) => {
             enhancedSnapshot.mae = maeValue;
             enhancedSnapshot.mae_percent = maePercent;
 
-            // 🔴 FEE & FUNDING LOGGING
+            // 🔴 BINANCE-MATCHED P&L via fills + income API
             const apiKey = Deno.env.get('BINANCE_API_KEY');
             const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
-            let entryFee = 0;
-            let exitFee = 0;
-            let fundingFee = 0;
             let totalFee = 0;
+            let fundingFee = 0;
             let netPnl: number | null = null;
             let pnlAfterFees: number | null = null;
             let notional: number | null = null;
             let feesPctOfNotional: number | null = null;
             let leverageUsed: number | null = null;
+            let binanceNetPnl: number | null = null;
+            let finalEntryPrice = position.entry_price;
+            let finalExitPrice = actualExitPrice;
+            let finalGrossPnl = actualPnl;
             
             if (apiKey && apiSecret) {
               const openedAtTime = position.opened_at ? new Date(position.opened_at).getTime() : now.getTime() - 3600000;
               const closedAtTime = now.getTime();
               
-              const fees = await getRecentTradeFees(position.symbol, apiKey, apiSecret, openedAtTime);
-              entryFee = fees.entryFee;
-              exitFee = fees.exitFee;
-              totalFee = entryFee + exitFee;
+              // Fetch fills for avg prices
+              const fills = await getPositionFills(position.symbol, position.side, apiKey, apiSecret, openedAtTime, closedAtTime);
+              if (fills.avgEntry > 0) finalEntryPrice = fills.avgEntry;
+              if (fills.avgExit > 0) finalExitPrice = fills.avgExit;
+              if (fills.avgEntry > 0) finalGrossPnl = fills.grossPnl;
               
-              fundingFee = await getPositionFundingFees(position.symbol, apiKey, apiSecret, openedAtTime, closedAtTime);
-              pnlAfterFees = actualPnl - totalFee;
-              netPnl = pnlAfterFees + fundingFee; // fundingFee can be negative (paid) or positive (received)
+              // Fetch ALL income types for Binance-matched net P&L
+              const income = await getPositionIncome(position.symbol, apiKey, apiSecret, openedAtTime, closedAtTime);
+              totalFee = Math.abs(income.commission);
+              fundingFee = income.fundingFee;
+              binanceNetPnl = income.binanceNetPnl;
+              pnlAfterFees = finalGrossPnl + income.commission;
+              netPnl = binanceNetPnl; // Use Binance-matched value
               
-              // Calculate notional value and leverage
-              notional = position.entry_price * actualQuantity;
+              notional = finalEntryPrice * actualQuantity;
               feesPctOfNotional = notional > 0 ? (totalFee / notional) * 100 : 0;
-              // Only use leverage if actually present in snapshot - don't guess
               leverageUsed = (position.indicators_snapshot as any)?.leverage ?? null;
               
-              console.log(`📊 Fee logging for ${position.symbol}: entry=${entryFee.toFixed(4)}, exit=${exitFee.toFixed(4)}, total=${totalFee.toFixed(4)} (${feesPctOfNotional.toFixed(4)}% of notional), funding=${fundingFee.toFixed(4)}, gross=${actualPnl.toFixed(4)}, afterFees=${pnlAfterFees.toFixed(4)}, net=${netPnl.toFixed(4)}, notional=${notional.toFixed(2)}, leverage=${leverageUsed}`);
+              console.log(`📊 BINANCE-MATCH | ${position.symbol} ${position.side} | grossPnl=${finalGrossPnl.toFixed(4)} | binanceNetPnl=${binanceNetPnl.toFixed(4)} | realized=${income.realizedPnl.toFixed(4)} commission=${income.commission.toFixed(4)} funding=${income.fundingFee.toFixed(4)}`);
             }
 
             const { error: historyError } = await supabaseClient.from('trade_history').insert({
               user_id: position.user_id,
               symbol: position.symbol,
               side: position.side,
-              entry_price: position.entry_price,
-              exit_price: actualExitPrice,
+              entry_price: finalEntryPrice,
+              exit_price: finalExitPrice,
               quantity: actualQuantity,
-              pnl: actualPnl,
-              pnl_percent: actualPnlPercent,
+              pnl: finalGrossPnl,
+              pnl_percent: finalEntryPrice > 0 ? ((finalExitPrice - finalEntryPrice) / finalEntryPrice) * 100 * (position.side === 'LONG' ? 1 : -1) : actualPnlPercent,
               opened_at: position.opened_at,
               closed_at: new Date().toISOString(),
               duration_minutes: Math.floor((now.getTime() - openedAt.getTime()) / (1000 * 60)),
@@ -2431,13 +2433,11 @@ serve(async (req) => {
               open_reason: position.open_reason,
               close_reason: finalCloseReason,
               indicators_snapshot: enhancedSnapshot,
-              // 🔴 MAE FELTER (ren logging, ingen execution impact)
               mae: maeValue,
               mae_percent: maePercent,
               low_price: finalLowPrice,
-              // 🔴 FEE & FUNDING FELTER (ren logging for analyse)
-              entry_fee: entryFee || null,
-              exit_fee: exitFee || null,
+              entry_fee: 0,
+              exit_fee: 0,
               total_fee: totalFee || null,
               funding_fee: fundingFee || null,
               net_pnl: netPnl,

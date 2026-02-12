@@ -168,15 +168,34 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
 
           {/* P&L Overview - For closed positions */}
           {!isPositionOpen && (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="border rounded-lg p-4">
-                <div className="text-sm text-muted-foreground mb-1">P&L</div>
+                <div className="text-sm text-muted-foreground mb-1">Gross P&L</div>
                 <div className={`text-2xl font-bold ${isProfitable ? "text-profit" : "text-loss"}`}>
                   {isProfitable ? "+" : ""}{trade.pnl.toFixed(2)} USDT
                 </div>
                 <div className="text-sm text-muted-foreground">
                   {trade.pnl_percent >= 0 ? "+" : ""}{trade.pnl_percent.toFixed(2)}%
                 </div>
+              </div>
+
+              <div className="border rounded-lg p-4 border-primary/30 bg-primary/5">
+                <div className="text-sm text-muted-foreground mb-1">Net P&L (Binance)</div>
+                {(() => {
+                  const netPnl = trade.net_pnl ?? trade.pnl;
+                  const isNetProfit = netPnl >= 0;
+                  return (
+                    <>
+                      <div className={`text-2xl font-bold ${isNetProfit ? "text-profit" : "text-loss"}`}>
+                        {isNetProfit ? "+" : ""}{netPnl.toFixed(2)} USDT
+                      </div>
+                      <div className="text-xs text-muted-foreground space-y-0.5">
+                        {trade.total_fee != null && <div>Commission: -{Math.abs(trade.total_fee).toFixed(4)}</div>}
+                        {trade.funding_fee != null && <div>Funding: {trade.funding_fee >= 0 ? "+" : ""}{trade.funding_fee.toFixed(4)}</div>}
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
               <div className="border rounded-lg p-4">

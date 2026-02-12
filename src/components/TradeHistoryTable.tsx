@@ -91,7 +91,8 @@ export const TradeHistoryTable = () => {
           ) : (
             <div className="space-y-2">
               {trades.map((trade) => {
-                const isProfitable = trade.pnl >= 0;
+                const netPnl = trade.net_pnl ?? trade.pnl;
+                const isProfitable = netPnl >= 0;
                 
                 return (
                   <div
@@ -126,10 +127,10 @@ export const TradeHistoryTable = () => {
                       </div>
                       <div className="text-right">
                         <div className={`text-sm font-bold ${isProfitable ? "text-profit" : "text-loss"}`}>
-                          {isProfitable ? "+" : ""}{trade.pnl.toFixed(2)} USDC
+                          {isProfitable ? "+" : ""}{netPnl.toFixed(2)} USDC
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {trade.pnl_percent >= 0 ? "+" : ""}{trade.pnl_percent.toFixed(2)}%
+                          Net P&L
                         </div>
                       </div>
                     </div>
