@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,9 +14,12 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
-import { Copy, Download } from "lucide-react";
+import { Copy, Download, CalendarIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { compressTradeData, compressTradeDataCompact, formatWithLineBreaks } from "@/lib/tradeExportUtils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
 
 interface ExportTradesDialogProps {
   strategyHash?: string;
@@ -29,11 +33,13 @@ export const ExportTradesDialog = ({
   buttonSize = "sm" 
 }: ExportTradesDialogProps) => {
   const [open, setOpen] = useState(false);
-  const [filterType, setFilterType] = useState<"count" | "days" | "hours">("count");
+  const [filterType, setFilterType] = useState<"count" | "days" | "hours" | "since_change" | "custom">("count");
   const [filterValue, setFilterValue] = useState("50");
   const [exportMode, setExportMode] = useState<"COMPACT" | "FULL_DEBUG">("COMPACT");
   const [exportedData, setExportedData] = useState<string>("");
   const [showFallback, setShowFallback] = useState(false);
+  const [customFrom, setCustomFrom] = useState<Date>();
+  const [customTo, setCustomTo] = useState<Date>();
   const { toast } = useToast();
 
   const fetchAndExport = async () => {
@@ -51,12 +57,29 @@ export const ExportTradesDialog = ({
         query = query.limit(parseInt(filterValue));
       } else if (filterType === "days") {
         const cutoffMs = Date.now() - (parseInt(filterValue) * 24 * 60 * 60 * 1000);
-        const cutoff = new Date(cutoffMs);
-        query = query.gte("closed_at", cutoff.toISOString());
+        query = query.gte("closed_at", new Date(cutoffMs).toISOString());
       } else if (filterType === "hours") {
         const cutoffMs = Date.now() - (parseInt(filterValue) * 60 * 60 * 1000);
-        const cutoff = new Date(cutoffMs);
-        query = query.gte("closed_at", cutoff.toISOString());
+        query = query.gte("closed_at", new Date(cutoffMs).toISOString());
+      } else if (filterType === "since_change") {
+        const { data: configData } = await supabase
+          .from("indicator_config")
+          .select("updated_at")
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (configData?.updated_at) {
+          query = query.gte("closed_at", configData.updated_at);
+        }
+      } else if (filterType === "custom") {
+        if (customFrom) {
+          query = query.gte("closed_at", customFrom.toISOString());
+        }
+        if (customTo) {
+          const endOfDay = new Date(customTo);
+          endOfDay.setUTCHours(23, 59, 59, 999);
+          query = query.lte("closed_at", endOfDay.toISOString());
+        }
       }
 
       const { data: trades, error } = await query;
@@ -164,20 +187,63 @@ export const ExportTradesDialog = ({
                   <RadioGroupItem value="hours" id="hours" />
                   <Label htmlFor="hours">Sidste X timer</Label>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="since_change" id="since_change" />
+                  <Label htmlFor="since_change">Siden strategi-ændring</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="custom" id="custom" />
+                  <Label htmlFor="custom">Vælg periode</Label>
+                </div>
               </RadioGroup>
 
-              <div className="space-y-2">
-                <Label htmlFor="value">
-                  {filterType === "count" ? "Antal" : filterType === "days" ? "Dage" : "Timer"}
-                </Label>
-                <Input
-                  id="value"
-                  type="number"
-                  value={filterValue}
-                  onChange={(e) => setFilterValue(e.target.value)}
-                  min="1"
-                />
-              </div>
+              {(filterType === "count" || filterType === "days" || filterType === "hours") && (
+                <div className="space-y-2">
+                  <Label htmlFor="value">
+                    {filterType === "count" ? "Antal" : filterType === "days" ? "Dage" : "Timer"}
+                  </Label>
+                  <Input
+                    id="value"
+                    type="number"
+                    value={filterValue}
+                    onChange={(e) => setFilterValue(e.target.value)}
+                    min="1"
+                  />
+                </div>
+              )}
+
+              {filterType === "custom" && (
+                <div className="flex gap-2">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-xs">Fra</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className={cn("w-full justify-start text-left text-xs", !customFrom && "text-muted-foreground")}>
+                          <CalendarIcon className="h-3 w-3 mr-1" />
+                          {customFrom ? format(customFrom, "dd/MM/yyyy") : "Vælg"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={customFrom} onSelect={setCustomFrom} initialFocus className="p-3 pointer-events-auto" />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-xs">Til</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className={cn("w-full justify-start text-left text-xs", !customTo && "text-muted-foreground")}>
+                          <CalendarIcon className="h-3 w-3 mr-1" />
+                          {customTo ? format(customTo, "dd/MM/yyyy") : "Vælg"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={customTo} onSelect={setCustomTo} initialFocus className="p-3 pointer-events-auto" />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+              )}
 
               {/* Mode-specific descriptions */}
               {exportMode === "COMPACT" ? (
