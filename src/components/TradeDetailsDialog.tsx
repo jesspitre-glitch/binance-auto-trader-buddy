@@ -180,18 +180,24 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
               </div>
 
               <div className="border rounded-lg p-4 border-primary/30 bg-primary/5">
-                <div className="text-sm text-muted-foreground mb-1">Net P&L (Binance)</div>
+                <div className="text-sm text-muted-foreground mb-1">
+                  Net P&L (Binance)
+                  {trade.fees_pending && <span className="text-xs text-yellow-500 ml-1">(afventer fees)</span>}
+                </div>
                 {(() => {
-                  const netPnl = trade.net_pnl ?? trade.pnl;
+                  const feesPending = trade.fees_pending && (trade.net_pnl === 0 || trade.net_pnl == null);
+                  const netPnl = feesPending ? trade.pnl : (trade.net_pnl ?? trade.pnl);
                   const isNetProfit = netPnl >= 0;
                   return (
                     <>
                       <div className={`text-2xl font-bold ${isNetProfit ? "text-profit" : "text-loss"}`}>
                         {isNetProfit ? "+" : ""}{netPnl.toFixed(2)} USDT
+                        {feesPending && <span className="text-sm font-normal text-yellow-500"> ~</span>}
                       </div>
                       <div className="text-xs text-muted-foreground space-y-0.5">
-                        {trade.total_fee != null && <div>Commission: -{Math.abs(trade.total_fee).toFixed(4)}</div>}
-                        {trade.funding_fee != null && <div>Funding: {trade.funding_fee >= 0 ? "+" : ""}{trade.funding_fee.toFixed(4)}</div>}
+                        {trade.total_fee != null && !feesPending && <div>Commission: -{Math.abs(trade.total_fee).toFixed(4)}</div>}
+                        {trade.funding_fee != null && !feesPending && <div>Funding: {trade.funding_fee >= 0 ? "+" : ""}{trade.funding_fee.toFixed(4)}</div>}
+                        {feesPending && <div className="text-yellow-500">Viser gross – fees hentes snart</div>}
                       </div>
                     </>
                   );
