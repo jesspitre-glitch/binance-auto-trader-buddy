@@ -2,9 +2,13 @@ import { useEffect, useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, LineChart as LineChartIcon, Copy, Download } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, LineChart as LineChartIcon, Copy, Download, CalendarIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 import {
   LineChart,
   Line,
@@ -26,7 +30,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatTradeForExport, compressTradeData, formatWithLineBreaks } from "@/lib/tradeExportUtils";
 
-type TimeRange = "24h" | "7d" | "30d" | "90d" | "1y" | "all";
+type TimeRange = "24h" | "7d" | "30d" | "90d" | "1y" | "all" | "since_change" | "custom";
 type PnlTotalMode = "strict_trades" | "binance_overview";
 
 export const PnLOverview = () => {
@@ -40,6 +44,8 @@ export const PnLOverview = () => {
   const [allTrades, setAllTrades] = useState<any[]>([]);
   const [selectedPeriodTrades, setSelectedPeriodTrades] = useState<any[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [customFrom, setCustomFrom] = useState<Date | undefined>(undefined);
+  const [customTo, setCustomTo] = useState<Date | undefined>(undefined);
   const { toast } = useToast();
 
   const fetchPnLData = async (range: TimeRange) => {
@@ -57,31 +63,64 @@ export const PnLOverview = () => {
       
       let startMs: number;
       
-      switch (range) {
-        case "24h":
-          // Start of today UTC (Binance's "Today")
+      if (range === "since_change") {
+        // Find the last strategy change time from indicator_config
+        const { data: configData } = await supabase
+          .from("indicator_config")
+          .select("updated_at")
+          .eq("user_id", user.id)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (configData?.updated_at) {
+          startMs = new Date(configData.updated_at).getTime();
+        } else {
+          startMs = todayUtcStart; // fallback
+        }
+      } else if (range === "custom") {
+        if (customFrom) {
+          startMs = customFrom.getTime();
+        } else {
           startMs = todayUtcStart;
-          break;
-        case "7d":
-          // 7 UTC days ago at 00:00:00
-          startMs = todayUtcStart - (6 * 24 * 60 * 60 * 1000); // Today + 6 previous days = 7 days
-          break;
-        case "30d":
-          // 30 UTC days ago at 00:00:00
-          startMs = todayUtcStart - (29 * 24 * 60 * 60 * 1000); // Today + 29 previous days = 30 days
-          break;
-        case "90d":
-          // 90 UTC days ago at 00:00:00
-          startMs = todayUtcStart - (89 * 24 * 60 * 60 * 1000);
-          break;
-        case "1y":
-          // 365 UTC days ago at 00:00:00
-          startMs = todayUtcStart - (364 * 24 * 60 * 60 * 1000);
-          break;
-        case "all":
-          // All time - go back to 2020
-          startMs = Date.UTC(2020, 0, 1, 0, 0, 0, 0);
-          break;
+        }
+        // Override "now" end time with customTo if set
+        if (customTo) {
+          const endOfDay = new Date(customTo);
+          endOfDay.setUTCHours(23, 59, 59, 999);
+          // We'll handle nowMs override below
+        }
+      } else {
+        switch (range) {
+          case "24h":
+            startMs = todayUtcStart;
+            break;
+          case "7d":
+            startMs = todayUtcStart - (6 * 24 * 60 * 60 * 1000);
+            break;
+          case "30d":
+            startMs = todayUtcStart - (29 * 24 * 60 * 60 * 1000);
+            break;
+          case "90d":
+            startMs = todayUtcStart - (89 * 24 * 60 * 60 * 1000);
+            break;
+          case "1y":
+            startMs = todayUtcStart - (364 * 24 * 60 * 60 * 1000);
+            break;
+          case "all":
+            startMs = Date.UTC(2020, 0, 1, 0, 0, 0, 0);
+            break;
+          default:
+            startMs = todayUtcStart;
+        }
+      }
+
+      // For custom range, allow end date override
+      let effectiveNowMs = nowMs;
+      if (range === "custom" && customTo) {
+        const endOfDay = new Date(customTo);
+        endOfDay.setUTCHours(23, 59, 59, 999);
+        effectiveNowMs = endOfDay.getTime();
       }
       
       const startDate = new Date(startMs);
@@ -115,7 +154,7 @@ export const PnLOverview = () => {
             },
             body: {
               startTime: startMs,
-              endTime: nowMs,
+              endTime: effectiveNowMs,
             },
           });
           
@@ -160,6 +199,7 @@ export const PnLOverview = () => {
           .eq("user_id", user.id)
           .neq("close_reason", "DUPLICATE")
           .gte("closed_at", startDate.toISOString())
+          .lte("closed_at", new Date(effectiveNowMs).toISOString())
           .order("closed_at", { ascending: false })
           .range(from, to);
 
@@ -180,7 +220,7 @@ export const PnLOverview = () => {
         .select("*")
         .eq("user_id", user.id)
         .gte("binance_time", startMs)
-        .lte("binance_time", nowMs)
+        .lte("binance_time", effectiveNowMs)
         .order("binance_time", { ascending: true });
       
       if (fundingError) {
@@ -306,7 +346,7 @@ export const PnLOverview = () => {
       const winsNet = trades.filter(t => getNetPnl(t) > 0).length;
 
       // Calculate total hours in period for per-hour metrics
-      const periodHours = (nowMs - startMs) / (1000 * 60 * 60);
+      const periodHours = (effectiveNowMs - startMs) / (1000 * 60 * 60);
       const totalDurationMinutes = trades.reduce((sum, t) => sum + Number(t.duration_minutes || 0), 0);
       const totalHoldHours = totalDurationMinutes / 60;
 
@@ -484,7 +524,7 @@ export const PnLOverview = () => {
             timeZone: "UTC",
           }) + " UTC";
           return { key, label };
-        } else if (rangeType === "7d" || rangeType === "30d") {
+        } else if (rangeType === "7d" || rangeType === "30d" || rangeType === "since_change" || rangeType === "custom") {
           const key = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
           const label = new Date(key).toLocaleString("da-DK", {
             month: "short",
@@ -616,8 +656,9 @@ export const PnLOverview = () => {
   }, [timeRange]);
 
   useEffect(() => {
+    if (timeRange === "custom" && (!customFrom || !customTo)) return;
     fetchPnLData(timeRange);
-  }, [timeRange, pnlMode]);
+  }, [timeRange, pnlMode, customFrom, customTo]);
 
   // Separate effect for realtime subscription - only set up once
   // Non-blocking: errors don't prevent the component from rendering
@@ -703,14 +744,59 @@ export const PnLOverview = () => {
       </CardHeader>
       <CardContent className="space-y-6">
         <Tabs value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-8">
             <TabsTrigger value="24h">24t</TabsTrigger>
             <TabsTrigger value="7d">7d</TabsTrigger>
             <TabsTrigger value="30d">30d</TabsTrigger>
             <TabsTrigger value="90d">90d</TabsTrigger>
             <TabsTrigger value="1y">1år</TabsTrigger>
             <TabsTrigger value="all">Alt</TabsTrigger>
+            <TabsTrigger value="since_change" className="text-xs">Strategi</TabsTrigger>
+            <TabsTrigger value="custom" className="text-xs">Periode</TabsTrigger>
           </TabsList>
+
+          {/* Custom date range picker */}
+          {timeRange === "custom" && (
+            <div className="flex items-center gap-2 mt-3 flex-wrap">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className={cn("text-xs h-8", !customFrom && "text-muted-foreground")}>
+                    <CalendarIcon className="h-3 w-3 mr-1" />
+                    {customFrom ? format(customFrom, "dd/MM/yyyy") : "Fra dato"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={customFrom}
+                    onSelect={setCustomFrom}
+                    disabled={(date) => date > new Date()}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+              <span className="text-xs text-muted-foreground">→</span>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className={cn("text-xs h-8", !customTo && "text-muted-foreground")}>
+                    <CalendarIcon className="h-3 w-3 mr-1" />
+                    {customTo ? format(customTo, "dd/MM/yyyy") : "Til dato"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={customTo}
+                    onSelect={setCustomTo}
+                    disabled={(date) => date > new Date() || (customFrom ? date < customFrom : false)}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          )}
 
           <TabsContent value={timeRange} className="space-y-6">
             {/* Key Metrics */}
