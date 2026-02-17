@@ -446,6 +446,15 @@ export const PnLOverview = () => {
             minute: range === "24h" ? "2-digit" : undefined,
             timeZone: "UTC",
           }) + " UTC",
+          fullDateTime: date.toLocaleString("da-DK", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            timeZone: "UTC",
+          }) + " UTC",
           pnl: Number(netPnl.toFixed(2)),
           cumulative: Number(cumulativePnL.toFixed(2)),
         };
@@ -957,7 +966,21 @@ export const PnLOverview = () => {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="time" />
                       <YAxis />
-                      <Tooltip />
+                      <Tooltip content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const data = payload[0].payload;
+                        return (
+                          <div className="rounded-lg border border-border/50 bg-background px-3 py-2 text-xs shadow-xl">
+                            <div className="text-muted-foreground mb-1">{data.fullDateTime}</div>
+                            <div className="font-mono font-medium">
+                              cumulative: <span className={data.cumulative >= 0 ? "text-profit" : "text-loss"}>{data.cumulative.toFixed(2)}</span>
+                            </div>
+                            <div className="font-mono text-muted-foreground">
+                              trade: {data.pnl >= 0 ? "+" : ""}{data.pnl.toFixed(2)}
+                            </div>
+                          </div>
+                        );
+                      }} />
                       <Line
                         type="monotone"
                         dataKey="cumulative"
