@@ -1104,15 +1104,23 @@ export const compressTradeDataCompact = (trades: any[]) => {
   const totalNet = netPnls.reduce((s, p) => s + p, 0);
   const grossWins = winners.reduce((s, p) => s + p, 0);
   const grossLosses = Math.abs(losers.reduce((s, p) => s + p, 0));
+  
+  // Sign convention: commission = negative (cost), funding = signed from Binance
+  const totalCommission = +trades.reduce((s, t) => s + Number(-Math.abs(Number(t.total_fee ?? 0))), 0).toFixed(4);
+  const totalFunding = +trades.reduce((s, t) => s + Number(t.funding_fee ?? 0), 0).toFixed(4);
+  const totalGross = +trades.reduce((s, t) => s + Number(t.pnl ?? 0), 0).toFixed(4);
 
   const summary = {
     total_trades: trades.length,
     win_rate_net: ((winners.length / trades.length) * 100).toFixed(2) + "%",
+    total_pnl_gross: totalGross,
+    total_commission: totalCommission,
+    total_funding: totalFunding,
     total_pnl_net: +totalNet.toFixed(4),
     avg_pnl_net: +(totalNet / trades.length).toFixed(4),
     profit_factor: grossLosses > 0 ? +(grossWins / grossLosses).toFixed(2) : null,
-    total_commission: +trades.reduce((s, t) => s + Math.abs(Number(t.total_fee ?? 0)), 0).toFixed(4),
-    total_funding: +trades.reduce((s, t) => s + Number(t.funding_fee ?? 0), 0).toFixed(4),
+    // Validation: total_pnl_net should ≈ total_pnl_gross + total_commission + total_funding
+    validation_diff: +(totalNet - (totalGross + totalCommission + totalFunding)).toFixed(6),
     period_from: new Date(trades[trades.length - 1].closed_at).toISOString(),
     period_to: new Date(trades[0].closed_at).toISOString()
   };
@@ -1135,14 +1143,20 @@ export const compressTradeData = (trades: any[]) => {
   const grossWins = winners.reduce((s, p) => s + p, 0);
   const grossLosses = Math.abs(losers.reduce((s, p) => s + p, 0));
 
+  const totalCommission = +trades.reduce((s, t) => s + Number(-Math.abs(Number(t.total_fee ?? 0))), 0).toFixed(4);
+  const totalFunding = +trades.reduce((s, t) => s + Number(t.funding_fee ?? 0), 0).toFixed(4);
+  const totalGross = +trades.reduce((s, t) => s + Number(t.pnl ?? 0), 0).toFixed(4);
+
   const summary = {
     total_trades: trades.length,
     win_rate_net: ((winners.length / trades.length) * 100).toFixed(2) + "%",
+    total_pnl_gross: totalGross,
+    total_commission: totalCommission,
+    total_funding: totalFunding,
     total_pnl_net: +totalNet.toFixed(4),
     avg_pnl_net: +(totalNet / trades.length).toFixed(4),
     profit_factor: grossLosses > 0 ? +(grossWins / grossLosses).toFixed(2) : null,
-    total_commission: +trades.reduce((s, t) => s + Math.abs(Number(t.total_fee ?? 0)), 0).toFixed(4),
-    total_funding: +trades.reduce((s, t) => s + Number(t.funding_fee ?? 0), 0).toFixed(4),
+    validation_diff: +(totalNet - (totalGross + totalCommission + totalFunding)).toFixed(6),
     period_from: new Date(trades[trades.length - 1].closed_at).toISOString(),
     period_to: new Date(trades[0].closed_at).toISOString()
   };
