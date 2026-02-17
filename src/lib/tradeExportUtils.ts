@@ -350,20 +350,23 @@ export const formatTradeForExport = (t: any) => {
     side: t.side,
     entry_price: +t.entry_price,
     exit_price: +t.exit_price,
-    pnl_abs: +(t.pnl?.toFixed(6) || 0),
-    pnl_pct: +(t.pnl_percent?.toFixed(6) || 0),
     duration_seconds: durationSec,
     exit_reason: exitReason,
-    exit_winner: t.pnl > 0,
 
-    // 🔴 FEE & FUNDING LOGGING (for leverage/edge analysis)
+    // 🔴 BINANCE GROUND TRUTH P&L (income API source)
+    pnl_gross: t.pnl != null ? +Number(t.pnl).toFixed(6) : 0,           // REALIZED_PNL from Binance
+    commission_total: t.total_fee != null ? +Number(-Math.abs(t.total_fee)).toFixed(6) : null, // sum(COMMISSION) - always negative
+    funding_total: t.funding_fee != null ? +Number(t.funding_fee).toFixed(6) : null,  // sum(FUNDING_FEE)
+    pnl_net: t.net_pnl != null ? +Number(t.net_pnl).toFixed(6) : null,  // REALIZED_PNL + COMMISSION + FUNDING_FEE
+    pnl_net_pct: t.net_pnl != null && t.notional != null && +t.notional > 0
+      ? +((+t.net_pnl / +t.notional) * 100).toFixed(4)
+      : (t.pnl_percent != null ? +(t.pnl_percent).toFixed(4) : null),
+    exit_winner: (t.net_pnl ?? t.pnl) > 0,
+
+    // 🔴 ADDITIONAL FEE DETAILS
     entry_fee: t.entry_fee != null ? +Number(t.entry_fee).toFixed(6) : null,
     exit_fee: t.exit_fee != null ? +Number(t.exit_fee).toFixed(6) : null,
-    total_fee: t.total_fee != null ? +Number(t.total_fee).toFixed(6) : null,
     fees_pct_of_notional: t.fees_pct_of_notional != null ? +Number(t.fees_pct_of_notional).toFixed(4) : null,
-    funding_fee: t.funding_fee != null ? +Number(t.funding_fee).toFixed(6) : null,
-    pnl_after_fees: t.pnl_after_fees != null ? +Number(t.pnl_after_fees).toFixed(6) : null,
-    net_pnl: t.net_pnl != null ? +Number(t.net_pnl).toFixed(6) : null,
     notional: t.notional != null ? +Number(t.notional).toFixed(2) : null,
     leverage_used: t.leverage_used ?? (snap.leverage || null),
 
@@ -744,8 +747,14 @@ export const formatTradeForCompactExport = (t: any) => {
   compact.side = t.side;
   compact.entry_price = +t.entry_price;
   compact.exit_price = +t.exit_price;
-  compact.pnl_pct = +(t.pnl_percent?.toFixed(4) || 0);
-  compact.pnl_abs = +(t.pnl?.toFixed(4) || 0);
+  // 🔴 BINANCE GROUND TRUTH P&L
+  compact.pnl_gross = t.pnl != null ? +Number(t.pnl).toFixed(4) : 0;
+  compact.commission_total = t.total_fee != null ? +Number(-Math.abs(t.total_fee)).toFixed(4) : null;
+  compact.funding_total = t.funding_fee != null ? +Number(t.funding_fee).toFixed(4) : null;
+  compact.pnl_net = t.net_pnl != null ? +Number(t.net_pnl).toFixed(4) : null;
+  compact.pnl_net_pct = t.net_pnl != null && t.notional != null && +t.notional > 0
+    ? +((+t.net_pnl / +t.notional) * 100).toFixed(4)
+    : (t.pnl_percent != null ? +(t.pnl_percent).toFixed(4) : null);
   compact.duration_seconds = durationSec;
   compact.exit_reason = exitReason;
   compact.timestamp_open = openedAt.toISOString();
@@ -1089,11 +1098,21 @@ export const formatTradeForCompactExport = (t: any) => {
 };
 
 export const compressTradeDataCompact = (trades: any[]) => {
+  const netPnls = trades.map(t => Number(t.net_pnl ?? t.pnl));
+  const winners = netPnls.filter(p => p > 0);
+  const losers = netPnls.filter(p => p < 0);
+  const totalNet = netPnls.reduce((s, p) => s + p, 0);
+  const grossWins = winners.reduce((s, p) => s + p, 0);
+  const grossLosses = Math.abs(losers.reduce((s, p) => s + p, 0));
+
   const summary = {
     total_trades: trades.length,
-    win_rate: ((trades.filter(t => t.pnl > 0).length / trades.length) * 100).toFixed(2) + "%",
-    total_pnl: +trades.reduce((sum, t) => sum + t.pnl, 0).toFixed(4),
-    avg_pnl: +(trades.reduce((sum, t) => sum + t.pnl, 0) / trades.length).toFixed(4),
+    win_rate_net: ((winners.length / trades.length) * 100).toFixed(2) + "%",
+    total_pnl_net: +totalNet.toFixed(4),
+    avg_pnl_net: +(totalNet / trades.length).toFixed(4),
+    profit_factor: grossLosses > 0 ? +(grossWins / grossLosses).toFixed(2) : null,
+    total_commission: +trades.reduce((s, t) => s + Math.abs(Number(t.total_fee ?? 0)), 0).toFixed(4),
+    total_funding: +trades.reduce((s, t) => s + Number(t.funding_fee ?? 0), 0).toFixed(4),
     period_from: new Date(trades[trades.length - 1].closed_at).toISOString(),
     period_to: new Date(trades[0].closed_at).toISOString()
   };
@@ -1109,11 +1128,21 @@ export const compressTradeDataCompact = (trades: any[]) => {
 // Complete format with all audit data for deep debugging
 
 export const compressTradeData = (trades: any[]) => {
+  const netPnls = trades.map(t => Number(t.net_pnl ?? t.pnl));
+  const winners = netPnls.filter(p => p > 0);
+  const losers = netPnls.filter(p => p < 0);
+  const totalNet = netPnls.reduce((s, p) => s + p, 0);
+  const grossWins = winners.reduce((s, p) => s + p, 0);
+  const grossLosses = Math.abs(losers.reduce((s, p) => s + p, 0));
+
   const summary = {
     total_trades: trades.length,
-    win_rate: ((trades.filter(t => t.pnl > 0).length / trades.length) * 100).toFixed(2) + "%",
-    total_pnl: +trades.reduce((sum, t) => sum + t.pnl, 0).toFixed(4),
-    avg_pnl: +(trades.reduce((sum, t) => sum + t.pnl, 0) / trades.length).toFixed(4),
+    win_rate_net: ((winners.length / trades.length) * 100).toFixed(2) + "%",
+    total_pnl_net: +totalNet.toFixed(4),
+    avg_pnl_net: +(totalNet / trades.length).toFixed(4),
+    profit_factor: grossLosses > 0 ? +(grossWins / grossLosses).toFixed(2) : null,
+    total_commission: +trades.reduce((s, t) => s + Math.abs(Number(t.total_fee ?? 0)), 0).toFixed(4),
+    total_funding: +trades.reduce((s, t) => s + Number(t.funding_fee ?? 0), 0).toFixed(4),
     period_from: new Date(trades[trades.length - 1].closed_at).toISOString(),
     period_to: new Date(trades[0].closed_at).toISOString()
   };
