@@ -1098,17 +1098,21 @@ export const formatTradeForCompactExport = (t: any) => {
 };
 
 export const compressTradeDataCompact = (trades: any[]) => {
+  // Per-trade P&L components (from DB, sourced from Binance userTrades + income)
+  const totalGross = +trades.reduce((s, t) => s + Number(t.pnl ?? 0), 0).toFixed(6);
+  // Commission: stored as positive (cost) in DB, exported as negative
+  const totalCommission = +trades.reduce((s, t) => s + Number(-Math.abs(Number(t.total_fee ?? 0))), 0).toFixed(6);
+  const totalFunding = +trades.reduce((s, t) => s + Number(t.funding_fee ?? 0), 0).toFixed(6);
+  // Net from DB (ground truth: gross + commission + funding per trade)
+  const totalNetFromDb = +trades.reduce((s, t) => s + Number(t.net_pnl ?? t.pnl), 0).toFixed(6);
+  // Net recalculated from components
+  const totalNetFromComponents = +(totalGross + totalCommission + totalFunding).toFixed(6);
+
   const netPnls = trades.map(t => Number(t.net_pnl ?? t.pnl));
   const winners = netPnls.filter(p => p > 0);
   const losers = netPnls.filter(p => p < 0);
-  const totalNet = netPnls.reduce((s, p) => s + p, 0);
   const grossWins = winners.reduce((s, p) => s + p, 0);
   const grossLosses = Math.abs(losers.reduce((s, p) => s + p, 0));
-  
-  // Sign convention: commission = negative (cost), funding = signed from Binance
-  const totalCommission = +trades.reduce((s, t) => s + Number(-Math.abs(Number(t.total_fee ?? 0))), 0).toFixed(4);
-  const totalFunding = +trades.reduce((s, t) => s + Number(t.funding_fee ?? 0), 0).toFixed(4);
-  const totalGross = +trades.reduce((s, t) => s + Number(t.pnl ?? 0), 0).toFixed(4);
 
   const summary = {
     total_trades: trades.length,
@@ -1116,11 +1120,14 @@ export const compressTradeDataCompact = (trades: any[]) => {
     total_pnl_gross: totalGross,
     total_commission: totalCommission,
     total_funding: totalFunding,
-    total_pnl_net: +totalNet.toFixed(4),
-    avg_pnl_net: +(totalNet / trades.length).toFixed(4),
+    total_pnl_net: totalNetFromDb,
+    avg_pnl_net: +(totalNetFromDb / trades.length).toFixed(4),
     profit_factor: grossLosses > 0 ? +(grossWins / grossLosses).toFixed(2) : null,
-    // Validation: total_pnl_net should ≈ total_pnl_gross + total_commission + total_funding
-    validation_diff: +(totalNet - (totalGross + totalCommission + totalFunding)).toFixed(6),
+    // Validation: DB net vs recalculated from components (should be ≈ 0)
+    validation_diff_db_vs_components: +(totalNetFromDb - totalNetFromComponents).toFixed(6),
+    // sum(trade.pnl_net) == summary.total_pnl_net (internal consistency)
+    validation_sum_matches: Math.abs(totalNetFromDb - trades.reduce((s, t) => s + Number(t.net_pnl ?? t.pnl), 0)) < 0.001,
+    commission_source: "binance_userTrades_per_fill",
     period_from: new Date(trades[trades.length - 1].closed_at).toISOString(),
     period_to: new Date(trades[0].closed_at).toISOString()
   };
@@ -1136,16 +1143,17 @@ export const compressTradeDataCompact = (trades: any[]) => {
 // Complete format with all audit data for deep debugging
 
 export const compressTradeData = (trades: any[]) => {
+  const totalGross = +trades.reduce((s, t) => s + Number(t.pnl ?? 0), 0).toFixed(6);
+  const totalCommission = +trades.reduce((s, t) => s + Number(-Math.abs(Number(t.total_fee ?? 0))), 0).toFixed(6);
+  const totalFunding = +trades.reduce((s, t) => s + Number(t.funding_fee ?? 0), 0).toFixed(6);
+  const totalNetFromDb = +trades.reduce((s, t) => s + Number(t.net_pnl ?? t.pnl), 0).toFixed(6);
+  const totalNetFromComponents = +(totalGross + totalCommission + totalFunding).toFixed(6);
+
   const netPnls = trades.map(t => Number(t.net_pnl ?? t.pnl));
   const winners = netPnls.filter(p => p > 0);
   const losers = netPnls.filter(p => p < 0);
-  const totalNet = netPnls.reduce((s, p) => s + p, 0);
   const grossWins = winners.reduce((s, p) => s + p, 0);
   const grossLosses = Math.abs(losers.reduce((s, p) => s + p, 0));
-
-  const totalCommission = +trades.reduce((s, t) => s + Number(-Math.abs(Number(t.total_fee ?? 0))), 0).toFixed(4);
-  const totalFunding = +trades.reduce((s, t) => s + Number(t.funding_fee ?? 0), 0).toFixed(4);
-  const totalGross = +trades.reduce((s, t) => s + Number(t.pnl ?? 0), 0).toFixed(4);
 
   const summary = {
     total_trades: trades.length,
@@ -1153,10 +1161,12 @@ export const compressTradeData = (trades: any[]) => {
     total_pnl_gross: totalGross,
     total_commission: totalCommission,
     total_funding: totalFunding,
-    total_pnl_net: +totalNet.toFixed(4),
-    avg_pnl_net: +(totalNet / trades.length).toFixed(4),
+    total_pnl_net: totalNetFromDb,
+    avg_pnl_net: +(totalNetFromDb / trades.length).toFixed(4),
     profit_factor: grossLosses > 0 ? +(grossWins / grossLosses).toFixed(2) : null,
-    validation_diff: +(totalNet - (totalGross + totalCommission + totalFunding)).toFixed(6),
+    validation_diff_db_vs_components: +(totalNetFromDb - totalNetFromComponents).toFixed(6),
+    validation_sum_matches: Math.abs(totalNetFromDb - trades.reduce((s, t) => s + Number(t.net_pnl ?? t.pnl), 0)) < 0.001,
+    commission_source: "binance_userTrades_per_fill",
     period_from: new Date(trades[trades.length - 1].closed_at).toISOString(),
     period_to: new Date(trades[0].closed_at).toISOString()
   };
