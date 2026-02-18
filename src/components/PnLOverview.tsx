@@ -251,19 +251,25 @@ export const PnLOverview = () => {
       let totalFunding: number;
       let pnlSource: string;
       
-      if (pnlMode === "binance_overview" && binancePnl) {
+      // Use Binance API data only if it succeeded (not rate-limited) and has actual data
+      const binancePnlValid = binancePnl && !(binancePnl as any).rateLimited && (binancePnl as any).success !== false;
+      
+      if (pnlMode === "binance_overview" && binancePnlValid) {
         // Mode: binance_overview - sum income types from Binance API for the period
         // Matches Binance "Futures PNL" view exactly
-        totalPnLGross = binancePnl.todaysRealizedPnl;  // REALIZED_PNL
-        totalFees = Math.abs(binancePnl.commission);   // COMMISSION (negative in API)
-        totalFunding = binancePnl.fundingFee;          // FUNDING_FEE
-        totalPnLAfterFees = binancePnl.todaysRealizedPnl + binancePnl.commission;
-        totalPnLNet = binancePnl.netPnl;               // REALIZED_PNL + COMMISSION + FUNDING_FEE
+        totalPnLGross = binancePnl!.todaysRealizedPnl;  // REALIZED_PNL
+        totalFees = Math.abs(binancePnl!.commission);   // COMMISSION (negative in API)
+        totalFunding = binancePnl!.fundingFee;          // FUNDING_FEE
+        totalPnLAfterFees = binancePnl!.todaysRealizedPnl + binancePnl!.commission;
+        totalPnLNet = binancePnl!.netPnl;               // REALIZED_PNL + COMMISSION + FUNDING_FEE
         totalPnL = totalPnLNet;
         pnlSource = "binance_income_api";
         
         console.log(`[PnL] Mode: binance_overview | gross=${totalPnLGross} fees=${totalFees} funding=${totalFunding} net=${totalPnLNet}`);
       } else {
+        if (binancePnl && (binancePnl as any).rateLimited) {
+          console.warn("[PnL] Binance rate limited – falling back to trade_history DB for totals");
+        }
         // Mode: strict_trades - sum net_pnl from trade_history records only
         // Full precision sum, round only at display
         totalPnLGross = 0;
