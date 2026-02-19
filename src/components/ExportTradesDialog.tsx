@@ -119,14 +119,14 @@ export const ExportTradesDialog = ({
         tradeChunks.push(formatWithLineBreaks(compressed));
       }
 
+      setChunks(tradeChunks);
+      setCurrentChunk(0);
       if (tradeChunks.length === 1) {
-        // Only one chunk – copy directly
-        await copyChunk(tradeChunks[0], `${trades.length} handler`);
-        if (tradeChunks.length === 1) setOpen(false);
+        toast({
+          title: `${trades.length} handler klar`,
+          description: "Tryk 'Kopier blok 1' for at kopiere til clipboard",
+        });
       } else {
-        // Multiple chunks – show chunk navigator
-        setChunks(tradeChunks);
-        setCurrentChunk(0);
         toast({
           title: `${trades.length} handler opdelt i ${tradeChunks.length} blokke`,
           description: "Kopier blok for blok ind i din AI",
@@ -166,49 +166,54 @@ export const ExportTradesDialog = ({
         
         <div className="space-y-4 py-4">
           {/* Chunk navigator view */}
-          {chunks.length > 1 && !showFallback ? (
+          {chunks.length > 0 && !showFallback ? (
             <>
-              <div className="flex items-center justify-between text-sm font-medium">
-                <span>Blok {currentChunk + 1} / {chunks.length}</span>
-                <span className="text-muted-foreground">maks {CHUNK_SIZE} handler pr. blok</span>
+              {/* Progress bar */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Trin {currentChunk + 1} af {chunks.length}</span>
+                  <span>{chunks.length * CHUNK_SIZE <= 130 ? `${chunks.length * CHUNK_SIZE}` : `op til ${chunks.length * CHUNK_SIZE}`} handler i alt</span>
+                </div>
+                <div className="flex gap-1">
+                  {chunks.map((_, i) => (
+                    <div
+                      key={i}
+                      className={cn(
+                        "h-2 flex-1 rounded-full transition-colors",
+                        i < currentChunk ? "bg-primary/60" : i === currentChunk ? "bg-primary" : "bg-muted"
+                      )}
+                    />
+                  ))}
+                </div>
               </div>
 
-              {/* Progress dots */}
-              <div className="flex gap-1.5 justify-center">
-                {chunks.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setCurrentChunk(i)}
-                    className={cn(
-                      "w-3 h-3 rounded-full transition-colors",
-                      i === currentChunk ? "bg-primary" : "bg-muted-foreground/30"
-                    )}
-                  />
-                ))}
+              {/* Instruction box */}
+              <div className="p-4 border-2 border-primary/20 bg-primary/5 rounded-lg space-y-2">
+                <p className="text-sm font-semibold text-foreground">
+                  {currentChunk === 0 ? "📋 Start her:" : `📋 Trin ${currentChunk + 1}:`}
+                </p>
+                <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+                  <li>Tryk <strong className="text-foreground">Kopier blok {currentChunk + 1}</strong> nedenfor</li>
+                  <li>Indsæt i din AI og send</li>
+                  {currentChunk < chunks.length - 1 && (
+                    <li>Kom tilbage her og tryk <strong className="text-foreground">Næste blok →</strong></li>
+                  )}
+                </ol>
               </div>
 
-              <div className="p-3 bg-muted/50 rounded text-xs text-muted-foreground space-y-1">
-                <p className="font-medium text-foreground">Sådan gør du:</p>
-                <p>1. Kopier blok {currentChunk + 1} og send til din AI</p>
-                {currentChunk < chunks.length - 1 && <p>2. Gå til næste blok og send igen</p>}
-              </div>
+              {/* Main copy button */}
+              <Button
+                size="lg"
+                onClick={async () => {
+                  await copyChunk(chunks[currentChunk], `Blok ${currentChunk + 1}/${chunks.length}`);
+                }}
+                className="w-full"
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                Kopier blok {currentChunk + 1} / {chunks.length}
+              </Button>
 
-              <div className="flex gap-2">
-                <Button
-                  onClick={async () => {
-                    await copyChunk(chunks[currentChunk], `Blok ${currentChunk + 1}/${chunks.length}`);
-                    if (currentChunk < chunks.length - 1) {
-                      setTimeout(() => setCurrentChunk(c => c + 1), 500);
-                    }
-                  }}
-                  className="flex-1"
-                >
-                  <Copy className="w-4 h-4 mr-2" />
-                  Kopier blok {currentChunk + 1}
-                  {currentChunk < chunks.length - 1 && " →"}
-                </Button>
-              </div>
-
+              {/* Navigation */}
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -217,20 +222,30 @@ export const ExportTradesDialog = ({
                   onClick={() => setCurrentChunk(c => c - 1)}
                   className="flex-1"
                 >
-                  ← Forrige
+                  ← Forrige blok
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={currentChunk === chunks.length - 1}
-                  onClick={() => setCurrentChunk(c => c + 1)}
-                  className="flex-1"
-                >
-                  Næste →
-                </Button>
+                {currentChunk < chunks.length - 1 ? (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => setCurrentChunk(c => c + 1)}
+                    className="flex-1"
+                  >
+                    Næste blok →
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={resetChunks}
+                    className="flex-1"
+                  >
+                    ✓ Færdig
+                  </Button>
+                )}
               </div>
 
-              <Button variant="ghost" size="sm" onClick={resetChunks} className="w-full text-muted-foreground">
+              <Button variant="ghost" size="sm" onClick={resetChunks} className="w-full text-muted-foreground text-xs">
                 ← Tilbage til filter
               </Button>
             </>
