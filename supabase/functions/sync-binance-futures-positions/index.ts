@@ -375,14 +375,14 @@ serve(async (req) => {
             updates.push({ symbol: duplicate.symbol, action: 'closed_duplicate', id: duplicate.id });
           }
         } else {
-          // Create new position if none exists
-          console.log(`Creating new position for ${binancePos.symbol}`);
+          // 🔴 KRITISK: Opret IKKE nye positioner medmindre de er kvalificeret af bot-signalet
+          // Positioner skal have et nyligt bot-signal med gyldige indikatorer
+          console.log(`Fandt ny Binance position: ${binancePos.symbol} - søger efter bot-signal...`);
           
           const entryPrice = parseFloat(binancePos.entryPrice);
-          // Get leverage from Binance API response
           const binanceLeverage = binancePos.leverage ? parseInt(binancePos.leverage) : null;
           
-          // Get user's indicator config for SL calculation and leverage fallback
+          // Get user's indicator config for leverage fallback
           const { data: userConfig } = await supabaseClient
             .from('indicator_config')
             .select('atr_stop_loss_multiplier, leverage')
@@ -390,22 +390,7 @@ serve(async (req) => {
             .limit(1)
             .single();
           
-          // Use Binance leverage if available, otherwise fall back to user config
           const leverageUsed = binanceLeverage ?? userConfig?.leverage ?? null;
-          console.log(`[SYNC] ${binancePos.symbol}: Binance leverage=${binanceLeverage}, config leverage=${userConfig?.leverage}, using=${leverageUsed}`);
-          
-          // Calculate a default stop loss based on entry price
-          // Use 3% as default safety margin if no config found
-          const defaultSlPercent = 3.0;
-          let stopLoss: number;
-          
-          if (side === 'LONG') {
-            stopLoss = entryPrice * (1 - defaultSlPercent / 100);
-          } else {
-            stopLoss = entryPrice * (1 + defaultSlPercent / 100);
-          }
-          
-          console.log(`⚠️ Setting default SL for synced position ${binancePos.symbol}: ${stopLoss.toFixed(4)} (${defaultSlPercent}% from entry)`);
           
           // Check if bot detected a signal for this symbol recently (within last 10 minutes)
           const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
@@ -419,69 +404,56 @@ serve(async (req) => {
             .order('created_at', { ascending: false })
             .limit(1);
           
-          let openReason = `⚠️ SYNCED FROM BINANCE (${side} @ ${entryPrice.toFixed(4)}) - PERCENT_FALLBACK SL: ${stopLoss.toFixed(4)} (${defaultSlPercent}%)`;
+          // 🔴 KRAV: Kun opret position hvis der er et GYLDIGT bot-signal med ATR
+          if (!recentSignals || recentSignals.length === 0) {
+            console.warn(`🚫 BLOKERET: ${binancePos.symbol} ${side} - INGEN bot-signal fundet inden for 10 min. Position IKKE oprettet i DB.`);
+            console.warn(`   Positionen eksisterer på Binance men blev ikke åbnet af botten.`);
+            console.warn(`   Brug manuelt management på Binance for denne position.`);
+            updates.push({ symbol: binancePos.symbol, action: 'blocked_no_signal', reason: 'No recent bot signal found' });
+            continue;
+          }
           
-          // 🔴 KRITISK: Marker synkroniserede positioner tydeligt
-          // Disse har IKKE ATR data og bruger procent-fallback
-          let indicatorsSnapshot: any = {
+          const signal = recentSignals[0];
+          const indicators = signal.indicators as any;
+          
+          // Kræv gyldig ATR for at sikre korrekte exit-beregninger
+          if (!indicators || !indicators.atr || indicators.atr <= 0) {
+            console.warn(`🚫 BLOKERET: ${binancePos.symbol} ${side} - Bot-signal fundet men ATR er ugyldig (${indicators?.atr}). Position IKKE oprettet.`);
+            updates.push({ symbol: binancePos.symbol, action: 'blocked_no_atr', reason: 'Bot signal found but ATR invalid' });
+            continue;
+          }
+          
+          // ✅ Gyldigt bot-signal med ATR - opret position
+          const indicatorsSnapshot = {
+            ...indicators,
             is_synced_position: true,
-            exit_type: 'PERCENT_FALLBACK', // IKKE ATR_BASED
-            atr: null, // Eksplicit null - ATR er IKKE tilgængelig
-            atr_percent: null,
-            stop_loss_percent_used: defaultSlPercent,
-            sync_timestamp: new Date().toISOString(),
-            leverage: leverageUsed, // Store leverage from Binance or config
-            warning: 'Position synced from Binance without bot signal - using percent-based stop loss fallback'
+            exit_type: 'ATR_BASED',
+            leverage: leverageUsed,
           };
           
-          console.log(`⚠️ PERCENT_FALLBACK_DETECTED: ${binancePos.symbol} synced without bot signal`);
-          console.log(`   exit_type: PERCENT_FALLBACK (${defaultSlPercent}% SL)`);
-          console.log(`   ATR: NULL (not available for synced positions)`);
-          console.log(`   leverage: ${leverageUsed}`);
-          
-          // If we found a recent signal from the bot, use that data including proper SL
-          if (recentSignals && recentSignals.length > 0) {
-            const signal = recentSignals[0];
-            const indicators = signal.indicators as any;
-            
-            // Check if bot signal has valid ATR
-            if (indicators && indicators.atr && indicators.atr > 0) {
-              indicatorsSnapshot = {
-                ...indicators,
-                is_synced_position: true, // Stadig synkroniseret, men har ATR data
-                exit_type: 'ATR_BASED', // HAR ATR fra bot signal
-              };
-              
-              // Use the SL from the signal if available
-              if (indicators.stop_loss && indicators.stop_loss > 0) {
-                stopLoss = indicators.stop_loss;
-                console.log(`✅ ATR_EXIT_OK: Using bot signal SL for ${binancePos.symbol}: ${stopLoss.toFixed(4)}`);
-                console.log(`   exit_type: ATR_BASED (from recent bot signal)`);
-                console.log(`   ATR: ${indicators.atr}`);
-              }
+          let stopLoss: number;
+          if (indicators.stop_loss && indicators.stop_loss > 0) {
+            stopLoss = indicators.stop_loss;
+            console.log(`✅ ATR_EXIT_OK: Using bot signal SL for ${binancePos.symbol}: ${stopLoss.toFixed(4)}`);
+          } else {
+            // Beregn SL fra ATR
+            const slMultiplier = userConfig?.atr_stop_loss_multiplier ?? 2.0;
+            if (side === 'LONG') {
+              stopLoss = entryPrice - (indicators.atr * slMultiplier);
             } else {
-              // Bot signal found but no ATR - still use percent fallback
-              console.log(`⚠️ Bot signal found but ATR missing for ${binancePos.symbol}`);
-              indicatorsSnapshot = {
-                ...indicators,
-                is_synced_position: true,
-                exit_type: 'PERCENT_FALLBACK',
-                atr: null,
-                stop_loss_percent_used: defaultSlPercent,
-                warning: 'Bot signal found but ATR was null - using percent fallback'
-              };
+              stopLoss = entryPrice + (indicators.atr * slMultiplier);
             }
-            
-            // Create detailed open reason like the bot would
-            openReason = `${side} signal på ${binancePos.symbol} - ` +
-              `Trend: ${indicators.trend || 'UNKNOWN'}. ` +
-              `RSI: ${indicators.rsi?.toFixed(2) || 'N/A'}, ` +
-              `MACD: ${indicators.macd?.toFixed(4) || 'N/A'}, ` +
-              `EMA: Fast ${indicators.emaFast?.toFixed(2) || 'N/A'} vs Slow ${indicators.emaSlow?.toFixed(2) || 'N/A'}, ` +
-              `ADX: ${indicators.adx?.toFixed(2) || 'N/A'}`;
-            
-            console.log(`✅ Found bot signal for ${binancePos.symbol}, using detailed open_reason`);
+            console.log(`✅ Beregnet ATR-baseret SL for ${binancePos.symbol}: ${stopLoss.toFixed(4)} (${slMultiplier}x ATR)`);
           }
+          
+          const openReason = `${side} signal på ${binancePos.symbol} - ` +
+            `Trend: ${indicators.trend || 'UNKNOWN'}. ` +
+            `RSI: ${indicators.rsi?.toFixed(2) || 'N/A'}, ` +
+            `MACD: ${indicators.macd?.toFixed(4) || 'N/A'}, ` +
+            `EMA: Fast ${indicators.emaFast?.toFixed(2) || 'N/A'} vs Slow ${indicators.emaSlow?.toFixed(2) || 'N/A'}, ` +
+            `ADX: ${indicators.adx?.toFixed(2) || 'N/A'}`;
+          
+          console.log(`✅ Opretter kvalificeret position: ${binancePos.symbol} ${side} (ATR=${indicators.atr.toFixed(6)}, SL=${stopLoss.toFixed(4)})`);
           
           const { error } = await supabaseClient
             .from('positions')
@@ -503,7 +475,7 @@ serve(async (req) => {
             });
           
           if (error) console.error('Insert error:', error);
-          updates.push({ symbol: binancePos.symbol, action: 'created', stop_loss: stopLoss });
+          updates.push({ symbol: binancePos.symbol, action: 'created_with_signal', stop_loss: stopLoss, atr: indicators.atr });
         }
       }
 
