@@ -44,7 +44,7 @@ export const ExportTradesDialog = ({
   const [currentChunk, setCurrentChunk] = useState(0);
   const { toast } = useToast();
 
-  const CHUNK_SIZE = 130;
+  const CHUNK_SIZE = 100;
 
   const copyChunk = async (text: string, label: string) => {
     try {
