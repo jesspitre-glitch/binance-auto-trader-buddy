@@ -39,15 +39,11 @@ serve(async (req) => {
       console.log('Position monitoring completed:', monitorResponse.data);
     }
 
-    // Step 3: Scan for new signals
-    console.log('Step 3: Scanning for new trading signals...');
-    const scanResponse = await supabaseClient.functions.invoke('auto-trade-quant');
-    
-    if (scanResponse.error) {
-      console.error('Error scanning markets:', scanResponse.error);
-    } else {
-      console.log('Market scan completed:', scanResponse.data);
-    }
+    // Step 3: REMOVED - auto-trade-quant is now ONLY called by continuous-scan-quant
+    // Having it called here AND by the continuous scanner caused race conditions
+    // where two concurrent invocations both opened positions, exceeding max_open_positions
+    console.log('Step 3: Skipped (scanning handled by continuous-scan-quant to prevent race conditions)');
+    const scanResponse = { data: { message: 'Delegated to continuous-scan-quant' }, error: null };
 
     // Step 4: Final sync to ensure everything matches Binance
     console.log('Step 4: Final sync with Binance...');
