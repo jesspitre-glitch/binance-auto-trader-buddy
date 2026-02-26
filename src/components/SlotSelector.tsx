@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { IntegerInput } from "@/components/IntegerInput";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -257,12 +258,13 @@ export const SlotSelector = ({
               />
             </div>
             <div className="flex items-center justify-between">
-              <Button
-                variant={editSlot?.is_active ? "destructive" : "default"}
-                onClick={() => editSlot && toggleSlotActive(editSlot)}
-              >
-                {editSlot?.is_active ? "Deaktivér" : "Aktivér"}
-              </Button>
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={editSlot?.is_active ?? false}
+                  onCheckedChange={() => editSlot && toggleSlotActive(editSlot)}
+                />
+                <Label>{editSlot?.is_active ? "Tændt" : "Slukket"}</Label>
+              </div>
               <div className="flex gap-2">
                 <Button
                   variant="ghost"
