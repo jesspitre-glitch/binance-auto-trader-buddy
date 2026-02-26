@@ -22,9 +22,10 @@ import {
 
 interface PositionManagerProps {
   slotId?: string | null;
+  includeLegacyData?: boolean;
 }
 
-export const PositionManager = ({ slotId }: PositionManagerProps) => {
+export const PositionManager = ({ slotId, includeLegacyData = false }: PositionManagerProps) => {
   const [positions, setPositions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -57,7 +58,9 @@ export const PositionManager = ({ slotId }: PositionManagerProps) => {
         .order("opened_at", { ascending: false });
 
       if (slotId) {
-        query = query.eq("slot_id", slotId);
+        query = includeLegacyData
+          ? query.or(`slot_id.eq.${slotId},slot_id.is.null`)
+          : query.eq("slot_id", slotId);
       }
 
       const { data, error } = await query;

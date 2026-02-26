@@ -36,6 +36,7 @@ export const TradingDashboard = () => {
 
   // Get the selected slot's config for the Config tab
   const selectedSlot = slots.find((s) => s.id === selectedSlotId);
+  const includeLegacyDataInSelectedSlot = selectedSlot?.slot_number === 1;
   const configIdForTab = selectedSlot?.config_id ?? activeConfigId;
 
   // Get the updated_at timestamp from the active config
@@ -306,7 +307,7 @@ export const TradingDashboard = () => {
 
       <PortfolioBalance />
       <ContinuousSyncControl />
-      <PositionManager slotId={selectedSlotId} />
+      <PositionManager slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} />
 
       <Tabs defaultValue="pnl">
         <TabsList className="grid w-full grid-cols-5 h-auto md:h-10 gap-1 p-1 bg-muted">
@@ -339,25 +340,25 @@ export const TradingDashboard = () => {
         
         <TabsContent value="pnl">
           <SectionErrorBoundary title="P&L Oversigt">
-            <PnLOverview slotId={selectedSlotId} />
+            <PnLOverview slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} />
           </SectionErrorBoundary>
         </TabsContent>
 
         <TabsContent value="strategy">
           <SectionErrorBoundary title="Strategi Analyse">
-            <StrategyAnalysis slotId={selectedSlotId} />
+            <StrategyAnalysis slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} />
           </SectionErrorBoundary>
         </TabsContent>
 
         <TabsContent value="scan">
           <SectionErrorBoundary title="Scan Resultater">
-            <ScanResults slotId={selectedSlotId} />
+            <ScanResults slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} />
           </SectionErrorBoundary>
         </TabsContent>
 
         <TabsContent value="history" className="space-y-4">
           <SectionErrorBoundary title="Trade Historik">
-            <TradeHistoryTable slotId={selectedSlotId} />
+            <TradeHistoryTable slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} />
           </SectionErrorBoundary>
         </TabsContent>
         

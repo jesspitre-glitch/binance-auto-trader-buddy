@@ -11,9 +11,10 @@ import { RegimeIndicator } from "./RegimeIndicator";
 
 interface ScanResultsProps {
   slotId?: string | null;
+  includeLegacyData?: boolean;
 }
 
-export const ScanResults = ({ slotId }: ScanResultsProps) => {
+export const ScanResults = ({ slotId, includeLegacyData = false }: ScanResultsProps) => {
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
@@ -31,7 +32,9 @@ export const ScanResults = ({ slotId }: ScanResultsProps) => {
         .limit(100);
 
       if (slotId) {
-        query = query.eq("slot_id", slotId);
+        query = includeLegacyData
+          ? query.or(`slot_id.eq.${slotId},slot_id.is.null`)
+          : query.eq("slot_id", slotId);
       }
 
       const { data, error } = await query;
