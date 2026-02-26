@@ -3582,7 +3582,8 @@ serve(async (req) => {
           
           // Get account balance
           const balance = await getAccountBalance();
-          console.log(`✅ Balance check OK: ${balance} USDC`);
+          const slotBalance = balance * (capitalPercent / 100);
+          console.log(`✅ Balance check OK: ${balance} USDC (Slot: ${slotBalance.toFixed(2)} USDC @ ${capitalPercent}%)`);
           
           // 🔴 KRITISK SIKKERHEDSCHECK: ATR SKAL VÆRE GYLDIG
           // Uden ATR kan vi ikke beregne stop loss, break-even eller trailing stop korrekt
@@ -3618,7 +3619,7 @@ serve(async (req) => {
           // Position notional = 60 × $1 = $60
           // Required margin = $60 / 3 = $20 ✓
           // Apply slot capital allocation: only use the slot's share of total balance
-          const slotBalance = balance * (capitalPercent / 100);
+          // slotBalance already calculated above (after getAccountBalance)
           const marginToUse = slotBalance * (config.position_size_percent / 100);
           const positionNotional = marginToUse * config.leverage;
           const directQuantity = positionNotional / analysis.indicators.price;
