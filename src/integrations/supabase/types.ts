@@ -613,6 +613,7 @@ export type Database = {
           peak_price: number | null
           quantity: number
           side: string
+          slot_id: string | null
           status: string | null
           stop_loss: number | null
           strategy_hash: string | null
@@ -640,6 +641,7 @@ export type Database = {
           peak_price?: number | null
           quantity: number
           side: string
+          slot_id?: string | null
           status?: string | null
           stop_loss?: number | null
           strategy_hash?: string | null
@@ -667,6 +669,7 @@ export type Database = {
           peak_price?: number | null
           quantity?: number
           side?: string
+          slot_id?: string | null
           status?: string | null
           stop_loss?: number | null
           strategy_hash?: string | null
@@ -678,7 +681,15 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "positions_slot_id_fkey"
+            columns: ["slot_id"]
+            isOneToOne: false
+            referencedRelation: "strategy_slots"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       price_cache: {
         Row: {
@@ -711,6 +722,7 @@ export type Database = {
           id: string
           indicators: Json | null
           signal: string
+          slot_id: string | null
           stop_loss: number | null
           symbol: string
           take_profit: number | null
@@ -722,6 +734,7 @@ export type Database = {
           id?: string
           indicators?: Json | null
           signal: string
+          slot_id?: string | null
           stop_loss?: number | null
           symbol: string
           take_profit?: number | null
@@ -733,12 +746,21 @@ export type Database = {
           id?: string
           indicators?: Json | null
           signal?: string
+          slot_id?: string | null
           stop_loss?: number | null
           symbol?: string
           take_profit?: number | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "scan_results_slot_id_fkey"
+            columns: ["slot_id"]
+            isOneToOne: false
+            referencedRelation: "strategy_slots"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       scanner_status: {
         Row: {
@@ -776,6 +798,50 @@ export type Database = {
         }
         Relationships: []
       }
+      strategy_slots: {
+        Row: {
+          capital_percent: number
+          config_id: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean
+          name: string
+          slot_number: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          capital_percent?: number
+          config_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          slot_number: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          capital_percent?: number
+          config_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          slot_number?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "strategy_slots_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "indicator_config"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       trade_history: {
         Row: {
           close_reason: string | null
@@ -806,6 +872,7 @@ export type Database = {
           pnl_percent: number
           quantity: number
           side: string
+          slot_id: string | null
           strategy_hash: string | null
           symbol: string
           total_fee: number | null
@@ -840,6 +907,7 @@ export type Database = {
           pnl_percent: number
           quantity: number
           side: string
+          slot_id?: string | null
           strategy_hash?: string | null
           symbol: string
           total_fee?: number | null
@@ -874,12 +942,21 @@ export type Database = {
           pnl_percent?: number
           quantity?: number
           side?: string
+          slot_id?: string | null
           strategy_hash?: string | null
           symbol?: string
           total_fee?: number | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "trade_history_slot_id_fkey"
+            columns: ["slot_id"]
+            isOneToOne: false
+            referencedRelation: "strategy_slots"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       trading_session: {
         Row: {

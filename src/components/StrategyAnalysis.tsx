@@ -34,7 +34,11 @@ interface StrategyStats {
 type SortField = 'strategy_number' | 'total_trades' | 'win_rate' | 'total_pnl' | 'avg_pnl' | 'largest_win' | 'largest_loss';
 type SortDirection = 'asc' | 'desc';
 
-export const StrategyAnalysis = () => {
+interface StrategyAnalysisProps {
+  slotId?: string | null;
+}
+
+export const StrategyAnalysis = ({ slotId }: StrategyAnalysisProps) => {
   const [strategies, setStrategies] = useState<StrategyStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStrategy, setSelectedStrategy] = useState<{ stats: StrategyStats; trades: any[] } | null>(null);
@@ -190,12 +194,18 @@ export const StrategyAnalysis = () => {
       let hasMore = true;
       
       while (hasMore) {
-        const { data: batch, error } = await supabase
+        let tradeQuery = supabase
           .from("trade_history")
           .select("*")
           .not("strategy_hash", "is", null)
           .order("closed_at", { ascending: false })
           .range(offset, offset + batchSize - 1);
+
+        if (slotId) {
+          tradeQuery = tradeQuery.eq("slot_id", slotId);
+        }
+
+        const { data: batch, error } = await tradeQuery;
         
         if (error) throw error;
         

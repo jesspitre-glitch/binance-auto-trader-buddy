@@ -20,7 +20,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-export const PositionManager = () => {
+interface PositionManagerProps {
+  slotId?: string | null;
+}
+
+export const PositionManager = ({ slotId }: PositionManagerProps) => {
   const [positions, setPositions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -46,11 +50,17 @@ export const PositionManager = () => {
 
   const fetchPositions = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("positions")
         .select("*")
         .eq("status", "OPEN")
         .order("opened_at", { ascending: false });
+
+      if (slotId) {
+        query = query.eq("slot_id", slotId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setPositions(data || []);

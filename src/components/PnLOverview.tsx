@@ -33,7 +33,11 @@ import { formatTradeForExport, compressTradeData, formatWithLineBreaks } from "@
 type TimeRange = "24h" | "7d" | "30d" | "90d" | "1y" | "all" | "since_change" | "custom";
 type PnlTotalMode = "strict_trades" | "binance_overview";
 
-export const PnLOverview = () => {
+interface PnLOverviewProps {
+  slotId?: string | null;
+}
+
+export const PnLOverview = ({ slotId }: PnLOverviewProps) => {
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<TimeRange>("24h");
   const [pnlMode, setPnlMode] = useState<PnlTotalMode>("binance_overview");
@@ -193,7 +197,7 @@ export const PnLOverview = () => {
         const from = page * pageSize;
         const to = from + pageSize - 1;
         
-        const { data, error } = await supabase
+        let tradeQuery = supabase
           .from("trade_history")
           .select("*")
           .eq("user_id", user.id)
@@ -202,6 +206,12 @@ export const PnLOverview = () => {
           .lte("closed_at", new Date(effectiveNowMs).toISOString())
           .order("closed_at", { ascending: false })
           .range(from, to);
+
+        if (slotId) {
+          tradeQuery = tradeQuery.eq("slot_id", slotId);
+        }
+
+        const { data, error } = await tradeQuery;
 
         if (error) throw error;
         

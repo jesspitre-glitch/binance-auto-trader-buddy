@@ -8,7 +8,11 @@ import { getBinanceTimeAgo } from "@/lib/timeUtils";
 import { TradeDetailsDialog } from "./TradeDetailsDialog";
 import { ExportTradesDialog } from "./ExportTradesDialog";
 
-export const TradeHistoryTable = () => {
+interface TradeHistoryTableProps {
+  slotId?: string | null;
+}
+
+export const TradeHistoryTable = ({ slotId }: TradeHistoryTableProps) => {
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTrade, setSelectedTrade] = useState<any>(null);
@@ -16,13 +20,18 @@ export const TradeHistoryTable = () => {
 
   const fetchTrades = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("trade_history")
         .select("*")
         .neq("close_reason", "DUPLICATE")
         .order("closed_at", { ascending: false })
         .limit(200);
 
+      if (slotId) {
+        query = query.eq("slot_id", slotId);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       setTrades(data || []);
     } catch (error: any) {
@@ -65,7 +74,7 @@ export const TradeHistoryTable = () => {
       supabase.removeChannel(channel);
       document.removeEventListener('visibilitychange', onVis);
     };
-  }, []);
+  }, [slotId]);
 
   if (loading) {
     return (
