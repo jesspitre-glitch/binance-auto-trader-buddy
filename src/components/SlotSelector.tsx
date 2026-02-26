@@ -195,7 +195,7 @@ export const SlotSelector = ({
               : "bg-card border-border hover:bg-accent text-foreground"
           )}
         >
-          Alle Slots
+          Samlet Overblik
         </button>
 
         {slots.map((slot) => (
