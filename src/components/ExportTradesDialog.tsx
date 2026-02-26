@@ -15,7 +15,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { Copy, Download, CalendarIcon } from "lucide-react";
-import { Slider } from "@/components/ui/slider";
+import { IntegerInput } from "@/components/IntegerInput";
 import { supabase } from "@/integrations/supabase/client";
 import { compressTradeData, compressTradeDataCompact, formatWithLineBreaks } from "@/lib/tradeExportUtils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -372,15 +372,13 @@ export const ExportTradesDialog = ({
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Handler pr. blok</Label>
                 <div className="flex items-center gap-3">
-                  <Slider
-                    value={[chunkSize]}
-                    onValueChange={([v]) => setChunkSize(v)}
-                    min={25}
-                    max={200}
-                    step={25}
-                    className="flex-1"
+                  <IntegerInput
+                    value={chunkSize}
+                    onValueChange={setChunkSize}
+                    min={10}
+                    fallback={100}
+                    className="w-24"
                   />
-                  <span className="text-sm font-mono w-10 text-right">{chunkSize}</span>
                 </div>
               </div>
 
