@@ -2727,7 +2727,12 @@ serve(async (req) => {
         console.log(`📊 STRATEGY SLOTS: ${activeSlots.length} active slots, total capital: ${totalCapital}%`);
 
         for (const slot of activeSlots) {
-          const slotConfig = (slot as any).indicator_config;
+          // Use slot's own config, or fall back to session's active config
+          let slotConfig = (slot as any).indicator_config;
+          if (!slotConfig && session.indicator_config) {
+            slotConfig = session.indicator_config;
+            console.log(`📎 Slot "${slot.name}" (${slot.id}): no own config, using session config (${session.active_config_id})`);
+          }
           if (slotConfig && slotConfig.enabled) {
             slotIterations.push({
               config: slotConfig,
