@@ -59,6 +59,35 @@ export const SlotSelector = ({
     .filter((s) => s.is_active)
     .reduce((sum, s) => sum + s.capital_percent, 0);
 
+  // Clone an existing config and return the new config's id
+  const cloneConfig = async (userId: string, slotName: string): Promise<string | null> => {
+    // Find a config to clone: prefer the first available
+    const { data: existingConfigs } = await supabase
+      .from("indicator_config")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (!existingConfigs || existingConfigs.length === 0) return null;
+
+    const source = existingConfigs[0];
+    // Remove metadata fields, keep all strategy params
+    const { id, created_at, updated_at, user_id, ...configParams } = source;
+
+    const { data: newConfig, error } = await supabase
+      .from("indicator_config")
+      .insert({
+        ...configParams,
+        user_id: userId,
+        name: `${slotName} Strategi`,
+      })
+      .select("id")
+      .single();
+
+    if (error) throw error;
+    return newConfig?.id ?? null;
+  };
+
   const addSlot = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -68,17 +97,23 @@ export const SlotSelector = ({
         ? Math.max(...slots.map((s) => s.slot_number)) + 1
         : 1;
 
+      const slotName = `Slot ${nextNumber}`;
+
+      // Auto-create a unique config for this slot
+      const newConfigId = await cloneConfig(user.id, slotName);
+
       const { error } = await supabase.from("strategy_slots").insert({
         user_id: user.id,
         slot_number: nextNumber,
-        name: `Slot ${nextNumber}`,
+        name: slotName,
         capital_percent: 25,
         is_active: false,
+        config_id: newConfigId,
       });
 
       if (error) throw error;
       onSlotsChanged();
-      toast({ title: "Slot oprettet", description: `Slot ${nextNumber} tilføjet` });
+      toast({ title: "Slot oprettet", description: `${slotName} tilføjet med egen strategi` });
     } catch (err: any) {
       toast({ title: "Fejl", description: err.message, variant: "destructive" });
     }
@@ -130,9 +165,21 @@ export const SlotSelector = ({
     }
 
     try {
+      // If activating and no config assigned, auto-clone one
+      let updateData: any = { is_active: newActive };
+      if (newActive && !slot.config_id) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const newConfigId = await cloneConfig(user.id, slot.name);
+          if (newConfigId) {
+            updateData.config_id = newConfigId;
+          }
+        }
+      }
+
       const { error } = await supabase
         .from("strategy_slots")
-        .update({ is_active: newActive })
+        .update(updateData)
         .eq("id", slot.id);
 
       if (error) throw error;
