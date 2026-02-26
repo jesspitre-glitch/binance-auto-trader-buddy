@@ -2696,8 +2696,67 @@ serve(async (req) => {
     const results = [];
 
     for (const session of sessions) {
-      const config = session.indicator_config;
-      if (!config || !config.enabled) continue;
+      // ═══════════════════════════════════════════════════════════════════
+      // STRATEGY SLOTS: Fetch active slots for this user
+      // If slots exist, iterate per-slot with slot-specific config & capital
+      // If no slots, fall back to session's indicator_config (legacy mode)
+      // ═══════════════════════════════════════════════════════════════════
+      const { data: activeSlots } = await supabaseClient
+        .from('strategy_slots')
+        .select('*, indicator_config:config_id(*)')
+        .eq('user_id', session.user_id)
+        .eq('is_active', true)
+        .order('slot_number');
+
+      interface SlotIteration {
+        config: any;
+        slotId: string | null;
+        capitalPercent: number;
+        slotName: string;
+      }
+
+      const slotIterations: SlotIteration[] = [];
+
+      if (activeSlots && activeSlots.length > 0) {
+        // Validate total capital allocation
+        const totalCapital = activeSlots.reduce((sum: number, s: any) => sum + Number(s.capital_percent), 0);
+        if (totalCapital > 100) {
+          console.error(`🚨 OVER-ALLOCATION: ${totalCapital}% > 100% — blocking ALL trades for user ${session.user_id}`);
+          continue;
+        }
+        console.log(`📊 STRATEGY SLOTS: ${activeSlots.length} active slots, total capital: ${totalCapital}%`);
+
+        for (const slot of activeSlots) {
+          const slotConfig = (slot as any).indicator_config;
+          if (slotConfig && slotConfig.enabled) {
+            slotIterations.push({
+              config: slotConfig,
+              slotId: slot.id,
+              capitalPercent: Number(slot.capital_percent),
+              slotName: slot.name,
+            });
+          } else {
+            console.log(`⏭️ Slot "${slot.name}" (${slot.id}): config missing or disabled, skipping`);
+          }
+        }
+      } else {
+        // Legacy mode: use session's indicator_config
+        const legacyConfig = session.indicator_config;
+        if (legacyConfig && legacyConfig.enabled) {
+          slotIterations.push({
+            config: legacyConfig,
+            slotId: null,
+            capitalPercent: 100,
+            slotName: 'Legacy',
+          });
+        }
+      }
+
+      if (slotIterations.length === 0) continue;
+
+      for (const { config, slotId, capitalPercent, slotName } of slotIterations) {
+        console.log(`\n🎰 === SLOT: "${slotName}" | ID: ${slotId ?? 'legacy'} | Capital: ${capitalPercent}% ===`);
+        if (!config || !config.enabled) continue;
 
       // Calculate strategy identifier for this config
       const strategyHash = await getStrategyIdentifier(config);
@@ -2752,15 +2811,21 @@ serve(async (req) => {
       let scanDebugCount = 0;
       const MAX_DEBUG_SCANS = 50;
 
-      // Check current open positions
-      const { data: positions } = await supabaseClient
+      // Check current open positions (filtered by slot_id when using slots)
+      let positionsQuery = supabaseClient
         .from('positions')
         .select('*')
         .eq('user_id', session.user_id)
         .eq('status', 'OPEN');
+      
+      if (slotId) {
+        positionsQuery = positionsQuery.eq('slot_id', slotId);
+      }
+      
+      const { data: positions } = await positionsQuery;
 
       if (positions && positions.length >= config.max_open_positions) {
-        console.log(`Max positions reached for user ${session.user_id}`);
+        console.log(`Max positions reached for ${slotName} (slot: ${slotId ?? 'legacy'}): ${positions.length}/${config.max_open_positions}`);
         continue;
       }
 
@@ -2939,14 +3004,16 @@ serve(async (req) => {
             user_id: session.user_id,
             symbol,
             signal: filteredSignal,
+            slot_id: slotId,
             indicators: {
               ...analysis.indicators,
               trend: trend,
-              higherTrend: higherTrend, // Add higher trend to scan_results
-              trend_higher: higherTrend, // Also save as trend_higher for compatibility
+              higherTrend: higherTrend,
+              trend_higher: higherTrend,
               scan_interval: config.scan_interval,
               trend_timeframe: config.trend_timeframe,
-              filterStatus: analysis.filterStatus, // Include filter evaluation results
+              filterStatus: analysis.filterStatus,
+              slot_name: slotName,
             },
             stop_loss: analysis.stopLoss,
             take_profit: analysis.takeProfit,
@@ -3540,7 +3607,7 @@ serve(async (req) => {
           
           // Calculate position size using BOTH methods, take the smaller
           // Method 1: Risk-based (current logic)
-          const riskAmount = balance * (config.risk_per_trade_percent / 100);
+          const riskAmount = slotBalance * (config.risk_per_trade_percent / 100);
           const stopLossDistance = Math.abs(analysis.indicators.price - analysis.stopLoss);
           const riskBasedQuantity = (riskAmount / stopLossDistance) * config.leverage;
           console.log(`📐 Risk-based: riskAmount=${riskAmount.toFixed(2)}, stopLossDistance=${stopLossDistance.toFixed(4)}, quantity=${riskBasedQuantity.toFixed(4)}`);
@@ -3550,14 +3617,17 @@ serve(async (req) => {
           // Example: ($100 × 20%) × 3 / $1 = $20 × 3 / $1 = 60 units
           // Position notional = 60 × $1 = $60
           // Required margin = $60 / 3 = $20 ✓
-          const marginToUse = balance * (config.position_size_percent / 100);
+          // Apply slot capital allocation: only use the slot's share of total balance
+          const slotBalance = balance * (capitalPercent / 100);
+          const marginToUse = slotBalance * (config.position_size_percent / 100);
           const positionNotional = marginToUse * config.leverage;
           const directQuantity = positionNotional / analysis.indicators.price;
           
           console.log(`📐 Direct percentage calculation:`);
-          console.log(`   Balance: $${balance.toFixed(2)}`);
+          console.log(`   Total Balance: $${balance.toFixed(2)}`);
+          console.log(`   Slot Capital: ${capitalPercent}% → Slot Balance: $${slotBalance.toFixed(2)}`);
           console.log(`   Position size %: ${config.position_size_percent}%`);
-          console.log(`   Margin to use: $${marginToUse.toFixed(2)} (${config.position_size_percent}% of balance)`);
+          console.log(`   Margin to use: $${marginToUse.toFixed(2)} (${config.position_size_percent}% of slot balance)`);
           console.log(`   Leverage: ${config.leverage}x`);
           console.log(`   Position notional: $${positionNotional.toFixed(2)} (margin × leverage)`);
           console.log(`   Price: $${analysis.indicators.price.toFixed(4)}`);
@@ -4550,9 +4620,7 @@ serve(async (req) => {
           }
 
           // Save position to database with verified Binance data and indicators
-          const { data: insertedPosition, error: insertError } = await supabaseClient
-            .from('positions')
-            .insert({
+          const positionInsertData: any = {
               user_id: session.user_id,
               symbol,
               side: signal,
@@ -4569,8 +4637,15 @@ serve(async (req) => {
               strategy_hash: strategyHash,
               open_reason: openReason,
               opened_at: openedAtNow.toISOString(),
-              indicators_snapshot: comprehensiveSnapshot,
-            })
+              indicators_snapshot: { ...comprehensiveSnapshot, slot_id: slotId, slot_name: slotName },
+          };
+          if (slotId) {
+            positionInsertData.slot_id = slotId;
+          }
+
+          const { data: insertedPosition, error: insertError } = await supabaseClient
+            .from('positions')
+            .insert(positionInsertData)
             .select()
             .single();
 
@@ -4603,14 +4678,18 @@ serve(async (req) => {
           }
 
           // 🛡️ RACE CONDITION GUARD: Check if we exceeded max positions after insert
-          const { data: finalPositionCheck } = await supabaseClient
+          let raceCheckQuery = supabaseClient
             .from('positions')
             .select('id')
             .eq('user_id', session.user_id)
             .eq('status', 'OPEN');
+          if (slotId) {
+            raceCheckQuery = raceCheckQuery.eq('slot_id', slotId);
+          }
+          const { data: finalPositionCheck } = await raceCheckQuery;
           
           if (finalPositionCheck && finalPositionCheck.length > config.max_open_positions) {
-            console.log(`⚠️ RACE CONDITION DETECTED: ${finalPositionCheck.length} open positions exceed limit of ${config.max_open_positions}`);
+            console.log(`⚠️ RACE CONDITION DETECTED: ${finalPositionCheck.length} open positions exceed limit of ${config.max_open_positions} for slot ${slotName}`);
             console.log(`   Closing newest position: ${symbol} (id: ${insertedPosition.id})`);
             
             // Mark position as closed in DB
@@ -4667,6 +4746,7 @@ serve(async (req) => {
           console.error(`   This position may need manual intervention\n`);
         }
       } // End of signalsToTrade loop
+      } // End of slotIterations loop
     }
 
     // Include FULL runtime config info in response for debugging
