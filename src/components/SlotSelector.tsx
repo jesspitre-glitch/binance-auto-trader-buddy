@@ -126,14 +126,6 @@ export const SlotSelector = ({
         });
         return;
       }
-      if (!slot.config_id) {
-        toast({
-          title: "Ingen strategi valgt",
-          description: "Vælg en strategi-konfiguration før du aktiverer slotten",
-          variant: "destructive",
-        });
-        return;
-      }
     }
 
     try {
