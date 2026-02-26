@@ -10,9 +10,10 @@ import { ExportTradesDialog } from "./ExportTradesDialog";
 
 interface TradeHistoryTableProps {
   slotId?: string | null;
+  includeLegacyData?: boolean;
 }
 
-export const TradeHistoryTable = ({ slotId }: TradeHistoryTableProps) => {
+export const TradeHistoryTable = ({ slotId, includeLegacyData = false }: TradeHistoryTableProps) => {
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTrade, setSelectedTrade] = useState<any>(null);
@@ -28,7 +29,9 @@ export const TradeHistoryTable = ({ slotId }: TradeHistoryTableProps) => {
         .limit(200);
 
       if (slotId) {
-        query = query.eq("slot_id", slotId);
+        query = includeLegacyData
+          ? query.or(`slot_id.eq.${slotId},slot_id.is.null`)
+          : query.eq("slot_id", slotId);
       }
 
       const { data, error } = await query;

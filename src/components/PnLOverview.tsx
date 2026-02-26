@@ -35,9 +35,10 @@ type PnlTotalMode = "strict_trades" | "binance_overview";
 
 interface PnLOverviewProps {
   slotId?: string | null;
+  includeLegacyData?: boolean;
 }
 
-export const PnLOverview = ({ slotId }: PnLOverviewProps) => {
+export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewProps) => {
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<TimeRange>("24h");
   const [pnlMode, setPnlMode] = useState<PnlTotalMode>("binance_overview");
@@ -208,7 +209,9 @@ export const PnLOverview = ({ slotId }: PnLOverviewProps) => {
           .range(from, to);
 
         if (slotId) {
-          tradeQuery = tradeQuery.eq("slot_id", slotId);
+          tradeQuery = includeLegacyData
+            ? tradeQuery.or(`slot_id.eq.${slotId},slot_id.is.null`)
+            : tradeQuery.eq("slot_id", slotId);
         }
 
         const { data, error } = await tradeQuery;

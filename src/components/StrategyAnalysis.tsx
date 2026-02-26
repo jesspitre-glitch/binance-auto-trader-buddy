@@ -36,9 +36,10 @@ type SortDirection = 'asc' | 'desc';
 
 interface StrategyAnalysisProps {
   slotId?: string | null;
+  includeLegacyData?: boolean;
 }
 
-export const StrategyAnalysis = ({ slotId }: StrategyAnalysisProps) => {
+export const StrategyAnalysis = ({ slotId, includeLegacyData = false }: StrategyAnalysisProps) => {
   const [strategies, setStrategies] = useState<StrategyStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStrategy, setSelectedStrategy] = useState<{ stats: StrategyStats; trades: any[] } | null>(null);
@@ -202,7 +203,9 @@ export const StrategyAnalysis = ({ slotId }: StrategyAnalysisProps) => {
           .range(offset, offset + batchSize - 1);
 
         if (slotId) {
-          tradeQuery = tradeQuery.eq("slot_id", slotId);
+          tradeQuery = includeLegacyData
+            ? tradeQuery.or(`slot_id.eq.${slotId},slot_id.is.null`)
+            : tradeQuery.eq("slot_id", slotId);
         }
 
         const { data: batch, error } = await tradeQuery;
