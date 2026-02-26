@@ -135,7 +135,7 @@ export const PositionManager = ({ slotId }: PositionManagerProps) => {
       supabase.removeChannel(channel);
       clearInterval(timeInterval);
     };
-  }, []);
+  }, [slotId]);
 
   // Live Binance prices for open symbols
   const symbols = positions.map((p) => p.symbol).filter(Boolean);

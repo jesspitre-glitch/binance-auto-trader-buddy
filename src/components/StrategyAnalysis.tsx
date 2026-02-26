@@ -477,7 +477,7 @@ export const StrategyAnalysis = ({ slotId }: StrategyAnalysisProps) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedStrategy]);
+  }, [selectedStrategy, slotId]);
 
   if (loading) {
     return (
