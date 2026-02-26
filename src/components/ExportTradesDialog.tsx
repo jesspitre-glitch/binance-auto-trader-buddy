@@ -15,6 +15,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { Copy, Download, CalendarIcon } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
 import { compressTradeData, compressTradeDataCompact, formatWithLineBreaks } from "@/lib/tradeExportUtils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -42,9 +43,8 @@ export const ExportTradesDialog = ({
   const [customTo, setCustomTo] = useState<Date>();
   const [chunks, setChunks] = useState<string[]>([]);
   const [currentChunk, setCurrentChunk] = useState(0);
+  const [chunkSize, setChunkSize] = useState(100);
   const { toast } = useToast();
-
-  const CHUNK_SIZE = 100;
 
   const copyChunk = async (text: string, label: string) => {
     try {
@@ -111,8 +111,8 @@ export const ExportTradesDialog = ({
 
       // Split into chunks of CHUNK_SIZE
       const tradeChunks: string[] = [];
-      for (let i = 0; i < trades.length; i += CHUNK_SIZE) {
-        const slice = trades.slice(i, i + CHUNK_SIZE);
+      for (let i = 0; i < trades.length; i += chunkSize) {
+        const slice = trades.slice(i, i + chunkSize);
         const compressed = exportMode === "COMPACT"
           ? compressTradeDataCompact(slice)
           : compressTradeData(slice);
@@ -172,7 +172,7 @@ export const ExportTradesDialog = ({
               <div className="space-y-1">
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>Trin {currentChunk + 1} af {chunks.length}</span>
-                  <span>{chunks.length * CHUNK_SIZE <= 130 ? `${chunks.length * CHUNK_SIZE}` : `op til ${chunks.length * CHUNK_SIZE}`} handler i alt</span>
+                  <span>{chunks.length * chunkSize <= 130 ? `${chunks.length * chunkSize}` : `op til ${chunks.length * chunkSize}`} handler i alt</span>
                 </div>
                 <div className="flex gap-1">
                   {chunks.map((_, i) => (
@@ -367,6 +367,22 @@ export const ExportTradesDialog = ({
                   <p className="text-amber-600 dark:text-amber-400">⚠ Stor fil - kun til deep debug</p>
                 </div>
               )}
+
+              {/* Chunk size selector */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Handler pr. blok</Label>
+                <div className="flex items-center gap-3">
+                  <Slider
+                    value={[chunkSize]}
+                    onValueChange={([v]) => setChunkSize(v)}
+                    min={25}
+                    max={200}
+                    step={25}
+                    className="flex-1"
+                  />
+                  <span className="text-sm font-mono w-10 text-right">{chunkSize}</span>
+                </div>
+              </div>
 
               <Button onClick={fetchAndExport} className="w-full">
                 <Download className="h-4 w-4 mr-2" />
