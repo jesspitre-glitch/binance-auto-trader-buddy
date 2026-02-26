@@ -81,7 +81,7 @@ export const ScanResults = ({ slotId }: ScanResultsProps) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [slotId]);
 
   const fetchConfig = async () => {
     try {

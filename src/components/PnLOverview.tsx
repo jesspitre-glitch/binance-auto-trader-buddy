@@ -674,7 +674,7 @@ export const PnLOverview = ({ slotId }: PnLOverviewProps) => {
   useEffect(() => {
     if (timeRange === "custom" && (!customFrom || !customTo)) return;
     fetchPnLData(timeRange);
-  }, [timeRange, pnlMode, customFrom, customTo]);
+  }, [timeRange, pnlMode, customFrom, customTo, slotId]);
 
   // Separate effect for realtime subscription - only set up once
   // Non-blocking: errors don't prevent the component from rendering
