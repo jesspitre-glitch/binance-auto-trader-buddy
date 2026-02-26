@@ -1,330 +1,202 @@
+# Implementeringsplan: Strategy Slots (Multi-Strategi Trading)
 
-
-# Implementeringsplan: Higher Timeframe Side-Gate (Regime Control)
-
-## Version 2.2.5 - Final med Signal-Audit og Tie-Breaker
+## Version 1.0
 
 ---
 
-## Oversigt
+## Koncept
 
-Denne plan implementerer et **Side-Gate** system i `supabase/functions/auto-trade-quant/index.ts` hvor Higher Timeframe (HTF) trend bestemmer hvilke retninger (LONG/SHORT) der må evalueres **før** signal-analyse starter.
-
----
-
-## Hovedkrav
-
-| # | Krav | Beskrivelse |
-|---|------|-------------|
-| 1 | Side-gate FØR analyse | HTF beregnes først, bestemmer `allowedSides` |
-| 2 | Gated sider = null | Ingen evaluering, ingen logs, ingen push til arrays |
-| 3 | Side-specifik hard filters | LONG og SHORT har separate filter-resultater |
-| 4 | Side-specifik signal beslutning | Hver side bruger egne counts og hardPass |
-| 5 | EMA er quality-only | Ikke retningsvalg, kun kvalitetstjek |
-| 6 | Post-HTF kun audit | Ingen blocking efter analyzeSignal |
-| 7 | Komplet audit logging | side_gate sektion i indicators_snapshot |
+Kør flere strategier (slots) samtidigt med én fælles scanner. Hver slot har sin egen indicator_config, kapital-andel, handler, positioner og stats. Scanneren kører ÉN gang og evaluerer alle aktive slots' configs mod scan-resultatet.
 
 ---
 
-## Nye Punkter i denne Version
+## Arkitektur
 
-### 1. Signal-Booleans Gemmes i Snapshot (Audit)
-
-`longSignal` og `shortSignal` gemmes eksplicit i `indicators_snapshot.signal_decision`:
-
-```text
-signal_decision: {
-  longSignal: boolean,           // true/false (aldrig null)
-  shortSignal: boolean,          // true/false (aldrig null)
-  longConditionsMet: number,
-  shortConditionsMet: number,
-  requiredConditions: number,
-  finalSignal: 'LONG' | 'SHORT' | 'NONE',
-  tieBreaker: string | null,     // LONG_MORE_CONDITIONS | SHORT_MORE_CONDITIONS | TIE_NO_SIGNAL | null
-}
+```
+┌─────────────────────────────────────┐
+│           Scanner (1 instans)        │
+│  Henter klines for alle symbols      │
+│  Returnerer rå markedsdata           │
+└──────────────┬──────────────────────┘
+               │
+     ┌─────────┼─────────┐
+     ▼         ▼         ▼
+  Slot 1    Slot 2    Slot 3
+  Config A  Config B  Config C
+  25% cap   10% cap   15% cap
+  Egne pos  Egne pos  Egne pos
+  Egne stats Egne stats Egne stats
 ```
 
-**Formål:** Verificere i data at gated side altid ender som `false` og aldrig `true` ved fejl.
+**Nøgleprincip:** Scanneren henter markedsdata én gang. `auto-trade-quant` evaluerer signaler for HVER aktiv slot's config mod samme data. Hver slot har sin egen kapital-pool og positionsgrænse.
 
 ---
 
-### 2. Deterministisk Tie-Breaker
+## Database-ændringer
 
-Når begge signaler er `true`:
+### Ny tabel: `strategy_slots`
 
-```typescript
-let signal: 'LONG' | 'SHORT' | 'NONE' = 'NONE';
-let tieBreakerUsed: string | null = null;
-
-if (longSignal && shortSignal) {
-  if (longConditionsMet > shortConditionsMet) {
-    signal = 'LONG';
-    tieBreakerUsed = 'LONG_MORE_CONDITIONS';
-  } else if (shortConditionsMet > longConditionsMet) {
-    signal = 'SHORT';
-    tieBreakerUsed = 'SHORT_MORE_CONDITIONS';
-  } else {
-    signal = 'NONE';
-    tieBreakerUsed = 'TIE_NO_SIGNAL';
-  }
-} else if (longSignal) {
-  signal = 'LONG';
-} else if (shortSignal) {
-  signal = 'SHORT';
-}
+```sql
+CREATE TABLE public.strategy_slots (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL,
+  slot_number INTEGER NOT NULL,
+  name TEXT NOT NULL DEFAULT 'Slot 1',
+  config_id UUID REFERENCES public.indicator_config(id),
+  capital_percent NUMERIC NOT NULL DEFAULT 25,
+  is_active BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(user_id, slot_number)
+);
 ```
 
-**Regel:** Vælg den side med flest soft conditions met. Ved tie, ingen trade.
+**Felter:**
+- `slot_number`: 1, 2, 3... (unik per bruger)
+- `config_id`: Hvilken indicator_config denne slot bruger
+- `capital_percent`: % af total Binance-balance allokeret til denne slot
+- `is_active`: Om slotten kører (uafhængigt af trading_session)
 
----
+### Ændring: `positions` tabel
 
-### 3. Tie-Breaker Logges og Gemmes
-
-`tieBreakerUsed` gemmes i snapshot:
-- `LONG_MORE_CONDITIONS` - LONG valgt pga. flere conditions
-- `SHORT_MORE_CONDITIONS` - SHORT valgt pga. flere conditions
-- `TIE_NO_SIGNAL` - Tie → ingen trade
-- `null` - Kun én side var true (normal case)
-
----
-
-### 4. Gated Side Signal = `false` (Ikke `null`)
-
-```typescript
-const longSignal = longAllowed && 
-                   longConditionsMet >= requiredConditions && 
-                   filterStatus.long.allPassed === true;
-// Hvis longAllowed=false → longSignal=false (short-circuit)
-
-const shortSignal = shortAllowed && 
-                    shortConditionsMet >= requiredConditions && 
-                    filterStatus.short.allPassed === true;
-// Hvis shortAllowed=false → shortSignal=false (short-circuit)
+```sql
+ALTER TABLE public.positions ADD COLUMN slot_id UUID REFERENCES public.strategy_slots(id);
 ```
 
-**Begrundelse:** `null` bruges til indikator-/audit-felter ("ikke evalueret"), men trade-beslutning skal være entydigt nej.
+### Ændring: `trade_history` tabel
+
+```sql
+ALTER TABLE public.trade_history ADD COLUMN slot_id UUID REFERENCES public.strategy_slots(id);
+```
+
+### Ændring: `scan_results` tabel
+
+```sql
+ALTER TABLE public.scan_results ADD COLUMN slot_id UUID REFERENCES public.strategy_slots(id);
+```
 
 ---
 
-## Komplet Teknisk Specifikation
+## Backend-ændringer
 
-### Fil der Ændres
+### `auto-trade-quant` (signal-evaluering)
 
-| Fil | Estimeret Ændring |
-|-----|-------------------|
-| `supabase/functions/auto-trade-quant/index.ts` | ~550 linjer |
+**Nuværende flow:**
+1. Modtag symbol + klines
+2. Hent aktiv config fra trading_session.active_config_id
+3. Evaluér signal → åbn position hvis signal
 
-### Ny Signatur for analyzeSignal()
+**Nyt flow:**
+1. Modtag symbol + klines (uændret)
+2. Hent ALLE aktive slots: `strategy_slots WHERE is_active = true`
+3. For HVER slot:
+   a. Hent slottens config via `slot.config_id`
+   b. Evaluér signal med denne config
+   c. Hvis signal → beregn position size ud fra `(total_balance × slot.capital_percent / 100)`
+   d. Tjek slot-specifik max_open_positions (kun positioner med denne slot_id)
+   e. Åbn position med `slot_id` tagget
+
+**Serialisering:** Slots evalueres sekventielt i samme scan-cycle for at undgå race conditions.
+
+### `continuous-scan-quant` (scanner)
+
+**Ingen ændring i scan-logik.** Scanneren henter stadig klines for alle symbols. Den kalder `auto-trade-quant` som normalt. Det er `auto-trade-quant` der itererer over slots.
+
+### `monitor-positions` / `auto-monitor-quant` (exit-logik)
+
+**Ændring:** Når positioner monitoreres, hentes den tilhørende slots config via `position.slot_id → strategy_slots.config_id → indicator_config`. Exit-regler bruger slottens config, ikke trading_session.active_config_id.
+
+### Kapital-validering
 
 ```typescript
-function analyzeSignal(
-  klines: any[], 
-  trendKlines: any[], 
-  config: IndicatorConfig,
-  allowedSides: ('LONG' | 'SHORT')[] = ['LONG', 'SHORT']
-)
-```
-
-### Side-Gate Flow (serve() funktion)
-
-```typescript
-// 1. Beregn HTF før analyzeSignal
-let allowedSides: ('LONG' | 'SHORT')[] = ['LONG', 'SHORT'];
-let higherTrend: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = 'NEUTRAL';
-let sideGateReason: string = 'HTF disabled';
-
-if (config.higher_trend_enabled) {
-  const minKlinesRequired = getMinimumKlinesForHTF(config);
-  const htfKlines = await fetchKlines(symbol, config.higher_trend_timeframe, config.klines_limit);
-  
-  if (!htfKlines || htfKlines.length < minKlinesRequired) {
-    console.warn(`HTF klines < required: got ${htfKlines?.length ?? 0}, need ${minKlinesRequired}`);
-    higherTrend = 'NEUTRAL';
-    sideGateReason = `HTF fallback NEUTRAL (insufficient data)`;
-  } else {
-    higherTrend = analyzeHigherTrend(htfKlines, config);
-    if (higherTrend === 'BULLISH') {
-      allowedSides = ['LONG'];
-      sideGateReason = `HTF ${config.higher_trend_timeframe} = BULLISH`;
-    } else if (higherTrend === 'BEARISH') {
-      allowedSides = ['SHORT'];
-      sideGateReason = `HTF ${config.higher_trend_timeframe} = BEARISH`;
-    } else {
-      sideGateReason = `HTF ${config.higher_trend_timeframe} = NEUTRAL`;
-    }
-  }
+// I auto-trade-quant, før position åbnes:
+const totalAllocated = activeSlots.reduce((sum, s) => sum + s.capital_percent, 0);
+if (totalAllocated > 100) {
+  console.error(`Over-allokering: ${totalAllocated}% > 100%`);
+  return; // Bloker nye trades
 }
 
-// 2. Kald analyzeSignal med allowedSides
-const analysis = analyzeSignal(klines, trendKlines, config, allowedSides);
-```
-
-### HTF Minimum Klines Beregning
-
-```typescript
-function getMinimumKlinesForHTF(config: IndicatorConfig): number {
-  const emaFast = config.ema_fast ?? 9;
-  const emaMedium = config.ema_medium ?? 21;
-  const emaSlow = config.ema_slow ?? 55;
-  
-  const minRequired = Math.max(emaFast, emaMedium, emaSlow);
-  const buffer = Math.ceil(minRequired * 0.5);
-  
-  return minRequired + buffer;
-}
-```
-
-### Ny filterStatus Struktur
-
-```text
-filterStatus:
-+-- neutral (kun ATR + ADX)
-|   +-- atr: { passed: null|false|true }
-|   +-- adx: { passed: null|false|true }
-+-- long (side-specifik)
-|   +-- evaluated: boolean (= longAllowed)
-|   +-- emaSpread, emaQuality, volume, macdDirection, etc.
-|   +-- allPassed: null|false|true
-+-- short (side-specifik)
-    +-- evaluated: boolean (= shortAllowed)
-    +-- emaSpread, emaQuality, volume, macdDirection, etc.
-    +-- allPassed: null|false|true
-```
-
-### Condition Arrays (Strikt Conditional)
-
-```typescript
-const longConditions: boolean[] = [];
-const shortConditions: boolean[] = [];
-
-// Alle push() inde i respektive if-blokke
-if (config.ema_enabled && emaDataValid) {
-  if (longAllowed) {
-    const emaLongTrend = /* beregning */;
-    longConditions.push(emaLongTrend);
-  }
-  if (shortAllowed) {
-    const emaShortTrend = /* beregning */;
-    shortConditions.push(emaShortTrend);
-  }
-}
-
-const longConditionsMet = longConditions.filter(Boolean).length;
-const shortConditionsMet = shortConditions.filter(Boolean).length;
-```
-
-### Neutral Filter Logik
-
-```typescript
-// null = gated/disabled → behandles som pass
-const neutralFiltersPassed = !neutralFilters.some(f => f === false);
-```
-
-### Signal Beslutning med Tie-Breaker
-
-```typescript
-const longSignal = longAllowed && 
-                   longConditionsMet >= requiredConditions && 
-                   filterStatus.long.allPassed === true;
-
-const shortSignal = shortAllowed && 
-                    shortConditionsMet >= requiredConditions && 
-                    filterStatus.short.allPassed === true;
-
-let signal: 'LONG' | 'SHORT' | 'NONE' = 'NONE';
-let tieBreakerUsed: string | null = null;
-
-if (longSignal && shortSignal) {
-  if (longConditionsMet > shortConditionsMet) {
-    signal = 'LONG';
-    tieBreakerUsed = 'LONG_MORE_CONDITIONS';
-  } else if (shortConditionsMet > longConditionsMet) {
-    signal = 'SHORT';
-    tieBreakerUsed = 'SHORT_MORE_CONDITIONS';
-  } else {
-    signal = 'NONE';
-    tieBreakerUsed = 'TIE_NO_SIGNAL';
-    console.warn(`TIE: Both signals true with equal conditions → NONE`);
-  }
-} else if (longSignal) {
-  signal = 'LONG';
-} else if (shortSignal) {
-  signal = 'SHORT';
-}
-```
-
-### Invariant Clamp (Sikkerhed)
-
-```typescript
-if (signal === 'LONG' && !longAllowed) {
-  console.error(`INVARIANT VIOLATION: LONG signal but gated!`);
-  signal = 'NONE';
-}
-if (signal === 'SHORT' && !shortAllowed) {
-  console.error(`INVARIANT VIOLATION: SHORT signal but gated!`);
-  signal = 'NONE';
-}
-```
-
-### indicators_snapshot Udvidelse
-
-```typescript
-const indicators = {
-  // ... eksisterende felter ...
-  
-  signal_decision: {
-    longSignal: longSignal,
-    shortSignal: shortSignal,
-    longConditionsMet: longConditionsMet,
-    shortConditionsMet: shortConditionsMet,
-    requiredConditions: requiredConditions,
-    finalSignal: signal,
-    tieBreaker: tieBreakerUsed,
-  },
-  
-  side_gate: {
-    higher_trend_enabled: config.higher_trend_enabled,
-    higher_trend_timeframe: config.higher_trend_timeframe,
-    higher_trend_result: higherTrend,
-    gate_reason: sideGateReason,
-    allowed_sides: allowedSides,
-    htf_min_klines_required: minKlinesRequired,
-    htf_actual_klines: htfKlines?.length ?? 0,
-    htf_klines_sufficient: (htfKlines?.length ?? 0) >= minKlinesRequired,
-  },
-};
+const slotBalance = totalBalance * (slot.capital_percent / 100);
+const margin = slotBalance * (config.position_size_percent / 100);
+const notional = margin * config.leverage;
+const quantity = notional / currentPrice;
 ```
 
 ---
 
-## Forventet Adfærd
+## UI-ændringer
 
-| HTF Trend | allowedSides | longSignal | shortSignal | Final Signal |
-|-----------|--------------|------------|-------------|--------------|
-| BULLISH | ['LONG'] | true/false | **false** | LONG eller NONE |
-| BEARISH | ['SHORT'] | **false** | true/false | SHORT eller NONE |
-| NEUTRAL (begge true, LONG flere) | ['LONG','SHORT'] | true | true | LONG (tie-breaker) |
-| NEUTRAL (begge true, tie) | ['LONG','SHORT'] | true | true | NONE (TIE_NO_SIGNAL) |
-| NEUTRAL (kun SHORT true) | ['LONG','SHORT'] | false | true | SHORT |
-| HTF disabled | ['LONG','SHORT'] | true/false | true/false | Normal logik |
-| Data insufficient | ['LONG','SHORT'] | true/false | true/false | Normal logik (fallback NEUTRAL) |
+### 1. Slot-selector (top-bar)
+
+Placering: Under "Trading Dashboard" header, over strategi-indstillinger.
+
+```
+┌──────────────────────────────────────────────┐
+│  [Slot 1 ●]  [Slot 2]  [Slot 3]  [+ Ny Slot] │
+│  "Trend Follow" 25%   "Reversal" 10%          │
+└──────────────────────────────────────────────┘
+```
+
+- Aktiv slot fremhævet
+- Viser navn + kapital%
+- Grøn prik hvis slotten kører
+- "+ Ny Slot" knap for at tilføje
+
+### 2. Slot-indstillinger
+
+Når en slot er valgt:
+- Vælg config (dropdown af indicator_configs)
+- Indstil kapital% (med validering: sum ≤ 100%)
+- Aktivér/deaktivér slot
+- Slet slot
+
+### 3. Filtrering af alle tabs
+
+Når en slot er valgt, filtrerer ALLE tabs på `slot_id`:
+- **P&L:** Kun handler fra denne slot
+- **Historik:** Kun handler fra denne slot
+- **Scan:** Kun scan-resultater fra denne slot
+- **Config:** Viser slottens config
+- **Positioner:** Kun positioner fra denne slot
+
+### 4. "Alle Slots" aggregeret view
+
+En ekstra "tab" der viser samlet overblik:
+- Total P&L på tværs af slots
+- Kapital-fordeling pie chart
+- Performance-sammenligning
 
 ---
 
-## Kritiske Invarianter (14 punkter)
+## Migrationsplan (rækkefølge)
 
-1. Alle thresholds fra UI config - ingen hardcodede tal
-2. EMA er side-specifik - ikke i neutral kategori
-3. Neutral = kun ATR + ADX
-4. `null` = gated/disabled (for indicator felter), `false` = fejlet
-5. Gated sider: alle side-specifikke passed/reason/audit felter sættes til `null`
-6. **Gated side signal = `false` (ikke `null`):** `longAllowed=false` → `longSignal=false`
-7. Neutral filters passerer når ingen er `false` (true eller null er OK)
-8. `filterStatus.long.evaluated` / `filterStatus.short.evaluated` = `longAllowed` / `shortAllowed`
-9. Alle `push()` til condition-arrays inde i `if (longAllowed)` / `if (shortAllowed)` blokke
-10. Final invariant clamp forhindrer gated signal
-11. HTF min-klines beregnes fra UI-config parametre
-12. HTF fallback = NEUTRAL ved fejl eller insufficient data
-13. **Signal booleans i snapshot:** `longSignal`/`shortSignal` i `indicators_snapshot.signal_decision`
-14. **Deterministisk tie-breaker:** Ved begge signaler true, vælg siden med flest conditions. Ved tie, NONE
+### Fase 1: Database
+1. Opret `strategy_slots` tabel med RLS
+2. Tilføj `slot_id` kolonne til `positions`, `trade_history`, `scan_results`
+3. Opret default Slot 1 for eksisterende bruger med nuværende active_config_id
 
+### Fase 2: Backend
+4. Opdater `auto-trade-quant` til at iterere over aktive slots
+5. Opdater `monitor-positions` til at bruge slot-specifik config
+6. Tilføj kapital-validering
+
+### Fase 3: UI
+7. Tilføj SlotSelector komponent
+8. Tilføj slot-filtrering i alle tabs
+9. Opdater PositionManager til at vise slot-info
+10. Opdater TradingDashboard til at bruge slot-context
+
+### Fase 4: Bagudkompatibilitet
+11. Eksisterende positioner/handler uden slot_id vises under "Legacy" eller Slot 1
+12. trading_session.active_config_id bruges som fallback hvis ingen slots findes
+
+---
+
+## Sikkerhed & Invarianter
+
+1. **Sum ≤ 100%:** Backend BLOKERER trades hvis summen af aktive slots' capital_percent > 100%
+2. **Slot-isolering:** En slots SL/TP/trailing påvirker IKKE andre slots
+3. **Race condition:** Slots evalueres sekventielt i scan-cycle
+4. **RLS:** strategy_slots har user_id-baseret RLS (som alle andre tabeller)
+5. **Config-uafhængighed:** Hver slot kan bruge samme eller forskellige configs
+6. **Sletning:** Slot kan kun slettes hvis den ikke har åbne positioner
