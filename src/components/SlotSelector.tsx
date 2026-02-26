@@ -247,24 +247,6 @@ export const SlotSelector = ({
               <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
             </div>
             <div>
-              <Label>Strategi</Label>
-              <Select
-                value={editConfigId ?? ""}
-                onValueChange={(v) => setEditConfigId(v || null)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Vælg strategi" />
-                </SelectTrigger>
-                <SelectContent>
-                  {configs.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
               <Label>Kapital-andel (%)</Label>
               <IntegerInput
                 value={editCapital}
