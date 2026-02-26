@@ -358,36 +358,58 @@ serve(async (req) => {
         // Tjek om trailing stop ALLEREDE er aktiveret (fra database)
         let trailingAlreadyActivated = position.trailing_stop != null && position.trailing_stop > 0;
         
-        // 🔴 FIX: Hent den AKTIVE strategi fra trading_session - ikke bare en tilfældig config!
-        // Dette sikrer at timeout og andre indstillinger følger den valgte strategi i UI
-        const { data: sessionData } = await supabaseClient
-          .from('trading_session')
-          .select('active_config_id')
-          .eq('user_id', position.user_id)
-          .single();
-        
+        // 🔴 STRATEGY SLOTS: Resolve config via slot_id first, then fall back to trading_session
         let configData: any = null;
         
-        if (sessionData?.active_config_id) {
-          // Hent den AKTIVE strategi
-          const { data: activeConfig } = await supabaseClient
-            .from('indicator_config')
-            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct')
-            .eq('id', sessionData.active_config_id)
+        if (position.slot_id) {
+          // Position belongs to a strategy slot — get config from slot's config_id
+          const { data: slotData } = await supabaseClient
+            .from('strategy_slots')
+            .select('config_id, name')
+            .eq('id', position.slot_id)
             .single();
-          configData = activeConfig;
-          console.log(`📋 Bruger AKTIV strategi (${sessionData.active_config_id}): timeout=${configData?.max_position_duration_minutes}min`);
-        } else {
-          // Fallback til første config hvis ingen session
-          const { data: fallbackConfig } = await supabaseClient
-            .from('indicator_config')
-            .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct')
+          
+          if (slotData?.config_id) {
+            const { data: slotConfig } = await supabaseClient
+              .from('indicator_config')
+              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct')
+              .eq('id', slotData.config_id)
+              .single();
+            configData = slotConfig;
+            console.log(`📋 Bruger SLOT config "${slotData.name}" (slot: ${position.slot_id}, config: ${slotData.config_id}): timeout=${configData?.max_position_duration_minutes}min`);
+          } else {
+            console.warn(`⚠️ Slot ${position.slot_id} har ingen config_id — falder tilbage til trading_session`);
+          }
+        }
+        
+        if (!configData) {
+          // Fallback: use trading_session's active config (legacy behavior)
+          const { data: sessionData } = await supabaseClient
+            .from('trading_session')
+            .select('active_config_id')
             .eq('user_id', position.user_id)
-            .order('created_at', { ascending: false })
-            .limit(1)
             .single();
-          configData = fallbackConfig;
-          console.warn(`⚠️ Ingen aktiv session fundet - bruger seneste config: timeout=${configData?.max_position_duration_minutes}min`);
+          
+          if (sessionData?.active_config_id) {
+            const { data: activeConfig } = await supabaseClient
+              .from('indicator_config')
+              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct')
+              .eq('id', sessionData.active_config_id)
+              .single();
+            configData = activeConfig;
+            console.log(`📋 Bruger AKTIV strategi (${sessionData.active_config_id}): timeout=${configData?.max_position_duration_minutes}min`);
+          } else {
+            // Fallback til første config hvis ingen session
+            const { data: fallbackConfig } = await supabaseClient
+              .from('indicator_config')
+              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct')
+              .eq('user_id', position.user_id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single();
+            configData = fallbackConfig;
+            console.warn(`⚠️ Ingen aktiv session fundet - bruger seneste config: timeout=${configData?.max_position_duration_minutes}min`);
+          }
         }
         
         // Break-even config fra database
@@ -2418,7 +2440,7 @@ serve(async (req) => {
               console.log(`📊 BINANCE-MATCH | ${position.symbol} ${position.side} | grossPnl=${finalGrossPnl.toFixed(4)} | binanceNetPnl=${binanceNetPnl.toFixed(4)} | realized=${income.realizedPnl.toFixed(4)} commission=${income.commission.toFixed(4)} funding=${income.fundingFee.toFixed(4)}`);
             }
 
-            const { error: historyError } = await supabaseClient.from('trade_history').insert({
+            const tradeHistoryInsert: any = {
               user_id: position.user_id,
               symbol: position.symbol,
               side: position.side,
@@ -2448,7 +2470,13 @@ serve(async (req) => {
               fees_pct_of_notional: feesPctOfNotional,
               fees_pending: true,
               fees_reconciled_at: null,
-            });
+            };
+            // Propagate slot_id from position to trade_history
+            if (position.slot_id) {
+              tradeHistoryInsert.slot_id = position.slot_id;
+            }
+
+            const { error: historyError } = await supabaseClient.from('trade_history').insert(tradeHistoryInsert);
 
             if (historyError) {
               console.error(`Failed to insert trade history for ${position.symbol}:`, historyError);
