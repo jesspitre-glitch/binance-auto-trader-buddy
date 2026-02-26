@@ -9,7 +9,11 @@ import { ScanResultVisual } from "./ScanResultVisual";
 import { LiveScanMonitor } from "./LiveScanMonitor";
 import { RegimeIndicator } from "./RegimeIndicator";
 
-export const ScanResults = () => {
+interface ScanResultsProps {
+  slotId?: string | null;
+}
+
+export const ScanResults = ({ slotId }: ScanResultsProps) => {
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
@@ -20,12 +24,17 @@ export const ScanResults = () => {
 
   const fetchResults = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("scan_results")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(100);
 
+      if (slotId) {
+        query = query.eq("slot_id", slotId);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       // Keep only the newest result per symbol
       const latestBySymbol = new Map<string, any>();

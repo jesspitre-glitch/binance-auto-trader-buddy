@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +15,7 @@ import { ScanResults } from "./ScanResults";
 import { StrategyAnalysis } from "./StrategyAnalysis";
 import { TradeHistoryTable } from "./TradeHistoryTable";
 import { ContinuousSyncControl } from "./ContinuousSyncControl";
+import { SlotSelector, Slot } from "./SlotSelector";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -30,15 +30,17 @@ export const TradingDashboard = () => {
   const [isActive, setIsActive] = useState(false);
   const [configs, setConfigs] = useState<any[]>([]);
   const [activeConfigId, setActiveConfigId] = useState<string | null>(null);
-  const [selectedConfig, setSelectedConfig] = useState<any>(null);
+  const [slots, setSlots] = useState<Slot[]>([]);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const { toast } = useToast();
 
+  // Get the selected slot's config for the Config tab
+  const selectedSlot = slots.find((s) => s.id === selectedSlotId);
+  const configIdForTab = selectedSlot?.config_id ?? activeConfigId;
+
   // Get the updated_at timestamp from the active config
-  const activeConfig = configs.find((c) => c.id === activeConfigId);
+  const activeConfig = configs.find((c) => c.id === configIdForTab);
   const lastUpdated = activeConfig?.updated_at ? new Date(activeConfig.updated_at) : null;
-  
-  // Debug logging for timestamp
-  console.log("[TradingDashboard] activeConfigId:", activeConfigId, "| updated_at from DB:", activeConfig?.updated_at, "| lastUpdated:", lastUpdated?.toISOString());
 
   const fetchConfigs = async () => {
     try {
@@ -54,11 +56,21 @@ export const TradingDashboard = () => {
         setActiveConfigId(data[0].id);
       }
     } catch (error: any) {
-      toast({
-        title: "Fejl",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Fejl", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const fetchSlots = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("strategy_slots")
+        .select("*")
+        .order("slot_number", { ascending: true });
+
+      if (error) throw error;
+      setSlots((data || []) as Slot[]);
+    } catch (error: any) {
+      console.error("Slots fetch error:", error);
     }
   };
 
@@ -69,10 +81,7 @@ export const TradingDashboard = () => {
   const fetchSession = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.log("No user found during session fetch");
-        return;
-      }
+      if (!user) return;
 
       const { data, error } = await supabase
         .from("trading_session")
@@ -80,10 +89,7 @@ export const TradingDashboard = () => {
         .eq("user_id", user.id)
         .maybeSingle();
 
-      if (error) {
-        console.error("Trading session query error:", error);
-        return;
-      }
+      if (error) return;
       
       if (data) {
         setIsActive(data.is_active || false);
@@ -91,7 +97,6 @@ export const TradingDashboard = () => {
           setActiveConfigId(data.active_config_id);
         }
         
-        // Auto-restart scanner if trading session is active but scanner is not
         if (data.is_active) {
           try {
             const { data: scannerStatus } = await supabase
@@ -101,7 +106,6 @@ export const TradingDashboard = () => {
               .maybeSingle();
             
             if (!scannerStatus?.is_active) {
-              console.log("Scanner inactive but trading active - restarting scanner");
               await supabase.functions.invoke('continuous-scan-quant', {
                 body: { action: 'start', interval_ms: 3000, user_id: user.id }
               }).catch(err => console.error("Scanner restart failed:", err));
@@ -119,12 +123,13 @@ export const TradingDashboard = () => {
   useEffect(() => {
     fetchConfigs();
     fetchSession();
+    fetchSlots();
 
-    // Refresh data when user returns to the tab
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         fetchConfigs();
         fetchSession();
+        fetchSlots();
       }
     };
 
@@ -135,15 +140,23 @@ export const TradingDashboard = () => {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "indicator_config" },
-        () => {
-          fetchConfigs();
-        }
+        () => { fetchConfigs(); }
+      )
+      .subscribe();
+
+    const slotsChannel = supabase
+      .channel("strategy-slots-listener")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "strategy_slots" },
+        () => { fetchSlots(); }
       )
       .subscribe();
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       supabase.removeChannel(channel);
+      supabase.removeChannel(slotsChannel);
     };
   }, []);
 
@@ -169,38 +182,27 @@ export const TradingDashboard = () => {
         active_config_id: activeConfigId,
       };
       
-      // Only set started_at when starting the bot
       if (newState) {
         updateData.started_at = new Date().toISOString();
       }
       
       const { error } = await supabase
         .from("trading_session")
-        .upsert(updateData, {
-          onConflict: 'user_id'
-        });
+        .upsert(updateData, { onConflict: 'user_id' });
 
       if (error) throw error;
 
-      // Start/stop continuous scanner with user_id for DB persistence
       const scannerAction = newState ? 'start' : 'stop';
-      const { data: scannerResult, error: scannerError } = await supabase.functions.invoke('continuous-scan-quant', {
-        body: { 
-          action: scannerAction, 
-          interval_ms: 3000,
-          user_id: user.id  // Pass user_id for DB-based scanner status
-        }
+      const { error: scannerError } = await supabase.functions.invoke('continuous-scan-quant', {
+        body: { action: scannerAction, interval_ms: 3000, user_id: user.id }
       });
 
       if (scannerError) {
-        console.error('Scanner toggle error:', scannerError);
         toast({
           title: "Scanner advarsel",
           description: `Kunne ikke ${scannerAction === 'start' ? 'starte' : 'stoppe'} continuous scanner`,
           variant: "destructive",
         });
-      } else {
-        console.log('Scanner result:', scannerResult);
       }
 
       setIsActive(newState);
@@ -208,15 +210,11 @@ export const TradingDashboard = () => {
       toast({
         title: newState ? "Trading startet" : "Trading stoppet",
         description: newState
-          ? "Auto-trading og continuous scanner er nu aktivt. Scanner kører i baggrunden."
+          ? "Auto-trading og continuous scanner er nu aktivt."
           : "Auto-trading og continuous scanner er stoppet",
       });
     } catch (error: any) {
-      toast({
-        title: "Fejl",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Fejl", description: error.message, variant: "destructive" });
     }
   };
 
@@ -235,34 +233,20 @@ export const TradingDashboard = () => {
             className="min-w-[120px] md:min-w-[160px] flex-1 md:flex-none h-12 md:h-auto"
           >
             {isActive ? (
-              <>
-                <Square className="mr-2 h-5 w-5" />
-                Stop Bot
-              </>
+              <><Square className="mr-2 h-5 w-5" />Stop Bot</>
             ) : (
-              <>
-                <Play className="mr-2 h-5 w-5" />
-                Start Bot
-              </>
+              <><Play className="mr-2 h-5 w-5" />Start Bot</>
             )}
           </Button>
           <div className="flex items-center gap-2 flex-wrap">
-            <span
-              className={`px-3 py-1 rounded-full text-sm font-medium ${
-                isActive
-                  ? "bg-success/10 text-success"
-                  : "bg-muted text-muted-foreground"
-              }`}
-            >
+            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+              isActive ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
+            }`}>
               {isActive ? "Aktiv" : "Inaktiv"}
             </span>
-            <span
-              className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1.5 ${
-                isActive
-                  ? "bg-success/10 text-success"
-                  : "bg-destructive/10 text-destructive"
-              }`}
-            >
+            <span className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1.5 ${
+              isActive ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
+            }`}>
               <Radio className={`h-3 w-3 ${isActive ? 'animate-pulse' : ''}`} />
               Scanner: {isActive ? 'Kører' : 'Stoppet'}
             </span>
@@ -270,64 +254,59 @@ export const TradingDashboard = () => {
         </div>
       </div>
 
+      {/* Strategy Slots */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle>Strategi Indstillinger</CardTitle>
-          {lastUpdated && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Clock className="h-3 w-3" />
-              <span>Gemt: {lastUpdated.toLocaleString("da-DK", { timeZone: "Europe/Copenhagen", hour: "2-digit", minute: "2-digit", second: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" })}</span>
-            </div>
-          )}
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Strategy Slots</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="flex-1">
-              <Label>Vælg Aktiv Strategi</Label>
-              <Select value={activeConfigId ?? ""} onValueChange={(v) => setActiveConfigId(v || null)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Vælg en strategi" />
-                </SelectTrigger>
-                <SelectContent>
-                  {configs.map((config) => (
-                    <SelectItem key={config.id} value={config.id}>
-                      <div className="flex items-center justify-between w-full pr-2">
-                        <span>{config.name} {config.enabled ? "" : "(Deaktiveret)"}</span>
-                        {config.id === activeConfigId && isActive && (
-                          <div className="flex items-center gap-1 px-2 py-0.5 bg-primary/20 text-primary rounded text-xs">
-                            <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
-                            Kører
-                          </div>
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {activeConfigId && (
-                <div className="mt-2 flex items-center gap-2 text-sm">
-                  <span className="text-muted-foreground">Valgt:</span>
-                  <span className="font-medium">
-                    {configs.find(c => c.id === activeConfigId)?.name || "Ukendt"}
-                  </span>
-                  {isActive && (
-                    <div className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded">
-                      <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
-                      <span className="text-xs font-medium">Aktiv</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+        <CardContent>
+          <SlotSelector
+            slots={slots}
+            selectedSlotId={selectedSlotId}
+            onSelectSlot={setSelectedSlotId}
+            configs={configs.map((c) => ({ id: c.id, name: c.name }))}
+            onSlotsChanged={fetchSlots}
+          />
         </CardContent>
       </Card>
 
+      {/* Legacy config selector — only show when no slots exist */}
+      {slots.length === 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle>Strategi Indstillinger</CardTitle>
+            {lastUpdated && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                <span>Gemt: {lastUpdated.toLocaleString("da-DK", { timeZone: "Europe/Copenhagen", hour: "2-digit", minute: "2-digit", second: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" })}</span>
+              </div>
+            )}
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <Label>Vælg Aktiv Strategi</Label>
+                <Select value={activeConfigId ?? ""} onValueChange={(v) => setActiveConfigId(v || null)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Vælg en strategi" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {configs.map((config) => (
+                      <SelectItem key={config.id} value={config.id}>
+                        {config.name} {config.enabled ? "" : "(Deaktiveret)"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <PortfolioBalance />
-
       <ContinuousSyncControl />
-
-      <PositionManager />
+      <PositionManager slotId={selectedSlotId} />
 
       <Tabs defaultValue="pnl">
         <TabsList className="grid w-full grid-cols-5 h-auto md:h-10 gap-1 p-1 bg-muted">
@@ -360,32 +339,32 @@ export const TradingDashboard = () => {
         
         <TabsContent value="pnl">
           <SectionErrorBoundary title="P&L Oversigt">
-            <PnLOverview />
+            <PnLOverview slotId={selectedSlotId} />
           </SectionErrorBoundary>
         </TabsContent>
 
         <TabsContent value="strategy">
           <SectionErrorBoundary title="Strategi Analyse">
-            <StrategyAnalysis />
+            <StrategyAnalysis slotId={selectedSlotId} />
           </SectionErrorBoundary>
         </TabsContent>
 
         <TabsContent value="scan">
           <SectionErrorBoundary title="Scan Resultater">
-            <ScanResults />
+            <ScanResults slotId={selectedSlotId} />
           </SectionErrorBoundary>
         </TabsContent>
 
         <TabsContent value="history" className="space-y-4">
           <SectionErrorBoundary title="Trade Historik">
-            <TradeHistoryTable />
+            <TradeHistoryTable slotId={selectedSlotId} />
           </SectionErrorBoundary>
         </TabsContent>
         
         <TabsContent value="config">
-          <SectionErrorBoundary title="Indikator Konfiguration" resetKey={activeConfigId}>
+          <SectionErrorBoundary title="Indikator Konfiguration" resetKey={configIdForTab}>
             <IndicatorConfig
-              config={configs.find((c) => c.id === activeConfigId)}
+              config={configs.find((c) => c.id === configIdForTab)}
               onSave={handleConfigSave}
             />
           </SectionErrorBoundary>
