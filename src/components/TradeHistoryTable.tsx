@@ -20,7 +20,8 @@ export const TradeHistoryTable = () => {
         .from("trade_history")
         .select("*")
         .neq("close_reason", "DUPLICATE")
-        .order("closed_at", { ascending: false });
+        .order("closed_at", { ascending: false })
+        .limit(200);
 
       if (error) throw error;
       setTrades(data || []);
@@ -81,7 +82,7 @@ export const TradeHistoryTable = () => {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Lukkede Handler ({trades.length})</CardTitle>
+            <CardTitle>Lukkede Handler (seneste {trades.length})</CardTitle>
             <ExportTradesDialog />
           </div>
         </CardHeader>

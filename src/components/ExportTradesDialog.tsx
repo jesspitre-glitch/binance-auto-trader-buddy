@@ -97,10 +97,21 @@ export const ExportTradesDialog = ({
         }
       }
 
-      const { data: trades, error } = await query;
+      // Fetch ALL matching trades using pagination (Supabase max 1000 per call)
+      let allTrades: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data: page, error: pageError } = await query.range(from, from + pageSize - 1);
+        if (pageError) throw pageError;
+        if (!page || page.length === 0) break;
+        allTrades = allTrades.concat(page);
+        if (page.length < pageSize) break;
+        from += pageSize;
+      }
 
-      if (error) throw error;
-      if (!trades || trades.length === 0) {
+      const trades = allTrades;
+      if (trades.length === 0) {
         toast({
           title: "Ingen handler",
           description: "Ingen handler fundet med de valgte kriterier",
