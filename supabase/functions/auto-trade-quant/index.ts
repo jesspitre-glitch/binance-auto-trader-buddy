@@ -3536,13 +3536,15 @@ serve(async (req) => {
 
           // Place order logic starts here
           // CRITICAL: Count open positions filtered by slot to prevent cross-slot blocking
+          // Also count orphaned positions (slot_id IS NULL) to prevent exceeding limits
           let posCountQuery = supabaseClient
             .from('positions')
-            .select('id, symbol')
+            .select('id, symbol, slot_id')
             .eq('user_id', session.user_id)
             .eq('status', 'OPEN');
           if (slotId) {
-            posCountQuery = posCountQuery.eq('slot_id', slotId);
+            // Count positions for THIS slot OR orphaned (NULL slot_id) positions
+            posCountQuery = posCountQuery.or(`slot_id.eq.${slotId},slot_id.is.null`);
           }
           const { data: currentPositions, error: posError } = await posCountQuery;
           
@@ -3572,7 +3574,7 @@ serve(async (req) => {
             .eq('symbol', symbol)
             .eq('status', 'OPEN');
           if (slotId) {
-            existingSymbolQuery = existingSymbolQuery.eq('slot_id', slotId);
+            existingSymbolQuery = existingSymbolQuery.or(`slot_id.eq.${slotId},slot_id.is.null`);
           }
           const { data: existingOpenForSymbol, error: existingOpenErr } = await existingSymbolQuery
             .maybeSingle();
