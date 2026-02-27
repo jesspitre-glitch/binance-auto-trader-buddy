@@ -3535,21 +3535,25 @@ serve(async (req) => {
           // NOTE: MACD direction check er nu dækket af UNIFIED GATE ovenfor
 
           // Place order logic starts here
-          // CRITICAL: Count open positions with FOR UPDATE lock to prevent race conditions
-          const { data: currentPositions, error: posError } = await supabaseClient
+          // CRITICAL: Count open positions filtered by slot to prevent cross-slot blocking
+          let posCountQuery = supabaseClient
             .from('positions')
             .select('id, symbol')
             .eq('user_id', session.user_id)
             .eq('status', 'OPEN');
+          if (slotId) {
+            posCountQuery = posCountQuery.eq('slot_id', slotId);
+          }
+          const { data: currentPositions, error: posError } = await posCountQuery;
           
           if (posError) {
             console.error(`Error checking positions for ${symbol}:`, posError);
             continue;
           }
           
-          // Strict check: >= means at or above limit
+          // Strict check: >= means at or above limit (per-slot)
           if (currentPositions && currentPositions.length >= config.max_open_positions) {
-            console.log(`Max positions LIMIT REACHED (${currentPositions.length}/${config.max_open_positions}) for user ${session.user_id}, skipping ${symbol}`);
+            console.log(`Max positions LIMIT REACHED (${currentPositions.length}/${config.max_open_positions}) for slot ${slotName}, skipping ${symbol}`);
             continue;
           }
           
@@ -3560,13 +3564,17 @@ serve(async (req) => {
             continue;
           }
           
-          // Fresh DB check to avoid races with concurrent scans
-          const { data: existingOpenForSymbol, error: existingOpenErr } = await supabaseClient
+          // Fresh DB check to avoid races with concurrent scans (per-slot)
+          let existingSymbolQuery = supabaseClient
             .from('positions')
             .select('id')
             .eq('user_id', session.user_id)
             .eq('symbol', symbol)
-            .eq('status', 'OPEN')
+            .eq('status', 'OPEN');
+          if (slotId) {
+            existingSymbolQuery = existingSymbolQuery.eq('slot_id', slotId);
+          }
+          const { data: existingOpenForSymbol, error: existingOpenErr } = await existingSymbolQuery
             .maybeSingle();
 
           if (existingOpenErr) {
