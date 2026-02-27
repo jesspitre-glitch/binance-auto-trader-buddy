@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Play, Square, Settings2, History, TrendingUp, Search, BarChart3, Radio, Clock } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 import { ThemeToggle } from "./ThemeToggle";
 import { PositionManager } from "./PositionManager";
@@ -307,10 +308,10 @@ export const TradingDashboard = () => {
 
       <PortfolioBalance />
       <ContinuousSyncControl />
-      <PositionManager slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} />
+      <PositionManager slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} slots={slots} />
 
       <Tabs defaultValue="pnl">
-        <TabsList className="grid w-full grid-cols-5 h-auto md:h-10 gap-1 p-1 bg-muted">
+        <TabsList className={cn("grid w-full h-auto md:h-10 gap-1 p-1 bg-muted", selectedSlotId ? "grid-cols-5" : "grid-cols-4")}>
           <TabsTrigger value="pnl" className="flex-col md:flex-row gap-1 md:gap-2 h-16 md:h-auto text-xs md:text-sm">
             <TrendingUp className="h-5 w-5 md:h-4 md:w-4" />
             <span className="hidden md:inline">P&L</span>
@@ -331,11 +332,13 @@ export const TradingDashboard = () => {
             <span className="hidden md:inline">Historik</span>
             <span className="md:hidden">Historik</span>
           </TabsTrigger>
-          <TabsTrigger value="config" className="flex-col md:flex-row gap-1 md:gap-2 h-16 md:h-auto text-xs md:text-sm">
-            <Settings2 className="h-5 w-5 md:h-4 md:w-4" />
-            <span className="hidden md:inline">Indikator Konfiguration</span>
-            <span className="md:hidden">Config</span>
-          </TabsTrigger>
+          {selectedSlotId && (
+            <TabsTrigger value="config" className="flex-col md:flex-row gap-1 md:gap-2 h-16 md:h-auto text-xs md:text-sm">
+              <Settings2 className="h-5 w-5 md:h-4 md:w-4" />
+              <span className="hidden md:inline">Indikator Konfiguration</span>
+              <span className="md:hidden">Config</span>
+            </TabsTrigger>
+          )}
         </TabsList>
         
         <TabsContent value="pnl">
@@ -362,14 +365,16 @@ export const TradingDashboard = () => {
           </SectionErrorBoundary>
         </TabsContent>
         
-        <TabsContent value="config">
-          <SectionErrorBoundary title="Indikator Konfiguration" resetKey={configIdForTab}>
-            <IndicatorConfig
-              config={configs.find((c) => c.id === configIdForTab)}
-              onSave={handleConfigSave}
-            />
-          </SectionErrorBoundary>
-        </TabsContent>
+        {selectedSlotId && (
+          <TabsContent value="config">
+            <SectionErrorBoundary title="Indikator Konfiguration" resetKey={configIdForTab}>
+              <IndicatorConfig
+                config={configs.find((c) => c.id === configIdForTab)}
+                onSave={handleConfigSave}
+              />
+            </SectionErrorBoundary>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

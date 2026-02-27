@@ -23,9 +23,10 @@ import {
 interface PositionManagerProps {
   slotId?: string | null;
   includeLegacyData?: boolean;
+  slots?: { id: string; name: string; slot_number: number }[];
 }
 
-export const PositionManager = ({ slotId, includeLegacyData = false }: PositionManagerProps) => {
+export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] }: PositionManagerProps) => {
   const [positions, setPositions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -242,10 +243,15 @@ export const PositionManager = ({ slotId, includeLegacyData = false }: PositionM
                         )}
                         <div>
                           <div className="font-semibold text-base md:text-sm">{position.symbol}</div>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <Badge variant={position.side === "LONG" ? "default" : "secondary"} className="text-xs">
                               {position.side}
                             </Badge>
+                            {position.slot_id && slots.length > 0 && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                                {slots.find(s => s.id === position.slot_id)?.name || 'Ukendt slot'}
+                              </Badge>
+                            )}
                             {config?.regime_router_enabled && position.indicators_snapshot && (
                               <RegimeIndicator
                                 adx={position.indicators_snapshot.adx}
