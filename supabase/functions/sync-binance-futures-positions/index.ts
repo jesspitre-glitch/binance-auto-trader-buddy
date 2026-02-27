@@ -370,6 +370,7 @@ serve(async (req) => {
                 strategy_hash: duplicate.strategy_hash,
                 open_reason: duplicate.open_reason,
                 close_reason: 'DUPLICATE',
+                slot_id: duplicate.slot_id,
               });
             
             updates.push({ symbol: duplicate.symbol, action: 'closed_duplicate', id: duplicate.id });
@@ -381,6 +382,13 @@ serve(async (req) => {
           
           const entryPrice = parseFloat(binancePos.entryPrice);
           const binanceLeverage = binancePos.leverage ? parseInt(binancePos.leverage) : null;
+          
+          // Get user's active slots for slot assignment
+          const { data: activeSlots } = await supabaseClient
+            .from('strategy_slots')
+            .select('id, config_id, name')
+            .eq('user_id', userId)
+            .eq('is_active', true);
           
           // Get user's indicator config for leverage fallback
           const { data: userConfig } = await supabaseClient
@@ -396,7 +404,7 @@ serve(async (req) => {
           const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
           const { data: recentSignals } = await supabaseClient
             .from('scan_results')
-            .select('*')
+            .select('*, slot_id')
             .eq('user_id', userId)
             .eq('symbol', binancePos.symbol)
             .eq('signal', side)
@@ -424,11 +432,17 @@ serve(async (req) => {
           }
           
           // ✅ Gyldigt bot-signal med ATR - opret position
+          // Determine slot_id from the signal's slot_id
+          const signalSlotId = signal.slot_id || null;
+          const signalSlotName = activeSlots?.find(s => s.id === signalSlotId)?.name || 'Unknown';
+          
           const indicatorsSnapshot = {
             ...indicators,
             is_synced_position: true,
             exit_type: 'ATR_BASED',
             leverage: leverageUsed,
+            slot_id: signalSlotId,
+            slot_name: signalSlotName,
           };
           
           let stopLoss: number;
@@ -453,11 +467,9 @@ serve(async (req) => {
             `EMA: Fast ${indicators.emaFast?.toFixed(2) || 'N/A'} vs Slow ${indicators.emaSlow?.toFixed(2) || 'N/A'}, ` +
             `ADX: ${indicators.adx?.toFixed(2) || 'N/A'}`;
           
-          console.log(`✅ Opretter kvalificeret position: ${binancePos.symbol} ${side} (ATR=${indicators.atr.toFixed(6)}, SL=${stopLoss.toFixed(4)})`);
+          console.log(`✅ Opretter kvalificeret position: ${binancePos.symbol} ${side} slot=${signalSlotName} (ATR=${indicators.atr.toFixed(6)}, SL=${stopLoss.toFixed(4)})`);
           
-          const { error } = await supabaseClient
-            .from('positions')
-            .insert({
+          const positionData: any = {
               user_id: userId,
               symbol: binancePos.symbol,
               side,
@@ -472,7 +484,16 @@ serve(async (req) => {
               status: 'OPEN',
               open_reason: openReason,
               indicators_snapshot: indicatorsSnapshot,
-            });
+          };
+          
+          // CRITICAL: Assign slot_id from the matching signal
+          if (signalSlotId) {
+            positionData.slot_id = signalSlotId;
+          }
+          
+          const { error } = await supabaseClient
+            .from('positions')
+            .insert(positionData);
           
           if (error) console.error('Insert error:', error);
           updates.push({ symbol: binancePos.symbol, action: 'created_with_signal', stop_loss: stopLoss, atr: indicators.atr });
@@ -564,6 +585,7 @@ serve(async (req) => {
                   close_reason: inferredReason,
                   leverage_used: leverageUsed,
                   indicators_snapshot: dbPos.indicators_snapshot,
+                  slot_id: dbPos.slot_id,
                   low_price: dbPos.low_price,
                   mae: dbPos.low_price && sideDb === 'LONG' ? entry - Number(dbPos.low_price) : 
                        dbPos.low_price && sideDb === 'SHORT' ? Number(dbPos.low_price) - entry : null,
