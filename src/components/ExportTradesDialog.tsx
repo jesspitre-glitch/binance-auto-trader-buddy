@@ -108,17 +108,20 @@ export const ExportTradesDialog = ({
         }
       }
 
-      // Fetch ALL matching trades using pagination (Supabase max 1000 per call)
+      // Fetch matching trades using pagination (Supabase max 1000 per call)
+      const maxRows = filterType === "count" ? parseInt(filterValue) : Infinity;
       let allTrades: any[] = [];
       let from = 0;
-      const pageSize = 1000;
-      while (true) {
-        const { data: page, error: pageError } = await query.range(from, from + pageSize - 1);
+      const pageSize = Math.min(1000, maxRows);
+      while (allTrades.length < maxRows) {
+        const remaining = maxRows - allTrades.length;
+        const fetchSize = Math.min(pageSize, remaining);
+        const { data: page, error: pageError } = await query.range(from, from + fetchSize - 1);
         if (pageError) throw pageError;
         if (!page || page.length === 0) break;
         allTrades = allTrades.concat(page);
-        if (page.length < pageSize) break;
-        from += pageSize;
+        if (page.length < fetchSize) break;
+        from += fetchSize;
       }
 
       const trades = allTrades;
