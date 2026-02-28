@@ -95,7 +95,7 @@ export const TradeHistoryTable = ({ slotId, includeLegacyData = false }: TradeHi
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Lukkede Handler (seneste {trades.length})</CardTitle>
-            <ExportTradesDialog />
+            <ExportTradesDialog slotId={slotId} includeLegacyData={includeLegacyData} />
           </div>
         </CardHeader>
         <CardContent>
