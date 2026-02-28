@@ -24,12 +24,16 @@ import { cn } from "@/lib/utils";
 
 interface ExportTradesDialogProps {
   strategyHash?: string;
+  slotId?: string | null;
+  includeLegacyData?: boolean;
   buttonVariant?: "default" | "outline" | "ghost";
   buttonSize?: "default" | "sm" | "lg" | "icon";
 }
 
 export const ExportTradesDialog = ({ 
-  strategyHash, 
+  strategyHash,
+  slotId,
+  includeLegacyData = false,
   buttonVariant = "outline",
   buttonSize = "sm" 
 }: ExportTradesDialogProps) => {
@@ -66,6 +70,13 @@ export const ExportTradesDialog = ({
 
       if (strategyHash) {
         query = query.eq("strategy_hash", strategyHash);
+      }
+
+      // Filter by slot if viewing a specific slot
+      if (slotId) {
+        query = includeLegacyData
+          ? query.or(`slot_id.eq.${slotId},slot_id.is.null`)
+          : query.eq("slot_id", slotId);
       }
 
       if (filterType === "count") {
