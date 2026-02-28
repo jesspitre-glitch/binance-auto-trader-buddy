@@ -13,6 +13,80 @@ import { ThemeProvider } from "next-themes";
 const queryClient = new QueryClient();
 
 const App = () => {
+  const [session, setSession] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const watchdog = window.setTimeout(() => {
+      if (!mounted) return;
+      console.warn("[App] Auth init timeout – showing UI anyway");
+      setLoading(false);
+      setAuthReady(true);
+    }, 4000);
+
+    const initAuth = async () => {
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+        if (!mounted) return;
+        if (error) console.error("Auth init error:", error);
+        setSession(session);
+      } catch (err) {
+        console.error("Auth exception:", err);
+      } finally {
+        window.clearTimeout(watchdog);
+        if (mounted) {
+          setLoading(false);
+          setAuthReady(true);
+        }
+      }
+    };
+
+    initAuth();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) {
+        setSession(session);
+        setLoading(false);
+        setAuthReady(true);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      window.clearTimeout(watchdog);
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  if (loading || (session && !authReady)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <Auth />
+          </TooltipProvider>
+        </QueryClientProvider>
+      </ThemeProvider>
+    );
+  }
+
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <QueryClientProvider client={queryClient}>
