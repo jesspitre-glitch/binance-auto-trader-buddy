@@ -306,7 +306,7 @@ export const TradingDashboard = () => {
         </Card>
       )}
 
-      <PortfolioBalance />
+      <PortfolioBalance slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} />
       <ContinuousSyncControl />
       <PositionManager slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} slots={slots} />
 
