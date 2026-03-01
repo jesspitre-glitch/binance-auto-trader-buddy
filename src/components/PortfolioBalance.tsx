@@ -5,7 +5,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, RefreshCw, TrendingUp, Wallet } from "lucide-react";
 
-export const PortfolioBalance = () => {
+interface PortfolioBalanceProps {
+  slotId?: string | null;
+  includeLegacyData?: boolean;
+}
+
+export const PortfolioBalance = ({ slotId, includeLegacyData }: PortfolioBalanceProps) => {
   const [portfolio, setPortfolio] = useState<any>(null);
   const [totalPnLFromTrades, setTotalPnLFromTrades] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -27,17 +32,25 @@ export const PortfolioBalance = () => {
       if (error) throw error;
       setPortfolio(data);
 
-      // Fetch ALL trades with pagination (Supabase has 1000 row limit per query)
+      // Fetch trades with pagination, filtered by slot if applicable
       let allPnL = 0;
       let offset = 0;
       const pageSize = 1000;
       let hasMore = true;
       
       while (hasMore) {
-        const { data: pnlData, error: pnlError } = await supabase
+        let pnlQuery = supabase
           .from("trade_history")
           .select("pnl")
-          .eq("user_id", user.id)
+          .eq("user_id", user.id);
+
+        if (slotId) {
+          pnlQuery = includeLegacyData
+            ? pnlQuery.or(`slot_id.eq.${slotId},slot_id.is.null`)
+            : pnlQuery.eq("slot_id", slotId);
+        }
+
+        const { data: pnlData, error: pnlError } = await pnlQuery
           .range(offset, offset + pageSize - 1);
 
         if (pnlError) throw pnlError;
@@ -60,6 +73,7 @@ export const PortfolioBalance = () => {
   };
 
   useEffect(() => {
+    setLoading(true);
     fetchPortfolio();
     
     let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -89,7 +103,7 @@ export const PortfolioBalance = () => {
       window.clearTimeout(timer);
       if (channel) supabase.removeChannel(channel);
     };
-  }, []);
+  }, [slotId, includeLegacyData]);
 
   const syncBalance = async () => {
     setSyncing(true);
