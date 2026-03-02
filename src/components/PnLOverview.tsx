@@ -44,6 +44,7 @@ interface SlotPnlBreakdown {
   totalNetPnl: number;
   trades: number;
   winRate: number;
+  chartData: { cumulative: number }[];
 }
 
 export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewProps) => {
@@ -275,10 +276,19 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
 
       const slotBreakdown: SlotPnlBreakdown[] = !slotId
         ? (slotRows || []).map((slot: any) => {
-            const slotTrades = trades.filter((t) => t.slot_id === slot.id);
+            const slotTrades = trades
+              .filter((t) => t.slot_id === slot.id)
+              .sort((a, b) => new Date(a.closed_at).getTime() - new Date(b.closed_at).getTime());
             const totalNetPnl = slotTrades.reduce((sum, t) => sum + getTradeNetPnl(t), 0);
             const winCount = slotTrades.filter((t) => getTradeNetPnl(t) > 0).length;
             const winRate = slotTrades.length > 0 ? (winCount / slotTrades.length) * 100 : 0;
+
+            // Build mini cumulative chart data
+            let cum = 0;
+            const chartData = slotTrades.map((t) => {
+              cum += getTradeNetPnl(t);
+              return { cumulative: Number(cum.toFixed(2)) };
+            });
 
             return {
               slotId: slot.id,
@@ -286,6 +296,7 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
               totalNetPnl,
               trades: slotTrades.length,
               winRate,
+              chartData,
             };
           })
         : [];
@@ -932,20 +943,37 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
             {!slotId && Array.isArray(stats?.slotBreakdown) && stats.slotBreakdown.length > 0 && (
               <div className="border rounded-lg p-4 space-y-3">
                 <h3 className="text-sm font-medium">P&L pr. Slot (net)</h3>
-                <div className="grid gap-2 md:grid-cols-2">
-                  {stats.slotBreakdown.map((slot: SlotPnlBreakdown) => (
-                    <div key={slot.slotId} className="rounded-md border p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium">{slot.slotName}</span>
-                        <span className={`text-sm font-bold ${slot.totalNetPnl >= 0 ? "text-profit" : "text-loss"}`}>
-                          {slot.totalNetPnl >= 0 ? "+" : ""}{slot.totalNetPnl.toFixed(2)} USD
-                        </span>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {stats.slotBreakdown.map((slot: SlotPnlBreakdown) => {
+                    const slotProfitable = slot.totalNetPnl >= 0;
+                    return (
+                      <div key={slot.slotId} className="rounded-md border p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium">{slot.slotName}</span>
+                          <span className={`text-sm font-bold ${slotProfitable ? "text-profit" : "text-loss"}`}>
+                            {slotProfitable ? "+" : ""}{slot.totalNetPnl.toFixed(2)} USD
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Trades: {slot.trades} · Win rate: {slot.winRate.toFixed(1)}%
+                        </div>
+                        {slot.chartData.length > 1 && (
+                          <ResponsiveContainer width="100%" height={60}>
+                            <LineChart data={slot.chartData}>
+                              <Line
+                                type="monotone"
+                                dataKey="cumulative"
+                                stroke={slotProfitable ? "#10b981" : "#ef4444"}
+                                strokeWidth={1.5}
+                                dot={false}
+                              />
+                              <YAxis hide domain={['dataMin', 'dataMax']} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        )}
                       </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        Trades: {slot.trades} · Win rate: {slot.winRate.toFixed(1)}%
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
