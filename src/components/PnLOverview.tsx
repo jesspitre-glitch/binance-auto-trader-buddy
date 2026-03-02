@@ -2,7 +2,8 @@ import { useEffect, useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, LineChart as LineChartIcon, Copy, Download, CalendarIcon } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, LineChart as LineChartIcon, Copy, Download, CalendarIcon, Clock } from "lucide-react";
+import { ExportTradesDialog } from "@/components/ExportTradesDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -45,6 +46,10 @@ interface SlotPnlBreakdown {
   trades: number;
   winRate: number;
   chartData: { cumulative: number }[];
+  lastConfigChange: string | null;
+  pnlSinceChange: number;
+  tradesSinceChange: number;
+  winRateSinceChange: number;
 }
 
 export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewProps) => {
@@ -267,9 +272,22 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
       // Slot-level net P&L breakdown for "Samlet Overblik"
       const { data: slotRows } = await supabase
         .from("strategy_slots")
-        .select("id, name, slot_number")
+        .select("id, name, slot_number, config_id")
         .eq("user_id", user.id)
         .order("slot_number", { ascending: true });
+
+      // Fetch config updated_at for each slot's config
+      const configIds = [...new Set((slotRows || []).map((s: any) => s.config_id).filter(Boolean))];
+      let configUpdatedMap: Record<string, string> = {};
+      if (configIds.length > 0) {
+        const { data: configs } = await supabase
+          .from("indicator_config")
+          .select("id, updated_at")
+          .in("id", configIds);
+        if (configs) {
+          configs.forEach((c: any) => { configUpdatedMap[c.id] = c.updated_at; });
+        }
+      }
 
       const getTradeNetPnl = (trade: any) =>
         Number(trade.net_pnl ?? (Number(trade.pnl) - Number(trade.total_fee || 0) + Number(trade.funding_fee || 0)));
@@ -290,6 +308,15 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
               return { cumulative: Number(cum.toFixed(2)) };
             });
 
+            // P&L since last config change
+            const lastConfigChange = slot.config_id ? (configUpdatedMap[slot.config_id] || null) : null;
+            const tradesSinceChange = lastConfigChange
+              ? slotTrades.filter((t) => new Date(t.closed_at).getTime() >= new Date(lastConfigChange).getTime())
+              : [];
+            const pnlSinceChange = tradesSinceChange.reduce((sum: number, t: any) => sum + getTradeNetPnl(t), 0);
+            const winsSinceChange = tradesSinceChange.filter((t: any) => getTradeNetPnl(t) > 0).length;
+            const winRateSinceChange = tradesSinceChange.length > 0 ? (winsSinceChange / tradesSinceChange.length) * 100 : 0;
+
             return {
               slotId: slot.id,
               slotName: slot.name,
@@ -297,6 +324,10 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
               trades: slotTrades.length,
               winRate,
               chartData,
+              lastConfigChange,
+              pnlSinceChange,
+              tradesSinceChange: tradesSinceChange.length,
+              winRateSinceChange,
             };
           })
         : [];
@@ -957,6 +988,27 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
                         <div className="text-xs text-muted-foreground">
                           Trades: {slot.trades} · Win rate: {slot.winRate.toFixed(1)}%
                         </div>
+                        {/* Last config change + P&L since */}
+                        {slot.lastConfigChange && (
+                          <div className="border-t pt-2 mt-1 space-y-1">
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Clock className="h-3 w-3" />
+                              <span>Strategi ændret: {format(new Date(slot.lastConfigChange), "dd/MM/yyyy HH:mm")}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">Siden ændring:</span>
+                              <span className={slot.pnlSinceChange >= 0 ? "text-profit font-medium" : "text-loss font-medium"}>
+                                {slot.pnlSinceChange >= 0 ? "+" : ""}{slot.pnlSinceChange.toFixed(2)} USD ({slot.tradesSinceChange} trades, {slot.winRateSinceChange.toFixed(0)}% WR)
+                              </span>
+                            </div>
+                            <ExportTradesDialog
+                              slotId={slot.slotId}
+                              buttonVariant="ghost"
+                              buttonSize="sm"
+                              defaultFilterType="since_change"
+                            />
+                          </div>
+                        )}
                         {slot.chartData.length > 1 && (
                           <ResponsiveContainer width="100%" height={60}>
                             <LineChart data={slot.chartData}>

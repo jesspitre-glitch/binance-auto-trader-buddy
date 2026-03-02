@@ -28,6 +28,7 @@ interface ExportTradesDialogProps {
   includeLegacyData?: boolean;
   buttonVariant?: "default" | "outline" | "ghost";
   buttonSize?: "default" | "sm" | "lg" | "icon";
+  defaultFilterType?: "count" | "days" | "hours" | "since_change" | "custom";
 }
 
 export const ExportTradesDialog = ({ 
@@ -35,10 +36,11 @@ export const ExportTradesDialog = ({
   slotId,
   includeLegacyData = false,
   buttonVariant = "outline",
-  buttonSize = "sm" 
+  buttonSize = "sm",
+  defaultFilterType = "count",
 }: ExportTradesDialogProps) => {
   const [open, setOpen] = useState(false);
-  const [filterType, setFilterType] = useState<"count" | "days" | "hours" | "since_change" | "custom">("count");
+  const [filterType, setFilterType] = useState<"count" | "days" | "hours" | "since_change" | "custom">(defaultFilterType);
   const [filterValue, setFilterValue] = useState("50");
   const [exportMode, setExportMode] = useState<"COMPACT" | "FULL_DEBUG">("COMPACT");
   const [exportedData, setExportedData] = useState<string>("");
@@ -88,14 +90,33 @@ export const ExportTradesDialog = ({
         const cutoffMs = Date.now() - (parseInt(filterValue) * 60 * 60 * 1000);
         query = query.gte("closed_at", new Date(cutoffMs).toISOString());
       } else if (filterType === "since_change") {
-        const { data: configData } = await supabase
-          .from("indicator_config")
-          .select("updated_at")
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (configData?.updated_at) {
-          query = query.gte("closed_at", configData.updated_at);
+        let configUpdatedAt: string | null = null;
+        if (slotId) {
+          // Get the config linked to this specific slot
+          const { data: slotData } = await supabase
+            .from("strategy_slots")
+            .select("config_id")
+            .eq("id", slotId)
+            .maybeSingle();
+          if (slotData?.config_id) {
+            const { data: cfgData } = await supabase
+              .from("indicator_config")
+              .select("updated_at")
+              .eq("id", slotData.config_id)
+              .maybeSingle();
+            configUpdatedAt = cfgData?.updated_at || null;
+          }
+        } else {
+          const { data: configData } = await supabase
+            .from("indicator_config")
+            .select("updated_at")
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          configUpdatedAt = configData?.updated_at || null;
+        }
+        if (configUpdatedAt) {
+          query = query.gte("closed_at", configUpdatedAt);
         }
       } else if (filterType === "custom") {
         if (customFrom) {
