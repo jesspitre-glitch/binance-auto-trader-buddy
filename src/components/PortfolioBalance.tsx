@@ -5,14 +5,22 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, RefreshCw, TrendingUp, Wallet } from "lucide-react";
 
+interface SlotPnL {
+  slotId: string;
+  name: string;
+  pnl: number;
+}
+
 interface PortfolioBalanceProps {
   slotId?: string | null;
   includeLegacyData?: boolean;
+  slots?: { id: string; name: string }[];
 }
 
-export const PortfolioBalance = ({ slotId, includeLegacyData }: PortfolioBalanceProps) => {
+export const PortfolioBalance = ({ slotId, includeLegacyData, slots }: PortfolioBalanceProps) => {
   const [portfolio, setPortfolio] = useState<any>(null);
   const [totalPnLFromTrades, setTotalPnLFromTrades] = useState<number>(0);
+  const [slotPnLs, setSlotPnLs] = useState<SlotPnL[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const { toast } = useToast();
@@ -79,6 +87,37 @@ export const PortfolioBalance = ({ slotId, includeLegacyData }: PortfolioBalance
 
       if (requestId === latestRequestRef.current) {
         setTotalPnLFromTrades(allPnL);
+      }
+
+      // If showing "Samlet Overblik" (no slotId), fetch per-slot breakdown
+      if (!slotId && slots && slots.length > 0) {
+        const perSlot: SlotPnL[] = [];
+        for (const slot of slots) {
+          let slotTotal = 0;
+          let sOffset = 0;
+          let sMore = true;
+          while (sMore) {
+            const { data: sData, error: sErr } = await supabase
+              .from("trade_history")
+              .select("pnl")
+              .eq("user_id", user.id)
+              .eq("slot_id", slot.id)
+              .range(sOffset, sOffset + pageSize - 1);
+            if (sErr) throw sErr;
+            if (requestId !== latestRequestRef.current) return;
+            if (sData && sData.length > 0) {
+              slotTotal += sData.reduce((s, t) => s + (t.pnl || 0), 0);
+              sOffset += pageSize;
+              sMore = sData.length === pageSize;
+            } else {
+              sMore = false;
+            }
+          }
+          perSlot.push({ slotId: slot.id, name: slot.name, pnl: slotTotal });
+        }
+        if (requestId === latestRequestRef.current) {
+          setSlotPnLs(perSlot);
+        }
       }
     } catch (error: any) {
       console.error("Portfolio fetch error:", error);
@@ -240,6 +279,23 @@ export const PortfolioBalance = ({ slotId, includeLegacyData }: PortfolioBalance
             </div>
           </div>
         </div>
+
+        {/* Per-slot P&L breakdown in Samlet Overblik */}
+        {!slotId && slotPnLs.length > 0 && (
+          <div className="mt-4 pt-4 border-t">
+            <div className="text-sm font-medium text-muted-foreground mb-2">P&L pr. Slot</div>
+            <div className="grid gap-2 md:grid-cols-2">
+              {slotPnLs.map((sp) => (
+                <div key={sp.slotId} className="flex items-center justify-between rounded-md border p-2">
+                  <span className="text-sm font-medium">{sp.name}</span>
+                  <span className={`text-sm font-bold ${sp.pnl >= 0 ? "text-profit" : "text-loss"}`}>
+                    {sp.pnl >= 0 ? "+" : ""}${sp.pnl.toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
