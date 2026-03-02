@@ -38,6 +38,14 @@ interface PnLOverviewProps {
   includeLegacyData?: boolean;
 }
 
+interface SlotPnlBreakdown {
+  slotId: string;
+  slotName: string;
+  totalNetPnl: number;
+  trades: number;
+  winRate: number;
+}
+
 export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewProps) => {
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<TimeRange>("24h");
@@ -255,6 +263,33 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
 
       setAllTrades(trades);
 
+      // Slot-level net P&L breakdown for "Samlet Overblik"
+      const { data: slotRows } = await supabase
+        .from("strategy_slots")
+        .select("id, name, slot_number")
+        .eq("user_id", user.id)
+        .order("slot_number", { ascending: true });
+
+      const getTradeNetPnl = (trade: any) =>
+        Number(trade.net_pnl ?? (Number(trade.pnl) - Number(trade.total_fee || 0) + Number(trade.funding_fee || 0)));
+
+      const slotBreakdown: SlotPnlBreakdown[] = !slotId
+        ? (slotRows || []).map((slot: any) => {
+            const slotTrades = trades.filter((t) => t.slot_id === slot.id);
+            const totalNetPnl = slotTrades.reduce((sum, t) => sum + getTradeNetPnl(t), 0);
+            const winCount = slotTrades.filter((t) => getTradeNetPnl(t) > 0).length;
+            const winRate = slotTrades.length > 0 ? (winCount / slotTrades.length) * 100 : 0;
+
+            return {
+              slotId: slot.id,
+              slotName: slot.name,
+              totalNetPnl,
+              trades: slotTrades.length,
+              winRate,
+            };
+          })
+        : [];
+
       // Calculate P&L based on selected mode
       let totalPnL: number;
       let totalPnLGross: number;
@@ -326,6 +361,7 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
           winsAfterFees: 0,
           winsNet: 0,
           leverageBreakdown: [],
+          slotBreakdown,
         });
         setChartData([]);
         setAggregatedData([]);
@@ -476,6 +512,7 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
         winsAfterFees,
         winsNet,
         leverageBreakdown,
+        slotBreakdown,
         // Impact metrics
         fundingPctOfNetPnl,
         fundingPerHour,
@@ -891,6 +928,27 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
                 </div>
               </div>
             </div>
+
+            {!slotId && Array.isArray(stats?.slotBreakdown) && stats.slotBreakdown.length > 0 && (
+              <div className="border rounded-lg p-4 space-y-3">
+                <h3 className="text-sm font-medium">P&L pr. Slot (net)</h3>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {stats.slotBreakdown.map((slot: SlotPnlBreakdown) => (
+                    <div key={slot.slotId} className="rounded-md border p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium">{slot.slotName}</span>
+                        <span className={`text-sm font-bold ${slot.totalNetPnl >= 0 ? "text-profit" : "text-loss"}`}>
+                          {slot.totalNetPnl >= 0 ? "+" : ""}{slot.totalNetPnl.toFixed(2)} USD
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Trades: {slot.trades} · Win rate: {slot.winRate.toFixed(1)}%
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Impact Analysis Section */}
             <div className="grid gap-4 md:grid-cols-2">
