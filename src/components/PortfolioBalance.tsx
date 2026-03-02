@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,11 +16,20 @@ export const PortfolioBalance = ({ slotId, includeLegacyData }: PortfolioBalance
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const { toast } = useToast();
+  const latestRequestRef = useRef(0);
 
   const fetchPortfolio = async () => {
+    const requestId = ++latestRequestRef.current;
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        if (requestId === latestRequestRef.current) {
+          setPortfolio(null);
+          setTotalPnLFromTrades(0);
+        }
+        return;
+      }
 
       // Fetch portfolio balance
       const { data, error } = await supabase
@@ -30,6 +39,8 @@ export const PortfolioBalance = ({ slotId, includeLegacyData }: PortfolioBalance
         .maybeSingle();
 
       if (error) throw error;
+
+      if (requestId !== latestRequestRef.current) return;
       setPortfolio(data);
 
       // Fetch trades with pagination, filtered by slot if applicable
@@ -37,7 +48,7 @@ export const PortfolioBalance = ({ slotId, includeLegacyData }: PortfolioBalance
       let offset = 0;
       const pageSize = 1000;
       let hasMore = true;
-      
+
       while (hasMore) {
         let pnlQuery = supabase
           .from("trade_history")
@@ -54,7 +65,9 @@ export const PortfolioBalance = ({ slotId, includeLegacyData }: PortfolioBalance
           .range(offset, offset + pageSize - 1);
 
         if (pnlError) throw pnlError;
-        
+
+        if (requestId !== latestRequestRef.current) return;
+
         if (pnlData && pnlData.length > 0) {
           allPnL += pnlData.reduce((sum, trade) => sum + (trade.pnl || 0), 0);
           offset += pageSize;
@@ -63,12 +76,16 @@ export const PortfolioBalance = ({ slotId, includeLegacyData }: PortfolioBalance
           hasMore = false;
         }
       }
-      
-      setTotalPnLFromTrades(allPnL);
+
+      if (requestId === latestRequestRef.current) {
+        setTotalPnLFromTrades(allPnL);
+      }
     } catch (error: any) {
       console.error("Portfolio fetch error:", error);
     } finally {
-      setLoading(false);
+      if (requestId === latestRequestRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -100,6 +117,7 @@ export const PortfolioBalance = ({ slotId, includeLegacyData }: PortfolioBalance
 
     return () => {
       mounted = false;
+      latestRequestRef.current += 1;
       window.clearTimeout(timer);
       if (channel) supabase.removeChannel(channel);
     };
