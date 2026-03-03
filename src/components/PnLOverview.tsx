@@ -43,11 +43,13 @@ interface SlotPnlBreakdown {
   slotId: string;
   slotName: string;
   totalNetPnl: number;
+  totalNetPnlPct: number;
   trades: number;
   winRate: number;
   chartData: { cumulative: number }[];
   lastConfigChange: string | null;
   pnlSinceChange: number;
+  pnlSinceChangePct: number;
   tradesSinceChange: number;
   winRateSinceChange: number;
 }
@@ -298,6 +300,7 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
               .filter((t) => t.slot_id === slot.id)
               .sort((a, b) => new Date(a.closed_at).getTime() - new Date(b.closed_at).getTime());
             const totalNetPnl = slotTrades.reduce((sum, t) => sum + getTradeNetPnl(t), 0);
+            const totalNetPnlPct = slotTrades.reduce((sum, t) => sum + (t.pnl_percent || 0), 0);
             const winCount = slotTrades.filter((t) => getTradeNetPnl(t) > 0).length;
             const winRate = slotTrades.length > 0 ? (winCount / slotTrades.length) * 100 : 0;
 
@@ -314,6 +317,7 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
               ? slotTrades.filter((t) => new Date(t.closed_at).getTime() >= new Date(lastConfigChange).getTime())
               : [];
             const pnlSinceChange = tradesSinceChange.reduce((sum: number, t: any) => sum + getTradeNetPnl(t), 0);
+            const pnlSinceChangePct = tradesSinceChange.reduce((sum: number, t: any) => sum + (t.pnl_percent || 0), 0);
             const winsSinceChange = tradesSinceChange.filter((t: any) => getTradeNetPnl(t) > 0).length;
             const winRateSinceChange = tradesSinceChange.length > 0 ? (winsSinceChange / tradesSinceChange.length) * 100 : 0;
 
@@ -321,11 +325,13 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
               slotId: slot.id,
               slotName: slot.name,
               totalNetPnl,
+              totalNetPnlPct,
               trades: slotTrades.length,
               winRate,
               chartData,
               lastConfigChange,
               pnlSinceChange,
+              pnlSinceChangePct,
               tradesSinceChange: tradesSinceChange.length,
               winRateSinceChange,
             };
@@ -982,7 +988,7 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-sm font-medium">{slot.slotName}</span>
                           <span className={`text-sm font-bold ${slotProfitable ? "text-profit" : "text-loss"}`}>
-                            {slotProfitable ? "+" : ""}{slot.totalNetPnl.toFixed(2)} USD
+                            {slotProfitable ? "+" : ""}{slot.totalNetPnl.toFixed(2)} USD ({slotProfitable ? "+" : ""}{slot.totalNetPnlPct.toFixed(2)}%)
                           </span>
                         </div>
                         <div className="text-xs text-muted-foreground">
@@ -998,7 +1004,7 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
                             <div className="flex items-center justify-between text-xs">
                               <span className="text-muted-foreground">Siden ændring:</span>
                               <span className={slot.pnlSinceChange >= 0 ? "text-profit font-medium" : "text-loss font-medium"}>
-                                {slot.pnlSinceChange >= 0 ? "+" : ""}{slot.pnlSinceChange.toFixed(2)} USD ({slot.tradesSinceChange} trades, {slot.winRateSinceChange.toFixed(0)}% WR)
+                                {slot.pnlSinceChange >= 0 ? "+" : ""}{slot.pnlSinceChange.toFixed(2)} USD ({slot.pnlSinceChangePct >= 0 ? "+" : ""}{slot.pnlSinceChangePct.toFixed(2)}%) · {slot.tradesSinceChange} trades, {slot.winRateSinceChange.toFixed(0)}% WR
                               </span>
                             </div>
                             <ExportTradesDialog
