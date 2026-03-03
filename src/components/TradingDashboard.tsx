@@ -16,6 +16,7 @@ import { ScanResults } from "./ScanResults";
 import { StrategyAnalysis } from "./StrategyAnalysis";
 import { TradeHistoryTable } from "./TradeHistoryTable";
 import { ContinuousSyncControl } from "./ContinuousSyncControl";
+import { BnbFeeWarning } from "./BnbFeeWarning";
 import { SlotSelector, Slot } from "./SlotSelector";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -306,6 +307,7 @@ export const TradingDashboard = () => {
         </Card>
       )}
 
+      <BnbFeeWarning />
       <PortfolioBalance key={selectedSlotId ?? "all-slots"} slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} slots={slots.map(s => ({ id: s.id, name: s.name }))} />
       <ContinuousSyncControl />
       <PositionManager slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} slots={slots} />
