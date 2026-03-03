@@ -68,6 +68,8 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
   const [customFrom, setCustomFrom] = useState<Date | undefined>(undefined);
   const [customTo, setCustomTo] = useState<Date | undefined>(undefined);
   const { toast } = useToast();
+  const isSlotScopedView = Boolean(slotId);
+  const effectivePnlMode: PnlTotalMode = isSlotScopedView ? "strict_trades" : pnlMode;
 
   const fetchPnLData = async (range: TimeRange) => {
     setLoading(true);
@@ -85,20 +87,39 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
       let startMs: number;
       
       if (range === "since_change") {
-        // Find the last strategy change time from indicator_config
-        const { data: configData } = await supabase
-          .from("indicator_config")
-          .select("updated_at")
-          .eq("user_id", user.id)
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        
-        if (configData?.updated_at) {
-          startMs = new Date(configData.updated_at).getTime();
+        let strategyUpdatedAt: string | null = null;
+
+        if (slotId) {
+          const { data: slotData } = await supabase
+            .from("strategy_slots")
+            .select("config_id")
+            .eq("id", slotId)
+            .maybeSingle();
+
+          if (slotData?.config_id) {
+            const { data: configData } = await supabase
+              .from("indicator_config")
+              .select("updated_at")
+              .eq("id", slotData.config_id)
+              .maybeSingle();
+
+            strategyUpdatedAt = configData?.updated_at ?? null;
+          }
         } else {
-          startMs = todayUtcStart; // fallback
+          const { data: configData } = await supabase
+            .from("indicator_config")
+            .select("updated_at")
+            .eq("user_id", user.id)
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          strategyUpdatedAt = configData?.updated_at ?? null;
         }
+
+        startMs = strategyUpdatedAt
+          ? new Date(strategyUpdatedAt).getTime()
+          : todayUtcStart;
       } else if (range === "custom") {
         if (customFrom) {
           startMs = customFrom.getTime();
@@ -350,7 +371,7 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
       // Use Binance API data only if it succeeded (not rate-limited) and has actual data
       const binancePnlValid = binancePnl && !(binancePnl as any).rateLimited && (binancePnl as any).success !== false;
       
-      if (pnlMode === "binance_overview" && binancePnlValid) {
+      if (effectivePnlMode === "binance_overview" && binancePnlValid) {
         // Mode: binance_overview - sum income types from Binance API for the period
         // Matches Binance "Futures PNL" view exactly
         totalPnLGross = binancePnl!.todaysRealizedPnl;  // REALIZED_PNL
@@ -549,7 +570,7 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
         profitFactor,
         fundingFees: totalFunding,
         pnlSource,
-        pnlMode,
+        pnlMode: effectivePnlMode,
         // New fee stats
         totalPnLGross,
         totalPnLAfterFees,
@@ -762,7 +783,7 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
   useEffect(() => {
     if (timeRange === "custom" && (!customFrom || !customTo)) return;
     fetchPnLData(timeRange);
-  }, [timeRange, pnlMode, customFrom, customTo, slotId]);
+  }, [timeRange, pnlMode, customFrom, customTo, slotId, includeLegacyData]);
 
   // Separate effect for realtime subscription - only set up once
   // Non-blocking: errors don't prevent the component from rendering
@@ -827,22 +848,35 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
         <div className="flex items-center justify-between">
           <CardTitle>Profit & Loss Oversigt</CardTitle>
           <div className="flex items-center gap-1 text-xs">
-            <Button
-              variant={pnlMode === "binance_overview" ? "default" : "outline"}
-              size="sm"
-              className="text-xs h-7 px-2"
-              onClick={() => setPnlMode("binance_overview")}
-            >
-              Binance
-            </Button>
-            <Button
-              variant={pnlMode === "strict_trades" ? "default" : "outline"}
-              size="sm"
-              className="text-xs h-7 px-2"
-              onClick={() => setPnlMode("strict_trades")}
-            >
-              Trades
-            </Button>
+            {isSlotScopedView ? (
+              <Button
+                variant="default"
+                size="sm"
+                className="text-xs h-7 px-2"
+                disabled
+              >
+                Trades (slot)
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant={pnlMode === "binance_overview" ? "default" : "outline"}
+                  size="sm"
+                  className="text-xs h-7 px-2"
+                  onClick={() => setPnlMode("binance_overview")}
+                >
+                  Binance
+                </Button>
+                <Button
+                  variant={pnlMode === "strict_trades" ? "default" : "outline"}
+                  size="sm"
+                  className="text-xs h-7 px-2"
+                  onClick={() => setPnlMode("strict_trades")}
+                >
+                  Trades
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </CardHeader>
