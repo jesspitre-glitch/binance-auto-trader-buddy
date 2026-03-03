@@ -122,21 +122,21 @@ export const BnbFeeWarning = () => {
         }
       }
 
-      // Determine warning level
+      // Determine warning level — actual balance takes priority over fee heuristics
       let level: BnbStatus["level"] = "unknown";
       if (bnbBalance !== null) {
-        if (bnbBalance <= 0.001 || !usingBnb) {
+        if (bnbBalance <= 0.001) {
           level = "empty";
         } else if (
-          estimatedDaysLeft !== null && estimatedDaysLeft < 3 ||
-          (bnbBalance < 0.01)
+          (estimatedDaysLeft !== null && estimatedDaysLeft < 3) ||
+          bnbBalance < 0.01
         ) {
           level = "low";
         } else {
           level = "ok";
         }
       } else {
-        // Fallback: use fee analysis only
+        // Fallback: use fee analysis only when we can't check balance
         level = usingBnb ? "ok" : "empty";
       }
 
