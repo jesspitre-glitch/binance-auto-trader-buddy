@@ -339,7 +339,7 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
               ? slotTrades.filter((t) => new Date(t.closed_at).getTime() >= new Date(lastConfigChange).getTime())
               : [];
             const pnlSinceChange = tradesSinceChange.reduce((sum: number, t: any) => sum + getTradeNetPnl(t), 0);
-            const pnlSinceChangePct = tradesSinceChange.reduce((sum: number, t: any) => sum + (t.pnl_percent || 0), 0);
+            const pnlSinceChangePct = slotCapital > 0 ? (pnlSinceChange / slotCapital) * 100 : 0;
             const winsSinceChange = tradesSinceChange.filter((t: any) => getTradeNetPnl(t) > 0).length;
             const winRateSinceChange = tradesSinceChange.length > 0 ? (winsSinceChange / tradesSinceChange.length) * 100 : 0;
 
