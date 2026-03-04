@@ -295,7 +295,7 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
       // Slot-level net P&L breakdown for "Samlet Overblik"
       const { data: slotRows } = await supabase
         .from("strategy_slots")
-        .select("id, name, slot_number, config_id")
+        .select("id, name, slot_number, config_id, capital_percent")
         .eq("user_id", user.id)
         .order("slot_number", { ascending: true });
 
