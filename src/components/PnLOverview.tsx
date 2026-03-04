@@ -321,7 +321,8 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
               .filter((t) => t.slot_id === slot.id)
               .sort((a, b) => new Date(a.closed_at).getTime() - new Date(b.closed_at).getTime());
             const totalNetPnl = slotTrades.reduce((sum, t) => sum + getTradeNetPnl(t), 0);
-            const totalNetPnlPct = slotTrades.reduce((sum, t) => sum + (t.pnl_percent || 0), 0);
+            const slotCapital = portfolioBalance * (Number(slot.capital_percent) / 100);
+            const totalNetPnlPct = slotCapital > 0 ? (totalNetPnl / slotCapital) * 100 : 0;
             const winCount = slotTrades.filter((t) => getTradeNetPnl(t) > 0).length;
             const winRate = slotTrades.length > 0 ? (winCount / slotTrades.length) * 100 : 0;
 
