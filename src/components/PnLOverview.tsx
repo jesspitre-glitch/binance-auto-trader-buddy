@@ -295,7 +295,7 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
       // Slot-level net P&L breakdown for "Samlet Overblik"
       const { data: slotRows } = await supabase
         .from("strategy_slots")
-        .select("id, name, slot_number, config_id")
+        .select("id, name, slot_number, config_id, capital_percent")
         .eq("user_id", user.id)
         .order("slot_number", { ascending: true });
 
@@ -321,7 +321,8 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
               .filter((t) => t.slot_id === slot.id)
               .sort((a, b) => new Date(a.closed_at).getTime() - new Date(b.closed_at).getTime());
             const totalNetPnl = slotTrades.reduce((sum, t) => sum + getTradeNetPnl(t), 0);
-            const totalNetPnlPct = slotTrades.reduce((sum, t) => sum + (t.pnl_percent || 0), 0);
+            const slotCapital = portfolioBalance * (Number(slot.capital_percent) / 100);
+            const totalNetPnlPct = slotCapital > 0 ? (totalNetPnl / slotCapital) * 100 : 0;
             const winCount = slotTrades.filter((t) => getTradeNetPnl(t) > 0).length;
             const winRate = slotTrades.length > 0 ? (winCount / slotTrades.length) * 100 : 0;
 
@@ -338,7 +339,7 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
               ? slotTrades.filter((t) => new Date(t.closed_at).getTime() >= new Date(lastConfigChange).getTime())
               : [];
             const pnlSinceChange = tradesSinceChange.reduce((sum: number, t: any) => sum + getTradeNetPnl(t), 0);
-            const pnlSinceChangePct = tradesSinceChange.reduce((sum: number, t: any) => sum + (t.pnl_percent || 0), 0);
+            const pnlSinceChangePct = slotCapital > 0 ? (pnlSinceChange / slotCapital) * 100 : 0;
             const winsSinceChange = tradesSinceChange.filter((t: any) => getTradeNetPnl(t) > 0).length;
             const winRateSinceChange = tradesSinceChange.length > 0 ? (winsSinceChange / tradesSinceChange.length) * 100 : 0;
 
