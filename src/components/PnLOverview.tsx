@@ -1029,8 +1029,8 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
                         <div className="text-xs text-muted-foreground">
                           Trades: {slot.trades} · Win rate: {slot.winRate.toFixed(1)}%
                         </div>
-                        {/* Last config change + P&L since */}
-                        {slot.lastConfigChange && (
+                        {/* Last config change + P&L since – only when "Strategi" tab is active */}
+                        {slot.lastConfigChange && timeRange === "since_change" && (
                           <div className="border-t pt-2 mt-1 space-y-1">
                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                               <Clock className="h-3 w-3" />
