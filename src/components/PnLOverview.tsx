@@ -99,11 +99,11 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
           if (slotData?.config_id) {
             const { data: configData } = await supabase
               .from("indicator_config")
-              .select("updated_at")
+              .select("strategy_params_changed_at, updated_at")
               .eq("id", slotData.config_id)
               .maybeSingle();
 
-            strategyUpdatedAt = configData?.updated_at ?? null;
+            strategyUpdatedAt = (configData as any)?.strategy_params_changed_at ?? configData?.updated_at ?? null;
           }
         } else {
           const { data: configData } = await supabase
