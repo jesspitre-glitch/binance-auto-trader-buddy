@@ -191,7 +191,7 @@ export const BnbFeeWarning = () => {
           <p>
             Dine seneste handler betaler{" "}
             <span className="font-bold">
-              {(status.avgFeePct * 100).toFixed(4)}%
+              {status.avgFeePct.toFixed(4)}%
             </span>{" "}
             i fees — uden BNB-rabat. Fyld op for at spare ~10% på fees.
           </p>
