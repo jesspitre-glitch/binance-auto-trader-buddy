@@ -108,13 +108,13 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
         } else {
           const { data: configData } = await supabase
             .from("indicator_config")
-            .select("updated_at")
+            .select("strategy_params_changed_at, updated_at")
             .eq("user_id", user.id)
             .order("updated_at", { ascending: false })
             .limit(1)
             .maybeSingle();
 
-          strategyUpdatedAt = configData?.updated_at ?? null;
+          strategyUpdatedAt = (configData as any)?.strategy_params_changed_at ?? configData?.updated_at ?? null;
         }
 
         startMs = strategyUpdatedAt
