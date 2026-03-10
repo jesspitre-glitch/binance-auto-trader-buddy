@@ -99,22 +99,22 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
           if (slotData?.config_id) {
             const { data: configData } = await supabase
               .from("indicator_config")
-              .select("updated_at")
+              .select("strategy_params_changed_at, updated_at")
               .eq("id", slotData.config_id)
               .maybeSingle();
 
-            strategyUpdatedAt = configData?.updated_at ?? null;
+            strategyUpdatedAt = (configData as any)?.strategy_params_changed_at ?? configData?.updated_at ?? null;
           }
         } else {
           const { data: configData } = await supabase
             .from("indicator_config")
-            .select("updated_at")
+            .select("strategy_params_changed_at, updated_at")
             .eq("user_id", user.id)
             .order("updated_at", { ascending: false })
             .limit(1)
             .maybeSingle();
 
-          strategyUpdatedAt = configData?.updated_at ?? null;
+          strategyUpdatedAt = (configData as any)?.strategy_params_changed_at ?? configData?.updated_at ?? null;
         }
 
         startMs = strategyUpdatedAt
@@ -299,16 +299,16 @@ export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewPr
         .eq("user_id", user.id)
         .order("slot_number", { ascending: true });
 
-      // Fetch config updated_at for each slot's config
+      // Fetch config strategy_params_changed_at for each slot's config
       const configIds = [...new Set((slotRows || []).map((s: any) => s.config_id).filter(Boolean))];
       let configUpdatedMap: Record<string, string> = {};
       if (configIds.length > 0) {
         const { data: configs } = await supabase
           .from("indicator_config")
-          .select("id, updated_at")
+          .select("id, strategy_params_changed_at, updated_at")
           .in("id", configIds);
         if (configs) {
-          configs.forEach((c: any) => { configUpdatedMap[c.id] = c.updated_at; });
+          configs.forEach((c: any) => { configUpdatedMap[c.id] = c.strategy_params_changed_at ?? c.updated_at; });
         }
       }
 
