@@ -3,10 +3,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle, CheckCircle, Info, Fuel } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
+// fees_pct_of_notional stores percentage values (e.g. 0.036 = 0.036%)
 // With BNB discount: taker ~0.036%, maker ~0.018%
 // Without BNB: taker 0.05%, maker 0.02%
-const FEE_THRESHOLD_NO_BNB = 0.00039; // 0.039% — likely no BNB discount
-const FEE_THRESHOLD_WARNING = 0.00037; // borderline
+const FEE_THRESHOLD_NO_BNB = 0.039; // 0.039% — likely no BNB discount
+const FEE_THRESHOLD_WARNING = 0.037; // borderline
 
 interface BnbStatus {
   level: "ok" | "low" | "empty" | "unknown";
