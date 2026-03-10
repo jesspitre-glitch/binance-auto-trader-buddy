@@ -585,7 +585,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       if (config?.id) {
         result = await supabase
           .from("indicator_config")
-          .update(finalPayload)
+          .update({ ...finalPayload, strategy_params_changed_at: new Date().toISOString() })
           .eq("id", config.id)
           .select("id, updated_at")
           .single();
