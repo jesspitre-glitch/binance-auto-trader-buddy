@@ -1929,7 +1929,12 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
         </CardContent>
       </Card>
 
-
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>ATR (Average True Range)</CardTitle>
+              <CardDescription>Volatilitet - bruges til stop-loss og trailing stop</CardDescription>
             </div>
             <FilterModeToggle
               isHard={formData.atr_hard_filter}
