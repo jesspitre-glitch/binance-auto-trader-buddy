@@ -764,6 +764,34 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       parentEnabled: Boolean(formData.vwap_enabled),
       isHard: Boolean(formData.vwap_hard_filter),
     },
+    {
+      key: "supertrend",
+      label: "Supertrend",
+      enabled: Boolean(formData.supertrend_enabled && !formData.supertrend_hard_filter),
+      parentEnabled: Boolean(formData.supertrend_enabled),
+      isHard: Boolean(formData.supertrend_hard_filter),
+    },
+    {
+      key: "obv",
+      label: "OBV",
+      enabled: Boolean(formData.obv_enabled && !formData.obv_hard_filter),
+      parentEnabled: Boolean(formData.obv_enabled),
+      isHard: Boolean(formData.obv_hard_filter),
+    },
+    {
+      key: "cci",
+      label: "CCI",
+      enabled: Boolean(formData.cci_enabled && !formData.cci_hard_filter),
+      parentEnabled: Boolean(formData.cci_enabled),
+      isHard: Boolean(formData.cci_hard_filter),
+    },
+    {
+      key: "psar",
+      label: "Parabolic SAR",
+      enabled: Boolean(formData.psar_enabled && !formData.psar_hard_filter),
+      parentEnabled: Boolean(formData.psar_enabled),
+      isHard: Boolean(formData.psar_hard_filter),
+    },
   ] as const;
 
   // Vis ALLE soft rules (ikke-hard) - uanset om de er enabled eller ej
