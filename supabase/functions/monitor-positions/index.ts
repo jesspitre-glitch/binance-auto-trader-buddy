@@ -1216,7 +1216,51 @@ serve(async (req) => {
             };
           }
 
-          // KRAV: Trailing må kun være i profit-zonen
+          // ═══════════════════════════════════════════════
+          // 🆕 PSAR TRAILING STOP ENHANCEMENT
+          // When enabled, calculate live PSAR and use most protective level
+          // ═══════════════════════════════════════════════
+          if (psarTrailingEnabled && newTrailingStop !== null) {
+            try {
+              // Fetch recent klines for PSAR calculation
+              const klineResponse = await fetch(
+                `https://fapi.binance.com/fapi/v1/klines?symbol=${position.symbol}&interval=5m&limit=50`
+              );
+              if (klineResponse.ok) {
+                const klineData = await klineResponse.json();
+                const kHighs = klineData.map((k: any) => parseFloat(k[2]));
+                const kLows = klineData.map((k: any) => parseFloat(k[3]));
+                const kCloses = klineData.map((k: any) => parseFloat(k[4]));
+                
+                const psarResult = calculatePSARForTrailing(kHighs, kLows, kCloses, psarAfStart, psarAfIncrement, psarAfMax);
+                
+                if (psarResult) {
+                  const psarValue = psarResult.value;
+                  
+                  // Model B: Most Protective - use tightest stop
+                  if (position.side === 'LONG') {
+                    // LONG: higher trailing stop is more protective
+                    if (psarValue > newTrailingStop && psarResult.direction === 'up') {
+                      console.log(`   📊 PSAR TRAILING: PSAR=${psarValue.toFixed(8)} > ATR_trailing=${newTrailingStop.toFixed(8)} → using PSAR (more protective)`);
+                      newTrailingStop = psarValue;
+                    } else {
+                      console.log(`   📊 PSAR TRAILING: PSAR=${psarValue.toFixed(8)} <= ATR_trailing=${newTrailingStop.toFixed(8)} → keeping ATR (more protective)`);
+                    }
+                  } else {
+                    // SHORT: lower trailing stop is more protective
+                    if (psarValue < newTrailingStop && psarResult.direction === 'down') {
+                      console.log(`   📊 PSAR TRAILING: PSAR=${psarValue.toFixed(8)} < ATR_trailing=${newTrailingStop.toFixed(8)} → using PSAR (more protective)`);
+                      newTrailingStop = psarValue;
+                    } else {
+                      console.log(`   📊 PSAR TRAILING: PSAR=${psarValue.toFixed(8)} >= ATR_trailing=${newTrailingStop.toFixed(8)} → keeping ATR (more protective)`);
+                    }
+                  }
+                }
+              }
+            } catch (psarError) {
+              console.warn(`⚠️ PSAR trailing calculation failed for ${position.symbol}: ${psarError}`);
+            }
+          }
           // LONG: trailing-stop skal altid ligge OVER entry
           // SHORT: trailing-stop skal altid ligge UNDER entry
           if (newTrailingStop !== null && newTrailingStop !== undefined && isFinite(newTrailingStop)) {
