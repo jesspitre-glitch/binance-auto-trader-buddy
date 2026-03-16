@@ -215,6 +215,32 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     regime_lock_at_entry: config?.regime_lock_at_entry ?? true,
     regime_trend_exit_profile_id: config?.regime_trend_exit_profile_id ?? null,
     regime_range_exit_profile_id: config?.regime_range_exit_profile_id ?? null,
+    
+    // Supertrend
+    supertrend_enabled: config?.supertrend_enabled !== undefined ? config?.supertrend_enabled : false,
+    supertrend_hard_filter: config?.supertrend_hard_filter !== undefined ? config?.supertrend_hard_filter : false,
+    supertrend_period: config?.supertrend_period ?? 10,
+    supertrend_multiplier: config?.supertrend_multiplier ?? 3.0,
+    
+    // OBV
+    obv_enabled: config?.obv_enabled !== undefined ? config?.obv_enabled : false,
+    obv_hard_filter: config?.obv_hard_filter !== undefined ? config?.obv_hard_filter : false,
+    obv_lookback: config?.obv_lookback ?? 5,
+    
+    // CCI
+    cci_enabled: config?.cci_enabled !== undefined ? config?.cci_enabled : false,
+    cci_hard_filter: config?.cci_hard_filter !== undefined ? config?.cci_hard_filter : false,
+    cci_period: config?.cci_period ?? 20,
+    cci_overbought: config?.cci_overbought ?? 100,
+    cci_oversold: config?.cci_oversold ?? -100,
+    
+    // Parabolic SAR
+    psar_enabled: config?.psar_enabled !== undefined ? config?.psar_enabled : false,
+    psar_hard_filter: config?.psar_hard_filter !== undefined ? config?.psar_hard_filter : false,
+    psar_af_start: config?.psar_af_start ?? 0.02,
+    psar_af_increment: config?.psar_af_increment ?? 0.02,
+    psar_af_max: config?.psar_af_max ?? 0.2,
+    psar_trailing_enabled: config?.psar_trailing_enabled !== undefined ? config?.psar_trailing_enabled : false,
   });
   
   // State for exit profiles
