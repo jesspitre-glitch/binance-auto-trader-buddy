@@ -43,6 +43,7 @@ export const ExportTradesDialog = ({
   const [filterType, setFilterType] = useState<"count" | "days" | "hours" | "since_change" | "custom">(defaultFilterType);
   const [filterValue, setFilterValue] = useState("50");
   const [exportMode, setExportMode] = useState<"COMPACT" | "FULL_DEBUG">("COMPACT");
+  const [outputMode, setOutputMode] = useState<"clipboard" | "file">("clipboard");
   const [exportedData, setExportedData] = useState<string>("");
   const [showFallback, setShowFallback] = useState(false);
   const [customFrom, setCustomFrom] = useState<Date>();
@@ -155,28 +156,51 @@ export const ExportTradesDialog = ({
         return;
       }
 
-      // Split into chunks of CHUNK_SIZE
-      const tradeChunks: string[] = [];
-      for (let i = 0; i < trades.length; i += chunkSize) {
-        const slice = trades.slice(i, i + chunkSize);
-        const compressed = exportMode === "COMPACT"
-          ? compressTradeDataCompact(slice)
-          : compressTradeData(slice);
-        tradeChunks.push(formatWithLineBreaks(compressed));
-      }
-
-      setChunks(tradeChunks);
-      setCurrentChunk(0);
-      if (tradeChunks.length === 1) {
+      // Build export data
+      if (outputMode === "file") {
+        // Single file download
+        const allCompressed = exportMode === "COMPACT"
+          ? compressTradeDataCompact(trades)
+          : compressTradeData(trades);
+        const content = formatWithLineBreaks(allCompressed);
+        const blob = new Blob([content], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const timestamp = format(new Date(), "yyyy-MM-dd_HHmm");
+        a.download = `trades_${exportMode.toLowerCase()}_${timestamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
         toast({
-          title: `${trades.length} handler klar`,
-          description: "Tryk 'Kopier blok 1' for at kopiere til clipboard",
+          title: `${trades.length} handler downloadet`,
+          description: "Filen er klar til at uploade i din AI",
         });
       } else {
-        toast({
-          title: `${trades.length} handler opdelt i ${tradeChunks.length} blokke`,
-          description: "Kopier blok for blok ind i din AI",
-        });
+        // Split into chunks for clipboard
+        const tradeChunks: string[] = [];
+        for (let i = 0; i < trades.length; i += chunkSize) {
+          const slice = trades.slice(i, i + chunkSize);
+          const compressed = exportMode === "COMPACT"
+            ? compressTradeDataCompact(slice)
+            : compressTradeData(slice);
+          tradeChunks.push(formatWithLineBreaks(compressed));
+        }
+
+        setChunks(tradeChunks);
+        setCurrentChunk(0);
+        if (tradeChunks.length === 1) {
+          toast({
+            title: `${trades.length} handler klar`,
+            description: "Tryk 'Kopier blok 1' for at kopiere til clipboard",
+          });
+        } else {
+          toast({
+            title: `${trades.length} handler opdelt i ${tradeChunks.length} blokke`,
+            description: "Kopier blok for blok ind i din AI",
+          });
+        }
       }
     } catch (error: any) {
       toast({
@@ -322,6 +346,31 @@ export const ExportTradesDialog = ({
                 </RadioGroup>
               </div>
 
+              {/* Output Mode Toggle */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Output metode</Label>
+                <RadioGroup 
+                  value={outputMode} 
+                  onValueChange={(v) => setOutputMode(v as "clipboard" | "file")}
+                  className="flex gap-4"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="clipboard" id="clipboard" />
+                    <Label htmlFor="clipboard" className="cursor-pointer">
+                      <span className="font-medium">Tekst</span>
+                      <span className="text-xs text-muted-foreground ml-1">(kopier)</span>
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="file" id="file" />
+                    <Label htmlFor="file" className="cursor-pointer">
+                      <span className="font-medium">Fil</span>
+                      <span className="text-xs text-muted-foreground ml-1">(upload til AI)</span>
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
               {/* Filter Type */}
               <RadioGroup value={filterType} onValueChange={(v) => setFilterType(v as any)}>
                 <div className="flex items-center space-x-2">
@@ -414,23 +463,25 @@ export const ExportTradesDialog = ({
                 </div>
               )}
 
-              {/* Chunk size selector */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Handler pr. blok</Label>
-                <div className="flex items-center gap-3">
-                  <IntegerInput
-                    value={chunkSize}
-                    onValueChange={setChunkSize}
-                    min={10}
-                    fallback={100}
-                    className="w-24"
-                  />
+              {/* Chunk size selector - only for clipboard mode */}
+              {outputMode === "clipboard" && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Handler pr. blok</Label>
+                  <div className="flex items-center gap-3">
+                    <IntegerInput
+                      value={chunkSize}
+                      onValueChange={setChunkSize}
+                      min={10}
+                      fallback={100}
+                      className="w-24"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               <Button onClick={fetchAndExport} className="w-full">
                 <Download className="h-4 w-4 mr-2" />
-                Kopier {exportMode} til Clipboard
+                {outputMode === "file" ? `Download ${exportMode} som fil` : `Kopier ${exportMode} til Clipboard`}
               </Button>
             </>
           ) : (
