@@ -2579,16 +2579,16 @@ function analyzeSignal(
       volume_hard_filter: config.volume_hard_filter,
       pivot_points_hard_filter: config.pivot_points_hard_filter,
       higher_trend_hard_filter: config.higher_trend_hard_filter,
+      supertrend_hard_filter: config.supertrend_hard_filter,
+      obv_hard_filter: config.obv_hard_filter,
+      cci_hard_filter: config.cci_hard_filter,
+      psar_hard_filter: config.psar_hard_filter,
     },
-    // OBV (On Balance Volume) - beregnes altid for logging, ikke som filter
-    obv: (() => {
-      const finalSignalSide = finalSignal !== 'NONE' ? finalSignal : 'LONG'; // Default til LONG for NONE signaler
-      const obvResult = calculateOBV(closes, volumes, finalSignalSide);
-      if (obvResult) {
-        console.log(`📊 OBV: current=${obvResult.current.toFixed(0)}, prev5=${obvResult.previous5.toFixed(0)}, trend=${obvResult.trend}, confirmation=${obvResult.confirmation}`);
-      }
-      return obvResult;
-    })(),
+    // 🆕 New Indicators
+    supertrend: supertrendResult ? { value: supertrendResult.value, direction: supertrendResult.direction } : null,
+    cci: cciValue,
+    psar: psarResult ? { value: psarResult.value, direction: psarResult.direction } : null,
+    obv: obvLong ? { current: obvLong.current, previous5: obvLong.previous5, trend: obvLong.trend, confirmation_long: obvLong.confirmation, confirmation_short: obvShort?.confirmation ?? false } : null,
     
     // ═══════════════════════════════════════════════════════════════════════════════
     // 🎯 HTF SIDE-GATE v2.2.5 - Signal Decision Audit
