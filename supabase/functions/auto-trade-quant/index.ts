@@ -4667,6 +4667,10 @@ serve(async (req) => {
               volume_hard_filter: config.volume_hard_filter,
               pivot_points_hard_filter: config.pivot_points_hard_filter,
               higher_trend_hard_filter: config.higher_trend_hard_filter,
+              supertrend_hard_filter: config.supertrend_hard_filter,
+              obv_hard_filter: config.obv_hard_filter,
+              cci_hard_filter: config.cci_hard_filter,
+              psar_hard_filter: config.psar_hard_filter,
             },
             
             // 🔴 KRAV 1: FILTER STATUS - Gemmes for at eksporten kan læse ADX min source audit
