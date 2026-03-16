@@ -1629,6 +1629,23 @@ function analyzeSignal(
   // Build conditions arrays dynamically based on enabled indicators
   const longConditions: boolean[] = [];
   const shortConditions: boolean[] = [];
+  // Calculate new indicators
+  const supertrendResult = config.supertrend_enabled 
+    ? calculateSupertrend(highs, lows, closes, config.supertrend_period ?? 10, config.supertrend_multiplier ?? 3.0) 
+    : null;
+  
+  const cciValue = config.cci_enabled 
+    ? calculateCCI(highs, lows, closes, config.cci_period ?? 20) 
+    : null;
+  
+  const psarResult = config.psar_enabled 
+    ? calculateParabolicSAR(highs, lows, closes, config.psar_af_start ?? 0.02, config.psar_af_increment ?? 0.02, config.psar_af_max ?? 0.2) 
+    : null;
+
+  // OBV beregnes altid for begge sider (LONG + SHORT) - bruges til condition check
+  const obvLong = config.obv_enabled ? calculateOBV(closes, volumes, 'LONG') : null;
+  const obvShort = config.obv_enabled ? calculateOBV(closes, volumes, 'SHORT') : null;
+
   const conditionDetails: any = {
     ema: { enabled: config.ema_enabled, long: null, short: null },
     rsi: { enabled: config.rsi_enabled, long: null, short: null },
@@ -1637,7 +1654,11 @@ function analyzeSignal(
     bb: { enabled: config.bb_enabled, long: null, short: null },
     volume: { enabled: config.volume_enabled, long: null, short: null },
     pivotPoints: { enabled: config.pivot_points_enabled, long: null, short: null },
-    vwap: { enabled: config.vwap_enabled ?? false, long: null, short: null, value: vwap }
+    vwap: { enabled: config.vwap_enabled ?? false, long: null, short: null, value: vwap },
+    supertrend: { enabled: config.supertrend_enabled ?? false, long: null, short: null },
+    obv: { enabled: config.obv_enabled ?? false, long: null, short: null },
+    cci: { enabled: config.cci_enabled ?? false, long: null, short: null },
+    psar: { enabled: config.psar_enabled ?? false, long: null, short: null },
   };
   
   // EMA Trend (hvis enabled OG IKKE hard filter)
