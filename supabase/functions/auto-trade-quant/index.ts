@@ -2066,6 +2066,87 @@ function analyzeSignal(
     console.log(`      Price=${currentPrice.toFixed(6)}, VWAP=${vwap.toFixed(6)}`);
   }
   
+  // ═══════════════════════════════════════════════
+  // 🆕 SUPERTREND (Hard/Soft)
+  // ═══════════════════════════════════════════════
+  if (config.supertrend_enabled && supertrendResult) {
+    const stLong = supertrendResult.direction === 'up';
+    const stShort = supertrendResult.direction === 'down';
+    conditionDetails.supertrend.long = stLong;
+    conditionDetails.supertrend.short = stShort;
+    
+    if (config.supertrend_hard_filter) {
+      // Hard filter: side-specific - handled in signal decision
+      console.log(`   🔴 Supertrend HARD: direction=${supertrendResult.direction}, value=${supertrendResult.value.toFixed(6)}`);
+      console.log(`      LONG: ${stLong ? '✅' : '❌'}, SHORT: ${stShort ? '✅' : '❌'}`);
+    } else {
+      // Soft condition: 1 point each
+      longConditions.push(stLong);
+      shortConditions.push(stShort);
+      console.log(`   📊 Supertrend SOFT (1 point): Long: ${stLong ? '✅' : '❌'} Short: ${stShort ? '✅' : '❌'}`);
+    }
+  }
+  
+  // ═══════════════════════════════════════════════
+  // 🆕 OBV (Hard/Soft)
+  // ═══════════════════════════════════════════════
+  if (config.obv_enabled && obvLong && obvShort) {
+    const obvLongOk = obvLong.confirmation;
+    const obvShortOk = obvShort.confirmation;
+    conditionDetails.obv.long = obvLongOk;
+    conditionDetails.obv.short = obvShortOk;
+    
+    if (config.obv_hard_filter) {
+      console.log(`   🔴 OBV HARD: LONG confirm=${obvLongOk}, SHORT confirm=${obvShortOk}, trend=${obvLong.trend}`);
+    } else {
+      longConditions.push(obvLongOk);
+      shortConditions.push(obvShortOk);
+      console.log(`   📊 OBV SOFT (1 point): Long: ${obvLongOk ? '✅' : '❌'} Short: ${obvShortOk ? '✅' : '❌'}`);
+    }
+  }
+  
+  // ═══════════════════════════════════════════════
+  // 🆕 CCI (Hard/Soft)
+  // ═══════════════════════════════════════════════
+  if (config.cci_enabled && cciValue !== null) {
+    const cciOversold = config.cci_oversold ?? -100;
+    const cciOverbought = config.cci_overbought ?? 100;
+    // LONG: CCI rising from oversold (CCI > oversold)
+    const cciLong = cciValue > cciOversold;
+    // SHORT: CCI falling from overbought (CCI < overbought)
+    const cciShort = cciValue < cciOverbought;
+    conditionDetails.cci.long = cciLong;
+    conditionDetails.cci.short = cciShort;
+    
+    if (config.cci_hard_filter) {
+      console.log(`   🔴 CCI HARD: value=${cciValue.toFixed(2)}, oversold=${cciOversold}, overbought=${cciOverbought}`);
+      console.log(`      LONG: ${cciLong ? '✅' : '❌'}, SHORT: ${cciShort ? '✅' : '❌'}`);
+    } else {
+      longConditions.push(cciLong);
+      shortConditions.push(cciShort);
+      console.log(`   📊 CCI SOFT (1 point): Long: ${cciLong ? '✅' : '❌'} Short: ${cciShort ? '✅' : '❌'} (value=${cciValue.toFixed(2)})`);
+    }
+  }
+  
+  // ═══════════════════════════════════════════════
+  // 🆕 PSAR Entry Filter (Hard/Soft)
+  // ═══════════════════════════════════════════════
+  if (config.psar_enabled && psarResult) {
+    const psarLong = psarResult.direction === 'up';  // SAR below price = bullish
+    const psarShort = psarResult.direction === 'down'; // SAR above price = bearish
+    conditionDetails.psar.long = psarLong;
+    conditionDetails.psar.short = psarShort;
+    
+    if (config.psar_hard_filter) {
+      console.log(`   🔴 PSAR HARD: direction=${psarResult.direction}, value=${psarResult.value.toFixed(6)}`);
+      console.log(`      LONG: ${psarLong ? '✅' : '❌'}, SHORT: ${psarShort ? '✅' : '❌'}`);
+    } else {
+      longConditions.push(psarLong);
+      shortConditions.push(psarShort);
+      console.log(`   📊 PSAR SOFT (1 point): Long: ${psarLong ? '✅' : '❌'} Short: ${psarShort ? '✅' : '❌'}`);
+    }
+  }
+
   const requiredConditions = config.signal_conditions_required;
   const longConditionsMet = longConditions.filter(c => c).length;
   const shortConditionsMet = shortConditions.filter(c => c).length;
