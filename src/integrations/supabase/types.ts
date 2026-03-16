@@ -190,6 +190,11 @@ export type Database = {
           break_even_ratchet_only: boolean | null
           candle_close_entry_window_seconds: number | null
           candle_momentum_enabled: boolean | null
+          cci_enabled: boolean | null
+          cci_hard_filter: boolean | null
+          cci_overbought: number | null
+          cci_oversold: number | null
+          cci_period: number | null
           conditional_time_exit_enabled: boolean | null
           created_at: string | null
           daily_loss_limit_percent: number | null
@@ -232,6 +237,9 @@ export type Database = {
           min_candle_body_percent: number | null
           min_ema_spread_percent: number | null
           name: string
+          obv_enabled: boolean | null
+          obv_hard_filter: boolean | null
+          obv_lookback: number | null
           peak_lock_activate_profit_pct: number | null
           peak_lock_distance_pct: number | null
           peak_lock_enabled: boolean | null
@@ -243,6 +251,12 @@ export type Database = {
           pivot_points_near_threshold: number | null
           pivot_points_timeframe: string | null
           position_size_percent: number | null
+          psar_af_increment: number | null
+          psar_af_max: number | null
+          psar_af_start: number | null
+          psar_enabled: boolean | null
+          psar_hard_filter: boolean | null
+          psar_trailing_enabled: boolean | null
           regime_adx_threshold: number | null
           regime_atr_pct_threshold: number | null
           regime_if_false: string | null
@@ -282,6 +296,10 @@ export type Database = {
           stochrsi_period: number | null
           stochrsi_short_mode: string
           strategy_params_changed_at: string | null
+          supertrend_enabled: boolean | null
+          supertrend_hard_filter: boolean | null
+          supertrend_multiplier: number | null
+          supertrend_period: number | null
           trailing_stop_activation_atr: number | null
           trailing_stop_activation_enabled: boolean | null
           trend_timeframe: string | null
@@ -332,6 +350,11 @@ export type Database = {
           break_even_ratchet_only?: boolean | null
           candle_close_entry_window_seconds?: number | null
           candle_momentum_enabled?: boolean | null
+          cci_enabled?: boolean | null
+          cci_hard_filter?: boolean | null
+          cci_overbought?: number | null
+          cci_oversold?: number | null
+          cci_period?: number | null
           conditional_time_exit_enabled?: boolean | null
           created_at?: string | null
           daily_loss_limit_percent?: number | null
@@ -374,6 +397,9 @@ export type Database = {
           min_candle_body_percent?: number | null
           min_ema_spread_percent?: number | null
           name: string
+          obv_enabled?: boolean | null
+          obv_hard_filter?: boolean | null
+          obv_lookback?: number | null
           peak_lock_activate_profit_pct?: number | null
           peak_lock_distance_pct?: number | null
           peak_lock_enabled?: boolean | null
@@ -385,6 +411,12 @@ export type Database = {
           pivot_points_near_threshold?: number | null
           pivot_points_timeframe?: string | null
           position_size_percent?: number | null
+          psar_af_increment?: number | null
+          psar_af_max?: number | null
+          psar_af_start?: number | null
+          psar_enabled?: boolean | null
+          psar_hard_filter?: boolean | null
+          psar_trailing_enabled?: boolean | null
           regime_adx_threshold?: number | null
           regime_atr_pct_threshold?: number | null
           regime_if_false?: string | null
@@ -424,6 +456,10 @@ export type Database = {
           stochrsi_period?: number | null
           stochrsi_short_mode?: string
           strategy_params_changed_at?: string | null
+          supertrend_enabled?: boolean | null
+          supertrend_hard_filter?: boolean | null
+          supertrend_multiplier?: number | null
+          supertrend_period?: number | null
           trailing_stop_activation_atr?: number | null
           trailing_stop_activation_enabled?: boolean | null
           trend_timeframe?: string | null
@@ -474,6 +510,11 @@ export type Database = {
           break_even_ratchet_only?: boolean | null
           candle_close_entry_window_seconds?: number | null
           candle_momentum_enabled?: boolean | null
+          cci_enabled?: boolean | null
+          cci_hard_filter?: boolean | null
+          cci_overbought?: number | null
+          cci_oversold?: number | null
+          cci_period?: number | null
           conditional_time_exit_enabled?: boolean | null
           created_at?: string | null
           daily_loss_limit_percent?: number | null
@@ -516,6 +557,9 @@ export type Database = {
           min_candle_body_percent?: number | null
           min_ema_spread_percent?: number | null
           name?: string
+          obv_enabled?: boolean | null
+          obv_hard_filter?: boolean | null
+          obv_lookback?: number | null
           peak_lock_activate_profit_pct?: number | null
           peak_lock_distance_pct?: number | null
           peak_lock_enabled?: boolean | null
@@ -527,6 +571,12 @@ export type Database = {
           pivot_points_near_threshold?: number | null
           pivot_points_timeframe?: string | null
           position_size_percent?: number | null
+          psar_af_increment?: number | null
+          psar_af_max?: number | null
+          psar_af_start?: number | null
+          psar_enabled?: boolean | null
+          psar_hard_filter?: boolean | null
+          psar_trailing_enabled?: boolean | null
           regime_adx_threshold?: number | null
           regime_atr_pct_threshold?: number | null
           regime_if_false?: string | null
@@ -566,6 +616,10 @@ export type Database = {
           stochrsi_period?: number | null
           stochrsi_short_mode?: string
           strategy_params_changed_at?: string | null
+          supertrend_enabled?: boolean | null
+          supertrend_hard_filter?: boolean | null
+          supertrend_multiplier?: number | null
+          supertrend_period?: number | null
           trailing_stop_activation_atr?: number | null
           trailing_stop_activation_enabled?: boolean | null
           trend_timeframe?: string | null
