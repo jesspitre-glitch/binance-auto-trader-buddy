@@ -463,23 +463,25 @@ export const ExportTradesDialog = ({
                 </div>
               )}
 
-              {/* Chunk size selector */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Handler pr. blok</Label>
-                <div className="flex items-center gap-3">
-                  <IntegerInput
-                    value={chunkSize}
-                    onValueChange={setChunkSize}
-                    min={10}
-                    fallback={100}
-                    className="w-24"
-                  />
+              {/* Chunk size selector - only for clipboard mode */}
+              {outputMode === "clipboard" && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Handler pr. blok</Label>
+                  <div className="flex items-center gap-3">
+                    <IntegerInput
+                      value={chunkSize}
+                      onValueChange={setChunkSize}
+                      min={10}
+                      fallback={100}
+                      className="w-24"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               <Button onClick={fetchAndExport} className="w-full">
                 <Download className="h-4 w-4 mr-2" />
-                Kopier {exportMode} til Clipboard
+                {outputMode === "file" ? `Download ${exportMode} som fil` : `Kopier ${exportMode} til Clipboard`}
               </Button>
             </>
           ) : (
