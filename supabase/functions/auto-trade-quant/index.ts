@@ -535,7 +535,95 @@ function calculateVWAP(highs: number[], lows: number[], closes: number[], volume
   return sumTPV / sumVolume;
 }
 
-function calculateADX(high: number[], low: number[], close: number[], period: number): { adx: number, plusDI: number, minusDI: number, dx: number } {
+// Supertrend calculation
+function calculateSupertrend(highs: number[], lows: number[], closes: number[], period: number, multiplier: number): { value: number, direction: 'up' | 'down' } {
+  const atrValues: number[] = [];
+  // Calculate TR
+  for (let i = 1; i < highs.length; i++) {
+    const tr = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i-1]), Math.abs(lows[i] - closes[i-1]));
+    atrValues.push(tr);
+  }
+  // Simple ATR
+  if (atrValues.length < period) return { value: closes[closes.length-1], direction: 'up' };
+  let atr = atrValues.slice(0, period).reduce((a,b) => a+b, 0) / period;
+  for (let i = period; i < atrValues.length; i++) {
+    atr = (atr * (period - 1) + atrValues[i]) / period;
+  }
+  
+  const lastIdx = closes.length - 1;
+  const hl2 = (highs[lastIdx] + lows[lastIdx]) / 2;
+  const upperBand = hl2 + multiplier * atr;
+  const lowerBand = hl2 - multiplier * atr;
+  
+  // Direction: price above lower = uptrend, price below upper = downtrend
+  const direction = closes[lastIdx] > lowerBand ? 'up' : 'down';
+  const value = direction === 'up' ? lowerBand : upperBand;
+  
+  return { value, direction };
+}
+
+// CCI (Commodity Channel Index)
+function calculateCCI(highs: number[], lows: number[], closes: number[], period: number): number | null {
+  if (closes.length < period) return null;
+  
+  const typicalPrices: number[] = [];
+  for (let i = 0; i < closes.length; i++) {
+    typicalPrices.push((highs[i] + lows[i] + closes[i]) / 3);
+  }
+  
+  const recentTP = typicalPrices.slice(-period);
+  const sma = recentTP.reduce((a, b) => a + b, 0) / period;
+  const meanDeviation = recentTP.reduce((sum, tp) => sum + Math.abs(tp - sma), 0) / period;
+  
+  if (meanDeviation === 0) return 0;
+  return (recentTP[recentTP.length - 1] - sma) / (0.015 * meanDeviation);
+}
+
+// Parabolic SAR
+function calculateParabolicSAR(highs: number[], lows: number[], closes: number[], afStart: number, afIncrement: number, afMax: number): { value: number, direction: 'up' | 'down' } | null {
+  if (highs.length < 3) return null;
+  
+  let isUpTrend = closes[1] > closes[0];
+  let sar = isUpTrend ? lows[0] : highs[0];
+  let ep = isUpTrend ? highs[1] : lows[1];
+  let af = afStart;
+  
+  for (let i = 2; i < highs.length; i++) {
+    const prevSar = sar;
+    sar = prevSar + af * (ep - prevSar);
+    
+    if (isUpTrend) {
+      sar = Math.min(sar, lows[i-1], lows[i-2]);
+      if (lows[i] < sar) {
+        isUpTrend = false;
+        sar = ep;
+        ep = lows[i];
+        af = afStart;
+      } else {
+        if (highs[i] > ep) {
+          ep = highs[i];
+          af = Math.min(af + afIncrement, afMax);
+        }
+      }
+    } else {
+      sar = Math.max(sar, highs[i-1], highs[i-2]);
+      if (highs[i] > sar) {
+        isUpTrend = true;
+        sar = ep;
+        ep = highs[i];
+        af = afStart;
+      } else {
+        if (lows[i] < ep) {
+          ep = lows[i];
+          af = Math.min(af + afIncrement, afMax);
+        }
+      }
+    }
+  }
+  
+  return { value: sar, direction: isUpTrend ? 'up' : 'down' };
+}
+
   const tr: number[] = [];
   const dmPlus: number[] = [];
   const dmMinus: number[] = [];
