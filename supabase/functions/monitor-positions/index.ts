@@ -476,6 +476,12 @@ serve(async (req) => {
           hardSlPctEnabled = (configData as any).hard_sl_pct_enabled ?? true;
           hardSlPct = (configData as any).hard_sl_pct ?? 3.0;
 
+          // PSAR Trailing config
+          psarTrailingEnabled = (configData as any).psar_trailing_enabled ?? false;
+          psarAfStart = (configData as any).psar_af_start ?? 0.02;
+          psarAfIncrement = (configData as any).psar_af_increment ?? 0.02;
+          psarAfMax = (configData as any).psar_af_max ?? 0.2;
+
           // Log for synkroniserede positioner uden strategy_hash
           if (!position.strategy_hash) {
             console.log(`📋 Synkroniseret position ${position.symbol} bruger aktuel config: timeout=${maxPositionDurationMinutes}min, autoExit=${autoExitEnabled}, conditionalTimeExit=${conditionalTimeExitEnabled}, peakLock=${peakLockEnabled}, maxSlAfterMfe=${maxSlAfterMfeEnabled ? `${maxSlAfterMfeActivatePct}%→${maxSlAfterMfeMaxDistPct}%` : 'off'}, hardSlPct=${hardSlPctEnabled ? hardSlPct + '%' : 'off'}`);
