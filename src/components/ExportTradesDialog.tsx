@@ -43,6 +43,7 @@ export const ExportTradesDialog = ({
   const [filterType, setFilterType] = useState<"count" | "days" | "hours" | "since_change" | "custom">(defaultFilterType);
   const [filterValue, setFilterValue] = useState("50");
   const [exportMode, setExportMode] = useState<"COMPACT" | "FULL_DEBUG">("COMPACT");
+  const [outputMode, setOutputMode] = useState<"clipboard" | "file">("clipboard");
   const [exportedData, setExportedData] = useState<string>("");
   const [showFallback, setShowFallback] = useState(false);
   const [customFrom, setCustomFrom] = useState<Date>();
