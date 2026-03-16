@@ -50,6 +50,52 @@ async function getCurrentPrice(symbol: string, supabaseClient: any): Promise<num
   throw new Error(`Failed to get price for ${symbol} - both API and cache failed`);
 }
 
+// Parabolic SAR calculation for trailing stops
+function calculatePSARForTrailing(highs: number[], lows: number[], closes: number[], afStart: number, afIncrement: number, afMax: number): { value: number, direction: 'up' | 'down' } | null {
+  if (highs.length < 3) return null;
+  
+  let isUpTrend = closes[1] > closes[0];
+  let sar = isUpTrend ? lows[0] : highs[0];
+  let ep = isUpTrend ? highs[1] : lows[1];
+  let af = afStart;
+  
+  for (let i = 2; i < highs.length; i++) {
+    const prevSar = sar;
+    sar = prevSar + af * (ep - prevSar);
+    
+    if (isUpTrend) {
+      sar = Math.min(sar, lows[i-1], lows[i-2]);
+      if (lows[i] < sar) {
+        isUpTrend = false;
+        sar = ep;
+        ep = lows[i];
+        af = afStart;
+      } else {
+        if (highs[i] > ep) {
+          ep = highs[i];
+          af = Math.min(af + afIncrement, afMax);
+        }
+      }
+    } else {
+      sar = Math.max(sar, highs[i-1], highs[i-2]);
+      if (highs[i] > sar) {
+        isUpTrend = true;
+        sar = ep;
+        ep = highs[i];
+        af = afStart;
+      } else {
+        if (lows[i] < ep) {
+          ep = lows[i];
+          af = Math.min(af + afIncrement, afMax);
+        }
+      }
+    }
+  }
+  
+  return { value: sar, direction: isUpTrend ? 'up' : 'down' };
+}
+
+
 async function createSignature(queryString: string, apiSecret: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
@@ -372,7 +418,7 @@ serve(async (req) => {
           if (slotData?.config_id) {
             const { data: slotConfig } = await supabaseClient
               .from('indicator_config')
-              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct')
+              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max')
               .eq('id', slotData.config_id)
               .single();
             configData = slotConfig;
@@ -393,7 +439,7 @@ serve(async (req) => {
           if (sessionData?.active_config_id) {
             const { data: activeConfig } = await supabaseClient
               .from('indicator_config')
-              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct')
+              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max')
               .eq('id', sessionData.active_config_id)
               .single();
             configData = activeConfig;
@@ -402,7 +448,7 @@ serve(async (req) => {
             // Fallback til første config hvis ingen session
             const { data: fallbackConfig } = await supabaseClient
               .from('indicator_config')
-              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct')
+              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max')
               .eq('user_id', position.user_id)
               .order('created_at', { ascending: false })
               .limit(1)
@@ -441,6 +487,12 @@ serve(async (req) => {
         // Trailing multiplier fra UI (indicator_config)
         let atrTrailingStopMultiplierFromUi: number | null = null;
         
+        // PSAR Trailing config
+        let psarTrailingEnabled = false;
+        let psarAfStart = 0.02;
+        let psarAfIncrement = 0.02;
+        let psarAfMax = 0.2;
+        
         if (configData) {
           trailingActivationEnabled = configData.trailing_stop_activation_enabled ?? true;
           trailingActivationAtr = configData.trailing_stop_activation_atr ?? 1.0;
@@ -475,6 +527,12 @@ serve(async (req) => {
           // Hard Stop Loss %
           hardSlPctEnabled = (configData as any).hard_sl_pct_enabled ?? true;
           hardSlPct = (configData as any).hard_sl_pct ?? 3.0;
+
+          // PSAR Trailing config
+          psarTrailingEnabled = (configData as any).psar_trailing_enabled ?? false;
+          psarAfStart = (configData as any).psar_af_start ?? 0.02;
+          psarAfIncrement = (configData as any).psar_af_increment ?? 0.02;
+          psarAfMax = (configData as any).psar_af_max ?? 0.2;
 
           // Log for synkroniserede positioner uden strategy_hash
           if (!position.strategy_hash) {
@@ -1159,7 +1217,51 @@ serve(async (req) => {
             };
           }
 
-          // KRAV: Trailing må kun være i profit-zonen
+          // ═══════════════════════════════════════════════
+          // 🆕 PSAR TRAILING STOP ENHANCEMENT
+          // When enabled, calculate live PSAR and use most protective level
+          // ═══════════════════════════════════════════════
+          if (psarTrailingEnabled && newTrailingStop !== null) {
+            try {
+              // Fetch recent klines for PSAR calculation
+              const klineResponse = await fetch(
+                `https://fapi.binance.com/fapi/v1/klines?symbol=${position.symbol}&interval=5m&limit=50`
+              );
+              if (klineResponse.ok) {
+                const klineData = await klineResponse.json();
+                const kHighs = klineData.map((k: any) => parseFloat(k[2]));
+                const kLows = klineData.map((k: any) => parseFloat(k[3]));
+                const kCloses = klineData.map((k: any) => parseFloat(k[4]));
+                
+                const psarResult = calculatePSARForTrailing(kHighs, kLows, kCloses, psarAfStart, psarAfIncrement, psarAfMax);
+                
+                if (psarResult) {
+                  const psarValue = psarResult.value;
+                  
+                  // Model B: Most Protective - use tightest stop
+                  if (position.side === 'LONG') {
+                    // LONG: higher trailing stop is more protective
+                    if (psarValue > newTrailingStop && psarResult.direction === 'up') {
+                      console.log(`   📊 PSAR TRAILING: PSAR=${psarValue.toFixed(8)} > ATR_trailing=${newTrailingStop.toFixed(8)} → using PSAR (more protective)`);
+                      newTrailingStop = psarValue;
+                    } else {
+                      console.log(`   📊 PSAR TRAILING: PSAR=${psarValue.toFixed(8)} <= ATR_trailing=${newTrailingStop.toFixed(8)} → keeping ATR (more protective)`);
+                    }
+                  } else {
+                    // SHORT: lower trailing stop is more protective
+                    if (psarValue < newTrailingStop && psarResult.direction === 'down') {
+                      console.log(`   📊 PSAR TRAILING: PSAR=${psarValue.toFixed(8)} < ATR_trailing=${newTrailingStop.toFixed(8)} → using PSAR (more protective)`);
+                      newTrailingStop = psarValue;
+                    } else {
+                      console.log(`   📊 PSAR TRAILING: PSAR=${psarValue.toFixed(8)} >= ATR_trailing=${newTrailingStop.toFixed(8)} → keeping ATR (more protective)`);
+                    }
+                  }
+                }
+              }
+            } catch (psarError) {
+              console.warn(`⚠️ PSAR trailing calculation failed for ${position.symbol}: ${psarError}`);
+            }
+          }
           // LONG: trailing-stop skal altid ligge OVER entry
           // SHORT: trailing-stop skal altid ligge UNDER entry
           if (newTrailingStop !== null && newTrailingStop !== undefined && isFinite(newTrailingStop)) {

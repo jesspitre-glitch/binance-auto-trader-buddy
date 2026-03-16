@@ -244,6 +244,28 @@ async function getStrategyIdentifier(config: any): Promise<string> {
     higher_trend_enabled: config.higher_trend_enabled,
     higher_trend_timeframe: config.higher_trend_timeframe,
     klines_limit: config.klines_limit,
+    // Supertrend
+    supertrend_enabled: config.supertrend_enabled,
+    supertrend_hard_filter: config.supertrend_hard_filter,
+    supertrend_period: config.supertrend_period,
+    supertrend_multiplier: config.supertrend_multiplier,
+    // OBV
+    obv_enabled: config.obv_enabled,
+    obv_hard_filter: config.obv_hard_filter,
+    obv_lookback: config.obv_lookback,
+    // CCI
+    cci_enabled: config.cci_enabled,
+    cci_hard_filter: config.cci_hard_filter,
+    cci_period: config.cci_period,
+    cci_overbought: config.cci_overbought,
+    cci_oversold: config.cci_oversold,
+    // PSAR
+    psar_enabled: config.psar_enabled,
+    psar_hard_filter: config.psar_hard_filter,
+    psar_af_start: config.psar_af_start,
+    psar_af_increment: config.psar_af_increment,
+    psar_af_max: config.psar_af_max,
+    psar_trailing_enabled: config.psar_trailing_enabled,
   };
   
   // Sort keys to ensure consistent hashing regardless of object property order
@@ -1629,6 +1651,23 @@ function analyzeSignal(
   // Build conditions arrays dynamically based on enabled indicators
   const longConditions: boolean[] = [];
   const shortConditions: boolean[] = [];
+  // Calculate new indicators
+  const supertrendResult = config.supertrend_enabled 
+    ? calculateSupertrend(highs, lows, closes, config.supertrend_period ?? 10, config.supertrend_multiplier ?? 3.0) 
+    : null;
+  
+  const cciValue = config.cci_enabled 
+    ? calculateCCI(highs, lows, closes, config.cci_period ?? 20) 
+    : null;
+  
+  const psarResult = config.psar_enabled 
+    ? calculateParabolicSAR(highs, lows, closes, config.psar_af_start ?? 0.02, config.psar_af_increment ?? 0.02, config.psar_af_max ?? 0.2) 
+    : null;
+
+  // OBV beregnes altid for begge sider (LONG + SHORT) - bruges til condition check
+  const obvLong = config.obv_enabled ? calculateOBV(closes, volumes, 'LONG') : null;
+  const obvShort = config.obv_enabled ? calculateOBV(closes, volumes, 'SHORT') : null;
+
   const conditionDetails: any = {
     ema: { enabled: config.ema_enabled, long: null, short: null },
     rsi: { enabled: config.rsi_enabled, long: null, short: null },
@@ -1637,7 +1676,11 @@ function analyzeSignal(
     bb: { enabled: config.bb_enabled, long: null, short: null },
     volume: { enabled: config.volume_enabled, long: null, short: null },
     pivotPoints: { enabled: config.pivot_points_enabled, long: null, short: null },
-    vwap: { enabled: config.vwap_enabled ?? false, long: null, short: null, value: vwap }
+    vwap: { enabled: config.vwap_enabled ?? false, long: null, short: null, value: vwap },
+    supertrend: { enabled: config.supertrend_enabled ?? false, long: null, short: null },
+    obv: { enabled: config.obv_enabled ?? false, long: null, short: null },
+    cci: { enabled: config.cci_enabled ?? false, long: null, short: null },
+    psar: { enabled: config.psar_enabled ?? false, long: null, short: null },
   };
   
   // EMA Trend (hvis enabled OG IKKE hard filter)
@@ -2045,6 +2088,87 @@ function analyzeSignal(
     console.log(`      Price=${currentPrice.toFixed(6)}, VWAP=${vwap.toFixed(6)}`);
   }
   
+  // ═══════════════════════════════════════════════
+  // 🆕 SUPERTREND (Hard/Soft)
+  // ═══════════════════════════════════════════════
+  if (config.supertrend_enabled && supertrendResult) {
+    const stLong = supertrendResult.direction === 'up';
+    const stShort = supertrendResult.direction === 'down';
+    conditionDetails.supertrend.long = stLong;
+    conditionDetails.supertrend.short = stShort;
+    
+    if (config.supertrend_hard_filter) {
+      // Hard filter: side-specific - handled in signal decision
+      console.log(`   🔴 Supertrend HARD: direction=${supertrendResult.direction}, value=${supertrendResult.value.toFixed(6)}`);
+      console.log(`      LONG: ${stLong ? '✅' : '❌'}, SHORT: ${stShort ? '✅' : '❌'}`);
+    } else {
+      // Soft condition: 1 point each
+      longConditions.push(stLong);
+      shortConditions.push(stShort);
+      console.log(`   📊 Supertrend SOFT (1 point): Long: ${stLong ? '✅' : '❌'} Short: ${stShort ? '✅' : '❌'}`);
+    }
+  }
+  
+  // ═══════════════════════════════════════════════
+  // 🆕 OBV (Hard/Soft)
+  // ═══════════════════════════════════════════════
+  if (config.obv_enabled && obvLong && obvShort) {
+    const obvLongOk = obvLong.confirmation;
+    const obvShortOk = obvShort.confirmation;
+    conditionDetails.obv.long = obvLongOk;
+    conditionDetails.obv.short = obvShortOk;
+    
+    if (config.obv_hard_filter) {
+      console.log(`   🔴 OBV HARD: LONG confirm=${obvLongOk}, SHORT confirm=${obvShortOk}, trend=${obvLong.trend}`);
+    } else {
+      longConditions.push(obvLongOk);
+      shortConditions.push(obvShortOk);
+      console.log(`   📊 OBV SOFT (1 point): Long: ${obvLongOk ? '✅' : '❌'} Short: ${obvShortOk ? '✅' : '❌'}`);
+    }
+  }
+  
+  // ═══════════════════════════════════════════════
+  // 🆕 CCI (Hard/Soft)
+  // ═══════════════════════════════════════════════
+  if (config.cci_enabled && cciValue !== null) {
+    const cciOversold = config.cci_oversold ?? -100;
+    const cciOverbought = config.cci_overbought ?? 100;
+    // LONG: CCI rising from oversold (CCI > oversold)
+    const cciLong = cciValue > cciOversold;
+    // SHORT: CCI falling from overbought (CCI < overbought)
+    const cciShort = cciValue < cciOverbought;
+    conditionDetails.cci.long = cciLong;
+    conditionDetails.cci.short = cciShort;
+    
+    if (config.cci_hard_filter) {
+      console.log(`   🔴 CCI HARD: value=${cciValue.toFixed(2)}, oversold=${cciOversold}, overbought=${cciOverbought}`);
+      console.log(`      LONG: ${cciLong ? '✅' : '❌'}, SHORT: ${cciShort ? '✅' : '❌'}`);
+    } else {
+      longConditions.push(cciLong);
+      shortConditions.push(cciShort);
+      console.log(`   📊 CCI SOFT (1 point): Long: ${cciLong ? '✅' : '❌'} Short: ${cciShort ? '✅' : '❌'} (value=${cciValue.toFixed(2)})`);
+    }
+  }
+  
+  // ═══════════════════════════════════════════════
+  // 🆕 PSAR Entry Filter (Hard/Soft)
+  // ═══════════════════════════════════════════════
+  if (config.psar_enabled && psarResult) {
+    const psarLong = psarResult.direction === 'up';  // SAR below price = bullish
+    const psarShort = psarResult.direction === 'down'; // SAR above price = bearish
+    conditionDetails.psar.long = psarLong;
+    conditionDetails.psar.short = psarShort;
+    
+    if (config.psar_hard_filter) {
+      console.log(`   🔴 PSAR HARD: direction=${psarResult.direction}, value=${psarResult.value.toFixed(6)}`);
+      console.log(`      LONG: ${psarLong ? '✅' : '❌'}, SHORT: ${psarShort ? '✅' : '❌'}`);
+    } else {
+      longConditions.push(psarLong);
+      shortConditions.push(psarShort);
+      console.log(`   📊 PSAR SOFT (1 point): Long: ${psarLong ? '✅' : '❌'} Short: ${psarShort ? '✅' : '❌'}`);
+    }
+  }
+
   const requiredConditions = config.signal_conditions_required;
   const longConditionsMet = longConditions.filter(c => c).length;
   const shortConditionsMet = shortConditions.filter(c => c).length;
@@ -2057,25 +2181,61 @@ function analyzeSignal(
   // shortAllowed=false → shortSignal=false uanset betingelser
   
   // 🔴 FIX: StochRSI HARD FILTER er SIDE-SPECIFIK og SKAL inkluderes i signal-beslutning!
-  // Hvis stochrsi_hard_filter=true og stochrsi_enabled=true, SKAL den respektive side passe
   const stochrsiLongHardPassed = !(config.stochrsi_enabled && config.stochrsi_hard_filter === true) || 
                                    filterStatus.hard.stochrsi.long === true;
   const stochrsiShortHardPassed = !(config.stochrsi_enabled && config.stochrsi_hard_filter === true) || 
                                     filterStatus.hard.stochrsi.short === true;
   
-  console.log(`🎯 SIDE-SPECIFIK STOCHRSI HARD: longPassed=${stochrsiLongHardPassed}, shortPassed=${stochrsiShortHardPassed}`);
+  // 🆕 Supertrend HARD - side-specific
+  const supertrendLongHardPassed = !(config.supertrend_enabled && config.supertrend_hard_filter === true) || 
+                                     conditionDetails.supertrend.long === true;
+  const supertrendShortHardPassed = !(config.supertrend_enabled && config.supertrend_hard_filter === true) || 
+                                      conditionDetails.supertrend.short === true;
+  
+  // 🆕 OBV HARD - side-specific
+  const obvLongHardPassed = !(config.obv_enabled && config.obv_hard_filter === true) || 
+                              conditionDetails.obv.long === true;
+  const obvShortHardPassed = !(config.obv_enabled && config.obv_hard_filter === true) || 
+                               conditionDetails.obv.short === true;
+  
+  // 🆕 CCI HARD - side-specific
+  const cciLongHardPassed = !(config.cci_enabled && config.cci_hard_filter === true) || 
+                              conditionDetails.cci.long === true;
+  const cciShortHardPassed = !(config.cci_enabled && config.cci_hard_filter === true) || 
+                               conditionDetails.cci.short === true;
+  
+  // 🆕 PSAR HARD - side-specific
+  const psarLongHardPassed = !(config.psar_enabled && config.psar_hard_filter === true) || 
+                               conditionDetails.psar.long === true;
+  const psarShortHardPassed = !(config.psar_enabled && config.psar_hard_filter === true) || 
+                                conditionDetails.psar.short === true;
+  
+  console.log(`🎯 SIDE-SPECIFIK HARD FILTERS:`);
+  console.log(`   StochRSI: long=${stochrsiLongHardPassed}, short=${stochrsiShortHardPassed}`);
+  if (config.supertrend_enabled && config.supertrend_hard_filter) console.log(`   Supertrend: long=${supertrendLongHardPassed}, short=${supertrendShortHardPassed}`);
+  if (config.obv_enabled && config.obv_hard_filter) console.log(`   OBV: long=${obvLongHardPassed}, short=${obvShortHardPassed}`);
+  if (config.cci_enabled && config.cci_hard_filter) console.log(`   CCI: long=${cciLongHardPassed}, short=${cciShortHardPassed}`);
+  if (config.psar_enabled && config.psar_hard_filter) console.log(`   PSAR: long=${psarLongHardPassed}, short=${psarShortHardPassed}`);
   
   const longSignal = longAllowed && 
                      longConditionsMet >= requiredConditions && 
                      macdLongOK && 
                      macdColorChangeLongOK &&
-                     stochrsiLongHardPassed;
+                     stochrsiLongHardPassed &&
+                     supertrendLongHardPassed &&
+                     obvLongHardPassed &&
+                     cciLongHardPassed &&
+                     psarLongHardPassed;
   
   const shortSignal = shortAllowed && 
                       shortConditionsMet >= requiredConditions && 
                       macdShortOK && 
                       macdColorChangeShortOK &&
-                      stochrsiShortHardPassed;
+                      stochrsiShortHardPassed &&
+                      supertrendShortHardPassed &&
+                      obvShortHardPassed &&
+                      cciShortHardPassed &&
+                      psarShortHardPassed;
   
   // ═══════════════════════════════════════════════════════════════════════════════
   // 🎯 DETERMINISTISK TIE-BREAKER - Når begge signaler er true
@@ -2341,6 +2501,10 @@ function analyzeSignal(
   if (config.bb_enabled && conditionDetails.bb.long) longPointsBreakdown.push('Bollinger: +1');
   if (config.volume_enabled && conditionDetails.volume.long) longPointsBreakdown.push('Volume: +1');
   if (config.pivot_points_enabled && conditionDetails.pivotPoints.long) longPointsBreakdown.push('Pivot: +1');
+  if (config.supertrend_enabled && !config.supertrend_hard_filter && conditionDetails.supertrend.long) longPointsBreakdown.push('Supertrend: +1');
+  if (config.obv_enabled && !config.obv_hard_filter && conditionDetails.obv.long) longPointsBreakdown.push('OBV: +1');
+  if (config.cci_enabled && !config.cci_hard_filter && conditionDetails.cci.long) longPointsBreakdown.push('CCI: +1');
+  if (config.psar_enabled && !config.psar_hard_filter && conditionDetails.psar.long) longPointsBreakdown.push('PSAR: +1');
   
   console.log(`   LONG points (${longConditionsMet}/${requiredConditions}):`);
   if (longPointsBreakdown.length > 0) {
@@ -2358,6 +2522,10 @@ function analyzeSignal(
   if (config.bb_enabled && conditionDetails.bb.short) shortPointsBreakdown.push('Bollinger: +1');
   if (config.volume_enabled && conditionDetails.volume.short) shortPointsBreakdown.push('Volume: +1');
   if (config.pivot_points_enabled && conditionDetails.pivotPoints.short) shortPointsBreakdown.push('Pivot: +1');
+  if (config.supertrend_enabled && !config.supertrend_hard_filter && conditionDetails.supertrend.short) shortPointsBreakdown.push('Supertrend: +1');
+  if (config.obv_enabled && !config.obv_hard_filter && conditionDetails.obv.short) shortPointsBreakdown.push('OBV: +1');
+  if (config.cci_enabled && !config.cci_hard_filter && conditionDetails.cci.short) shortPointsBreakdown.push('CCI: +1');
+  if (config.psar_enabled && !config.psar_hard_filter && conditionDetails.psar.short) shortPointsBreakdown.push('PSAR: +1');
   
   console.log(`   SHORT points (${shortConditionsMet}/${requiredConditions}):`);
   if (shortPointsBreakdown.length > 0) {
@@ -2441,16 +2609,16 @@ function analyzeSignal(
       volume_hard_filter: config.volume_hard_filter,
       pivot_points_hard_filter: config.pivot_points_hard_filter,
       higher_trend_hard_filter: config.higher_trend_hard_filter,
+      supertrend_hard_filter: config.supertrend_hard_filter,
+      obv_hard_filter: config.obv_hard_filter,
+      cci_hard_filter: config.cci_hard_filter,
+      psar_hard_filter: config.psar_hard_filter,
     },
-    // OBV (On Balance Volume) - beregnes altid for logging, ikke som filter
-    obv: (() => {
-      const finalSignalSide = finalSignal !== 'NONE' ? finalSignal : 'LONG'; // Default til LONG for NONE signaler
-      const obvResult = calculateOBV(closes, volumes, finalSignalSide);
-      if (obvResult) {
-        console.log(`📊 OBV: current=${obvResult.current.toFixed(0)}, prev5=${obvResult.previous5.toFixed(0)}, trend=${obvResult.trend}, confirmation=${obvResult.confirmation}`);
-      }
-      return obvResult;
-    })(),
+    // 🆕 New Indicators
+    supertrend: supertrendResult ? { value: supertrendResult.value, direction: supertrendResult.direction } : null,
+    cci: cciValue,
+    psar: psarResult ? { value: psarResult.value, direction: psarResult.direction } : null,
+    obv: obvLong ? { current: obvLong.current, previous5: obvLong.previous5, trend: obvLong.trend, confirmation_long: obvLong.confirmation, confirmation_short: obvShort?.confirmation ?? false } : null,
     
     // ═══════════════════════════════════════════════════════════════════════════════
     // 🎯 HTF SIDE-GATE v2.2.5 - Signal Decision Audit
@@ -4288,10 +4456,55 @@ serve(async (req) => {
               passed: analysis.indicators.conditionDetails?.vwap?.[signal.toLowerCase()] === true,
               points: analysis.indicators.conditionDetails?.vwap?.[signal.toLowerCase()] === true ? 1 : 0,
             },
+            soft_supertrend: {
+              enabled: config.supertrend_enabled === true && config.supertrend_hard_filter !== true,
+              passed: analysis.indicators.conditionDetails?.supertrend?.[signal.toLowerCase()] === true,
+              points: analysis.indicators.conditionDetails?.supertrend?.[signal.toLowerCase()] === true ? 1 : 0,
+            },
+            soft_obv: {
+              enabled: config.obv_enabled === true && config.obv_hard_filter !== true,
+              passed: analysis.indicators.conditionDetails?.obv?.[signal.toLowerCase()] === true,
+              points: analysis.indicators.conditionDetails?.obv?.[signal.toLowerCase()] === true ? 1 : 0,
+            },
+            soft_cci: {
+              enabled: config.cci_enabled === true && config.cci_hard_filter !== true,
+              passed: analysis.indicators.conditionDetails?.cci?.[signal.toLowerCase()] === true,
+              points: analysis.indicators.conditionDetails?.cci?.[signal.toLowerCase()] === true ? 1 : 0,
+            },
+            soft_psar: {
+              enabled: config.psar_enabled === true && config.psar_hard_filter !== true,
+              passed: analysis.indicators.conditionDetails?.psar?.[signal.toLowerCase()] === true,
+              points: analysis.indicators.conditionDetails?.psar?.[signal.toLowerCase()] === true ? 1 : 0,
+            },
+            // Hard filter entries for new indicators
+            hard_supertrend: {
+              enabled: config.supertrend_enabled === true && config.supertrend_hard_filter === true,
+              passed: signal === 'LONG' ? analysis.indicators.conditionDetails?.supertrend?.long === true
+                : signal === 'SHORT' ? analysis.indicators.conditionDetails?.supertrend?.short === true : null,
+              reason: config.supertrend_enabled ? `direction=${analysis.indicators.supertrend?.direction ?? 'N/A'}` : 'filter_disabled',
+            },
+            hard_obv: {
+              enabled: config.obv_enabled === true && config.obv_hard_filter === true,
+              passed: signal === 'LONG' ? analysis.indicators.conditionDetails?.obv?.long === true
+                : signal === 'SHORT' ? analysis.indicators.conditionDetails?.obv?.short === true : null,
+              reason: config.obv_enabled ? `trend=${analysis.indicators.obv?.trend ?? 'N/A'}` : 'filter_disabled',
+            },
+            hard_cci: {
+              enabled: config.cci_enabled === true && config.cci_hard_filter === true,
+              passed: signal === 'LONG' ? analysis.indicators.conditionDetails?.cci?.long === true
+                : signal === 'SHORT' ? analysis.indicators.conditionDetails?.cci?.short === true : null,
+              reason: config.cci_enabled ? `value=${analysis.indicators.cci?.toFixed(2) ?? 'N/A'}` : 'filter_disabled',
+            },
+            hard_psar: {
+              enabled: config.psar_enabled === true && config.psar_hard_filter === true,
+              passed: signal === 'LONG' ? analysis.indicators.conditionDetails?.psar?.long === true
+                : signal === 'SHORT' ? analysis.indicators.conditionDetails?.psar?.short === true : null,
+              reason: config.psar_enabled ? `direction=${analysis.indicators.psar?.direction ?? 'N/A'}` : 'filter_disabled',
+            },
             // ═══════════════════════════════════════════════════════
             // SUMMARY
             // ═══════════════════════════════════════════════════════
-            hard_filters_total: 10,
+            hard_filters_total: 14,
             hard_filters_enabled: [
               config.ema_enabled && config.ema_hard_filter !== false, // EMA spread filter
               config.atr_enabled && config.atr_hard_filter !== false,
@@ -4302,7 +4515,11 @@ serve(async (req) => {
               config.macd_direction_enabled,
               config.macd_color_change_hard_filter,
               config.higher_trend_enabled && config.higher_trend_hard_filter !== false,
-              config.ema_enabled && config.ema_trend_hard_filter === true, // 🔴 FIX: medium trend bruger ema_trend_hard_filter
+              config.ema_enabled && config.ema_trend_hard_filter === true,
+              config.supertrend_enabled && config.supertrend_hard_filter === true,
+              config.obv_enabled && config.obv_hard_filter === true,
+              config.cci_enabled && config.cci_hard_filter === true,
+              config.psar_enabled && config.psar_hard_filter === true,
             ].filter(Boolean).length,
             soft_conditions_required: config.signal_conditions_required,
             soft_conditions_met: signal === 'LONG' 
@@ -4450,6 +4667,10 @@ serve(async (req) => {
               volume_hard_filter: config.volume_hard_filter,
               pivot_points_hard_filter: config.pivot_points_hard_filter,
               higher_trend_hard_filter: config.higher_trend_hard_filter,
+              supertrend_hard_filter: config.supertrend_hard_filter,
+              obv_hard_filter: config.obv_hard_filter,
+              cci_hard_filter: config.cci_hard_filter,
+              psar_hard_filter: config.psar_hard_filter,
             },
             
             // 🔴 KRAV 1: FILTER STATUS - Gemmes for at eksporten kan læse ADX min source audit
