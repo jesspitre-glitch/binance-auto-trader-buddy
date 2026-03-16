@@ -105,6 +105,32 @@ interface IndicatorConfig {
   vwap_period?: number;
   vwap_hard_filter?: boolean;
   
+  // Supertrend
+  supertrend_enabled?: boolean;
+  supertrend_hard_filter?: boolean;
+  supertrend_period?: number;
+  supertrend_multiplier?: number;
+  
+  // OBV
+  obv_enabled?: boolean;
+  obv_hard_filter?: boolean;
+  obv_lookback?: number;
+  
+  // CCI
+  cci_enabled?: boolean;
+  cci_hard_filter?: boolean;
+  cci_period?: number;
+  cci_overbought?: number;
+  cci_oversold?: number;
+  
+  // Parabolic SAR
+  psar_enabled?: boolean;
+  psar_hard_filter?: boolean;
+  psar_af_start?: number;
+  psar_af_increment?: number;
+  psar_af_max?: number;
+  psar_trailing_enabled?: boolean;
+  
   // Regime Router
   regime_router_enabled?: boolean;
   regime_method?: string;
