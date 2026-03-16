@@ -2159,25 +2159,61 @@ function analyzeSignal(
   // shortAllowed=false → shortSignal=false uanset betingelser
   
   // 🔴 FIX: StochRSI HARD FILTER er SIDE-SPECIFIK og SKAL inkluderes i signal-beslutning!
-  // Hvis stochrsi_hard_filter=true og stochrsi_enabled=true, SKAL den respektive side passe
   const stochrsiLongHardPassed = !(config.stochrsi_enabled && config.stochrsi_hard_filter === true) || 
                                    filterStatus.hard.stochrsi.long === true;
   const stochrsiShortHardPassed = !(config.stochrsi_enabled && config.stochrsi_hard_filter === true) || 
                                     filterStatus.hard.stochrsi.short === true;
   
-  console.log(`🎯 SIDE-SPECIFIK STOCHRSI HARD: longPassed=${stochrsiLongHardPassed}, shortPassed=${stochrsiShortHardPassed}`);
+  // 🆕 Supertrend HARD - side-specific
+  const supertrendLongHardPassed = !(config.supertrend_enabled && config.supertrend_hard_filter === true) || 
+                                     conditionDetails.supertrend.long === true;
+  const supertrendShortHardPassed = !(config.supertrend_enabled && config.supertrend_hard_filter === true) || 
+                                      conditionDetails.supertrend.short === true;
+  
+  // 🆕 OBV HARD - side-specific
+  const obvLongHardPassed = !(config.obv_enabled && config.obv_hard_filter === true) || 
+                              conditionDetails.obv.long === true;
+  const obvShortHardPassed = !(config.obv_enabled && config.obv_hard_filter === true) || 
+                               conditionDetails.obv.short === true;
+  
+  // 🆕 CCI HARD - side-specific
+  const cciLongHardPassed = !(config.cci_enabled && config.cci_hard_filter === true) || 
+                              conditionDetails.cci.long === true;
+  const cciShortHardPassed = !(config.cci_enabled && config.cci_hard_filter === true) || 
+                               conditionDetails.cci.short === true;
+  
+  // 🆕 PSAR HARD - side-specific
+  const psarLongHardPassed = !(config.psar_enabled && config.psar_hard_filter === true) || 
+                               conditionDetails.psar.long === true;
+  const psarShortHardPassed = !(config.psar_enabled && config.psar_hard_filter === true) || 
+                                conditionDetails.psar.short === true;
+  
+  console.log(`🎯 SIDE-SPECIFIK HARD FILTERS:`);
+  console.log(`   StochRSI: long=${stochrsiLongHardPassed}, short=${stochrsiShortHardPassed}`);
+  if (config.supertrend_enabled && config.supertrend_hard_filter) console.log(`   Supertrend: long=${supertrendLongHardPassed}, short=${supertrendShortHardPassed}`);
+  if (config.obv_enabled && config.obv_hard_filter) console.log(`   OBV: long=${obvLongHardPassed}, short=${obvShortHardPassed}`);
+  if (config.cci_enabled && config.cci_hard_filter) console.log(`   CCI: long=${cciLongHardPassed}, short=${cciShortHardPassed}`);
+  if (config.psar_enabled && config.psar_hard_filter) console.log(`   PSAR: long=${psarLongHardPassed}, short=${psarShortHardPassed}`);
   
   const longSignal = longAllowed && 
                      longConditionsMet >= requiredConditions && 
                      macdLongOK && 
                      macdColorChangeLongOK &&
-                     stochrsiLongHardPassed;
+                     stochrsiLongHardPassed &&
+                     supertrendLongHardPassed &&
+                     obvLongHardPassed &&
+                     cciLongHardPassed &&
+                     psarLongHardPassed;
   
   const shortSignal = shortAllowed && 
                       shortConditionsMet >= requiredConditions && 
                       macdShortOK && 
                       macdColorChangeShortOK &&
-                      stochrsiShortHardPassed;
+                      stochrsiShortHardPassed &&
+                      supertrendShortHardPassed &&
+                      obvShortHardPassed &&
+                      cciShortHardPassed &&
+                      psarShortHardPassed;
   
   // ═══════════════════════════════════════════════════════════════════════════════
   // 🎯 DETERMINISTISK TIE-BREAKER - Når begge signaler er true
