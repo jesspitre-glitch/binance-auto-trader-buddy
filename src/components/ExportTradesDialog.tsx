@@ -156,28 +156,51 @@ export const ExportTradesDialog = ({
         return;
       }
 
-      // Split into chunks of CHUNK_SIZE
-      const tradeChunks: string[] = [];
-      for (let i = 0; i < trades.length; i += chunkSize) {
-        const slice = trades.slice(i, i + chunkSize);
-        const compressed = exportMode === "COMPACT"
-          ? compressTradeDataCompact(slice)
-          : compressTradeData(slice);
-        tradeChunks.push(formatWithLineBreaks(compressed));
-      }
-
-      setChunks(tradeChunks);
-      setCurrentChunk(0);
-      if (tradeChunks.length === 1) {
+      // Build export data
+      if (outputMode === "file") {
+        // Single file download
+        const allCompressed = exportMode === "COMPACT"
+          ? compressTradeDataCompact(trades)
+          : compressTradeData(trades);
+        const content = formatWithLineBreaks(allCompressed);
+        const blob = new Blob([content], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const timestamp = format(new Date(), "yyyy-MM-dd_HHmm");
+        a.download = `trades_${exportMode.toLowerCase()}_${timestamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
         toast({
-          title: `${trades.length} handler klar`,
-          description: "Tryk 'Kopier blok 1' for at kopiere til clipboard",
+          title: `${trades.length} handler downloadet`,
+          description: "Filen er klar til at uploade i din AI",
         });
       } else {
-        toast({
-          title: `${trades.length} handler opdelt i ${tradeChunks.length} blokke`,
-          description: "Kopier blok for blok ind i din AI",
-        });
+        // Split into chunks for clipboard
+        const tradeChunks: string[] = [];
+        for (let i = 0; i < trades.length; i += chunkSize) {
+          const slice = trades.slice(i, i + chunkSize);
+          const compressed = exportMode === "COMPACT"
+            ? compressTradeDataCompact(slice)
+            : compressTradeData(slice);
+          tradeChunks.push(formatWithLineBreaks(compressed));
+        }
+
+        setChunks(tradeChunks);
+        setCurrentChunk(0);
+        if (tradeChunks.length === 1) {
+          toast({
+            title: `${trades.length} handler klar`,
+            description: "Tryk 'Kopier blok 1' for at kopiere til clipboard",
+          });
+        } else {
+          toast({
+            title: `${trades.length} handler opdelt i ${tradeChunks.length} blokke`,
+            description: "Kopier blok for blok ind i din AI",
+          });
+        }
       }
     } catch (error: any) {
       toast({
