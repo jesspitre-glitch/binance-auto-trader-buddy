@@ -346,6 +346,31 @@ export const ExportTradesDialog = ({
                 </RadioGroup>
               </div>
 
+              {/* Output Mode Toggle */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Output metode</Label>
+                <RadioGroup 
+                  value={outputMode} 
+                  onValueChange={(v) => setOutputMode(v as "clipboard" | "file")}
+                  className="flex gap-4"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="clipboard" id="clipboard" />
+                    <Label htmlFor="clipboard" className="cursor-pointer">
+                      <span className="font-medium">Tekst</span>
+                      <span className="text-xs text-muted-foreground ml-1">(kopier)</span>
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="file" id="file" />
+                    <Label htmlFor="file" className="cursor-pointer">
+                      <span className="font-medium">Fil</span>
+                      <span className="text-xs text-muted-foreground ml-1">(upload til AI)</span>
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
               {/* Filter Type */}
               <RadioGroup value={filterType} onValueChange={(v) => setFilterType(v as any)}>
                 <div className="flex items-center space-x-2">
