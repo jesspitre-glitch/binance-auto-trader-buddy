@@ -244,6 +244,28 @@ async function getStrategyIdentifier(config: any): Promise<string> {
     higher_trend_enabled: config.higher_trend_enabled,
     higher_trend_timeframe: config.higher_trend_timeframe,
     klines_limit: config.klines_limit,
+    // Supertrend
+    supertrend_enabled: config.supertrend_enabled,
+    supertrend_hard_filter: config.supertrend_hard_filter,
+    supertrend_period: config.supertrend_period,
+    supertrend_multiplier: config.supertrend_multiplier,
+    // OBV
+    obv_enabled: config.obv_enabled,
+    obv_hard_filter: config.obv_hard_filter,
+    obv_lookback: config.obv_lookback,
+    // CCI
+    cci_enabled: config.cci_enabled,
+    cci_hard_filter: config.cci_hard_filter,
+    cci_period: config.cci_period,
+    cci_overbought: config.cci_overbought,
+    cci_oversold: config.cci_oversold,
+    // PSAR
+    psar_enabled: config.psar_enabled,
+    psar_hard_filter: config.psar_hard_filter,
+    psar_af_start: config.psar_af_start,
+    psar_af_increment: config.psar_af_increment,
+    psar_af_max: config.psar_af_max,
+    psar_trailing_enabled: config.psar_trailing_enabled,
   };
   
   // Sort keys to ensure consistent hashing regardless of object property order
