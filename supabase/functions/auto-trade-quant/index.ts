@@ -2500,6 +2500,10 @@ function analyzeSignal(
   if (config.bb_enabled && conditionDetails.bb.short) shortPointsBreakdown.push('Bollinger: +1');
   if (config.volume_enabled && conditionDetails.volume.short) shortPointsBreakdown.push('Volume: +1');
   if (config.pivot_points_enabled && conditionDetails.pivotPoints.short) shortPointsBreakdown.push('Pivot: +1');
+  if (config.supertrend_enabled && !config.supertrend_hard_filter && conditionDetails.supertrend.short) shortPointsBreakdown.push('Supertrend: +1');
+  if (config.obv_enabled && !config.obv_hard_filter && conditionDetails.obv.short) shortPointsBreakdown.push('OBV: +1');
+  if (config.cci_enabled && !config.cci_hard_filter && conditionDetails.cci.short) shortPointsBreakdown.push('CCI: +1');
+  if (config.psar_enabled && !config.psar_hard_filter && conditionDetails.psar.short) shortPointsBreakdown.push('PSAR: +1');
   
   console.log(`   SHORT points (${shortConditionsMet}/${requiredConditions}):`);
   if (shortPointsBreakdown.length > 0) {
