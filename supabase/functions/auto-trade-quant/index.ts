@@ -2479,6 +2479,10 @@ function analyzeSignal(
   if (config.bb_enabled && conditionDetails.bb.long) longPointsBreakdown.push('Bollinger: +1');
   if (config.volume_enabled && conditionDetails.volume.long) longPointsBreakdown.push('Volume: +1');
   if (config.pivot_points_enabled && conditionDetails.pivotPoints.long) longPointsBreakdown.push('Pivot: +1');
+  if (config.supertrend_enabled && !config.supertrend_hard_filter && conditionDetails.supertrend.long) longPointsBreakdown.push('Supertrend: +1');
+  if (config.obv_enabled && !config.obv_hard_filter && conditionDetails.obv.long) longPointsBreakdown.push('OBV: +1');
+  if (config.cci_enabled && !config.cci_hard_filter && conditionDetails.cci.long) longPointsBreakdown.push('CCI: +1');
+  if (config.psar_enabled && !config.psar_hard_filter && conditionDetails.psar.long) longPointsBreakdown.push('PSAR: +1');
   
   console.log(`   LONG points (${longConditionsMet}/${requiredConditions}):`);
   if (longPointsBreakdown.length > 0) {
