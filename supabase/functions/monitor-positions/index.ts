@@ -441,6 +441,12 @@ serve(async (req) => {
         // Trailing multiplier fra UI (indicator_config)
         let atrTrailingStopMultiplierFromUi: number | null = null;
         
+        // PSAR Trailing config
+        let psarTrailingEnabled = false;
+        let psarAfStart = 0.02;
+        let psarAfIncrement = 0.02;
+        let psarAfMax = 0.2;
+        
         if (configData) {
           trailingActivationEnabled = configData.trailing_stop_activation_enabled ?? true;
           trailingActivationAtr = configData.trailing_stop_activation_atr ?? 1.0;
