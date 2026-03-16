@@ -4456,10 +4456,55 @@ serve(async (req) => {
               passed: analysis.indicators.conditionDetails?.vwap?.[signal.toLowerCase()] === true,
               points: analysis.indicators.conditionDetails?.vwap?.[signal.toLowerCase()] === true ? 1 : 0,
             },
+            soft_supertrend: {
+              enabled: config.supertrend_enabled === true && config.supertrend_hard_filter !== true,
+              passed: analysis.indicators.conditionDetails?.supertrend?.[signal.toLowerCase()] === true,
+              points: analysis.indicators.conditionDetails?.supertrend?.[signal.toLowerCase()] === true ? 1 : 0,
+            },
+            soft_obv: {
+              enabled: config.obv_enabled === true && config.obv_hard_filter !== true,
+              passed: analysis.indicators.conditionDetails?.obv?.[signal.toLowerCase()] === true,
+              points: analysis.indicators.conditionDetails?.obv?.[signal.toLowerCase()] === true ? 1 : 0,
+            },
+            soft_cci: {
+              enabled: config.cci_enabled === true && config.cci_hard_filter !== true,
+              passed: analysis.indicators.conditionDetails?.cci?.[signal.toLowerCase()] === true,
+              points: analysis.indicators.conditionDetails?.cci?.[signal.toLowerCase()] === true ? 1 : 0,
+            },
+            soft_psar: {
+              enabled: config.psar_enabled === true && config.psar_hard_filter !== true,
+              passed: analysis.indicators.conditionDetails?.psar?.[signal.toLowerCase()] === true,
+              points: analysis.indicators.conditionDetails?.psar?.[signal.toLowerCase()] === true ? 1 : 0,
+            },
+            // Hard filter entries for new indicators
+            hard_supertrend: {
+              enabled: config.supertrend_enabled === true && config.supertrend_hard_filter === true,
+              passed: signal === 'LONG' ? analysis.indicators.conditionDetails?.supertrend?.long === true
+                : signal === 'SHORT' ? analysis.indicators.conditionDetails?.supertrend?.short === true : null,
+              reason: config.supertrend_enabled ? `direction=${analysis.indicators.supertrend?.direction ?? 'N/A'}` : 'filter_disabled',
+            },
+            hard_obv: {
+              enabled: config.obv_enabled === true && config.obv_hard_filter === true,
+              passed: signal === 'LONG' ? analysis.indicators.conditionDetails?.obv?.long === true
+                : signal === 'SHORT' ? analysis.indicators.conditionDetails?.obv?.short === true : null,
+              reason: config.obv_enabled ? `trend=${analysis.indicators.obv?.trend ?? 'N/A'}` : 'filter_disabled',
+            },
+            hard_cci: {
+              enabled: config.cci_enabled === true && config.cci_hard_filter === true,
+              passed: signal === 'LONG' ? analysis.indicators.conditionDetails?.cci?.long === true
+                : signal === 'SHORT' ? analysis.indicators.conditionDetails?.cci?.short === true : null,
+              reason: config.cci_enabled ? `value=${analysis.indicators.cci?.toFixed(2) ?? 'N/A'}` : 'filter_disabled',
+            },
+            hard_psar: {
+              enabled: config.psar_enabled === true && config.psar_hard_filter === true,
+              passed: signal === 'LONG' ? analysis.indicators.conditionDetails?.psar?.long === true
+                : signal === 'SHORT' ? analysis.indicators.conditionDetails?.psar?.short === true : null,
+              reason: config.psar_enabled ? `direction=${analysis.indicators.psar?.direction ?? 'N/A'}` : 'filter_disabled',
+            },
             // ═══════════════════════════════════════════════════════
             // SUMMARY
             // ═══════════════════════════════════════════════════════
-            hard_filters_total: 10,
+            hard_filters_total: 14,
             hard_filters_enabled: [
               config.ema_enabled && config.ema_hard_filter !== false, // EMA spread filter
               config.atr_enabled && config.atr_hard_filter !== false,
@@ -4470,7 +4515,11 @@ serve(async (req) => {
               config.macd_direction_enabled,
               config.macd_color_change_hard_filter,
               config.higher_trend_enabled && config.higher_trend_hard_filter !== false,
-              config.ema_enabled && config.ema_trend_hard_filter === true, // 🔴 FIX: medium trend bruger ema_trend_hard_filter
+              config.ema_enabled && config.ema_trend_hard_filter === true,
+              config.supertrend_enabled && config.supertrend_hard_filter === true,
+              config.obv_enabled && config.obv_hard_filter === true,
+              config.cci_enabled && config.cci_hard_filter === true,
+              config.psar_enabled && config.psar_hard_filter === true,
             ].filter(Boolean).length,
             soft_conditions_required: config.signal_conditions_required,
             soft_conditions_met: signal === 'LONG' 
