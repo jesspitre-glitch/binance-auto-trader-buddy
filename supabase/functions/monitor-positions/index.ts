@@ -372,7 +372,7 @@ serve(async (req) => {
           if (slotData?.config_id) {
             const { data: slotConfig } = await supabaseClient
               .from('indicator_config')
-              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct')
+              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max')
               .eq('id', slotData.config_id)
               .single();
             configData = slotConfig;
