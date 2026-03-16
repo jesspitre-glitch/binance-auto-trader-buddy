@@ -50,7 +50,52 @@ async function getCurrentPrice(symbol: string, supabaseClient: any): Promise<num
   throw new Error(`Failed to get price for ${symbol} - both API and cache failed`);
 }
 
-async function createSignature(queryString: string, apiSecret: string): Promise<string> {
+// Parabolic SAR calculation for trailing stops
+function calculatePSARForTrailing(highs: number[], lows: number[], closes: number[], afStart: number, afIncrement: number, afMax: number): { value: number, direction: 'up' | 'down' } | null {
+  if (highs.length < 3) return null;
+  
+  let isUpTrend = closes[1] > closes[0];
+  let sar = isUpTrend ? lows[0] : highs[0];
+  let ep = isUpTrend ? highs[1] : lows[1];
+  let af = afStart;
+  
+  for (let i = 2; i < highs.length; i++) {
+    const prevSar = sar;
+    sar = prevSar + af * (ep - prevSar);
+    
+    if (isUpTrend) {
+      sar = Math.min(sar, lows[i-1], lows[i-2]);
+      if (lows[i] < sar) {
+        isUpTrend = false;
+        sar = ep;
+        ep = lows[i];
+        af = afStart;
+      } else {
+        if (highs[i] > ep) {
+          ep = highs[i];
+          af = Math.min(af + afIncrement, afMax);
+        }
+      }
+    } else {
+      sar = Math.max(sar, highs[i-1], highs[i-2]);
+      if (highs[i] > sar) {
+        isUpTrend = true;
+        sar = ep;
+        ep = highs[i];
+        af = afStart;
+      } else {
+        if (lows[i] < ep) {
+          ep = lows[i];
+          af = Math.min(af + afIncrement, afMax);
+        }
+      }
+    }
+  }
+  
+  return { value: sar, direction: isUpTrend ? 'up' : 'down' };
+}
+
+
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(apiSecret),
