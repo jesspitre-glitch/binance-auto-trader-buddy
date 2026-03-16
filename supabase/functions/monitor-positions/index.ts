@@ -96,6 +96,7 @@ function calculatePSARForTrailing(highs: number[], lows: number[], closes: numbe
 }
 
 
+async function createSignature(queryString: string, apiSecret: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(apiSecret),
