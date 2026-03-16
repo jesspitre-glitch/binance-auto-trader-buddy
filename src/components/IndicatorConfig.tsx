@@ -215,6 +215,32 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     regime_lock_at_entry: config?.regime_lock_at_entry ?? true,
     regime_trend_exit_profile_id: config?.regime_trend_exit_profile_id ?? null,
     regime_range_exit_profile_id: config?.regime_range_exit_profile_id ?? null,
+    
+    // Supertrend
+    supertrend_enabled: config?.supertrend_enabled !== undefined ? config?.supertrend_enabled : false,
+    supertrend_hard_filter: config?.supertrend_hard_filter !== undefined ? config?.supertrend_hard_filter : false,
+    supertrend_period: config?.supertrend_period ?? 10,
+    supertrend_multiplier: config?.supertrend_multiplier ?? 3.0,
+    
+    // OBV
+    obv_enabled: config?.obv_enabled !== undefined ? config?.obv_enabled : false,
+    obv_hard_filter: config?.obv_hard_filter !== undefined ? config?.obv_hard_filter : false,
+    obv_lookback: config?.obv_lookback ?? 5,
+    
+    // CCI
+    cci_enabled: config?.cci_enabled !== undefined ? config?.cci_enabled : false,
+    cci_hard_filter: config?.cci_hard_filter !== undefined ? config?.cci_hard_filter : false,
+    cci_period: config?.cci_period ?? 20,
+    cci_overbought: config?.cci_overbought ?? 100,
+    cci_oversold: config?.cci_oversold ?? -100,
+    
+    // Parabolic SAR
+    psar_enabled: config?.psar_enabled !== undefined ? config?.psar_enabled : false,
+    psar_hard_filter: config?.psar_hard_filter !== undefined ? config?.psar_hard_filter : false,
+    psar_af_start: config?.psar_af_start ?? 0.02,
+    psar_af_increment: config?.psar_af_increment ?? 0.02,
+    psar_af_max: config?.psar_af_max ?? 0.2,
+    psar_trailing_enabled: config?.psar_trailing_enabled !== undefined ? config?.psar_trailing_enabled : false,
   });
   
   // State for exit profiles
@@ -374,6 +400,28 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       regime_lock_at_entry: config.regime_lock_at_entry ?? true,
       regime_trend_exit_profile_id: config.regime_trend_exit_profile_id ?? null,
       regime_range_exit_profile_id: config.regime_range_exit_profile_id ?? null,
+      // Supertrend
+      supertrend_enabled: config.supertrend_enabled !== undefined ? config.supertrend_enabled : false,
+      supertrend_hard_filter: config.supertrend_hard_filter !== undefined ? config.supertrend_hard_filter : false,
+      supertrend_period: config.supertrend_period ?? 10,
+      supertrend_multiplier: config.supertrend_multiplier ?? 3.0,
+      // OBV
+      obv_enabled: config.obv_enabled !== undefined ? config.obv_enabled : false,
+      obv_hard_filter: config.obv_hard_filter !== undefined ? config.obv_hard_filter : false,
+      obv_lookback: config.obv_lookback ?? 5,
+      // CCI
+      cci_enabled: config.cci_enabled !== undefined ? config.cci_enabled : false,
+      cci_hard_filter: config.cci_hard_filter !== undefined ? config.cci_hard_filter : false,
+      cci_period: config.cci_period ?? 20,
+      cci_overbought: config.cci_overbought ?? 100,
+      cci_oversold: config.cci_oversold ?? -100,
+      // Parabolic SAR
+      psar_enabled: config.psar_enabled !== undefined ? config.psar_enabled : false,
+      psar_hard_filter: config.psar_hard_filter !== undefined ? config.psar_hard_filter : false,
+      psar_af_start: config.psar_af_start ?? 0.02,
+      psar_af_increment: config.psar_af_increment ?? 0.02,
+      psar_af_max: config.psar_af_max ?? 0.2,
+      psar_trailing_enabled: config.psar_trailing_enabled !== undefined ? config.psar_trailing_enabled : false,
     });
   }, [config?.id, config?.updated_at]);
 
@@ -536,6 +584,28 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       regime_lock_at_entry: config.regime_lock_at_entry ?? true,
       regime_trend_exit_profile_id: config.regime_trend_exit_profile_id ?? null,
       regime_range_exit_profile_id: config.regime_range_exit_profile_id ?? null,
+      // Supertrend
+      supertrend_enabled: config.supertrend_enabled !== undefined ? config.supertrend_enabled : false,
+      supertrend_hard_filter: config.supertrend_hard_filter !== undefined ? config.supertrend_hard_filter : false,
+      supertrend_period: config.supertrend_period ?? 10,
+      supertrend_multiplier: config.supertrend_multiplier ?? 3.0,
+      // OBV
+      obv_enabled: config.obv_enabled !== undefined ? config.obv_enabled : false,
+      obv_hard_filter: config.obv_hard_filter !== undefined ? config.obv_hard_filter : false,
+      obv_lookback: config.obv_lookback ?? 5,
+      // CCI
+      cci_enabled: config.cci_enabled !== undefined ? config.cci_enabled : false,
+      cci_hard_filter: config.cci_hard_filter !== undefined ? config.cci_hard_filter : false,
+      cci_period: config.cci_period ?? 20,
+      cci_overbought: config.cci_overbought ?? 100,
+      cci_oversold: config.cci_oversold ?? -100,
+      // Parabolic SAR
+      psar_enabled: config.psar_enabled !== undefined ? config.psar_enabled : false,
+      psar_hard_filter: config.psar_hard_filter !== undefined ? config.psar_hard_filter : false,
+      psar_af_start: config.psar_af_start ?? 0.02,
+      psar_af_increment: config.psar_af_increment ?? 0.02,
+      psar_af_max: config.psar_af_max ?? 0.2,
+      psar_trailing_enabled: config.psar_trailing_enabled !== undefined ? config.psar_trailing_enabled : false,
     });
     
     toast({
@@ -693,6 +763,34 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       enabled: Boolean(formData.vwap_enabled && !formData.vwap_hard_filter),
       parentEnabled: Boolean(formData.vwap_enabled),
       isHard: Boolean(formData.vwap_hard_filter),
+    },
+    {
+      key: "supertrend",
+      label: "Supertrend",
+      enabled: Boolean(formData.supertrend_enabled && !formData.supertrend_hard_filter),
+      parentEnabled: Boolean(formData.supertrend_enabled),
+      isHard: Boolean(formData.supertrend_hard_filter),
+    },
+    {
+      key: "obv",
+      label: "OBV",
+      enabled: Boolean(formData.obv_enabled && !formData.obv_hard_filter),
+      parentEnabled: Boolean(formData.obv_enabled),
+      isHard: Boolean(formData.obv_hard_filter),
+    },
+    {
+      key: "cci",
+      label: "CCI",
+      enabled: Boolean(formData.cci_enabled && !formData.cci_hard_filter),
+      parentEnabled: Boolean(formData.cci_enabled),
+      isHard: Boolean(formData.cci_hard_filter),
+    },
+    {
+      key: "psar",
+      label: "Parabolic SAR",
+      enabled: Boolean(formData.psar_enabled && !formData.psar_hard_filter),
+      parentEnabled: Boolean(formData.psar_enabled),
+      isHard: Boolean(formData.psar_hard_filter),
     },
   ] as const;
 
@@ -1518,6 +1616,315 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                 Antal bars til VWAP beregning (standard 50, 288 ≈ 24h på 5m)
               </p>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Supertrend */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Supertrend</CardTitle>
+              <CardDescription>ATR-baseret trend direction filter. LONG hvis pris &gt; Supertrend, SHORT hvis pris &lt; Supertrend</CardDescription>
+            </div>
+            <FilterModeToggle
+              isHard={formData.supertrend_hard_filter}
+              onChange={(isHard) => setFormData({ ...formData, supertrend_hard_filter: isHard })}
+              disabled={!formData.supertrend_enabled}
+            />
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="flex items-center justify-between sm:col-span-2">
+            <Label htmlFor="supertrend_enabled">Aktiver Supertrend</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.supertrend_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="supertrend_enabled"
+                checked={formData.supertrend_enabled}
+                onCheckedChange={(checked) => setFormData({ 
+                  ...formData, 
+                  supertrend_enabled: checked,
+                  ...(checked === false && { supertrend_hard_filter: false })
+                })}
+              />
+            </div>
+          </div>
+          
+          {formData.supertrend_enabled && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="supertrend_period">ATR Periode</Label>
+                <IntegerInput
+                  id="supertrend_period"
+                  value={formData.supertrend_period}
+                  onValueChange={(v) => setFormData({ ...formData, supertrend_period: v })}
+                  fallback={10}
+                  min={1}
+                  max={100}
+                />
+                <p className="text-xs text-muted-foreground">ATR periode for Supertrend beregning (standard 10)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="supertrend_multiplier">ATR Multiplikator</Label>
+                <DecimalInput
+                  id="supertrend_multiplier"
+                  value={formData.supertrend_multiplier}
+                  onValueChange={(v) => setFormData({ ...formData, supertrend_multiplier: v })}
+                  fallback={3.0}
+                  min={0.5}
+                  max={10}
+                />
+                <p className="text-xs text-muted-foreground">Multiplikator for ATR afstand (standard 3.0). Højere = bredere bånd</p>
+              </div>
+              <div className="sm:col-span-2 p-3 bg-muted/50 rounded-md">
+                <p className="text-xs text-muted-foreground">
+                  <strong>📊 Logik:</strong> Supertrend = HL2 ± ({formData.supertrend_multiplier}× ATR({formData.supertrend_period}))<br/>
+                  • <strong>LONG:</strong> Pris over Supertrend linje (uptrend)<br/>
+                  • <strong>SHORT:</strong> Pris under Supertrend linje (downtrend)
+                </p>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* OBV (On Balance Volume) */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>OBV (On Balance Volume)</CardTitle>
+              <CardDescription>Kumulativ volume baseret på prisændring – bekræfter trend</CardDescription>
+            </div>
+            <FilterModeToggle
+              isHard={formData.obv_hard_filter}
+              onChange={(isHard) => setFormData({ ...formData, obv_hard_filter: isHard })}
+              disabled={!formData.obv_enabled}
+            />
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="flex items-center justify-between sm:col-span-2">
+            <Label htmlFor="obv_enabled">Aktiver OBV</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.obv_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="obv_enabled"
+                checked={formData.obv_enabled}
+                onCheckedChange={(checked) => setFormData({ 
+                  ...formData, 
+                  obv_enabled: checked,
+                  ...(checked === false && { obv_hard_filter: false })
+                })}
+              />
+            </div>
+          </div>
+          
+          {formData.obv_enabled && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="obv_lookback">Lookback Perioder</Label>
+                <IntegerInput
+                  id="obv_lookback"
+                  value={formData.obv_lookback}
+                  onValueChange={(v) => setFormData({ ...formData, obv_lookback: v })}
+                  fallback={5}
+                  min={2}
+                  max={50}
+                />
+                <p className="text-xs text-muted-foreground">Antal perioder tilbage til sammenligning (standard 5)</p>
+              </div>
+              <div className="sm:col-span-2 p-3 bg-muted/50 rounded-md">
+                <p className="text-xs text-muted-foreground">
+                  <strong>📊 Logik:</strong> OBV stiger når volumen bekræfter prisretning<br/>
+                  • <strong>LONG:</strong> OBV stigende (nuværende &gt; {formData.obv_lookback} perioder siden)<br/>
+                  • <strong>SHORT:</strong> OBV faldende (nuværende &lt; {formData.obv_lookback} perioder siden)
+                </p>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* CCI (Commodity Channel Index) */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>CCI (Commodity Channel Index)</CardTitle>
+              <CardDescription>Momentum oscillator – bedre i trends end StochRSI</CardDescription>
+            </div>
+            <FilterModeToggle
+              isHard={formData.cci_hard_filter}
+              onChange={(isHard) => setFormData({ ...formData, cci_hard_filter: isHard })}
+              disabled={!formData.cci_enabled}
+            />
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-3">
+          <div className="flex items-center justify-between sm:col-span-3">
+            <Label htmlFor="cci_enabled">Aktiver CCI</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.cci_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="cci_enabled"
+                checked={formData.cci_enabled}
+                onCheckedChange={(checked) => setFormData({ 
+                  ...formData, 
+                  cci_enabled: checked,
+                  ...(checked === false && { cci_hard_filter: false })
+                })}
+              />
+            </div>
+          </div>
+          
+          {formData.cci_enabled && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="cci_period">CCI Periode</Label>
+                <IntegerInput
+                  id="cci_period"
+                  value={formData.cci_period}
+                  onValueChange={(v) => setFormData({ ...formData, cci_period: v })}
+                  fallback={20}
+                  min={5}
+                  max={100}
+                />
+                <p className="text-xs text-muted-foreground">Antal bars til CCI beregning (standard 20)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cci_overbought">Overbought</Label>
+                <DecimalInput
+                  id="cci_overbought"
+                  value={formData.cci_overbought}
+                  onValueChange={(v) => setFormData({ ...formData, cci_overbought: v })}
+                  fallback={100}
+                />
+                <p className="text-xs text-muted-foreground">Over denne værdi = overbought (standard +100)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cci_oversold">Oversold</Label>
+                <DecimalInput
+                  id="cci_oversold"
+                  value={formData.cci_oversold}
+                  onValueChange={(v) => setFormData({ ...formData, cci_oversold: v })}
+                  fallback={-100}
+                />
+                <p className="text-xs text-muted-foreground">Under denne værdi = oversold (standard -100)</p>
+              </div>
+              <div className="sm:col-span-3 p-3 bg-muted/50 rounded-md">
+                <p className="text-xs text-muted-foreground">
+                  <strong>📊 Logik:</strong> CCI = (Typical Price - SMA) / (0.015 × Mean Deviation)<br/>
+                  • <strong>LONG:</strong> CCI krydser op over {formData.cci_oversold} (fra oversold)<br/>
+                  • <strong>SHORT:</strong> CCI krydser ned under {formData.cci_overbought} (fra overbought)
+                </p>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Parabolic SAR */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Parabolic SAR</CardTitle>
+              <CardDescription>Entry filter + trailing stop ved exit</CardDescription>
+            </div>
+            <FilterModeToggle
+              isHard={formData.psar_hard_filter}
+              onChange={(isHard) => setFormData({ ...formData, psar_hard_filter: isHard })}
+              disabled={!formData.psar_enabled}
+            />
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-3">
+          <div className="flex items-center justify-between sm:col-span-3">
+            <Label htmlFor="psar_enabled">Aktiver Parabolic SAR</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.psar_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="psar_enabled"
+                checked={formData.psar_enabled}
+                onCheckedChange={(checked) => setFormData({ 
+                  ...formData, 
+                  psar_enabled: checked,
+                  ...(checked === false && { psar_hard_filter: false, psar_trailing_enabled: false })
+                })}
+              />
+            </div>
+          </div>
+          
+          {formData.psar_enabled && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="psar_af_start">AF Start</Label>
+                <DecimalInput
+                  id="psar_af_start"
+                  value={formData.psar_af_start}
+                  onValueChange={(v) => setFormData({ ...formData, psar_af_start: v })}
+                  fallback={0.02}
+                  min={0.001}
+                  max={0.1}
+                />
+                <p className="text-xs text-muted-foreground">Acceleration Factor start (standard 0.02)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="psar_af_increment">AF Increment</Label>
+                <DecimalInput
+                  id="psar_af_increment"
+                  value={formData.psar_af_increment}
+                  onValueChange={(v) => setFormData({ ...formData, psar_af_increment: v })}
+                  fallback={0.02}
+                  min={0.001}
+                  max={0.1}
+                />
+                <p className="text-xs text-muted-foreground">AF stiger med dette pr. ny high/low (standard 0.02)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="psar_af_max">AF Max</Label>
+                <DecimalInput
+                  id="psar_af_max"
+                  value={formData.psar_af_max}
+                  onValueChange={(v) => setFormData({ ...formData, psar_af_max: v })}
+                  fallback={0.2}
+                  min={0.05}
+                  max={0.5}
+                />
+                <p className="text-xs text-muted-foreground">Maksimal Acceleration Factor (standard 0.2)</p>
+              </div>
+
+              <div className="flex items-center justify-between sm:col-span-3 border-t pt-4">
+                <div>
+                  <Label htmlFor="psar_trailing_enabled">PSAR Trailing Stop (Exit)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Brug PSAR som alternativ trailing stop ved position exit
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">{formData.psar_trailing_enabled ? "Tændt" : "Slukket"}</span>
+                  <Switch
+                    id="psar_trailing_enabled"
+                    checked={formData.psar_trailing_enabled}
+                    onCheckedChange={(checked) => setFormData({ ...formData, psar_trailing_enabled: checked })}
+                  />
+                </div>
+              </div>
+
+              <div className="sm:col-span-3 p-3 bg-muted/50 rounded-md">
+                <p className="text-xs text-muted-foreground">
+                  <strong>📊 Entry Filter:</strong><br/>
+                  • <strong>LONG:</strong> Pris &gt; PSAR (uptrend konfirmeret)<br/>
+                  • <strong>SHORT:</strong> Pris &lt; PSAR (downtrend konfirmeret)<br/><br/>
+                  <strong>📊 Trailing Stop (hvis aktiveret):</strong><br/>
+                  • PSAR følger prisen med accelererende hastighed<br/>
+                  • Integreres i Model B (Most Protective) med andre stops
+                </p>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
