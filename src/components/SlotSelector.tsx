@@ -273,22 +273,32 @@ export const SlotSelector = ({
                 : "bg-card border-border hover:bg-accent text-foreground"
             )}
           >
-            {slot.is_active && (
-              <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-            )}
-            <span>{slot.name}</span>
-            <Badge variant="secondary" className="text-xs px-1.5 py-0">
-              {slot.capital_percent}%
-            </Badge>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                openEditDialog(slot);
-              }}
-              className="ml-1 opacity-60 hover:opacity-100"
-            >
-              <Settings2 className="h-3.5 w-3.5" />
-            </button>
+            <div className="flex flex-col items-start gap-0.5">
+              <div className="flex items-center gap-2">
+                {slot.is_active && (
+                  <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                )}
+                <span>{slot.name}</span>
+                <Badge variant="secondary" className="text-xs px-1.5 py-0">
+                  {slot.capital_percent}%
+                </Badge>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openEditDialog(slot);
+                  }}
+                  className="ml-1 opacity-60 hover:opacity-100"
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              {slot.config_id && configTimestamps[slot.config_id] && (
+                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  <Clock className="h-2.5 w-2.5" />
+                  Ændret: {formatBinanceDate(configTimestamps[slot.config_id]!, { includeTime: true })}
+                </span>
+              )}
+            </div>
           </button>
         ))}
 
