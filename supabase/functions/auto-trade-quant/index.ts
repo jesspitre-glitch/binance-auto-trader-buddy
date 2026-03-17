@@ -5146,6 +5146,7 @@ serve(async (req) => {
         }
       } // End of signalsToTrade loop
       } // End of slotIterations loop
+      console.log(`🗄️ Klines cache stats: ${klinesCache.stats()}`);
     }
 
     // Include FULL runtime config info in response for debugging
