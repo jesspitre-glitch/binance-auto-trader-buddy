@@ -3085,6 +3085,10 @@ serve(async (req) => {
 
       if (slotIterations.length === 0) continue;
 
+      // Reset klines cache for this scan cycle - all slots share same cached klines
+      klinesCache = new KlinesCache();
+      console.log(`🗄️ Klines cache initialized for ${slotIterations.length} slot(s)`);
+
       for (const { config, slotId, capitalPercent, slotName } of slotIterations) {
         console.log(`\n🎰 === SLOT: "${slotName}" | ID: ${slotId ?? 'legacy'} | Capital: ${capitalPercent}% ===`);
         if (!config || !config.enabled) continue;
