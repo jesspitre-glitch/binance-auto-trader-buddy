@@ -774,8 +774,47 @@ async function fetchAllUSDCSymbols(): Promise<string[]> {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// 🗄️ KLINES CACHE - Fetches from Binance once, reuses across slots
+// ═══════════════════════════════════════════════════════════════════
+class KlinesCache {
+  private cache = new Map<string, any[]>();
+  private hits = 0;
+  private misses = 0;
+
+  private key(symbol: string, interval: string, limit: number): string {
+    return `${symbol}_${interval}_${limit}`;
+  }
+
+  async fetch(symbol: string, interval: string, limit: number, retries = 3): Promise<any[]> {
+    const k = this.key(symbol, interval, limit);
+    const cached = this.cache.get(k);
+    if (cached) {
+      this.hits++;
+      return cached;
+    }
+    this.misses++;
+    const data = await fetchKlinesFromBinance(symbol, interval, limit, retries);
+    this.cache.set(k, data);
+    return data;
+  }
+
+  stats(): string {
+    return `hits=${this.hits}, misses=${this.misses}, cached_keys=${this.cache.size}`;
+  }
+
+  clear(): void {
+    this.cache.clear();
+    this.hits = 0;
+    this.misses = 0;
+  }
+}
+
+// Global cache instance per invocation (reset each scan cycle)
+let klinesCache = new KlinesCache();
+
 // Rate limiting and retry logic for Binance API
-async function fetchKlines(symbol: string, interval: string, limit: number, retries = 3) {
+async function fetchKlinesFromBinance(symbol: string, interval: string, limit: number, retries = 3) {
   const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
   
   for (let attempt = 0; attempt < retries; attempt++) {
@@ -816,6 +855,11 @@ async function fetchKlines(symbol: string, interval: string, limit: number, retr
   }
   
   throw new Error(`Failed to fetch klines for ${symbol} after ${retries} retries`);
+}
+
+// Wrapper that uses cache (drop-in replacement for old fetchKlines)
+async function fetchKlines(symbol: string, interval: string, limit: number, retries = 3) {
+  return klinesCache.fetch(symbol, interval, limit, retries);
 }
 
 
@@ -3041,6 +3085,10 @@ serve(async (req) => {
 
       if (slotIterations.length === 0) continue;
 
+      // Reset klines cache for this scan cycle - all slots share same cached klines
+      klinesCache = new KlinesCache();
+      console.log(`🗄️ Klines cache initialized for ${slotIterations.length} slot(s)`);
+
       for (const { config, slotId, capitalPercent, slotName } of slotIterations) {
         console.log(`\n🎰 === SLOT: "${slotName}" | ID: ${slotId ?? 'legacy'} | Capital: ${capitalPercent}% ===`);
         if (!config || !config.enabled) continue;
@@ -5098,6 +5146,7 @@ serve(async (req) => {
         }
       } // End of signalsToTrade loop
       } // End of slotIterations loop
+      console.log(`🗄️ Klines cache stats: ${klinesCache.stats()}`);
     }
 
     // Include FULL runtime config info in response for debugging
