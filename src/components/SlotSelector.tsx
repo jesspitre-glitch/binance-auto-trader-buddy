@@ -324,6 +324,12 @@ export const SlotSelector = ({
             <DialogTitle>Rediger {editSlot?.name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {editSlot?.config_id && configTimestamps[editSlot.config_id] && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+                <Clock className="h-3.5 w-3.5" />
+                <span>Strategi sidst ændret: {formatBinanceDate(configTimestamps[editSlot.config_id]!, { includeTime: true })}</span>
+              </div>
+            )}
             <div>
               <Label>Navn</Label>
               <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
