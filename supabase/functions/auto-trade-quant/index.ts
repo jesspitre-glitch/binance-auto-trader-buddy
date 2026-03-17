@@ -646,6 +646,7 @@ function calculateParabolicSAR(highs: number[], lows: number[], closes: number[]
   return { value: sar, direction: isUpTrend ? 'up' : 'down' };
 }
 
+function calculateADX(high: number[], low: number[], close: number[], period: number = 14): { adx: number; plusDI: number; minusDI: number; dx: number } {
   const tr: number[] = [];
   const dmPlus: number[] = [];
   const dmMinus: number[] = [];
