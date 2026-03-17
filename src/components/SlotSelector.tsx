@@ -55,6 +55,29 @@ export const SlotSelector = ({
   const [editConfigId, setEditConfigId] = useState<string | null>(null);
   const [editCapital, setEditCapital] = useState(25);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [configTimestamps, setConfigTimestamps] = useState<Record<string, string | null>>({});
+
+  // Fetch strategy_params_changed_at for all slot configs
+  useEffect(() => {
+    const fetchTimestamps = async () => {
+      const configIds = slots.map(s => s.config_id).filter(Boolean) as string[];
+      if (configIds.length === 0) return;
+
+      const { data } = await supabase
+        .from("indicator_config")
+        .select("id, strategy_params_changed_at, created_at")
+        .in("id", configIds);
+
+      if (data) {
+        const map: Record<string, string | null> = {};
+        data.forEach(c => {
+          map[c.id] = c.strategy_params_changed_at || c.created_at;
+        });
+        setConfigTimestamps(map);
+      }
+    };
+    fetchTimestamps();
+  }, [slots]);
 
   const totalAllocated = slots
     .filter((s) => s.is_active)
