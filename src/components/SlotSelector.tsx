@@ -21,8 +21,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Settings2, Trash2 } from "lucide-react";
+import { Plus, Settings2, Trash2, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatBinanceDate } from "@/lib/timeUtils";
 
 export interface Slot {
   id: string;
@@ -54,6 +55,29 @@ export const SlotSelector = ({
   const [editConfigId, setEditConfigId] = useState<string | null>(null);
   const [editCapital, setEditCapital] = useState(25);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [configTimestamps, setConfigTimestamps] = useState<Record<string, string | null>>({});
+
+  // Fetch strategy_params_changed_at for all slot configs
+  useEffect(() => {
+    const fetchTimestamps = async () => {
+      const configIds = slots.map(s => s.config_id).filter(Boolean) as string[];
+      if (configIds.length === 0) return;
+
+      const { data } = await supabase
+        .from("indicator_config")
+        .select("id, strategy_params_changed_at, created_at")
+        .in("id", configIds);
+
+      if (data) {
+        const map: Record<string, string | null> = {};
+        data.forEach(c => {
+          map[c.id] = c.strategy_params_changed_at || c.created_at;
+        });
+        setConfigTimestamps(map);
+      }
+    };
+    fetchTimestamps();
+  }, [slots]);
 
   const totalAllocated = slots
     .filter((s) => s.is_active)
@@ -249,22 +273,32 @@ export const SlotSelector = ({
                 : "bg-card border-border hover:bg-accent text-foreground"
             )}
           >
-            {slot.is_active && (
-              <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-            )}
-            <span>{slot.name}</span>
-            <Badge variant="secondary" className="text-xs px-1.5 py-0">
-              {slot.capital_percent}%
-            </Badge>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                openEditDialog(slot);
-              }}
-              className="ml-1 opacity-60 hover:opacity-100"
-            >
-              <Settings2 className="h-3.5 w-3.5" />
-            </button>
+            <div className="flex flex-col items-start gap-0.5">
+              <div className="flex items-center gap-2">
+                {slot.is_active && (
+                  <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                )}
+                <span>{slot.name}</span>
+                <Badge variant="secondary" className="text-xs px-1.5 py-0">
+                  {slot.capital_percent}%
+                </Badge>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openEditDialog(slot);
+                  }}
+                  className="ml-1 opacity-60 hover:opacity-100"
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              {slot.config_id && configTimestamps[slot.config_id] && (
+                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  <Clock className="h-2.5 w-2.5" />
+                  Ændret: {formatBinanceDate(configTimestamps[slot.config_id]!, { includeTime: true })}
+                </span>
+              )}
+            </div>
           </button>
         ))}
 
@@ -290,6 +324,12 @@ export const SlotSelector = ({
             <DialogTitle>Rediger {editSlot?.name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {editSlot?.config_id && configTimestamps[editSlot.config_id] && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+                <Clock className="h-3.5 w-3.5" />
+                <span>Strategi sidst ændret: {formatBinanceDate(configTimestamps[editSlot.config_id]!, { includeTime: true })}</span>
+              </div>
+            )}
             <div>
               <Label>Navn</Label>
               <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
