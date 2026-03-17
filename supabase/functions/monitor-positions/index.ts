@@ -285,7 +285,7 @@ async function closePositionOnBinance(symbol: string, side: string, quantity: nu
   
   // Place the closing order
   const timestamp = Date.now();
-  const queryString = `symbol=${symbol}&side=${closeSide}&type=MARKET&quantity=${positionAmt}&timestamp=${timestamp}&recvWindow=10000`;
+  const queryString = `symbol=${symbol}&side=${closeSide}&type=MARKET&quantity=${positionAmt}&reduceOnly=true&timestamp=${timestamp}&recvWindow=10000`;
   const signature = await createSignature(queryString, apiSecret);
 
   const response = await fetch(
