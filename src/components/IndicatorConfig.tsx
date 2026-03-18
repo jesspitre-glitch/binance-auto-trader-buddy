@@ -1245,7 +1245,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                         : 'LONG ved bullish cross: D krydser over K i oversold zone'}
                     </p>
                   </div>
-                  {formData.stochrsi_long_mode === 'REVERSAL_ROLLOVER' && (
+                  {['REVERSAL_ROLLOVER', 'REVERSAL_OVERSOLD'].includes(formData.stochrsi_long_mode) && (
                     <div className="space-y-2">
                       <Label htmlFor="rollover_d_min_long">Rollover D Min (LONG)</Label>
                       <DecimalInput
