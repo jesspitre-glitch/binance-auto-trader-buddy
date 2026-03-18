@@ -92,32 +92,44 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
 
   const fetchConfig = async () => {
     try {
-      // Fetch all enabled configs
-      const { data: singleConfig, error } = await supabase
-        .from("indicator_config")
-        .select("*")
-        .eq("enabled", true)
-        .maybeSingle();
-      
-      if (error) throw error;
+      const [defaultConfigResult, slotsResult, configsResult] = await Promise.all([
+        supabase
+          .from("indicator_config")
+          .select("*")
+          .eq("enabled", true)
+          .maybeSingle(),
+        supabase
+          .from("strategy_slots")
+          .select("id, config_id"),
+        supabase
+          .from("indicator_config")
+          .select("id, signal_conditions_required, enabled, name"),
+      ]);
+
+      if (defaultConfigResult.error) throw defaultConfigResult.error;
+      if (slotsResult.error) throw slotsResult.error;
+      if (configsResult.error) throw configsResult.error;
+
+      const singleConfig = defaultConfigResult.data;
       console.log("Live Monitor - Default config loaded:", singleConfig?.signal_conditions_required);
       configRef.current = singleConfig;
       setConfig(singleConfig);
 
-      // Fetch all slot configs so each slot's signal_conditions_required is respected
-      const { data: slots, error: slotsErr } = await supabase
-        .from("strategy_slots")
-        .select("id, config_id, indicator_config(*)");
+      const configById = new Map<string, any>();
+      (configsResult.data || []).forEach((cfg: any) => {
+        configById.set(cfg.id, cfg);
+      });
 
-      if (slotsErr) throw slotsErr;
-      const map = new Map<string, any>();
-      (slots || []).forEach((slot: any) => {
-        if (slot.indicator_config) {
-          map.set(slot.id, slot.indicator_config);
+      const slotMap = new Map<string, any>();
+      (slotsResult.data || []).forEach((slot: any) => {
+        const slotConfig = slot.config_id ? configById.get(slot.config_id) : null;
+        if (slotConfig) {
+          slotMap.set(slot.id, slotConfig);
         }
       });
-      slotConfigsRef.current = map;
-      console.log(`Live Monitor - Loaded configs for ${map.size} slots`);
+
+      slotConfigsRef.current = slotMap;
+      console.log(`Live Monitor - Loaded configs for ${slotMap.size} slots`);
     } catch (error) {
       console.error("Error fetching config:", error);
     }
