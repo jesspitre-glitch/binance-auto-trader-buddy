@@ -92,16 +92,32 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
 
   const fetchConfig = async () => {
     try {
-      const { data, error } = await supabase
+      // Fetch all enabled configs
+      const { data: singleConfig, error } = await supabase
         .from("indicator_config")
         .select("*")
         .eq("enabled", true)
         .maybeSingle();
       
       if (error) throw error;
-      console.log("Live Monitor - Config loaded:", data?.signal_conditions_required);
-      configRef.current = data;
-      setConfig(data);
+      console.log("Live Monitor - Default config loaded:", singleConfig?.signal_conditions_required);
+      configRef.current = singleConfig;
+      setConfig(singleConfig);
+
+      // Fetch all slot configs so each slot's signal_conditions_required is respected
+      const { data: slots, error: slotsErr } = await supabase
+        .from("strategy_slots")
+        .select("id, config_id, indicator_config(*)");
+
+      if (slotsErr) throw slotsErr;
+      const map = new Map<string, any>();
+      (slots || []).forEach((slot: any) => {
+        if (slot.indicator_config) {
+          map.set(slot.id, slot.indicator_config);
+        }
+      });
+      slotConfigsRef.current = map;
+      console.log(`Live Monitor - Loaded configs for ${map.size} slots`);
     } catch (error) {
       console.error("Error fetching config:", error);
     }
