@@ -1262,7 +1262,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               {/* Oversold thresholds for LONG */}
               <div className="sm:col-span-5 border-t pt-4 mt-2">
                 <p className="text-sm font-medium text-muted-foreground mb-3">
-                  Oversolgt (LONG tærskler{formData.stochrsi_long_mode === 'REVERSAL_ROLLOVER' ? ' - Bullish Cross kræver min(K,D) <= threshold' : ''})
+                  Oversolgt (LONG tærskler{['REVERSAL_ROLLOVER', 'REVERSAL_OVERSOLD'].includes(formData.stochrsi_long_mode) ? ' - Bullish Cross kræver min(K,D) <= threshold' : ''})
                 </p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
