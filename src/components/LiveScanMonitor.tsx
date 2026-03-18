@@ -146,7 +146,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     const indicators = result.indicators;
     // IMPORTANT: use ?? (not ||) so a config value of 0 is respected.
     // We intentionally DO NOT fall back to snapshot here; UI should reflect current config.
-    const conditionsRequired = (config?.signal_conditions_required ?? 0) as number;
+    const conditionsRequired = (configRef.current?.signal_conditions_required ?? config?.signal_conditions_required ?? 0) as number;
     
     // 🔍 DIAGNOSTIC: Log MACD and Higher Trend keys for N/A debugging
     console.log(`📊 [${result.symbol}] MACD keys:`, {
