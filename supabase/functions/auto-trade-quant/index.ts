@@ -1862,9 +1862,10 @@ function analyzeSignal(
         
         // LONG signal logic based on UI mode
         if (stochLongMode === 'ZONE_ONLY') {
-          // ZONE_ONLY: LONG when K <= oversold_k AND D <= oversold_d (no cross required)
-          stochRSILong = oversoldAtSignal;
-          longConditionType = stochRSILong ? 'ZONE_OVERSOLD' : (longInZone ? 'ZONE_PARTIAL' : 'NONE');
+          // ZONE_ONLY: LONG when EITHER K or D is in the oversold zone (no cross required)
+          // This preserves the expected zone-entry behavior for migrated configs.
+          stochRSILong = longInZone;
+          longConditionType = stochRSILong ? 'ZONE_OVERSOLD' : 'NONE';
         } else {
           // REVERSAL_ROLLOVER: LONG = bullish cross (K above D) + in oversold area
           // Use longInZone (OR) instead of oversoldAtSignal (AND) because:
