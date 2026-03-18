@@ -161,9 +161,10 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     }
 
     const indicators = result.indicators;
-    // IMPORTANT: use ?? (not ||) so a config value of 0 is respected.
-    // We intentionally DO NOT fall back to snapshot here; UI should reflect current config.
-    const conditionsRequired = (configRef.current?.signal_conditions_required ?? config?.signal_conditions_required ?? 0) as number;
+    // Use slot-specific config if available, otherwise fall back to default config
+    const slotConfig = result.slot_id ? slotConfigsRef.current.get(result.slot_id) : null;
+    const activeConfig = slotConfig || configRef.current || config;
+    const conditionsRequired = (activeConfig?.signal_conditions_required ?? 0) as number;
     
     // 🔍 DIAGNOSTIC: Log MACD and Higher Trend keys for N/A debugging
     console.log(`📊 [${result.symbol}] MACD keys:`, {
