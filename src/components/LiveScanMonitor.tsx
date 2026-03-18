@@ -99,6 +99,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
       
       if (error) throw error;
       console.log("Live Monitor - Config loaded:", data?.signal_conditions_required);
+      configRef.current = data;
       setConfig(data);
     } catch (error) {
       console.error("Error fetching config:", error);
