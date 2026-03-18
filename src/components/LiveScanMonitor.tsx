@@ -35,6 +35,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
   const [coins, setCoins] = useState<Map<string, CoinSignalStrength>>(new Map());
   const [config, setConfig] = useState<any>(null);
   const configRef = useRef<any>(null);
+  const slotConfigsRef = useRef<Map<string, any>>(new Map());
 
   useEffect(() => {
     if (!open) return;
@@ -91,16 +92,32 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
 
   const fetchConfig = async () => {
     try {
-      const { data, error } = await supabase
+      // Fetch all enabled configs
+      const { data: singleConfig, error } = await supabase
         .from("indicator_config")
         .select("*")
         .eq("enabled", true)
         .maybeSingle();
       
       if (error) throw error;
-      console.log("Live Monitor - Config loaded:", data?.signal_conditions_required);
-      configRef.current = data;
-      setConfig(data);
+      console.log("Live Monitor - Default config loaded:", singleConfig?.signal_conditions_required);
+      configRef.current = singleConfig;
+      setConfig(singleConfig);
+
+      // Fetch all slot configs so each slot's signal_conditions_required is respected
+      const { data: slots, error: slotsErr } = await supabase
+        .from("strategy_slots")
+        .select("id, config_id, indicator_config(*)");
+
+      if (slotsErr) throw slotsErr;
+      const map = new Map<string, any>();
+      (slots || []).forEach((slot: any) => {
+        if (slot.indicator_config) {
+          map.set(slot.id, slot.indicator_config);
+        }
+      });
+      slotConfigsRef.current = map;
+      console.log(`Live Monitor - Loaded configs for ${map.size} slots`);
     } catch (error) {
       console.error("Error fetching config:", error);
     }
@@ -144,9 +161,10 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     }
 
     const indicators = result.indicators;
-    // IMPORTANT: use ?? (not ||) so a config value of 0 is respected.
-    // We intentionally DO NOT fall back to snapshot here; UI should reflect current config.
-    const conditionsRequired = (configRef.current?.signal_conditions_required ?? config?.signal_conditions_required ?? 0) as number;
+    // Use slot-specific config if available, otherwise fall back to default config
+    const slotConfig = result.slot_id ? slotConfigsRef.current.get(result.slot_id) : null;
+    const activeConfig = slotConfig || configRef.current || config;
+    const conditionsRequired = (activeConfig?.signal_conditions_required ?? 0) as number;
     
     // 🔍 DIAGNOSTIC: Log MACD and Higher Trend keys for N/A debugging
     console.log(`📊 [${result.symbol}] MACD keys:`, {
