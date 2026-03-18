@@ -1189,7 +1189,7 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               {/* Overbought thresholds for SHORT - always shown for both modes */}
               <div className="sm:col-span-5 border-t pt-4 mt-2">
                 <p className="text-sm font-medium text-muted-foreground mb-3">
-                  Overkøbt (SHORT tærskler{formData.stochrsi_short_mode === 'REVERSAL_ROLLOVER' ? ' - Bearish Cross kræver max(K,D) >= threshold' : ''})
+                  Overkøbt (SHORT tærskler{['REVERSAL_ROLLOVER', 'REVERSAL_OVERBOUGHT'].includes(formData.stochrsi_short_mode) ? ' - Bearish Cross kræver max(K,D) >= threshold' : ''})
                 </p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
