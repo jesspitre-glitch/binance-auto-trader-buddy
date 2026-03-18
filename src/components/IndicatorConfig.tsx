@@ -1243,17 +1243,15 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
                         : 'LONG ved bullish cross: D krydser over K i oversold zone'}
                     </p>
                   </div>
-                  {['REVERSAL_ROLLOVER', 'REVERSAL_OVERSOLD'].includes(formData.stochrsi_long_mode) && (
-                    <div className="space-y-2">
-                      <Label htmlFor="rollover_d_min_long">Rollover D Min (LONG)</Label>
-                      <DecimalInput
-                        value={formData.rollover_d_min_long}
-                        onValueChange={(v) => setFormData({ ...formData, rollover_d_min_long: v })}
-                        fallback={40}
-                      />
-                      <p className="text-xs text-muted-foreground">Ekstra filter: D skal være ≥ denne værdi ved cross (0=deaktiveret)</p>
-                    </div>
-                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="rollover_d_min_long">Rollover D Min (LONG)</Label>
+                    <DecimalInput
+                      value={formData.rollover_d_min_long}
+                      onValueChange={(v) => setFormData({ ...formData, rollover_d_min_long: v })}
+                      fallback={40}
+                    />
+                    <p className="text-xs text-muted-foreground">Ekstra filter: D skal være ≥ denne værdi ved cross (0=deaktiveret)</p>
+                  </div>
                 </div>
               </div>
               
