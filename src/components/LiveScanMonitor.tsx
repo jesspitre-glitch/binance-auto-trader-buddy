@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +34,7 @@ interface CoinSignalStrength {
 export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) => {
   const [coins, setCoins] = useState<Map<string, CoinSignalStrength>>(new Map());
   const [config, setConfig] = useState<any>(null);
+  const configRef = useRef<any>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -98,6 +99,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
       
       if (error) throw error;
       console.log("Live Monitor - Config loaded:", data?.signal_conditions_required);
+      configRef.current = data;
       setConfig(data);
     } catch (error) {
       console.error("Error fetching config:", error);
@@ -144,7 +146,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
     const indicators = result.indicators;
     // IMPORTANT: use ?? (not ||) so a config value of 0 is respected.
     // We intentionally DO NOT fall back to snapshot here; UI should reflect current config.
-    const conditionsRequired = (config?.signal_conditions_required ?? 0) as number;
+    const conditionsRequired = (configRef.current?.signal_conditions_required ?? config?.signal_conditions_required ?? 0) as number;
     
     // 🔍 DIAGNOSTIC: Log MACD and Higher Trend keys for N/A debugging
     console.log(`📊 [${result.symbol}] MACD keys:`, {
