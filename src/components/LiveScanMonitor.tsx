@@ -35,6 +35,7 @@ export const LiveScanMonitor = ({ open, onOpenChange }: LiveScanMonitorProps) =>
   const [coins, setCoins] = useState<Map<string, CoinSignalStrength>>(new Map());
   const [config, setConfig] = useState<any>(null);
   const configRef = useRef<any>(null);
+  const slotConfigsRef = useRef<Map<string, any>>(new Map());
 
   useEffect(() => {
     if (!open) return;
