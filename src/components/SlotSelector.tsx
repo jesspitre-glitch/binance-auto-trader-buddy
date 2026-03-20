@@ -425,7 +425,7 @@ export const SlotSelector = ({
                 </div>
                 <p className="text-xs text-muted-foreground">Overskriver alle strategi-indstillinger i dette slot</p>
               </div>
-            )
+            )}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Switch
