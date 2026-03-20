@@ -190,6 +190,7 @@ export type Database = {
           break_even_ratchet_only: boolean | null
           candle_close_entry_window_seconds: number | null
           candle_momentum_enabled: boolean | null
+          candle_momentum_hard_filter: boolean | null
           cci_enabled: boolean | null
           cci_hard_filter: boolean | null
           cci_overbought: number | null
@@ -350,6 +351,7 @@ export type Database = {
           break_even_ratchet_only?: boolean | null
           candle_close_entry_window_seconds?: number | null
           candle_momentum_enabled?: boolean | null
+          candle_momentum_hard_filter?: boolean | null
           cci_enabled?: boolean | null
           cci_hard_filter?: boolean | null
           cci_overbought?: number | null
@@ -510,6 +512,7 @@ export type Database = {
           break_even_ratchet_only?: boolean | null
           candle_close_entry_window_seconds?: number | null
           candle_momentum_enabled?: boolean | null
+          candle_momentum_hard_filter?: boolean | null
           cci_enabled?: boolean | null
           cci_hard_filter?: boolean | null
           cci_overbought?: number | null

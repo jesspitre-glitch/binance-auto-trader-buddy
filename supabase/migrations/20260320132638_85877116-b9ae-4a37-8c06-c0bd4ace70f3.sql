@@ -1,0 +1,1 @@
+ALTER TABLE public.indicator_config ADD COLUMN IF NOT EXISTS candle_momentum_hard_filter boolean DEFAULT false;
