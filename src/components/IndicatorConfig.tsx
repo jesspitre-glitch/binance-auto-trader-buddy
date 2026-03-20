@@ -1945,6 +1945,69 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
         </CardContent>
       </Card>
 
+      {/* Candle Momentum */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>🕯️ Candle Momentum</CardTitle>
+              <CardDescription>Filtrerer små og svage candles fra. Bruges til kun at tage handler når prisen faktisk bevæger sig med reel styrke.</CardDescription>
+            </div>
+            <FilterModeToggle
+              isHard={formData.candle_momentum_hard_filter}
+              onChange={(isHard) => setFormData({ ...formData, candle_momentum_hard_filter: isHard })}
+              disabled={!formData.candle_momentum_enabled}
+            />
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="flex items-center justify-between sm:col-span-2">
+            <Label htmlFor="candle_momentum_enabled">Aktiver Candle Momentum</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.candle_momentum_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="candle_momentum_enabled"
+                checked={formData.candle_momentum_enabled}
+                onCheckedChange={(checked) => setFormData({ 
+                  ...formData, 
+                  candle_momentum_enabled: checked,
+                  ...(checked === false && { candle_momentum_hard_filter: false })
+                })}
+              />
+            </div>
+          </div>
+          
+          {formData.candle_momentum_enabled && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="min_candle_body_percent">Min Body %</Label>
+                <DecimalInput
+                  id="min_candle_body_percent"
+                  value={formData.min_candle_body_percent}
+                  onValueChange={(v) => setFormData({ ...formData, min_candle_body_percent: v })}
+                  fallback={0.15}
+                  min={0.05}
+                  max={0.50}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Minimum candle body størrelse i % (typisk 0.05 - 0.50, standard 0.15)
+                </p>
+              </div>
+
+              <div className="sm:col-span-2 p-3 bg-muted/50 rounded-md">
+                <p className="text-xs text-muted-foreground">
+                  <strong>📊 Logik:</strong><br/>
+                  • <strong>Formel:</strong> body_pct = |close - open| / open × 100<br/>
+                  • <strong>Bestået:</strong> body_pct ≥ {formData.min_candle_body_percent}%<br/>
+                  • <strong>Blokeret:</strong> body_pct &lt; {formData.min_candle_body_percent}%<br/>
+                  • Gælder ens for LONG og SHORT. Kun candle body tæller, ikke wicks.
+                </p>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
