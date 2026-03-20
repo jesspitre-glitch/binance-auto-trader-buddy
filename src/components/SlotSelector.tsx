@@ -21,7 +21,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Settings2, Trash2, Clock } from "lucide-react";
+import { Plus, Settings2, Trash2, Clock, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatBinanceDate } from "@/lib/timeUtils";
 
@@ -55,6 +55,8 @@ export const SlotSelector = ({
   const [editConfigId, setEditConfigId] = useState<string | null>(null);
   const [editCapital, setEditCapital] = useState(25);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [copyFromSlotId, setCopyFromSlotId] = useState<string>("");
+  const [isCopying, setIsCopying] = useState(false);
   const [configTimestamps, setConfigTimestamps] = useState<Record<string, string | null>>({});
 
   // Fetch strategy_params_changed_at for all slot configs
@@ -148,7 +150,55 @@ export const SlotSelector = ({
     setEditName(slot.name);
     setEditConfigId(slot.config_id);
     setEditCapital(slot.capital_percent);
+    setCopyFromSlotId("");
     setDialogOpen(true);
+  };
+
+  const copyConfigFromSlot = async () => {
+    if (!editSlot || !copyFromSlotId) return;
+    const sourceSlot = slots.find(s => s.id === copyFromSlotId);
+    if (!sourceSlot?.config_id) {
+      toast({ title: "Fejl", description: "Kildeslotet har ingen konfiguration", variant: "destructive" });
+      return;
+    }
+    if (!editSlot.config_id) {
+      toast({ title: "Fejl", description: "Dette slot har ingen konfiguration at overskrive", variant: "destructive" });
+      return;
+    }
+
+    setIsCopying(true);
+    try {
+      // Fetch full source config
+      const { data: source, error: fetchErr } = await supabase
+        .from("indicator_config")
+        .select("*")
+        .eq("id", sourceSlot.config_id)
+        .single();
+      if (fetchErr || !source) throw fetchErr || new Error("Kunne ikke hente kilde-konfiguration");
+
+      // Strip metadata, keep all strategy params
+      const { id, created_at, updated_at, user_id, name, strategy_params_changed_at, ...params } = source;
+
+      // Overwrite target config with source params
+      const { error: updateErr } = await supabase
+        .from("indicator_config")
+        .update({
+          ...params,
+          strategy_params_changed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", editSlot.config_id);
+
+      if (updateErr) throw updateErr;
+
+      toast({ title: "Konfiguration kopieret", description: `Indstillinger fra ${sourceSlot.name} kopieret til ${editSlot.name}` });
+      setCopyFromSlotId("");
+      onSlotsChanged();
+    } catch (err: any) {
+      toast({ title: "Fejl", description: err.message, variant: "destructive" });
+    } finally {
+      setIsCopying(false);
+    }
   };
 
   const saveSlot = async () => {
@@ -344,6 +394,38 @@ export const SlotSelector = ({
                 className="w-24"
               />
             </div>
+            {/* Copy config from another slot */}
+            {slots.filter(s => s.id !== editSlot?.id && s.config_id).length > 0 && (
+              <div className="space-y-2 border-t pt-3">
+                <Label className="flex items-center gap-1.5 text-sm">
+                  <Copy className="h-3.5 w-3.5" />
+                  Kopiér indstillinger fra andet slot
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Select value={copyFromSlotId} onValueChange={setCopyFromSlotId}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Vælg kilde-slot" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {slots
+                        .filter(s => s.id !== editSlot?.id && s.config_id)
+                        .map(s => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!copyFromSlotId || isCopying}
+                    onClick={copyConfigFromSlot}
+                  >
+                    {isCopying ? "Kopierer…" : "Kopiér"}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">Overskriver alle strategi-indstillinger i dette slot</p>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Switch
