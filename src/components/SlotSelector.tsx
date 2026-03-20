@@ -150,7 +150,55 @@ export const SlotSelector = ({
     setEditName(slot.name);
     setEditConfigId(slot.config_id);
     setEditCapital(slot.capital_percent);
+    setCopyFromSlotId("");
     setDialogOpen(true);
+  };
+
+  const copyConfigFromSlot = async () => {
+    if (!editSlot || !copyFromSlotId) return;
+    const sourceSlot = slots.find(s => s.id === copyFromSlotId);
+    if (!sourceSlot?.config_id) {
+      toast({ title: "Fejl", description: "Kildeslotet har ingen konfiguration", variant: "destructive" });
+      return;
+    }
+    if (!editSlot.config_id) {
+      toast({ title: "Fejl", description: "Dette slot har ingen konfiguration at overskrive", variant: "destructive" });
+      return;
+    }
+
+    setIsCopying(true);
+    try {
+      // Fetch full source config
+      const { data: source, error: fetchErr } = await supabase
+        .from("indicator_config")
+        .select("*")
+        .eq("id", sourceSlot.config_id)
+        .single();
+      if (fetchErr || !source) throw fetchErr || new Error("Kunne ikke hente kilde-konfiguration");
+
+      // Strip metadata, keep all strategy params
+      const { id, created_at, updated_at, user_id, name, strategy_params_changed_at, ...params } = source;
+
+      // Overwrite target config with source params
+      const { error: updateErr } = await supabase
+        .from("indicator_config")
+        .update({
+          ...params,
+          strategy_params_changed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", editSlot.config_id);
+
+      if (updateErr) throw updateErr;
+
+      toast({ title: "Konfiguration kopieret", description: `Indstillinger fra ${sourceSlot.name} kopieret til ${editSlot.name}` });
+      setCopyFromSlotId("");
+      onSlotsChanged();
+    } catch (err: any) {
+      toast({ title: "Fejl", description: err.message, variant: "destructive" });
+    } finally {
+      setIsCopying(false);
+    }
   };
 
   const saveSlot = async () => {
