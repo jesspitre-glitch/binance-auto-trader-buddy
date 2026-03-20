@@ -729,6 +729,13 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       isHard: Boolean(formData.ema_trend_hard_filter),
     },
     {
+      key: "rsi",
+      label: "RSI",
+      enabled: Boolean(formData.rsi_enabled && !formData.rsi_hard_filter),
+      parentEnabled: Boolean(formData.rsi_enabled),
+      isHard: Boolean(formData.rsi_hard_filter),
+    },
+    {
       key: "stochrsi",
       label: "StochRSI Zone",
       enabled: Boolean(formData.stochrsi_enabled && !formData.stochrsi_hard_filter),
