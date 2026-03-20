@@ -55,6 +55,8 @@ export const SlotSelector = ({
   const [editConfigId, setEditConfigId] = useState<string | null>(null);
   const [editCapital, setEditCapital] = useState(25);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [copyFromSlotId, setCopyFromSlotId] = useState<string>("");
+  const [isCopying, setIsCopying] = useState(false);
   const [configTimestamps, setConfigTimestamps] = useState<Record<string, string | null>>({});
 
   // Fetch strategy_params_changed_at for all slot configs
