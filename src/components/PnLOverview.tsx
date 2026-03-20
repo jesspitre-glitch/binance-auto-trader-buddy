@@ -1020,7 +1020,14 @@ export const PnLOverview = ({ slotId, includeLegacyData = false, onSelectSlot }:
                   {stats.slotBreakdown.map((slot: SlotPnlBreakdown) => {
                     const slotProfitable = slot.totalNetPnl >= 0;
                     return (
-                      <div key={slot.slotId} className="rounded-md border p-3 space-y-2">
+                      <div
+                        key={slot.slotId}
+                        className={cn(
+                          "rounded-md border p-3 space-y-2 transition-colors",
+                          onSelectSlot && "cursor-pointer hover:bg-accent/50 hover:border-primary/40"
+                        )}
+                        onClick={() => onSelectSlot?.(slot.slotId)}
+                      >
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-sm font-medium">{slot.slotName}</span>
                           <span className={`text-sm font-bold ${slotProfitable ? "text-profit" : "text-loss"}`}>
