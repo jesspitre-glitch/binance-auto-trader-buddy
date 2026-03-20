@@ -394,6 +394,38 @@ export const SlotSelector = ({
                 className="w-24"
               />
             </div>
+            {/* Copy config from another slot */}
+            {slots.filter(s => s.id !== editSlot?.id && s.config_id).length > 0 && (
+              <div className="space-y-2 border-t pt-3">
+                <Label className="flex items-center gap-1.5 text-sm">
+                  <Copy className="h-3.5 w-3.5" />
+                  Kopiér indstillinger fra andet slot
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Select value={copyFromSlotId} onValueChange={setCopyFromSlotId}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Vælg kilde-slot" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {slots
+                        .filter(s => s.id !== editSlot?.id && s.config_id)
+                        .map(s => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!copyFromSlotId || isCopying}
+                    onClick={copyConfigFromSlot}
+                  >
+                    {isCopying ? "Kopierer…" : "Kopiér"}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">Overskriver alle strategi-indstillinger i dette slot</p>
+              </div>
+            )
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Switch
