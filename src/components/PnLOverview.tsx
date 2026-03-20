@@ -55,7 +55,7 @@ interface SlotPnlBreakdown {
   winRateSinceChange: number;
 }
 
-export const PnLOverview = ({ slotId, includeLegacyData = false }: PnLOverviewProps) => {
+export const PnLOverview = ({ slotId, includeLegacyData = false, onSelectSlot }: PnLOverviewProps) => {
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<TimeRange>("24h");
   const [pnlMode, setPnlMode] = useState<PnlTotalMode>("binance_overview");
