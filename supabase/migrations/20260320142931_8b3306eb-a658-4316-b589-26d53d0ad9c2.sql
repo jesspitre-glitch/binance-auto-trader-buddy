@@ -1,0 +1,1 @@
+UPDATE indicator_config SET candle_momentum_enabled = false WHERE candle_momentum_enabled = true;
