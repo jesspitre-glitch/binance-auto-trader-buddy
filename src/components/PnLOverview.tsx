@@ -37,6 +37,7 @@ type PnlTotalMode = "strict_trades" | "binance_overview";
 interface PnLOverviewProps {
   slotId?: string | null;
   includeLegacyData?: boolean;
+  onSelectSlot?: (slotId: string) => void;
 }
 
 interface SlotPnlBreakdown {
