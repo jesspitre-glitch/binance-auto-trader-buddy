@@ -805,6 +805,13 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       parentEnabled: Boolean(formData.psar_enabled),
       isHard: Boolean(formData.psar_hard_filter),
     },
+    {
+      key: "candle_momentum",
+      label: "Candle Momentum",
+      enabled: Boolean(formData.candle_momentum_enabled && !formData.candle_momentum_hard_filter),
+      parentEnabled: Boolean(formData.candle_momentum_enabled),
+      isHard: Boolean(formData.candle_momentum_hard_filter),
+    },
   ] as const;
 
   // Vis ALLE soft rules (ikke-hard) - uanset om de er enabled eller ej
