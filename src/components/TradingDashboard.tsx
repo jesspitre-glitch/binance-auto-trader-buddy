@@ -345,7 +345,7 @@ export const TradingDashboard = () => {
         
         <TabsContent value="pnl">
           <SectionErrorBoundary title="P&L Oversigt">
-            <PnLOverview slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} />
+            <PnLOverview slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} onSelectSlot={setSelectedSlotId} />
           </SectionErrorBoundary>
         </TabsContent>
 
