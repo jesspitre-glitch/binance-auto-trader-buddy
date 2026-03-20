@@ -615,6 +615,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       psar_af_increment: config.psar_af_increment ?? 0.02,
       psar_af_max: config.psar_af_max ?? 0.2,
       psar_trailing_enabled: config.psar_trailing_enabled !== undefined ? config.psar_trailing_enabled : false,
+      // Candle Momentum
+      candle_momentum_enabled: config.candle_momentum_enabled !== undefined ? config.candle_momentum_enabled : false,
+      candle_momentum_hard_filter: config.candle_momentum_hard_filter !== undefined ? config.candle_momentum_hard_filter : false,
+      min_candle_body_percent: config.min_candle_body_percent ?? 0.15,
     });
     
     toast({
