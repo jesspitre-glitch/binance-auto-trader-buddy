@@ -21,7 +21,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Settings2, Trash2, Clock } from "lucide-react";
+import { Plus, Settings2, Trash2, Clock, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatBinanceDate } from "@/lib/timeUtils";
 
