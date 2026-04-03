@@ -304,8 +304,8 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                                   TRAILING
                                 </Badge>
                               ) : isBreakEvenActivated ? (
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-blue-500/10 text-blue-500 border-blue-500/20">
-                                  BREAK-EVEN
+                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-4 ${trailingIsActive ? 'bg-muted/10 text-muted-foreground border-muted/20 opacity-60' : 'bg-blue-500/10 text-blue-500 border-blue-500/20'}`}>
+                                  {trailingIsActive ? 'BE OVERTAGET' : 'BREAK-EVEN'}
                                 </Badge>
                               ) : null}
                            </div>

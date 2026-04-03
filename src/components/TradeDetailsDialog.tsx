@@ -265,19 +265,32 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
             )}
 
             {/* Break-Even Level - vis når BE er aktiveret */}
-            {trade.break_even_activated && (
-              <div className="border rounded-lg p-3 border-blue-500/50 bg-blue-500/5">
-                <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                  🛡️ Break-Even Niveau
-                  <Badge variant="outline" className="ml-1 text-xs bg-blue-500/20 text-blue-400 border-blue-500/40">
-                    AKTIV
-                  </Badge>
+            {trade.break_even_activated && (() => {
+              const tsVal = Number(trade.trailing_stop || trade.indicators_snapshot?.trailing_stop);
+              const epVal = Number(trade.entry_price);
+              const trailingHasOvertaken = !isNaN(tsVal) && tsVal > 0 && (
+                trade.side === 'LONG' ? tsVal >= epVal : tsVal <= epVal
+              );
+              return (
+                <div className={`border rounded-lg p-3 ${trailingHasOvertaken ? 'border-muted/50 bg-muted/5 opacity-60' : 'border-blue-500/50 bg-blue-500/5'}`}>
+                  <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                    🛡️ Break-Even Niveau
+                    {trailingHasOvertaken ? (
+                      <Badge variant="outline" className="ml-1 text-xs bg-muted/20 text-muted-foreground border-muted/40">
+                        OVERTAGET
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="ml-1 text-xs bg-blue-500/20 text-blue-400 border-blue-500/40">
+                        AKTIV
+                      </Badge>
+                    )}
+                  </div>
+                  <div className={`font-mono font-semibold ${trailingHasOvertaken ? 'text-muted-foreground' : 'text-blue-400'}`}>
+                    ${Number(trade.indicators_snapshot?.break_even_at_price ?? trade.stop_loss ?? trade.entry_price).toFixed(4)}
+                  </div>
                 </div>
-                <div className="font-mono font-semibold text-blue-400">
-                  ${Number(trade.indicators_snapshot?.break_even_at_price ?? trade.stop_loss ?? trade.entry_price).toFixed(4)}
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Trailing Stop - use position data for live, snapshot for closed */}
             {(trade.trailing_stop || trade.indicators_snapshot?.trailing_stop) && (() => {
