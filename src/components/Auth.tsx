@@ -62,32 +62,55 @@ export const Auth = () => {
     setLoading(true);
 
     try {
-      const { data, error } = await withTimeout(
-        supabase.functions.invoke("preview-password-login", {
-          body: { email, password },
-        })
-      );
+      let loggedIn = false;
 
-      if (error) throw error;
-
-      if (!data?.success || !data?.access_token || !data?.refresh_token) {
-        throw new Error(
-          data?.error_description ||
-            data?.msg ||
-            data?.message ||
-            data?.error ||
-            "Login mislykkedes."
+      try {
+        const { data: directData, error: directError } = await withTimeout(
+          supabase.auth.signInWithPassword({ email, password })
         );
+
+        if (directError) throw directError;
+        loggedIn = !!directData.session;
+      } catch (directError: any) {
+        const directMessage = directError?.message || "";
+        const shouldFallbackToProxy =
+          directMessage.includes("Load failed") ||
+          directMessage.includes("Failed to fetch") ||
+          directMessage.includes("Login-serveren svarer ikke lige nu");
+
+        if (!shouldFallbackToProxy) {
+          throw directError;
+        }
       }
 
-      const { error: sessionError } = await withTimeout(
-        supabase.auth.setSession({
-          access_token: data.access_token,
-          refresh_token: data.refresh_token,
-        })
-      );
+      if (!loggedIn) {
+        const { data, error } = await withTimeout(
+          supabase.functions.invoke("preview-password-login", {
+            body: { email, password },
+          })
+        );
 
-      if (sessionError) throw sessionError;
+        if (error) throw error;
+
+        if (!data?.success || !data?.access_token || !data?.refresh_token) {
+          throw new Error(
+            data?.error_description ||
+              data?.msg ||
+              data?.message ||
+              data?.error ||
+              "Login mislykkedes."
+          );
+        }
+
+        const { error: sessionError } = await withTimeout(
+          supabase.auth.setSession({
+            access_token: data.access_token,
+            refresh_token: data.refresh_token,
+          })
+        );
+
+        if (sessionError) throw sessionError;
+      }
 
       toast({
         title: "Success",
@@ -99,6 +122,8 @@ export const Auth = () => {
         ? "Du skal først bekræfte din email via linket i din indbakke."
         : rawMessage.includes("Invalid login credentials")
           ? "Forkert email eller adgangskode."
+          : rawMessage.includes("Login-serveren svarer ikke lige nu")
+            ? "Login-serveren svarer ikke lige nu. Prøv igen om lidt."
           : rawMessage;
 
       toast({
