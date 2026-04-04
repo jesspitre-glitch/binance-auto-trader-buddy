@@ -2,7 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 serve(async (req) => {
@@ -37,6 +38,9 @@ serve(async (req) => {
       throw new Error("Backend auth er ikke konfigureret korrekt.");
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort("auth_timeout"), 10000);
+
     const authResponse = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
       method: "POST",
       headers: {
@@ -50,7 +54,8 @@ serve(async (req) => {
         password,
         gotrue_meta_security: {},
       }),
-    });
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeoutId));
 
     const responseText = await authResponse.text();
     const contentType = authResponse.headers.get("content-type") || "";
@@ -80,6 +85,8 @@ serve(async (req) => {
     const message = rawMessage.includes("timed out") || rawMessage.includes("Failed to fetch")
       ? "Login-serveren svarer ikke lige nu. Prøv igen om lidt."
       : rawMessage;
+
+    console.error("[preview-password-login]", rawMessage);
 
     return new Response(JSON.stringify({ success: false, message }), {
       status: 200,
