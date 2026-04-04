@@ -22,13 +22,16 @@ export const Auth = () => {
       const { error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/index`,
+        },
       });
 
       if (error) throw error;
 
       toast({
         title: "Success",
-        description: "Account created! You can now log in.",
+        description: "Konto oprettet. Tjek din email og bekræft kontoen, før du logger ind.",
       });
     } catch (error: any) {
       toast({
@@ -58,9 +61,13 @@ export const Auth = () => {
         description: "Logged in successfully!",
       });
     } catch (error: any) {
+      const message = error?.message?.includes("Email not confirmed")
+        ? "Du skal først bekræfte din email via linket i din indbakke."
+        : error.message;
+
       toast({
         title: "Error",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -136,6 +143,9 @@ export const Auth = () => {
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Opret Konto
                 </Button>
+                <p className="text-sm text-muted-foreground">
+                  Du skal bekræfte din email, før login virker.
+                </p>
               </form>
             </TabsContent>
           </Tabs>
