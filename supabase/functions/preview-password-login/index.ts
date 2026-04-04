@@ -52,17 +52,37 @@ serve(async (req) => {
       }),
     });
 
-    const payload = await authResponse.json();
+    const responseText = await authResponse.text();
+    const contentType = authResponse.headers.get("content-type") || "";
+    const looksLikeHtml = responseText.trim().startsWith("<!DOCTYPE") || responseText.trim().startsWith("<html");
+
+    if (!contentType.includes("application/json") || looksLikeHtml) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: "Login-serveren svarer ikke lige nu. Prøv igen om lidt.",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const payload = JSON.parse(responseText);
 
     return new Response(JSON.stringify({ success: authResponse.ok, ...payload }), {
-      status: authResponse.ok ? 200 : 200,
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Ukendt loginfejl";
+    const rawMessage = error instanceof Error ? error.message : "Ukendt loginfejl";
+    const message = rawMessage.includes("timed out") || rawMessage.includes("Failed to fetch")
+      ? "Login-serveren svarer ikke lige nu. Prøv igen om lidt."
+      : rawMessage;
 
     return new Response(JSON.stringify({ success: false, message }), {
-      status: 500,
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
