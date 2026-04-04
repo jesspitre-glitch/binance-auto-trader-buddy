@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.reconcile-trade-fees]
 verify_jwt = false
+
+[functions.preview-password-login]
+verify_jwt = false
