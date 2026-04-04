@@ -8,24 +8,37 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
+const AUTH_TIMEOUT_MS = 12000;
+
 export const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const { toast } = useToast();
 
+  const withTimeout = async <T,>(promise: Promise<T>) => {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        window.setTimeout(() => {
+          reject(new Error("Login-serveren svarer ikke lige nu. Prøv igen om lidt."));
+        }, AUTH_TIMEOUT_MS);
+      }),
+    ]);
+  };
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const { error } = await withTimeout(supabase.auth.signUp({
         email,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/index`,
         },
-      });
+      }));
 
       if (error) throw error;
 
@@ -49,10 +62,10 @@ export const Auth = () => {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error } = await withTimeout(supabase.auth.signInWithPassword({
         email,
         password,
-      });
+      }));
 
       if (error) throw error;
 
