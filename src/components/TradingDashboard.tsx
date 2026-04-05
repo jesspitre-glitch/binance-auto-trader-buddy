@@ -165,8 +165,8 @@ export const TradingDashboard = () => {
 
   const toggleTrading = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
+      const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+      if (!user) throw new Error("Ikke logget ind - bot-kontrol kræver login");
 
       if (!activeConfigId && !isActive) {
         toast({
