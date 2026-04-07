@@ -3,13 +3,23 @@ import { supabase } from "@/integrations/supabase/client";
 const AUTH_TIMEOUT_MS = 12000;
 const AUTH_TIMEOUT_MESSAGE = "Login-serveren svarer ikke lige nu. Prøv igen om lidt.";
 
-const withTimeout = async <T,>(factory: () => Promise<T>) => {
+type AuthTimeoutOptions = {
+  timeoutMessage?: string;
+  timeoutMs?: number;
+};
+
+export const withAuthTimeout = async <T,>(
+  factory: () => Promise<T>,
+  options: AuthTimeoutOptions = {}
+) => {
+  const timeoutMs = options.timeoutMs ?? AUTH_TIMEOUT_MS;
+  const timeoutMessage = options.timeoutMessage ?? AUTH_TIMEOUT_MESSAGE;
   let timeoutId: number | undefined;
 
   return await new Promise<T>((resolve, reject) => {
     timeoutId = window.setTimeout(() => {
-      reject(new Error(AUTH_TIMEOUT_MESSAGE));
-    }, AUTH_TIMEOUT_MS);
+      reject(new Error(timeoutMessage));
+    }, timeoutMs);
 
     factory()
       .then(resolve)
@@ -30,7 +40,7 @@ const isPreviewEnvironment = () => {
 const getProxyUrl = () => `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/preview-password-login`;
 
 const signInThroughPreviewProxy = async (email: string, password: string) => {
-  const response = await withTimeout(() =>
+  const response = await withAuthTimeout(() =>
     fetch(getProxyUrl(), {
       method: "POST",
       headers: {
@@ -60,7 +70,7 @@ const signInThroughPreviewProxy = async (email: string, password: string) => {
     );
   }
 
-  const { error: sessionError } = await withTimeout(() =>
+  const { error: sessionError } = await withAuthTimeout(() =>
     supabase.auth.setSession({
       access_token: data.access_token,
       refresh_token: data.refresh_token,
@@ -79,7 +89,7 @@ export const signInWithFallback = async (email: string, password: string) => {
   }
 
   try {
-    const { data, error } = await withTimeout(() =>
+    const { data, error } = await withAuthTimeout(() =>
       supabase.auth.signInWithPassword({ email, password })
     );
 
