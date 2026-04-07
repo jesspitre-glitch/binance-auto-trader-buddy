@@ -272,7 +272,7 @@ export const TradingDashboard = () => {
             selectedSlotId={selectedSlotId}
             onSelectSlot={setSelectedSlotId}
             configs={configs.map((c) => ({ id: c.id, name: c.name }))}
-            onSlotsChanged={fetchSlots}
+            onSlotsChanged={fetchSlotsAndConfigs}
           />
         </CardContent>
       </Card>
