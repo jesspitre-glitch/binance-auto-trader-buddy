@@ -77,6 +77,10 @@ export const TradingDashboard = () => {
     }
   };
 
+  const fetchSlotsAndConfigs = async () => {
+    await Promise.all([fetchSlots(), fetchConfigs()]);
+  };
+
   const handleConfigSave = () => {
     fetchConfigs();
   };
