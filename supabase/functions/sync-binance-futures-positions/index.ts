@@ -264,6 +264,7 @@ serve(async (req) => {
         const absQuantity = Math.abs(quantity);
         const currentPrice = parseFloat(binancePos.markPrice);
         const unrealizedPnl = parseFloat(binancePos.unRealizedProfit);
+        const binanceEntryPrice = parseFloat(binancePos.entryPrice);
         
         binanceSymbols.add(binancePos.symbol);
         
@@ -283,6 +284,10 @@ serve(async (req) => {
             side: side,
             updated_at: new Date().toISOString(),
           };
+
+          if (Number.isFinite(binanceEntryPrice) && binanceEntryPrice > 0) {
+            updateData.entry_price = binanceEntryPrice;
+          }
           
           // If missing indicators_snapshot, try to find a recent bot signal
           if (!mainPos.indicators_snapshot) {
