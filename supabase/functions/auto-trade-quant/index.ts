@@ -3920,12 +3920,10 @@ serve(async (req) => {
             continue;
           }
 
-          // Exchange-level guard: if a position exists on Binance, don't place another
-          const existingOnExchange = await verifyPositionOnBinance(symbol);
-          if (existingOnExchange) {
-            console.log(`Skipping ${symbol}: Position already open on Binance`);
-            continue;
-          }
+          // NOTE: Exchange-level guard REMOVED - multiple slots are allowed to trade
+          // the same symbol independently. The per-slot DB check above is sufficient.
+          // Binance merges positions at account level, so verifyPositionOnBinance would
+          // incorrectly block slot B when slot A already has the same symbol open.
           
           // Get account balance
           const balance = await getAccountBalance();
