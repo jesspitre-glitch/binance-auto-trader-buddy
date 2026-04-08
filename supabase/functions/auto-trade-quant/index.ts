@@ -3925,11 +3925,24 @@ serve(async (req) => {
           // Binance merges positions at account level, so verifyPositionOnBinance would
           // incorrectly block slot B when slot A already has the same symbol open.
           
-          // Get account balance
-          const balance = await getAccountBalance();
-          const slotBalance = balance * (capitalPercent / 100);
-          console.log(`✅ Balance check OK: ${balance} USDC (Slot: ${slotBalance.toFixed(2)} USDC @ ${capitalPercent}%)`);
+          // Get portfolio balance from database (NOT Binance availableBalance which includes non-allocated funds)
+          const { data: portfolioData, error: portfolioError } = await supabaseClient
+            .from('user_portfolio')
+            .select('futures_capital')
+            .eq('user_id', session.user_id)
+            .maybeSingle();
           
+          if (portfolioError || !portfolioData || !portfolioData.futures_capital) {
+            console.error(`🚨 Cannot fetch portfolio balance for user ${session.user_id}:`, portfolioError?.message);
+            // Fallback to Binance balance if portfolio not set
+            const binanceBalance = await getAccountBalance();
+            console.warn(`⚠️ FALLBACK: Using Binance availableBalance: $${binanceBalance.toFixed(2)} (user_portfolio not configured)`);
+          }
+          
+          const balance = portfolioData?.futures_capital ? Number(portfolioData.futures_capital) : await getAccountBalance();
+          const slotBalance = balance * (capitalPercent / 100);
+          console.log(`✅ Balance check OK: $${balance.toFixed(2)} (from user_portfolio) → Slot: $${slotBalance.toFixed(2)} @ ${capitalPercent}%`);
+
           // 🔴 KRITISK SIKKERHEDSCHECK: ATR SKAL VÆRE GYLDIG
           // Uden ATR kan vi ikke beregne stop loss, break-even eller trailing stop korrekt
           const atrFromAnalysis = analysis.indicators.atr;
