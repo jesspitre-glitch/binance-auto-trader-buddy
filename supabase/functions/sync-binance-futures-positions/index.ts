@@ -198,28 +198,27 @@ serve(async (req) => {
       const userId = session.user_id;
       console.log(`Syncing positions for user ${userId}`);
 
-      // Update or insert user portfolio with balance
+      // Preserve user-defined trading capital.
+      // This sync must never overwrite futures_capital with Binance account balance,
+      // because auto-trade uses futures_capital as the sizing baseline.
+      // We only bootstrap the portfolio row if it does not exist yet.
       const { data: existingPortfolio } = await supabaseClient
         .from('user_portfolio')
         .select('*')
         .eq('user_id', userId)
         .single();
 
-      if (existingPortfolio) {
-        await supabaseClient
-          .from('user_portfolio')
-          .update({
-            futures_capital: totalMarginBalance,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('user_id', userId);
-      } else {
+      if (!existingPortfolio) {
         await supabaseClient
           .from('user_portfolio')
           .insert({
             user_id: userId,
             futures_capital: totalMarginBalance,
           });
+      } else {
+        console.log(
+          `Preserving user_portfolio.futures_capital for user ${userId}: ${existingPortfolio.futures_capital}`
+        );
       }
       
       // Create daily balance snapshot if it doesn't exist yet (Binance-style P&L tracking)
