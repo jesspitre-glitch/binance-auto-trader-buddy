@@ -92,8 +92,26 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
           </DialogTitle>
         </DialogHeader>
 
-        {/* Export button - separated from close button */}
-        <div className="flex justify-end -mt-2 mb-2">
+        {/* Action buttons */}
+        <div className="flex justify-between -mt-2 mb-2">
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={async () => {
+              if (!confirm("Er du sikker på at du vil slette denne handel? Det kan ikke fortrydes.")) return;
+              const { error } = await supabase.from("trade_history").delete().eq("id", trade.id);
+              if (error) {
+                toast({ title: "Fejl", description: error.message, variant: "destructive" });
+              } else {
+                toast({ title: "Slettet", description: `${trade.symbol} handel fjernet fra historik` });
+                onClose();
+              }
+            }}
+            className="flex items-center gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            Slet handel
+          </Button>
           <Button
             variant="outline"
             size="sm"
