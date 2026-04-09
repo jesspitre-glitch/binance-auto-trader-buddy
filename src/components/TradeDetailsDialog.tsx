@@ -13,9 +13,10 @@ interface TradeDetailsDialogProps {
   trade: any;
   isOpen: boolean;
   onClose: () => void;
+  onDeleted?: () => void;
 }
 
-export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialogProps) => {
+export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeDetailsDialogProps) => {
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
   
@@ -104,6 +105,7 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialo
                 toast({ title: "Fejl", description: error.message, variant: "destructive" });
               } else {
                 toast({ title: "Slettet", description: `${trade.symbol} handel fjernet fra historik` });
+                onDeleted?.();
                 onClose();
               }
             }}

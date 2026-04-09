@@ -1,0 +1,1 @@
+ALTER TABLE public.trade_history REPLICA IDENTITY FULL;
