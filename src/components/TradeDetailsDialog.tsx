@@ -105,6 +105,7 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeD
                 toast({ title: "Fejl", description: error.message, variant: "destructive" });
               } else {
                 toast({ title: "Slettet", description: `${trade.symbol} handel fjernet fra historik` });
+                onDeleted?.();
                 onClose();
               }
             }}
