@@ -257,6 +257,12 @@ export const SlotSelector = ({
         .eq("id", slot.id);
 
       if (error) throw error;
+      
+      // Update local editSlot state immediately so Switch reflects change
+      if (editSlot && editSlot.id === slot.id) {
+        setEditSlot({ ...editSlot, is_active: newActive });
+      }
+      
       onSlotsChanged();
     } catch (err: any) {
       toast({ title: "Fejl", description: err.message, variant: "destructive" });
