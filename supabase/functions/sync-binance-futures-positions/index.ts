@@ -271,113 +271,73 @@ serve(async (req) => {
         const matchingPositions = dbPositions?.filter(p => p.symbol === binancePos.symbol) || [];
         
         if (matchingPositions.length > 0) {
-          // Update the FIRST position with LIVE data from Binance
-          const mainPos = matchingPositions[0];
-          
-          console.log(`Updating ${binancePos.symbol}: Price ${currentPrice}, P&L ${unrealizedPnl.toFixed(2)} USDT`);
-          
-          let updateData: any = {
-            current_price: currentPrice,
-            unrealized_pnl: unrealizedPnl,
-            quantity: absQuantity,
-            side: side,
-            updated_at: new Date().toISOString(),
-          };
-
-          if (Number.isFinite(binanceEntryPrice) && binanceEntryPrice > 0) {
-            updateData.entry_price = binanceEntryPrice;
-          }
-          
-          // If missing indicators_snapshot, try to find a recent bot signal
-          if (!mainPos.indicators_snapshot) {
-            const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-            const { data: recentSignals } = await supabaseClient
-              .from('scan_results')
-              .select('*')
-              .eq('user_id', userId)
-              .eq('symbol', binancePos.symbol)
-              .eq('signal', side)
-              .gte('created_at', tenMinutesAgo)
-              .order('created_at', { ascending: false })
-              .limit(1);
+          // Update ALL matching positions with live market data from Binance
+          // Each position may belong to a different slot — do NOT aggregate or close "duplicates"
+          for (const dbPos of matchingPositions) {
+            console.log(`Updating ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): Price ${currentPrice}, P&L calc from DB qty`);
             
-            if (recentSignals && recentSignals.length > 0) {
-              const signal = recentSignals[0];
-              const indicators = signal.indicators as any;
-              
-              updateData.indicators_snapshot = signal.indicators;
-              updateData.open_reason = `${side} signal på ${binancePos.symbol} - ` +
-                `Trend: ${indicators.trend || 'UNKNOWN'}. ` +
-                `RSI: ${indicators.rsi?.toFixed(2) || 'N/A'}, ` +
-                `MACD: ${indicators.macd?.toFixed(4) || 'N/A'}, ` +
-                `EMA: Fast ${indicators.emaFast?.toFixed(2) || 'N/A'} vs Slow ${indicators.emaSlow?.toFixed(2) || 'N/A'}, ` +
-                `ADX: ${indicators.adx?.toFixed(2) || 'N/A'}`;
-              
-              console.log(`✅ Updated ${binancePos.symbol} with bot signal data`);
+            // Calculate per-position unrealized P&L based on the DB's stored quantity
+            const dbQty = Number(dbPos.quantity) || 0;
+            const dbEntry = Number(dbPos.entry_price) || 0;
+            const dbSide = dbPos.side as string;
+            const perPositionPnl = dbSide === 'LONG' 
+              ? (currentPrice - dbEntry) * dbQty 
+              : (dbEntry - currentPrice) * dbQty;
+            
+            let updateData: any = {
+              current_price: currentPrice,
+              unrealized_pnl: perPositionPnl,
+              // Do NOT overwrite quantity — it was set at order time per-slot
+              // Do NOT overwrite side — it was set at order time
+              updated_at: new Date().toISOString(),
+            };
+
+            if (Number.isFinite(binanceEntryPrice) && binanceEntryPrice > 0) {
+              updateData.entry_price = binanceEntryPrice;
             }
-          }
-          
-          const { error } = await supabaseClient
-            .from('positions')
-            .update(updateData)
-            .eq('id', mainPos.id);
-          
-          if (error) console.error('Update error:', error);
-          updates.push({ 
-            symbol: binancePos.symbol, 
-            action: 'updated', 
-            id: mainPos.id,
-            price: currentPrice,
-            pnl: unrealizedPnl,
-          });
-          
-          // Close DUPLICATES (all except the first one)
-          for (let i = 1; i < matchingPositions.length; i++) {
-            const duplicate = matchingPositions[i];
-            console.log(`Closing duplicate position ${duplicate.symbol} (ID: ${duplicate.id})`);
             
-            // Fetch a current price snapshot to log history
-            const exitPrice = await getCurrentPrice(duplicate.symbol, supabaseClient);
-            const qty = Number(duplicate.quantity) || 0;
-            const entry = Number(duplicate.entry_price) || 0;
-            const sideDup = duplicate.side as 'LONG' | 'SHORT';
-            const pnlRaw = sideDup === 'LONG' ? (exitPrice - entry) * qty : (entry - exitPrice) * qty;
-            const positionValue = entry * qty || 1;
-            const pnlPct = (pnlRaw / positionValue) * 100;
-            const nowIso = new Date().toISOString();
-            const durationMin = duplicate.opened_at ? Math.floor((Date.now() - new Date(duplicate.opened_at).getTime()) / (1000 * 60)) : null;
-
-            await supabaseClient
+            // If missing indicators_snapshot, try to find a recent bot signal
+            if (!dbPos.indicators_snapshot) {
+              const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+              const { data: recentSignals } = await supabaseClient
+                .from('scan_results')
+                .select('*')
+                .eq('user_id', userId)
+                .eq('symbol', binancePos.symbol)
+                .eq('signal', side)
+                .gte('created_at', tenMinutesAgo)
+                .order('created_at', { ascending: false })
+                .limit(1);
+              
+              if (recentSignals && recentSignals.length > 0) {
+                const signal = recentSignals[0];
+                const indicators = signal.indicators as any;
+                
+                updateData.indicators_snapshot = signal.indicators;
+                updateData.open_reason = `${side} signal på ${binancePos.symbol} - ` +
+                  `Trend: ${indicators.trend || 'UNKNOWN'}. ` +
+                  `RSI: ${indicators.rsi?.toFixed(2) || 'N/A'}, ` +
+                  `MACD: ${indicators.macd?.toFixed(4) || 'N/A'}, ` +
+                  `EMA: Fast ${indicators.emaFast?.toFixed(2) || 'N/A'} vs Slow ${indicators.emaSlow?.toFixed(2) || 'N/A'}, ` +
+                  `ADX: ${indicators.adx?.toFixed(2) || 'N/A'}`;
+                
+                console.log(`✅ Updated ${binancePos.symbol} with bot signal data`);
+              }
+            }
+            
+            const { error } = await supabaseClient
               .from('positions')
-              .update({
-                status: 'CLOSED',
-                closed_at: nowIso,
-                close_reason: 'DUPLICATE',
-              })
-              .eq('id', duplicate.id);
-
-            // Insert trade history for duplicate closure
-            await supabaseClient
-              .from('trade_history')
-              .insert({
-                user_id: duplicate.user_id,
-                symbol: duplicate.symbol,
-                side: duplicate.side,
-                entry_price: entry,
-                exit_price: exitPrice,
-                quantity: qty,
-                pnl: pnlRaw,
-                pnl_percent: pnlPct,
-                opened_at: duplicate.opened_at,
-                closed_at: nowIso,
-                duration_minutes: durationMin,
-                strategy_hash: duplicate.strategy_hash,
-                open_reason: duplicate.open_reason,
-                close_reason: 'DUPLICATE',
-                slot_id: duplicate.slot_id,
-              });
+              .update(updateData)
+              .eq('id', dbPos.id);
             
-            updates.push({ symbol: duplicate.symbol, action: 'closed_duplicate', id: duplicate.id });
+            if (error) console.error('Update error:', error);
+            updates.push({ 
+              symbol: binancePos.symbol, 
+              action: 'updated', 
+              id: dbPos.id,
+              price: currentPrice,
+              pnl: perPositionPnl,
+            });
           }
         } else {
           // 🔴 KRITISK: Opret IKKE nye positioner medmindre de er kvalificeret af bot-signalet
