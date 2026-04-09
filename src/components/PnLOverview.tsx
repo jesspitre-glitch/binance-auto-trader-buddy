@@ -58,7 +58,7 @@ interface SlotPnlBreakdown {
 export const PnLOverview = ({ slotId, includeLegacyData = false, onSelectSlot }: PnLOverviewProps) => {
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<TimeRange>("24h");
-  const [pnlMode, setPnlMode] = useState<PnlTotalMode>("binance_overview");
+  const [pnlMode, setPnlMode] = useState<PnlTotalMode>("strict_trades");
   const [chartType, setChartType] = useState<"line" | "bar">("line");
   const [stats, setStats] = useState<any>(null);
   const [chartData, setChartData] = useState<any[]>([]);
@@ -78,11 +78,9 @@ export const PnLOverview = ({ slotId, includeLegacyData = false, onSelectSlot }:
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Calculate UTC day-aligned time window (matching Binance's day boundaries)
+      // Calculate selected time window
       const nowMs = Date.now();
       const now = new Date(nowMs);
-      
-      // Get start of current UTC day
       const todayUtcStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0);
       
       let startMs: number;
@@ -136,7 +134,7 @@ export const PnLOverview = ({ slotId, includeLegacyData = false, onSelectSlot }:
       } else {
         switch (range) {
           case "24h":
-            startMs = todayUtcStart;
+            startMs = nowMs - (24 * 60 * 60 * 1000);
             break;
           case "7d":
             startMs = todayUtcStart - (6 * 24 * 60 * 60 * 1000);
@@ -168,7 +166,7 @@ export const PnLOverview = ({ slotId, includeLegacyData = false, onSelectSlot }:
       
       const startDate = new Date(startMs);
 
-      console.log(`[PnL] UTC-aligned window: ${range}, from ${startDate.toISOString()} to ${now.toISOString()}`);
+      console.log(`[PnL] Selected window: ${range}, from ${startDate.toISOString()} to ${new Date(effectiveNowMs).toISOString()}`);
       
       // Fetch portfolio balance (current)
       const portfolioResult = await supabase
@@ -189,31 +187,32 @@ export const PnLOverview = ({ slotId, includeLegacyData = false, onSelectSlot }:
       } | null = null;
       
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData?.session) {
-          const response = await supabase.functions.invoke("get-binance-daily-pnl", {
-            headers: {
-              Authorization: `Bearer ${sessionData.session.access_token}`,
-            },
-            body: {
-              startTime: startMs,
-              endTime: effectiveNowMs,
-            },
-          });
-          
-          if (response.error) {
-            const errorMsg = typeof response.error === 'object' 
-              ? JSON.stringify(response.error) 
-              : String(response.error);
-            // Check for rate limit / IP ban errors
-            if (errorMsg.includes('banned') || errorMsg.includes('-1003') || errorMsg.includes('rate limit')) {
-              console.warn("[PnL] Binance API rate limited, using trade-based fallback");
-            } else {
-              console.warn("[PnL] Binance API error:", errorMsg);
+        if (effectivePnlMode === "binance_overview") {
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (sessionData?.session) {
+            const response = await supabase.functions.invoke("get-binance-daily-pnl", {
+              headers: {
+                Authorization: `Bearer ${sessionData.session.access_token}`,
+              },
+              body: {
+                startTime: startMs,
+                endTime: effectiveNowMs,
+              },
+            });
+            
+            if (response.error) {
+              const errorMsg = typeof response.error === 'object' 
+                ? JSON.stringify(response.error) 
+                : String(response.error);
+              if (errorMsg.includes('banned') || errorMsg.includes('-1003') || errorMsg.includes('rate limit')) {
+                console.warn("[PnL] Binance API rate limited, using trade-based fallback");
+              } else {
+                console.warn("[PnL] Binance API error:", errorMsg);
+              }
+            } else if (response.data) {
+              binancePnl = response.data;
+              console.log(`[PnL] Binance income ledger (${range}):`, binancePnl);
             }
-          } else if (response.data) {
-            binancePnl = response.data;
-            console.log(`[PnL] Binance income ledger (${range}):`, binancePnl);
           }
         }
       } catch (err: any) {
@@ -796,20 +795,20 @@ export const PnLOverview = ({ slotId, includeLegacyData = false, onSelectSlot }:
     const setupSubscription = () => {
       if (!mounted) return;
       
-      console.log("[PnL] Setting up realtime subscription for trade_history");
+      console.log("[PnL] Setting up realtime subscription for trade_history changes");
       
       channel = supabase
         .channel("pnl-trade-history-changes")
         .on(
           "postgres_changes",
           {
-            event: "INSERT",
+            event: "*",
             schema: "public",
             table: "trade_history",
           },
           (payload) => {
             if (!mounted) return;
-            console.log("[PnL] Realtime: New trade detected, refetching data", payload);
+            console.log("[PnL] Realtime: trade_history changed, refetching data", payload);
             fetchPnLData(timeRangeRef.current);
           }
         )
