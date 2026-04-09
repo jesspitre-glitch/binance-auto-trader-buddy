@@ -4088,9 +4088,11 @@ serve(async (req) => {
           console.log(`   Distance: ${trailingStopDistance.toFixed(6)}`);
           console.log(`   Procent: ${trailingStopPercent.toFixed(2)}%`);
           
-          // Use actual values from Binance for database insert
+          // Use actual entry price from Binance (accounts for slippage)
+          // but use the ORDERED quantity, NOT the aggregate Binance position
+          // (Binance nets all orders for a symbol, so positionAmt is the total across all slots)
           const actualEntryPrice = parseFloat(binancePosition.entryPrice);
-          const actualQuantity = Math.abs(parseFloat(binancePosition.positionAmt));
+          const actualQuantity = quantityRounded;
           
           // Calculate initial trailing stop level (aktiveres med det samme, ikke efter TP)
           const initialTrailingStop = signal === 'LONG'
