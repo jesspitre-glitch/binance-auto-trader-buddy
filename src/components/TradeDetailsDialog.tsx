@@ -16,7 +16,7 @@ interface TradeDetailsDialogProps {
   onDeleted?: () => void;
 }
 
-export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialogProps) => {
+export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeDetailsDialogProps) => {
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
   
