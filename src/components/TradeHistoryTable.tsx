@@ -161,6 +161,7 @@ export const TradeHistoryTable = ({ slotId, includeLegacyData = false }: TradeHi
           trade={selectedTrade}
           isOpen={!!selectedTrade}
           onClose={() => setSelectedTrade(null)}
+          onDeleted={() => fetchTrades()}
         />
       )}
     </>
