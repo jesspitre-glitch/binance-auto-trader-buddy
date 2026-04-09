@@ -326,14 +326,18 @@ export const SlotSelector = ({
               "px-4 py-2 rounded-lg border text-sm font-medium transition-all flex items-center gap-2",
               selectedSlotId === slot.id
                 ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                : "bg-card border-border hover:bg-accent text-foreground"
+                : "bg-card border-border hover:bg-accent text-foreground",
+              !slot.is_active && selectedSlotId !== slot.id && "opacity-50"
             )}
           >
             <div className="flex flex-col items-start gap-0.5">
               <div className="flex items-center gap-2">
-                {slot.is_active && (
-                  <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-                )}
+                <div className={cn(
+                  "w-2.5 h-2.5 rounded-full border",
+                  slot.is_active
+                    ? "bg-green-500 border-green-400 animate-pulse shadow-[0_0_6px_rgba(34,197,94,0.5)]"
+                    : "bg-muted border-muted-foreground/30"
+                )} />
                 <span>{slot.name}</span>
                 <Badge variant="secondary" className="text-xs px-1.5 py-0">
                   {slot.capital_percent}%
