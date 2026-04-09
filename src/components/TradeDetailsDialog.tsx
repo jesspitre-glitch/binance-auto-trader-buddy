@@ -2,11 +2,12 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, TrendingDown, Clock, DollarSign, Target, AlertTriangle, X, Download, Copy, Check } from "lucide-react";
+import { TrendingUp, TrendingDown, Clock, DollarSign, Target, AlertTriangle, X, Download, Copy, Check, Trash2 } from "lucide-react";
 import { getBinanceTimeAgo, formatBinanceDate } from "@/lib/timeUtils";
 import { TradeChart } from "./TradeChart";
 import { formatTradeForExport } from "@/lib/tradeExportUtils";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface TradeDetailsDialogProps {
   trade: any;
