@@ -151,6 +151,17 @@ export const PortfolioBalance = ({ slotId, includeLegacyData, slots }: Portfolio
             if (mounted) fetchPortfolio();
           }
         )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "trade_history",
+          },
+          () => {
+            if (mounted) fetchPortfolio();
+          }
+        )
         .subscribe();
     }, 500);
 
