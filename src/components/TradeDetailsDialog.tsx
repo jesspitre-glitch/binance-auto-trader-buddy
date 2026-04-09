@@ -13,6 +13,7 @@ interface TradeDetailsDialogProps {
   trade: any;
   isOpen: boolean;
   onClose: () => void;
+  onDeleted?: () => void;
 }
 
 export const TradeDetailsDialog = ({ trade, isOpen, onClose }: TradeDetailsDialogProps) => {
