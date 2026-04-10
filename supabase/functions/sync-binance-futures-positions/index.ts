@@ -6,6 +6,45 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const SLOT_QUANTITY_TOLERANCE_MULTIPLIER = 1.25;
+
+function calculateMaxExpectedSlotQuantity(params: {
+  portfolioCapital: number;
+  slotCapitalPercent: number;
+  positionSizePercent: number;
+  leverage: number;
+  entryPrice: number;
+}): number {
+  const {
+    portfolioCapital,
+    slotCapitalPercent,
+    positionSizePercent,
+    leverage,
+    entryPrice,
+  } = params;
+
+  if (
+    !Number.isFinite(portfolioCapital) ||
+    !Number.isFinite(slotCapitalPercent) ||
+    !Number.isFinite(positionSizePercent) ||
+    !Number.isFinite(leverage) ||
+    !Number.isFinite(entryPrice) ||
+    portfolioCapital <= 0 ||
+    slotCapitalPercent <= 0 ||
+    positionSizePercent <= 0 ||
+    leverage <= 0 ||
+    entryPrice <= 0
+  ) {
+    return NaN;
+  }
+
+  const slotBalance = portfolioCapital * (slotCapitalPercent / 100);
+  const marginToUse = slotBalance * (positionSizePercent / 100);
+  const positionNotional = marginToUse * leverage;
+
+  return positionNotional / entryPrice;
+}
+
 async function createSignature(queryString: string, secret: string): Promise<string> {
   const encoder = new TextEncoder();
   const keyData = encoder.encode(secret);
@@ -350,7 +389,7 @@ serve(async (req) => {
           // Get user's active slots for slot assignment
           const { data: activeSlots } = await supabaseClient
             .from('strategy_slots')
-            .select('id, config_id, name')
+            .select('id, config_id, name, capital_percent, indicator_config:config_id(position_size_percent, risk_per_trade_percent, leverage)')
             .eq('user_id', userId)
             .eq('is_active', true);
           
@@ -398,7 +437,45 @@ serve(async (req) => {
           // ✅ Gyldigt bot-signal med ATR - opret position
           // Determine slot_id from the signal's slot_id
           const signalSlotId = signal.slot_id || null;
-          const signalSlotName = activeSlots?.find(s => s.id === signalSlotId)?.name || 'Unknown';
+          const matchedSlot = activeSlots?.find(s => s.id === signalSlotId) || null;
+          const signalSlotName = matchedSlot?.name || 'Unknown';
+
+          if (matchedSlot?.indicator_config && existingPortfolio?.futures_capital != null) {
+            const portfolioCapital = Number(existingPortfolio.futures_capital);
+            const slotCapitalPercent = Number(matchedSlot.capital_percent ?? 0);
+            const positionSizePercent = Number((matchedSlot as any).indicator_config?.position_size_percent ?? 0);
+            const leverageForSlot = Number((matchedSlot as any).indicator_config?.leverage ?? leverageUsed ?? 0);
+            const maxExpectedQty = calculateMaxExpectedSlotQuantity({
+              portfolioCapital,
+              slotCapitalPercent,
+              positionSizePercent,
+              leverage: leverageForSlot,
+              entryPrice,
+            });
+
+            if (Number.isFinite(maxExpectedQty) && maxExpectedQty > 0) {
+              const allowedMaxQty = maxExpectedQty * SLOT_QUANTITY_TOLERANCE_MULTIPLIER;
+
+              console.log(
+                `🔎 SLOT SIZE VALIDATION ${binancePos.symbol}: actual=${absQuantity.toFixed(6)}, expected_max=${maxExpectedQty.toFixed(6)}, allowed_max=${allowedMaxQty.toFixed(6)}, slot=${signalSlotName}`
+              );
+
+              if (absQuantity > allowedMaxQty) {
+                console.error(
+                  `🚫 BLOKERET: ${binancePos.symbol} ${side} - Binance qty ${absQuantity.toFixed(6)} overstiger slot ${signalSlotName} max ${allowedMaxQty.toFixed(6)}. Undgår forkert slot-allokering af aggregat-position.`
+                );
+                updates.push({
+                  symbol: binancePos.symbol,
+                  action: 'blocked_quantity_mismatch',
+                  slot_id: signalSlotId,
+                  actual_quantity: absQuantity,
+                  expected_max_quantity: maxExpectedQty,
+                  allowed_max_quantity: allowedMaxQty,
+                });
+                continue;
+              }
+            }
+          }
           
           const indicatorsSnapshot = {
             ...indicators,
