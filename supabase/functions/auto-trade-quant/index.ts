@@ -3898,7 +3898,8 @@ serve(async (req) => {
             continue;
           }
           
-          // Fresh DB check to avoid races with concurrent scans (per-slot)
+          // Fresh DB check to avoid races with concurrent scans (per-slot only)
+          // IMPORTANT: Only check within THIS slot — other slots are independent
           let existingSymbolQuery = supabaseClient
             .from('positions')
             .select('id')
@@ -3906,7 +3907,7 @@ serve(async (req) => {
             .eq('symbol', symbol)
             .eq('status', 'OPEN');
           if (slotId) {
-            existingSymbolQuery = existingSymbolQuery.or(`slot_id.eq.${slotId},slot_id.is.null`);
+            existingSymbolQuery = existingSymbolQuery.eq('slot_id', slotId);
           }
           const { data: existingOpenForSymbol, error: existingOpenErr } = await existingSymbolQuery
             .maybeSingle();
@@ -3916,7 +3917,7 @@ serve(async (req) => {
             continue;
           }
           if (existingOpenForSymbol) {
-            console.log(`Skipping ${symbol}: Already open (fresh DB check)`);
+            console.log(`Skipping ${symbol}: Already open in this slot (fresh DB check)`);
             continue;
           }
 
