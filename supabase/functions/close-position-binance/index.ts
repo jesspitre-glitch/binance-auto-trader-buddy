@@ -155,7 +155,7 @@ async function getPositionIncome(
   } catch (e) { console.error('Error fetching income:', e); return result; }
 }
 
-async function closeOnBinance(symbol: string, apiKey: string, apiSecret: string) {
+async function closeOnBinance(symbol: string, apiKey: string, apiSecret: string, requestedQty?: number) {
   const pos = await getPositionRisk(symbol, apiKey, apiSecret);
   const amt = parseFloat(pos.positionAmt);
   if (!amt || Math.abs(amt) === 0) {
@@ -163,7 +163,13 @@ async function closeOnBinance(symbol: string, apiKey: string, apiSecret: string)
   }
 
   const side = amt > 0 ? 'SELL' : 'BUY';
-  const quantity = Math.abs(amt);
+  const livePositionQty = Math.abs(amt);
+  const desiredQty = Math.abs(Number(requestedQty) || 0);
+  const quantity = desiredQty > 0 ? Math.min(desiredQty, livePositionQty) : livePositionQty;
+
+  if (desiredQty > livePositionQty) {
+    console.warn(`Requested manual close qty for ${symbol} exceeds live Binance qty (${desiredQty} > ${livePositionQty}) - clamping to live qty`);
+  }
 
   const serverTime = await getBinanceServerTime();
   const params = new URLSearchParams({
@@ -178,7 +184,7 @@ async function closeOnBinance(symbol: string, apiKey: string, apiSecret: string)
   const order = await res.json();
 
   await cancelAllOpenOrders(symbol, apiKey, apiSecret);
-  return { order };
+  return { order, requestedQty: quantity, livePositionQty };
 }
 
 serve(async (req) => {
@@ -214,12 +220,20 @@ serve(async (req) => {
     const position = openPositions?.[0];
 
     // 2) Close position on Binance
-    const closeRes = await closeOnBinance(symbol, apiKey, apiSecret);
+    const closeRes = await closeOnBinance(symbol, apiKey, apiSecret, Number(position?.quantity) || undefined);
     const order = (closeRes as any).order ?? {};
 
     // 3) Resolve exit price from order response or fallback
     const avgPrice = Number(order.avgPrice) || Number(order.price) || 0;
-    const executedQty = Number(order.executedQty) || Number(order.origQty) || Number(position?.quantity) || 0;
+    const rawExecutedQty = Number(order.executedQty) || Number(order.origQty) || 0;
+    const slotQuantity = Math.abs(Number(position?.quantity) || 0);
+    const executedQty = rawExecutedQty > 0 && rawExecutedQty <= slotQuantity * 1.02
+      ? rawExecutedQty
+      : (slotQuantity || rawExecutedQty);
+
+    if (slotQuantity > 0 && rawExecutedQty > slotQuantity * 1.02) {
+      console.error(`🚨 Manual close qty mismatch for ${symbol}: executed=${rawExecutedQty}, slot=${slotQuantity}. Using slot quantity for DB/history.`);
+    }
 
     let exitPrice = avgPrice;
     if (!exitPrice || !isFinite(exitPrice) || exitPrice === 0) {
