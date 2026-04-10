@@ -2590,7 +2590,9 @@ serve(async (req) => {
             console.log(`Syncing with Binance after closing ${position.symbol}`);
             await supabaseClient.functions.invoke('sync-binance-futures-positions');
 
-            // Update user portfolio with actual balance from Binance
+            // Preserve user-defined trading capital.
+            // Position sizing must keep using user_portfolio.futures_capital as the stable baseline,
+            // so monitor-positions must not overwrite it with live Binance balance after closes.
             try {
               const apiKey = Deno.env.get('BINANCE_API_KEY');
               const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
@@ -2604,17 +2606,7 @@ serve(async (req) => {
                   .eq('user_id', position.user_id)
                   .single();
 
-                if (portfolio) {
-                  await supabaseClient
-                    .from('user_portfolio')
-                    .update({
-                      futures_capital: accountBalance.totalMarginBalance,
-                      updated_at: new Date().toISOString(),
-                    })
-                    .eq('user_id', position.user_id);
-                  
-                  console.log(`Portfolio updated: ${accountBalance.totalMarginBalance} USDT`);
-                } else {
+                if (!portfolio) {
                   // Create portfolio if it doesn't exist
                   await supabaseClient
                     .from('user_portfolio')
@@ -2622,6 +2614,10 @@ serve(async (req) => {
                       user_id: position.user_id,
                       futures_capital: accountBalance.totalMarginBalance,
                     });
+
+                  console.log(`Portfolio initialized: ${accountBalance.totalMarginBalance} USDT`);
+                } else {
+                  console.log(`Portfolio capital preserved for ${position.user_id}: ${portfolio.futures_capital}`);
                 }
               }
             } catch (error) {
