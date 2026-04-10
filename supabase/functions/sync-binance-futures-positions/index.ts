@@ -310,24 +310,20 @@ serve(async (req) => {
         const matchingPositions = dbPositions?.filter(p => p.symbol === binancePos.symbol) || [];
         
         if (matchingPositions.length > 0) {
-          const canUseBinanceAggregatePnl = matchingPositions.length === 1 && Number.isFinite(unrealizedPnl);
-
           // Update ALL matching positions with live market data from Binance
           // Each position may belong to a different slot — do NOT aggregate or close "duplicates"
           for (const dbPos of matchingPositions) {
-            console.log(`Updating ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): Price ${currentPrice}, P&L calc from DB qty`);
-            
-            // Calculate per-position unrealized P&L based on the DB's stored quantity
+            // ALWAYS calculate P&L per-position using DB's own qty and entry_price.
+            // Never use Binance's aggregate unRealizedProfit — it includes ALL positions
+            // for the symbol (including manual trades outside the bot) and would inflate P&L.
             const dbQty = Number(dbPos.quantity) || 0;
             const dbEntry = Number(dbPos.entry_price) || 0;
             const dbSide = dbPos.side as string;
-            const perPositionPnl = dbSide === 'LONG' 
+            const syncedUnrealizedPnl = dbSide === 'LONG' 
               ? (currentPrice - dbEntry) * dbQty 
               : (dbEntry - currentPrice) * dbQty;
 
-            const syncedUnrealizedPnl = canUseBinanceAggregatePnl
-              ? unrealizedPnl
-              : perPositionPnl;
+            console.log(`Updating ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): Price ${currentPrice}, P&L ${syncedUnrealizedPnl.toFixed(6)} (qty ${dbQty}, entry ${dbEntry})`);
             
             let updateData: any = {
               current_price: currentPrice,
