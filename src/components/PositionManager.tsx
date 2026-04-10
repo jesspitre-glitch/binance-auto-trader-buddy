@@ -187,7 +187,10 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                 const pnlLiveBase = position.side === "LONG"
                   ? (livePrice - position.entry_price) * position.quantity
                   : (position.entry_price - livePrice) * position.quantity;
-                const pnl = Number.isFinite(pnlLiveBase) ? pnlLiveBase : (position.unrealized_pnl || 0);
+                const syncedPnl = Number(position.unrealized_pnl);
+                const pnl = Number.isFinite(syncedPnl)
+                  ? syncedPnl
+                  : (Number.isFinite(pnlLiveBase) ? pnlLiveBase : 0);
                 const isProfitable = pnl >= 0;
                 
                 // Live peak price calculation
@@ -378,7 +381,7 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                           const tradeView = {
                             ...position,
                             exit_price: livePrices[position.symbol] ?? position.current_price,
-                            pnl: pnl,
+                             pnl: pnl,
                             pnl_percent: ((pnl / (position.entry_price * position.quantity)) * 100),
                             closed_at: new Date().toISOString(),
                             duration_minutes: Math.floor((Date.now() - openedTime) / (1000 * 60)),
