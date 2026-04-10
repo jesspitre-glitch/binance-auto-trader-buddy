@@ -53,7 +53,7 @@ export const SlotSelector = ({
   const [editSlot, setEditSlot] = useState<Slot | null>(null);
   const [editName, setEditName] = useState("");
   const [editConfigId, setEditConfigId] = useState<string | null>(null);
-  const [editCapital, setEditCapital] = useState(25);
+  const [editCapital, setEditCapital] = useState(16);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [copyFromSlotId, setCopyFromSlotId] = useState<string>("");
   const [isCopying, setIsCopying] = useState(false);
@@ -84,6 +84,16 @@ export const SlotSelector = ({
   const totalAllocated = slots
     .filter((s) => s.is_active)
     .reduce((sum, s) => sum + s.capital_percent, 0);
+
+  const defaultCapitalPercent = (() => {
+    const referenceSlots = slots.filter((slot) => slot.is_active);
+    const sourceSlots = referenceSlots.length > 0 ? referenceSlots : slots;
+    const firstCapitalPercent = Number(sourceSlots[0]?.capital_percent);
+
+    return Number.isFinite(firstCapitalPercent) && firstCapitalPercent > 0
+      ? firstCapitalPercent
+      : 16;
+  })();
 
   // Clone an existing config and return the new config's id
   const cloneConfig = async (userId: string, slotName: string): Promise<string | null> => {
@@ -132,14 +142,14 @@ export const SlotSelector = ({
         user_id: user.id,
         slot_number: nextNumber,
         name: slotName,
-        capital_percent: 25,
+        capital_percent: defaultCapitalPercent,
         is_active: false,
         config_id: newConfigId,
       });
 
       if (error) throw error;
       onSlotsChanged();
-      toast({ title: "Slot oprettet", description: `${slotName} tilføjet med egen strategi` });
+      toast({ title: "Slot oprettet", description: `${slotName} tilføjet med ${defaultCapitalPercent}% kapital og egen strategi` });
     } catch (err: any) {
       toast({ title: "Fejl", description: err.message, variant: "destructive" });
     }
@@ -400,7 +410,7 @@ export const SlotSelector = ({
                 value={editCapital}
                 onValueChange={setEditCapital}
                 min={1}
-                fallback={25}
+                fallback={editSlot?.capital_percent ?? defaultCapitalPercent}
                 className="w-24"
               />
             </div>
