@@ -31,14 +31,16 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeD
   const entryPrice = Number(trade.entry_price);
   const quantity = Number(trade.quantity);
   
-  let livePnl = trade.pnl;
+  let livePnl = Number.isFinite(Number(trade.unrealized_pnl)) ? Number(trade.unrealized_pnl) : trade.pnl;
   let livePnlPercent = trade.pnl_percent;
   
   if (isPositionOpen && currentPrice) {
-    if (trade.side === 'LONG') {
-      livePnl = (currentPrice - entryPrice) * quantity;
-    } else {
-      livePnl = (entryPrice - currentPrice) * quantity;
+    if (!Number.isFinite(Number(trade.unrealized_pnl))) {
+      if (trade.side === 'LONG') {
+        livePnl = (currentPrice - entryPrice) * quantity;
+      } else {
+        livePnl = (entryPrice - currentPrice) * quantity;
+      }
     }
     livePnlPercent = (livePnl / (entryPrice * quantity)) * 100;
   }

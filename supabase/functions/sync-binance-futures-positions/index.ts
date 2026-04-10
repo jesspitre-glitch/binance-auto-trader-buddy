@@ -310,6 +310,8 @@ serve(async (req) => {
         const matchingPositions = dbPositions?.filter(p => p.symbol === binancePos.symbol) || [];
         
         if (matchingPositions.length > 0) {
+          const canUseBinanceAggregatePnl = matchingPositions.length === 1 && Number.isFinite(unrealizedPnl);
+
           // Update ALL matching positions with live market data from Binance
           // Each position may belong to a different slot — do NOT aggregate or close "duplicates"
           for (const dbPos of matchingPositions) {
@@ -322,18 +324,22 @@ serve(async (req) => {
             const perPositionPnl = dbSide === 'LONG' 
               ? (currentPrice - dbEntry) * dbQty 
               : (dbEntry - currentPrice) * dbQty;
+
+            const syncedUnrealizedPnl = canUseBinanceAggregatePnl
+              ? unrealizedPnl
+              : perPositionPnl;
             
             let updateData: any = {
               current_price: currentPrice,
-              unrealized_pnl: perPositionPnl,
+              unrealized_pnl: syncedUnrealizedPnl,
               // Do NOT overwrite quantity — it was set at order time per-slot
               // Do NOT overwrite side — it was set at order time
               updated_at: new Date().toISOString(),
             };
 
-            if (Number.isFinite(binanceEntryPrice) && binanceEntryPrice > 0) {
-              updateData.entry_price = binanceEntryPrice;
-            }
+            // IMPORTANT: Never overwrite entry_price for existing DB positions.
+            // Binance positionRisk.entryPrice is aggregated per symbol and can corrupt
+            // per-slot P&L when multiple slots trade the same symbol.
             
             // If missing indicators_snapshot, try to find a recent bot signal
             if (!dbPos.indicators_snapshot) {
@@ -375,7 +381,7 @@ serve(async (req) => {
               action: 'updated', 
               id: dbPos.id,
               price: currentPrice,
-              pnl: perPositionPnl,
+              pnl: syncedUnrealizedPnl,
             });
           }
         } else {
