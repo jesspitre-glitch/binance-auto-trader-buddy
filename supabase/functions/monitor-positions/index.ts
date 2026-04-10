@@ -280,12 +280,29 @@ async function closePositionOnBinance(symbol: string, side: string, quantity: nu
     return null;
   }
 
-  const positionAmt = Math.abs(parseFloat(position.positionAmt));
+  const livePositionQty = Math.abs(parseFloat(position.positionAmt));
+  const requestedQty = Math.abs(Number(quantity) || 0);
+
+  if (!Number.isFinite(requestedQty) || requestedQty <= 0) {
+    throw new Error(`Invalid requested close quantity for ${symbol}: ${quantity}`);
+  }
+
+  const closeQuantity = Math.min(requestedQty, livePositionQty);
+
+  if (!Number.isFinite(closeQuantity) || closeQuantity <= 0) {
+    console.log(`No closable quantity found for ${symbol} (requested=${requestedQty}, live=${livePositionQty})`);
+    return null;
+  }
+
+  if (requestedQty > livePositionQty) {
+    console.warn(`Requested close qty for ${symbol} exceeds live Binance qty (${requestedQty} > ${livePositionQty}) - clamping to live qty`);
+  }
+
   const closeSide = side === 'LONG' ? 'SELL' : 'BUY';
   
   // Place the closing order
   const timestamp = Date.now();
-  const queryString = `symbol=${symbol}&side=${closeSide}&type=MARKET&quantity=${positionAmt}&reduceOnly=true&timestamp=${timestamp}&recvWindow=10000`;
+  const queryString = `symbol=${symbol}&side=${closeSide}&type=MARKET&quantity=${closeQuantity}&reduceOnly=true&timestamp=${timestamp}&recvWindow=10000`;
   const signature = await createSignature(queryString, apiSecret);
 
   const response = await fetch(
@@ -332,6 +349,8 @@ async function closePositionOnBinance(symbol: string, side: string, quantity: nu
       avgPrice: parseFloat(orderDetails.avgPrice),
       executedQty: parseFloat(orderDetails.executedQty),
       cumQuote: parseFloat(orderDetails.cumQuote),
+      requestedQty: closeQuantity,
+      livePositionQty,
     };
   }
 
@@ -339,6 +358,8 @@ async function closePositionOnBinance(symbol: string, side: string, quantity: nu
     orderId: orderResult.orderId,
     avgPrice: parseFloat(orderResult.avgPrice || orderResult.price || '0'),
     executedQty: parseFloat(orderResult.executedQty || '0'),
+    requestedQty: closeQuantity,
+    livePositionQty,
   };
 }
 
@@ -1986,7 +2007,15 @@ serve(async (req) => {
 
             // Use actual exit price from Binance order
             const actualExitPrice = closeResult.avgPrice;
-            const actualQuantity = closeResult.executedQty;
+            const slotQuantity = Math.abs(Number(position.quantity) || 0);
+            const executedQuantity = Math.abs(Number(closeResult.executedQty) || 0);
+            const actualQuantity = executedQuantity > 0 && executedQuantity <= slotQuantity * 1.02
+              ? executedQuantity
+              : slotQuantity;
+
+            if (executedQuantity > slotQuantity * 1.02) {
+              console.error(`🚨 Close qty mismatch for ${position.symbol}: executed=${executedQuantity}, slot=${slotQuantity}. Using slot quantity for DB/history.`);
+            }
             
             // Calculate actual P&L based on real exit price
             const actualPnl = position.side === 'LONG' 
