@@ -3921,6 +3921,28 @@ serve(async (req) => {
             continue;
           }
 
+          // ── CANDLE-LOCK: Prevent re-entry in same slot+symbol within current candle ──
+          // If a trade was closed in this slot for this symbol during the current candle,
+          // skip to avoid "machine-gunning" entries on one stable signal.
+          const candleDurationMs = intervalToMs(config.scan_interval);
+          const candleLockCutoff = new Date(Date.now() - candleDurationMs).toISOString();
+          let candleLockQuery = supabaseClient
+            .from('trade_history')
+            .select('id, closed_at')
+            .eq('user_id', session.user_id)
+            .eq('symbol', symbol)
+            .gte('closed_at', candleLockCutoff)
+            .neq('close_reason', 'DUPLICATE')
+            .limit(1);
+          if (slotId) {
+            candleLockQuery = candleLockQuery.eq('slot_id', slotId);
+          }
+          const { data: recentCloseInSlot } = await candleLockQuery.maybeSingle();
+          if (recentCloseInSlot) {
+            console.log(`⏳ CANDLE-LOCK: Skipping ${symbol} in slot ${slotName} — trade closed ${recentCloseInSlot.closed_at} (within ${config.scan_interval} candle)`);
+            continue;
+          }
+
           // NOTE: Exchange-level guard REMOVED - multiple slots are allowed to trade
           // the same symbol independently. The per-slot DB check above is sufficient.
           // Binance merges positions at account level, so verifyPositionOnBinance would
