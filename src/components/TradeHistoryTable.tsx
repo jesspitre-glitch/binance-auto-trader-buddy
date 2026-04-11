@@ -11,6 +11,7 @@ import { ExportTradesDialog } from "./ExportTradesDialog";
 interface TradeHistoryTableProps {
   slotId?: string | null;
   includeLegacyData?: boolean;
+  slots?: { id: string; name: string }[];
 }
 
 export const TradeHistoryTable = ({ slotId, includeLegacyData = false }: TradeHistoryTableProps) => {
