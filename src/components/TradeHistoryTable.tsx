@@ -11,9 +11,10 @@ import { ExportTradesDialog } from "./ExportTradesDialog";
 interface TradeHistoryTableProps {
   slotId?: string | null;
   includeLegacyData?: boolean;
+  slots?: { id: string; name: string }[];
 }
 
-export const TradeHistoryTable = ({ slotId, includeLegacyData = false }: TradeHistoryTableProps) => {
+export const TradeHistoryTable = ({ slotId, includeLegacyData = false, slots = [] }: TradeHistoryTableProps) => {
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTrade, setSelectedTrade] = useState<any>(null);
@@ -121,7 +122,15 @@ export const TradeHistoryTable = ({ slotId, includeLegacyData = false }: TradeHi
                         <TrendingDown className="h-4 w-4 text-loss" />
                       )}
                       <div>
-                        <div className="font-semibold text-sm">{trade.symbol}</div>
+                        <div className="font-semibold text-sm flex items-center gap-1.5">
+                          {trade.symbol}
+                          {trade.slot_id && slots.length > 0 && (() => {
+                            const slot = slots.find(s => s.id === trade.slot_id);
+                            return slot ? (
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{slot.name}</span>
+                            ) : null;
+                          })()}
+                        </div>
                         <div className="text-xs text-muted-foreground">
                           {getBinanceTimeAgo(trade.closed_at)}
                         </div>
