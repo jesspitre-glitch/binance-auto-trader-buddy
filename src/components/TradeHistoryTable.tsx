@@ -14,7 +14,7 @@ interface TradeHistoryTableProps {
   slots?: { id: string; name: string }[];
 }
 
-export const TradeHistoryTable = ({ slotId, includeLegacyData = false }: TradeHistoryTableProps) => {
+export const TradeHistoryTable = ({ slotId, includeLegacyData = false, slots = [] }: TradeHistoryTableProps) => {
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTrade, setSelectedTrade] = useState<any>(null);
