@@ -367,7 +367,7 @@ export const TradingDashboard = () => {
 
         <TabsContent value="history" className="space-y-4">
           <SectionErrorBoundary title="Trade Historik">
-            <TradeHistoryTable slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} />
+            <TradeHistoryTable slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} slots={slots.map(s => ({ id: s.id, name: s.name }))} />
           </SectionErrorBoundary>
         </TabsContent>
         
