@@ -3483,7 +3483,7 @@ serve(async (req) => {
         // - Vi tjekker is_new_candle_start for at sikre vi er inde i candle N+1
         
         const filteredByCandleClose = topCandidates.filter(s => {
-          const candleAudit = s.analysis?.indicators?.volumeCandleAudit;
+          const candleAudit = s.analysis?.indicators?.volume_candle_audit ?? s.analysis?.indicators?.volumeCandleAudit;
           const isClosed = candleAudit?.is_closed === true;
           const isNewCandleStart = candleAudit?.is_new_candle_start === true;
           const msIntoCurrent = candleAudit?.ms_into_current_candle;
@@ -3928,23 +3928,43 @@ serve(async (req) => {
           // Binance merges positions at account level, so verifyPositionOnBinance would
           // incorrectly block slot B when slot A already has the same symbol open.
           
-          // Get portfolio balance from database (NOT Binance availableBalance which includes non-allocated funds)
+          // Get configured portfolio balance from database, but ALWAYS cap sizing by actual Binance available balance.
+          // This prevents false order attempts when local portfolio tracking is higher than real tradable margin.
           const { data: portfolioData, error: portfolioError } = await supabaseClient
             .from('user_portfolio')
             .select('futures_capital')
             .eq('user_id', session.user_id)
             .maybeSingle();
           
-          if (portfolioError || !portfolioData || !portfolioData.futures_capital) {
-            console.error(`🚨 Cannot fetch portfolio balance for user ${session.user_id}:`, portfolioError?.message);
-            // Fallback to Binance balance if portfolio not set
-            const binanceBalance = await getAccountBalance();
-            console.warn(`⚠️ FALLBACK: Using Binance availableBalance: $${binanceBalance.toFixed(2)} (user_portfolio not configured)`);
+          const availableBalance = await getAccountBalance();
+          const configuredBalance = portfolioData?.futures_capital != null
+            ? Number(portfolioData.futures_capital)
+            : null;
+
+          if (portfolioError) {
+            console.error(`🚨 Cannot fetch portfolio balance for user ${session.user_id}:`, portfolioError.message);
           }
-          
-          const balance = portfolioData?.futures_capital ? Number(portfolioData.futures_capital) : await getAccountBalance();
-          const slotBalance = balance * (capitalPercent / 100);
-          console.log(`✅ Balance check OK: $${balance.toFixed(2)} (from user_portfolio) → Slot: $${slotBalance.toFixed(2)} @ ${capitalPercent}%`);
+
+          if (configuredBalance === null || !Number.isFinite(configuredBalance) || configuredBalance <= 0) {
+            console.warn(`⚠️ user_portfolio mangler/ugyldig - bruger Binance availableBalance direkte: $${availableBalance.toFixed(2)}`);
+          }
+
+          const planningBalance = (configuredBalance !== null && Number.isFinite(configuredBalance) && configuredBalance > 0)
+            ? configuredBalance
+            : availableBalance;
+          const slotConfiguredBalance = planningBalance * (capitalPercent / 100);
+          const slotTradableBalance = Math.min(slotConfiguredBalance, availableBalance);
+
+          if (!Number.isFinite(slotTradableBalance) || slotTradableBalance <= 0) {
+            console.log(`🚫 Skip ${symbol}: no tradable balance available (configured=${slotConfiguredBalance}, available=${availableBalance})`);
+            continue;
+          }
+
+          console.log(`✅ Balance check OK:`);
+          console.log(`   Configured portfolio balance: $${planningBalance.toFixed(2)}${configuredBalance !== null ? ' (from user_portfolio)' : ' (fallback to Binance)'}`);
+          console.log(`   Binance available balance: $${availableBalance.toFixed(2)}`);
+          console.log(`   Slot configured balance: $${slotConfiguredBalance.toFixed(2)} @ ${capitalPercent}%`);
+          console.log(`   Slot tradable balance used for sizing: $${slotTradableBalance.toFixed(2)}`);
 
           // 🔴 KRITISK SIKKERHEDSCHECK: ATR SKAL VÆRE GYLDIG
           // Uden ATR kan vi ikke beregne stop loss, break-even eller trailing stop korrekt
@@ -3969,7 +3989,7 @@ serve(async (req) => {
           
           // Calculate position size using BOTH methods, take the smaller
           // Method 1: Risk-based (current logic)
-          const riskAmount = slotBalance * (config.risk_per_trade_percent / 100);
+          const riskAmount = slotTradableBalance * (config.risk_per_trade_percent / 100);
           const stopLossDistance = Math.abs(analysis.indicators.price - analysis.stopLoss);
           const riskBasedQuantity = (riskAmount / stopLossDistance) * config.leverage;
           console.log(`📐 Risk-based: riskAmount=${riskAmount.toFixed(2)}, stopLossDistance=${stopLossDistance.toFixed(4)}, quantity=${riskBasedQuantity.toFixed(4)}`);
@@ -3979,17 +3999,18 @@ serve(async (req) => {
           // Example: ($100 × 20%) × 3 / $1 = $20 × 3 / $1 = 60 units
           // Position notional = 60 × $1 = $60
           // Required margin = $60 / 3 = $20 ✓
-          // Apply slot capital allocation: only use the slot's share of total balance
-          // slotBalance already calculated above (after getAccountBalance)
-          const marginToUse = slotBalance * (config.position_size_percent / 100);
+          // Apply slot capital allocation, but never exceed actual available exchange margin
+          const marginToUse = slotTradableBalance * (config.position_size_percent / 100);
           const positionNotional = marginToUse * config.leverage;
           const directQuantity = positionNotional / analysis.indicators.price;
           
           console.log(`📐 Direct percentage calculation:`);
-          console.log(`   Total Balance: $${balance.toFixed(2)}`);
-          console.log(`   Slot Capital: ${capitalPercent}% → Slot Balance: $${slotBalance.toFixed(2)}`);
+          console.log(`   Planning Balance: $${planningBalance.toFixed(2)}`);
+          console.log(`   Available Balance: $${availableBalance.toFixed(2)}`);
+          console.log(`   Slot Capital: ${capitalPercent}% → Slot Configured Balance: $${slotConfiguredBalance.toFixed(2)}`);
+          console.log(`   Slot Tradable Balance: $${slotTradableBalance.toFixed(2)}`);
           console.log(`   Position size %: ${config.position_size_percent}%`);
-          console.log(`   Margin to use: $${marginToUse.toFixed(2)} (${config.position_size_percent}% of slot balance)`);
+          console.log(`   Margin to use: $${marginToUse.toFixed(2)} (${config.position_size_percent}% of slot tradable balance)`);
           console.log(`   Leverage: ${config.leverage}x`);
           console.log(`   Position notional: $${positionNotional.toFixed(2)} (margin × leverage)`);
           console.log(`   Price: $${analysis.indicators.price.toFixed(4)}`);
@@ -4011,11 +4032,35 @@ serve(async (req) => {
           const pricePrecision = getPrecisionFromStep(filters.tickSize);
 
           const step = filters.stepSize;
-          const quantityRounded = Math.floor(rawQuantity / step) * step;
+          let quantityRounded = Math.floor(rawQuantity / step) * step;
+
+          // Final affordability guard based on real-time available margin from Binance.
+          const maxAffordableNotional = Math.max(0, availableBalance * config.leverage * 0.98);
+          const maxAffordableQuantity = maxAffordableNotional / analysis.indicators.price;
+          const maxAffordableQuantityRounded = Math.floor(maxAffordableQuantity / step) * step;
+
+          if (Number.isFinite(maxAffordableQuantityRounded) && maxAffordableQuantityRounded > 0 && quantityRounded > maxAffordableQuantityRounded) {
+            console.log(`⚠️ Quantity reduced by available margin guard: ${quantityRounded.toFixed(qtyPrecision)} → ${maxAffordableQuantityRounded.toFixed(qtyPrecision)}`);
+            quantityRounded = maxAffordableQuantityRounded;
+          }
+
           console.log(`✂️ Rounded quantity: ${quantityRounded.toFixed(qtyPrecision)} (step=${step}, minQty=${filters.minQty})`);
 
           if (!isFinite(quantityRounded) || quantityRounded <= 0 || quantityRounded < filters.minQty) {
             console.log(`❌ Skip ${symbol}: qty ${quantityRounded} below min ${filters.minQty}`);
+            continue;
+          }
+
+          const requiredMarginEstimate = (quantityRounded * analysis.indicators.price) / config.leverage;
+          console.log(`💰 Required margin estimate: $${requiredMarginEstimate.toFixed(4)} vs available: $${availableBalance.toFixed(4)}`);
+
+          if (!Number.isFinite(requiredMarginEstimate) || requiredMarginEstimate <= 0) {
+            console.log(`❌ Skip ${symbol}: invalid required margin estimate (${requiredMarginEstimate})`);
+            continue;
+          }
+
+          if (requiredMarginEstimate > availableBalance) {
+            console.log(`❌ Skip ${symbol}: required margin $${requiredMarginEstimate.toFixed(4)} exceeds Binance available balance $${availableBalance.toFixed(4)}`);
             continue;
           }
           
