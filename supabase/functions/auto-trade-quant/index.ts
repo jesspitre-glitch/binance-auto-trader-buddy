@@ -3565,23 +3565,26 @@ serve(async (req) => {
         }
       }
       
-      // 🛡️ KRITISK: Tag KUN det stærkeste signal for at undgå race conditions
-      // Tidligere: .slice(0, slotsAvailable) kunne åbne flere positioner samtidigt
-      // Nu: .slice(0, 1) sikrer kun én position åbnes per scan-cyklus
-      const signalsToTrade = eligibleSignals.slice(0, 1);
+      // 🛡️ KRITISK: Forsøg eligible signaler i styrke-rækkefølge, men stop efter FØRSTE succes.
+      // Det bevarer max 1 ny position per scan-cyklus og giver fallback hvis topsignalet
+      // senere bliver blokeret af unified gate, max positions, sizing eller margin guards.
+      const signalsToTrade = eligibleSignals;
       
       console.log(`\n📊 Efter hård filtrering: ${eligibleSignals.length}/${topCandidates.length} top signaler passerede hårde filtre`);
-      console.log(`🛡️ RACE CONDITION GUARD: Behandler kun det stærkeste signal (${signalsToTrade.length} af ${eligibleSignals.length} eligible)`);
+      console.log(`🛡️ RACE CONDITION GUARD: Forsøger eligible signaler sekventielt og stopper efter første åbne position (${signalsToTrade.length} eligible)`);
       
       if (signalsToTrade.length === 0) {
         console.log(`⚠️ Ingen signaler at handle eller ingen ledige positioner`);
         continue;
       }
       
-      console.log(`\n📈 Handler det stærkeste signal:`);
+      console.log(`\n📈 Forsøger signaler i prioriteret rækkefølge indtil én position åbnes:`);
+      let positionOpenedForSlot = false;
+      let attemptedEligibleSignals = 0;
       
       // 🚀 STEP 5: Place orders for selected signals
-      for (const selectedSignal of signalsToTrade) {
+      for (const [signalIndex, selectedSignal] of signalsToTrade.entries()) {
+        attemptedEligibleSignals++;
         const { symbol, signal, analysis, trend } = selectedSignal;
         
         // SIKKERHEDSCHECK: Bloker NONE signaler (skulle aldrig komme hertil, men dobbelt-tjek)
@@ -3591,7 +3594,7 @@ serve(async (req) => {
         }
         
         try {
-          console.log(`\n🎯 Behandler signal ${selectedSignal.symbol} (styrke: ${selectedSignal.strength.toFixed(1)})`);
+          console.log(`\n🎯 Behandler signal ${selectedSignal.symbol} (${signalIndex + 1}/${signalsToTrade.length}, styrke: ${selectedSignal.strength.toFixed(1)})`);
           
           // ═══════════════════════════════════════════════════════════════════
           // 🚧 UNIFIED HARD FILTER GATE - ALL ENABLED FILTERS MUST BE TRUE
@@ -5194,9 +5197,12 @@ serve(async (req) => {
           console.log(`   Quantity: ${actualQuantity}`);
           console.log(`   Signal Strength: ${selectedSignal.strength.toFixed(1)}`);
           console.log(`   Open Reason: ${openReason}\n`);
+          console.log(`✅ FALLBACK_SUCCESS: Åbnede position efter ${attemptedEligibleSignals} eligible signalforsøg i slot ${slotName}`);
 
           // NOTE: Removed immediate sync call to avoid race conditions
           // sync-binance-futures-positions runs on its own schedule via auto-monitor-quant
+          positionOpenedForSlot = true;
+          break;
             
         } catch (error: any) {
           console.error(`\n❌❌❌ CRITICAL ERROR in order placement for ${symbol}:`);
@@ -5208,6 +5214,10 @@ serve(async (req) => {
           console.error(`   This position may need manual intervention\n`);
         }
       } // End of signalsToTrade loop
+      
+      if (!positionOpenedForSlot) {
+        console.log(`⚠️ Ingen position åbnet i slot ${slotName} efter ${attemptedEligibleSignals} eligible signalforsøg`);
+      }
       } // End of slotIterations loop
       console.log(`🗄️ Klines cache stats: ${klinesCache.stats()}`);
     }
