@@ -3870,16 +3870,16 @@ serve(async (req) => {
           // NOTE: MACD direction check er nu dækket af UNIFIED GATE ovenfor
 
           // Place order logic starts here
-          // CRITICAL: Count open positions filtered by slot to prevent cross-slot blocking
-          // Also count orphaned positions (slot_id IS NULL) to prevent exceeding limits
+          // CRITICAL: Count open positions filtered STRICTLY by slot_id
+          // Do NOT include orphaned (null slot_id) positions — they belong to legacy/manual trades
+          // and must not block active slots from opening new positions
           let posCountQuery = supabaseClient
             .from('positions')
             .select('id, symbol, slot_id')
             .eq('user_id', session.user_id)
             .eq('status', 'OPEN');
           if (slotId) {
-            // Count positions for THIS slot OR orphaned (NULL slot_id) positions
-            posCountQuery = posCountQuery.or(`slot_id.eq.${slotId},slot_id.is.null`);
+            posCountQuery = posCountQuery.eq('slot_id', slotId);
           }
           const { data: currentPositions, error: posError } = await posCountQuery;
           
