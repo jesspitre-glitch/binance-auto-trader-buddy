@@ -4066,6 +4066,20 @@ serve(async (req) => {
             console.log(`❌ Skip ${symbol}: required margin $${requiredMarginEstimate.toFixed(4)} exceeds Binance available balance $${availableBalance.toFixed(4)}`);
             continue;
           }
+
+          // 🛡️ HARD SAFETY GUARD: Validate final notional against slot maximum
+          // Max notional = planningBalance × (capitalPercent%) × (position_size_percent%) × leverage
+          // With 50% tolerance to account for price fluctuations / rounding
+          const maxSlotNotional = planningBalance * (capitalPercent / 100) * (config.position_size_percent / 100) * config.leverage;
+          const actualNotional = quantityRounded * analysis.indicators.price;
+          const notionalTolerance = 1.5; // 50% tolerance
+          if (actualNotional > maxSlotNotional * notionalTolerance) {
+            console.error(`🚨 SAFETY GUARD BLOCKED: ${symbol} notional $${actualNotional.toFixed(2)} exceeds slot max $${maxSlotNotional.toFixed(2)} × ${notionalTolerance} = $${(maxSlotNotional * notionalTolerance).toFixed(2)}`);
+            console.error(`   planningBalance=$${planningBalance.toFixed(2)}, capitalPercent=${capitalPercent}%, position_size=${config.position_size_percent}%, leverage=${config.leverage}x`);
+            console.error(`   ❌ Trade AFVIST for at beskytte mod oversized positioner`);
+            continue;
+          }
+          console.log(`🛡️ Safety guard OK: notional $${actualNotional.toFixed(2)} <= max $${(maxSlotNotional * notionalTolerance).toFixed(2)}`);
           
           // Place order
           const side = signal === 'LONG' ? 'BUY' : 'SELL';
