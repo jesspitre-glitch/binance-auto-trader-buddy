@@ -3106,6 +3106,21 @@ serve(async (req) => {
 
       for (const { config, slotId, capitalPercent, slotName } of slotIterations) {
         console.log(`\n🎰 === SLOT: "${slotName}" | ID: ${slotId ?? 'legacy'} | Capital: ${capitalPercent}% ===`);
+        
+        // Initialize per-slot summary tracker
+        const slotSummary = {
+          slotName,
+          slotId,
+          symbolsScanned: 0,
+          signalsDetected: 0,
+          signalsPassed: 0,
+          positionOpened: false,
+          openedSymbol: null as string | null,
+          maxPositionsReached: false,
+          topBlockers: {} as Record<string, number>,
+        };
+        slotSummaries.push(slotSummary);
+        
         if (!config || !config.enabled) continue;
 
       // Calculate strategy identifier for this config
