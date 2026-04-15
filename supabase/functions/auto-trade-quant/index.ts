@@ -3931,8 +3931,9 @@ serve(async (req) => {
           // Binance merges positions at account level, so verifyPositionOnBinance would
           // incorrectly block slot B when slot A already has the same symbol open.
           
-          // Get configured portfolio balance from database, but ALWAYS cap sizing by actual Binance available balance.
-          // This prevents false order attempts when local portfolio tracking is higher than real tradable margin.
+          // Get configured portfolio balance from database.
+          // CRITICAL: Slot sizing must ONLY use the persisted UI baseline from user_portfolio.
+          // Binance available balance may cap affordability, but must NEVER become the sizing baseline.
           const { data: portfolioData, error: portfolioError } = await supabaseClient
             .from('user_portfolio')
             .select('futures_capital')
@@ -3949,12 +3950,28 @@ serve(async (req) => {
           }
 
           if (configuredBalance === null || !Number.isFinite(configuredBalance) || configuredBalance <= 0) {
-            console.warn(`⚠️ user_portfolio mangler/ugyldig - bruger Binance availableBalance direkte: $${availableBalance.toFixed(2)}`);
+            console.error(`🚫 BLOKERET: user_portfolio.futures_capital mangler/er ugyldig for user ${session.user_id}`);
+            console.error(`   Binance available balance ($${availableBalance.toFixed(2)}) må IKKE bruges som sizing-baseline for slot trades`);
+            console.error(`   ❌ Trade AFVIST: størrelsen kan ikke valideres mod slot-UI uden en gyldig futures_capital`);
+            continue;
           }
 
-          const planningBalance = (configuredBalance !== null && Number.isFinite(configuredBalance) && configuredBalance > 0)
-            ? configuredBalance
-            : availableBalance;
+          if (!Number.isFinite(capitalPercent) || capitalPercent <= 0 || capitalPercent > 100) {
+            console.error(`🚫 BLOKERET: ugyldig capital_percent for slot ${slotName}: ${capitalPercent}`);
+            continue;
+          }
+
+          if (!Number.isFinite(config.position_size_percent) || config.position_size_percent <= 0 || config.position_size_percent > 100) {
+            console.error(`🚫 BLOKERET: ugyldig position_size_percent for slot ${slotName}: ${config.position_size_percent}`);
+            continue;
+          }
+
+          if (!Number.isFinite(config.leverage) || config.leverage <= 0) {
+            console.error(`🚫 BLOKERET: ugyldig leverage for slot ${slotName}: ${config.leverage}`);
+            continue;
+          }
+
+          const planningBalance = configuredBalance;
           const slotConfiguredBalance = planningBalance * (capitalPercent / 100);
           const slotTradableBalance = Math.min(slotConfiguredBalance, availableBalance);
 
@@ -3964,7 +3981,7 @@ serve(async (req) => {
           }
 
           console.log(`✅ Balance check OK:`);
-          console.log(`   Configured portfolio balance: $${planningBalance.toFixed(2)}${configuredBalance !== null ? ' (from user_portfolio)' : ' (fallback to Binance)'}`);
+          console.log(`   Configured portfolio balance: $${planningBalance.toFixed(2)} (strictly from user_portfolio)`);
           console.log(`   Binance available balance: $${availableBalance.toFixed(2)}`);
           console.log(`   Slot configured balance: $${slotConfiguredBalance.toFixed(2)} @ ${capitalPercent}%`);
           console.log(`   Slot tradable balance used for sizing: $${slotTradableBalance.toFixed(2)}`);
@@ -4036,6 +4053,18 @@ serve(async (req) => {
 
           const step = filters.stepSize;
           let quantityRounded = Math.floor(rawQuantity / step) * step;
+          const maxSlotNotional = slotConfiguredBalance * (config.position_size_percent / 100) * config.leverage;
+          const maxSlotQuantity = maxSlotNotional / analysis.indicators.price;
+          const maxSlotQuantityRounded = Math.floor(maxSlotQuantity / step) * step;
+
+          if (Number.isFinite(maxSlotQuantityRounded) && maxSlotQuantityRounded > 0 && quantityRounded > maxSlotQuantityRounded) {
+            console.error(`🚫 SLOT SIZE BLOCKED: ${symbol} qty ${quantityRounded.toFixed(qtyPrecision)} exceeds slot max ${maxSlotQuantityRounded.toFixed(qtyPrecision)}`);
+            console.error(`   Slot: ${slotName}`);
+            console.error(`   Configured balance: $${planningBalance.toFixed(2)}`);
+            console.error(`   capitalPercent=${capitalPercent}%, position_size=${config.position_size_percent}%, leverage=${config.leverage}x`);
+            console.error(`   ❌ Trade AFVIST før Binance-kald`);
+            continue;
+          }
 
           // Final affordability guard based on real-time available margin from Binance.
           const maxAffordableNotional = Math.max(0, availableBalance * config.leverage * 0.98);
@@ -4067,19 +4096,18 @@ serve(async (req) => {
             continue;
           }
 
-          // 🛡️ HARD SAFETY GUARD: Validate final notional against slot maximum
-          // Max notional = planningBalance × (capitalPercent%) × (position_size_percent%) × leverage
-          // With 50% tolerance to account for price fluctuations / rounding
-          const maxSlotNotional = planningBalance * (capitalPercent / 100) * (config.position_size_percent / 100) * config.leverage;
+          // 🛡️ HARD SAFETY GUARD: Validate final notional against slot maximum with zero oversize tolerance.
+          // Max notional = persisted UI balance × slot capital % × position size % × leverage
           const actualNotional = quantityRounded * analysis.indicators.price;
-          const notionalTolerance = 1.5; // 50% tolerance
-          if (actualNotional > maxSlotNotional * notionalTolerance) {
-            console.error(`🚨 SAFETY GUARD BLOCKED: ${symbol} notional $${actualNotional.toFixed(2)} exceeds slot max $${maxSlotNotional.toFixed(2)} × ${notionalTolerance} = $${(maxSlotNotional * notionalTolerance).toFixed(2)}`);
+          const hardNotionalEpsilon = Math.max(0.01, analysis.indicators.price * step);
+          const maxAllowedNotional = maxSlotNotional + hardNotionalEpsilon;
+          if (actualNotional > maxAllowedNotional) {
+            console.error(`🚨 SAFETY GUARD BLOCKED: ${symbol} notional $${actualNotional.toFixed(2)} exceeds slot max $${maxSlotNotional.toFixed(2)} (+epsilon $${hardNotionalEpsilon.toFixed(2)}) = $${maxAllowedNotional.toFixed(2)}`);
             console.error(`   planningBalance=$${planningBalance.toFixed(2)}, capitalPercent=${capitalPercent}%, position_size=${config.position_size_percent}%, leverage=${config.leverage}x`);
-            console.error(`   ❌ Trade AFVIST for at beskytte mod oversized positioner`);
+            console.error(`   ❌ Trade AFVIST før Binance-kald for at beskytte mod oversized positioner`);
             continue;
           }
-          console.log(`🛡️ Safety guard OK: notional $${actualNotional.toFixed(2)} <= max $${(maxSlotNotional * notionalTolerance).toFixed(2)}`);
+          console.log(`🛡️ Safety guard OK: notional $${actualNotional.toFixed(2)} <= max $${maxAllowedNotional.toFixed(2)}`);
           
           // Place order
           const side = signal === 'LONG' ? 'BUY' : 'SELL';
