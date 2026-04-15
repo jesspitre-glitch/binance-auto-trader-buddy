@@ -4157,6 +4157,17 @@ serve(async (req) => {
           }
           console.log(`🛡️ Safety guard OK: notional $${actualNotional.toFixed(2)} <= max $${maxAllowedNotional.toFixed(2)}`);
           
+          // 🚨 ABSOLUT HARD CAP: Portfolio-baseret ultimativ grænse
+          // Ingen trade må NOGENSINDE have notional > portfolio × 50% × 20x
+          const ABSOLUTE_MAX_PORTFOLIO_FRACTION = 0.50;
+          const ABSOLUTE_MAX_LEVERAGE = 20;
+          const absoluteMaxNotional = configuredBalance * ABSOLUTE_MAX_PORTFOLIO_FRACTION * ABSOLUTE_MAX_LEVERAGE;
+          if (actualNotional > absoluteMaxNotional) {
+            console.error(`🚨 ABSOLUT HARD CAP BLOCKED: ${symbol} notional $${actualNotional.toFixed(2)} > portfolio absolute max $${absoluteMaxNotional.toFixed(2)} (portfolio $${configuredBalance.toFixed(2)} × 50% × 20x)`);
+            console.error(`   ❌ Trade AFVIST — dette burde ALDRIG ske`);
+            continue;
+          }
+          
           // Place order
           const side = signal === 'LONG' ? 'BUY' : 'SELL';
           console.log(`\n🚀 PLACING ORDER on ${symbol}:`);
