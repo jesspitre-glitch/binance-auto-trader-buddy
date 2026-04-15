@@ -3091,8 +3091,36 @@ serve(async (req) => {
       klinesCache = new KlinesCache();
       console.log(`🗄️ Klines cache initialized for ${slotIterations.length} slot(s)`);
 
+      // 📊 PER-SLOT SUMMARY TRACKER
+      const slotSummaries: Array<{
+        slotName: string;
+        slotId: string | null;
+        symbolsScanned: number;
+        signalsDetected: number;
+        signalsPassed: number;
+        positionOpened: boolean;
+        openedSymbol: string | null;
+        maxPositionsReached: boolean;
+        topBlockers: Record<string, number>;
+      }> = [];
+
       for (const { config, slotId, capitalPercent, slotName } of slotIterations) {
         console.log(`\n🎰 === SLOT: "${slotName}" | ID: ${slotId ?? 'legacy'} | Capital: ${capitalPercent}% ===`);
+        
+        // Initialize per-slot summary tracker
+        const slotSummary = {
+          slotName,
+          slotId,
+          symbolsScanned: 0,
+          signalsDetected: 0,
+          signalsPassed: 0,
+          positionOpened: false,
+          openedSymbol: null as string | null,
+          maxPositionsReached: false,
+          topBlockers: {} as Record<string, number>,
+        };
+        slotSummaries.push(slotSummary);
+        
         if (!config || !config.enabled) continue;
 
       // Calculate strategy identifier for this config
@@ -3163,6 +3191,7 @@ serve(async (req) => {
 
       if (positions && positions.length >= config.max_open_positions) {
         console.log(`Max positions reached for ${slotName} (slot: ${slotId ?? 'legacy'}): ${positions.length}/${config.max_open_positions}`);
+        slotSummary.maxPositionsReached = true;
         continue;
       }
 
@@ -3569,6 +3598,25 @@ serve(async (req) => {
       // Det bevarer max 1 ny position per scan-cyklus og giver fallback hvis topsignalet
       // senere bliver blokeret af unified gate, max positions, sizing eller margin guards.
       const signalsToTrade = eligibleSignals;
+      
+      // 📊 Populate slot summary with scan results
+      slotSummary.symbolsScanned = validSignals.length;
+      slotSummary.signalsDetected = validSignals.filter(s => s.signal !== 'NONE').length;
+      slotSummary.signalsPassed = eligibleSignals.length;
+      // Track top blocker reasons
+      for (const sig of validSignals) {
+        if (sig.signal === 'NONE' || !sig.hardFiltersPassed) {
+          const fs = sig.analysis?.filterStatus?.hard || {};
+          let blocker = 'CONDITIONS';
+          if (fs.stochrsi?.passed === false) blocker = 'STOCHRSI';
+          else if (fs.adx?.passed === false) blocker = 'ADX';
+          else if (fs.atr?.passed === false) blocker = 'ATR';
+          else if (fs.medium_trend?.passed === false) blocker = 'EMA_TREND';
+          else if (fs.volume_long?.passed === false || fs.volume_short?.passed === false) blocker = 'VOLUME';
+          else if (fs.emaSpread?.passed === false) blocker = 'EMA_SPREAD';
+          slotSummary.topBlockers[blocker] = (slotSummary.topBlockers[blocker] || 0) + 1;
+        }
+      }
       
       console.log(`\n📊 Efter hård filtrering: ${eligibleSignals.length}/${topCandidates.length} top signaler passerede hårde filtre`);
       console.log(`🛡️ RACE CONDITION GUARD: Forsøger eligible signaler sekventielt og stopper efter første åbne position (${signalsToTrade.length} eligible)`);
@@ -5244,6 +5292,8 @@ serve(async (req) => {
           // NOTE: Removed immediate sync call to avoid race conditions
           // sync-binance-futures-positions runs on its own schedule via auto-monitor-quant
           positionOpenedForSlot = true;
+          slotSummary.positionOpened = true;
+          slotSummary.openedSymbol = symbol;
           break;
             
         } catch (error: any) {
@@ -5261,6 +5311,26 @@ serve(async (req) => {
         console.log(`⚠️ Ingen position åbnet i slot ${slotName} efter ${attemptedEligibleSignals} eligible signalforsøg`);
       }
       } // End of slotIterations loop
+      
+      // 📊 ═══════════════════════════════════════════════════════════════
+      // 📊 PER-SLOT SUMMARY (kompakt overblik over alle slots i denne cyklus)
+      // 📊 ═══════════════════════════════════════════════════════════════
+      console.log(`\n📊 ═══ SLOT SUMMARY (${slotSummaries.length} slots) ═══`);
+      for (const ss of slotSummaries) {
+        const blockerStr = Object.entries(ss.topBlockers)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([k, v]) => `${k}:${v}`)
+          .join(', ') || 'N/A';
+        const status = ss.maxPositionsReached 
+          ? '🔒 MAX_POS' 
+          : ss.positionOpened 
+            ? `✅ OPENED ${ss.openedSymbol}` 
+            : `⚠️ NO_TRADE`;
+        console.log(`   🎰 ${ss.slotName} | scanned=${ss.symbolsScanned} | signals=${ss.signalsDetected} | eligible=${ss.signalsPassed} | ${status} | blockers=[${blockerStr}]`);
+      }
+      console.log(`📊 ═══════════════════════════════════════════════════════\n`);
+      
       console.log(`🗄️ Klines cache stats: ${klinesCache.stats()}`);
     }
 
