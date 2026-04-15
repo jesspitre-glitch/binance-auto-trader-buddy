@@ -5311,6 +5311,26 @@ serve(async (req) => {
         console.log(`⚠️ Ingen position åbnet i slot ${slotName} efter ${attemptedEligibleSignals} eligible signalforsøg`);
       }
       } // End of slotIterations loop
+      
+      // 📊 ═══════════════════════════════════════════════════════════════
+      // 📊 PER-SLOT SUMMARY (kompakt overblik over alle slots i denne cyklus)
+      // 📊 ═══════════════════════════════════════════════════════════════
+      console.log(`\n📊 ═══ SLOT SUMMARY (${slotSummaries.length} slots) ═══`);
+      for (const ss of slotSummaries) {
+        const blockerStr = Object.entries(ss.topBlockers)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([k, v]) => `${k}:${v}`)
+          .join(', ') || 'N/A';
+        const status = ss.maxPositionsReached 
+          ? '🔒 MAX_POS' 
+          : ss.positionOpened 
+            ? `✅ OPENED ${ss.openedSymbol}` 
+            : `⚠️ NO_TRADE`;
+        console.log(`   🎰 ${ss.slotName} | scanned=${ss.symbolsScanned} | signals=${ss.signalsDetected} | eligible=${ss.signalsPassed} | ${status} | blockers=[${blockerStr}]`);
+      }
+      console.log(`📊 ═══════════════════════════════════════════════════════\n`);
+      
       console.log(`🗄️ Klines cache stats: ${klinesCache.stats()}`);
     }
 
