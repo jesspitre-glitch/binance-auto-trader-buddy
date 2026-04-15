@@ -3191,6 +3191,7 @@ serve(async (req) => {
 
       if (positions && positions.length >= config.max_open_positions) {
         console.log(`Max positions reached for ${slotName} (slot: ${slotId ?? 'legacy'}): ${positions.length}/${config.max_open_positions}`);
+        slotSummary.maxPositionsReached = true;
         continue;
       }
 
