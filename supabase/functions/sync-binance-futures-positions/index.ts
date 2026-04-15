@@ -381,9 +381,8 @@ serve(async (req) => {
             });
           }
         } else {
-          // 🔴 KRITISK: Opret IKKE nye positioner medmindre de er kvalificeret af bot-signalet
-          // Positioner skal have et nyligt bot-signal med gyldige indikatorer
-          console.log(`Fandt ny Binance position: ${binancePos.symbol} - søger efter bot-signal...`);
+          // 🟢 BINANCE ER MASTER: Alle Binance-positioner SKAL trackes i DB
+          console.log(`Fandt ny Binance position: ${binancePos.symbol} - søger efter bot-signal for slot-tildeling...`);
           
           const entryPrice = parseFloat(binancePos.entryPrice);
           const binanceLeverage = binancePos.leverage ? parseInt(binancePos.leverage) : null;
@@ -391,7 +390,7 @@ serve(async (req) => {
           // Get user's active slots for slot assignment
           const { data: activeSlots } = await supabaseClient
             .from('strategy_slots')
-            .select('id, config_id, name, capital_percent, indicator_config:config_id(position_size_percent, risk_per_trade_percent, leverage)')
+            .select('id, config_id, name, capital_percent, indicator_config:config_id(position_size_percent, risk_per_trade_percent, leverage, atr_stop_loss_multiplier)')
             .eq('user_id', userId)
             .eq('is_active', true);
           
@@ -417,119 +416,115 @@ serve(async (req) => {
             .order('created_at', { ascending: false })
             .limit(1);
           
-          // 🔴 KRAV: Kun opret position hvis der er et GYLDIGT bot-signal med ATR
-          if (!recentSignals || recentSignals.length === 0) {
-            console.warn(`🚫 BLOKERET: ${binancePos.symbol} ${side} - INGEN bot-signal fundet inden for 10 min. Position IKKE oprettet i DB.`);
-            console.warn(`   Positionen eksisterer på Binance men blev ikke åbnet af botten.`);
-            console.warn(`   Brug manuelt management på Binance for denne position.`);
-            updates.push({ symbol: binancePos.symbol, action: 'blocked_no_signal', reason: 'No recent bot signal found' });
-            continue;
-          }
+          let signalSlotId: string | null = null;
+          let signalSlotName = 'Unassigned';
+          let indicators: any = null;
+          let hasValidSignal = false;
           
-          const signal = recentSignals[0];
-          const indicators = signal.indicators as any;
-          
-          // Kræv gyldig ATR for at sikre korrekte exit-beregninger
-          if (!indicators || !indicators.atr || indicators.atr <= 0) {
-            console.warn(`🚫 BLOKERET: ${binancePos.symbol} ${side} - Bot-signal fundet men ATR er ugyldig (${indicators?.atr}). Position IKKE oprettet.`);
-            updates.push({ symbol: binancePos.symbol, action: 'blocked_no_atr', reason: 'Bot signal found but ATR invalid' });
-            continue;
-          }
-          
-          // ✅ Gyldigt bot-signal med ATR - opret position
-          // Determine slot_id from the signal's slot_id
-          const signalSlotId = signal.slot_id || null;
-          const matchedSlot = activeSlots?.find(s => s.id === signalSlotId) || null;
-          const signalSlotName = matchedSlot?.name || 'Unknown';
-
-          if (matchedSlot?.indicator_config && existingPortfolio?.futures_capital != null) {
-            const portfolioCapital = Number(existingPortfolio.futures_capital);
-            const slotCapitalPercent = Number(matchedSlot.capital_percent ?? 0);
-            const positionSizePercent = Number((matchedSlot as any).indicator_config?.position_size_percent ?? 0);
-            const leverageForSlot = Number((matchedSlot as any).indicator_config?.leverage ?? leverageUsed ?? 0);
-            const maxExpectedQty = calculateMaxExpectedSlotQuantity({
-              portfolioCapital,
-              slotCapitalPercent,
-              positionSizePercent,
-              leverage: leverageForSlot,
-              entryPrice,
-            });
-
-            if (Number.isFinite(maxExpectedQty) && maxExpectedQty > 0) {
-              const allowedMaxQty = maxExpectedQty * SLOT_QUANTITY_TOLERANCE_MULTIPLIER;
-
-              console.log(
-                `🔎 SLOT SIZE VALIDATION ${binancePos.symbol}: actual=${absQuantity.toFixed(6)}, expected_max=${maxExpectedQty.toFixed(6)}, allowed_max=${allowedMaxQty.toFixed(6)}, slot=${signalSlotName}`
-              );
-
-              if (absQuantity > allowedMaxQty) {
-                console.error(
-                  `🚫 BLOKERET: ${binancePos.symbol} ${side} - Binance qty ${absQuantity.toFixed(6)} overstiger slot ${signalSlotName} max ${allowedMaxQty.toFixed(6)}. Undgår forkert slot-allokering af aggregat-position.`
-                );
-                updates.push({
-                  symbol: binancePos.symbol,
-                  action: 'blocked_quantity_mismatch',
-                  slot_id: signalSlotId,
-                  actual_quantity: absQuantity,
-                  expected_max_quantity: maxExpectedQty,
-                  allowed_max_quantity: allowedMaxQty,
-                });
-                continue;
+          if (recentSignals && recentSignals.length > 0) {
+            const signal = recentSignals[0];
+            indicators = signal.indicators as any;
+            signalSlotId = signal.slot_id || null;
+            
+            const matchedSlot = activeSlots?.find(s => s.id === signalSlotId) || null;
+            signalSlotName = matchedSlot?.name || 'Unknown';
+            hasValidSignal = indicators && indicators.atr && indicators.atr > 0;
+            
+            if (hasValidSignal) {
+              console.log(`✅ Bot-signal fundet for ${binancePos.symbol} → slot ${signalSlotName}`);
+            } else {
+              console.warn(`⚠️ Bot-signal fundet men ATR ugyldig for ${binancePos.symbol}`);
+            }
+          } else {
+            console.warn(`⚠️ Ingen bot-signal for ${binancePos.symbol} - tildeles som SYNCED_UNASSIGNED`);
+            
+            // Try to find the best slot by checking which slot has open capacity
+            // and matches the position's characteristics
+            if (activeSlots && activeSlots.length > 0) {
+              // Check which slots already have this symbol open
+              const { data: existingSlotPositions } = await supabaseClient
+                .from('positions')
+                .select('slot_id')
+                .eq('user_id', userId)
+                .eq('status', 'OPEN');
+              
+              const slotsWithPositions = new Set(existingSlotPositions?.map(p => p.slot_id).filter(Boolean) || []);
+              
+              // Find first active slot without a position
+              const availableSlot = activeSlots.find(s => !slotsWithPositions.has(s.id));
+              if (availableSlot) {
+                signalSlotId = availableSlot.id;
+                signalSlotName = availableSlot.name;
+                console.log(`📌 Auto-tildelt til ledig slot: ${signalSlotName}`);
               }
             }
           }
           
-          const indicatorsSnapshot = {
+          // Build indicators snapshot
+          const indicatorsSnapshot = hasValidSignal ? {
             ...indicators,
             is_synced_position: true,
             exit_type: 'ATR_BASED',
             leverage: leverageUsed,
             slot_id: signalSlotId,
             slot_name: signalSlotName,
+          } : {
+            is_synced_position: true,
+            exit_type: 'FALLBACK_SL',
+            leverage: leverageUsed,
+            slot_id: signalSlotId,
+            slot_name: signalSlotName,
+            synced_without_signal: true,
           };
           
+          // Calculate stop loss
           let stopLoss: number;
-          if (indicators.stop_loss && indicators.stop_loss > 0) {
+          if (hasValidSignal && indicators.stop_loss && indicators.stop_loss > 0) {
             stopLoss = indicators.stop_loss;
-            console.log(`✅ ATR_EXIT_OK: Using bot signal SL for ${binancePos.symbol}: ${stopLoss.toFixed(4)}`);
-          } else {
-            // Beregn SL fra ATR
+            console.log(`✅ Using bot signal SL: ${stopLoss.toFixed(4)}`);
+          } else if (hasValidSignal && indicators.atr > 0) {
             const slMultiplier = userConfig?.atr_stop_loss_multiplier ?? 2.0;
-            if (side === 'LONG') {
-              stopLoss = entryPrice - (indicators.atr * slMultiplier);
-            } else {
-              stopLoss = entryPrice + (indicators.atr * slMultiplier);
-            }
-            console.log(`✅ Beregnet ATR-baseret SL for ${binancePos.symbol}: ${stopLoss.toFixed(4)} (${slMultiplier}x ATR)`);
+            stopLoss = side === 'LONG' 
+              ? entryPrice - (indicators.atr * slMultiplier)
+              : entryPrice + (indicators.atr * slMultiplier);
+            console.log(`✅ ATR-baseret SL: ${stopLoss.toFixed(4)}`);
+          } else {
+            // Fallback 3% SL when no signal data
+            const defaultSlPercent = 3.0;
+            stopLoss = side === 'LONG'
+              ? entryPrice * (1 - defaultSlPercent / 100)
+              : entryPrice * (1 + defaultSlPercent / 100);
+            console.log(`⚠️ Fallback 3% SL: ${stopLoss.toFixed(4)} (ingen signal-data)`);
           }
           
-          const openReason = `${side} signal på ${binancePos.symbol} - ` +
-            `Trend: ${indicators.trend || 'UNKNOWN'}. ` +
-            `RSI: ${indicators.rsi?.toFixed(2) || 'N/A'}, ` +
-            `MACD: ${indicators.macd?.toFixed(4) || 'N/A'}, ` +
-            `EMA: Fast ${indicators.emaFast?.toFixed(2) || 'N/A'} vs Slow ${indicators.emaSlow?.toFixed(2) || 'N/A'}, ` +
-            `ADX: ${indicators.adx?.toFixed(2) || 'N/A'}`;
+          const openReason = hasValidSignal
+            ? `${side} signal på ${binancePos.symbol} - ` +
+              `Trend: ${indicators.trend || 'UNKNOWN'}. ` +
+              `RSI: ${indicators.rsi?.toFixed(2) || 'N/A'}, ` +
+              `MACD: ${indicators.macd?.toFixed(4) || 'N/A'}, ` +
+              `EMA: Fast ${indicators.emaFast?.toFixed(2) || 'N/A'} vs Slow ${indicators.emaSlow?.toFixed(2) || 'N/A'}, ` +
+              `ADX: ${indicators.adx?.toFixed(2) || 'N/A'}`
+            : `SYNCED from Binance - ${side} ${binancePos.symbol} (no bot signal, auto-assigned to ${signalSlotName})`;
           
-          console.log(`✅ Opretter kvalificeret position: ${binancePos.symbol} ${side} slot=${signalSlotName} (ATR=${indicators.atr.toFixed(6)}, SL=${stopLoss.toFixed(4)})`);
+          console.log(`✅ Opretter Binance-master position: ${binancePos.symbol} ${side} qty=${absQuantity} slot=${signalSlotName}`);
           
           const positionData: any = {
-              user_id: userId,
-              symbol: binancePos.symbol,
-              side,
-              entry_price: entryPrice,
-              quantity: absQuantity,
-              current_price: currentPrice,
-              peak_price: currentPrice,
-              stop_loss: stopLoss,
-              trailing_stop: stopLoss,
-              trailing_stop_percent: 2.0,
-              unrealized_pnl: unrealizedPnl,
-              status: 'OPEN',
-              open_reason: openReason,
-              indicators_snapshot: indicatorsSnapshot,
+            user_id: userId,
+            symbol: binancePos.symbol,
+            side,
+            entry_price: entryPrice,
+            quantity: absQuantity,
+            current_price: currentPrice,
+            peak_price: currentPrice,
+            stop_loss: stopLoss,
+            trailing_stop: stopLoss,
+            trailing_stop_percent: 2.0,
+            unrealized_pnl: unrealizedPnl,
+            status: 'OPEN',
+            open_reason: openReason,
+            indicators_snapshot: indicatorsSnapshot,
           };
           
-          // CRITICAL: Assign slot_id from the matching signal
           if (signalSlotId) {
             positionData.slot_id = signalSlotId;
           }
@@ -539,7 +534,7 @@ serve(async (req) => {
             .insert(positionData);
           
           if (error) console.error('Insert error:', error);
-          updates.push({ symbol: binancePos.symbol, action: 'created_with_signal', stop_loss: stopLoss, atr: indicators.atr });
+          updates.push({ symbol: binancePos.symbol, action: hasValidSignal ? 'created_with_signal' : 'created_synced_master', slot: signalSlotName, stop_loss: stopLoss });
         }
       }
 
