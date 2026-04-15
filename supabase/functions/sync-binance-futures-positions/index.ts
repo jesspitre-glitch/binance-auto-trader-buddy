@@ -508,11 +508,14 @@ serve(async (req) => {
           
           console.log(`✅ Opretter Binance-master position: ${binancePos.symbol} ${side} qty=${absQuantity} slot=${signalSlotName}`);
           
-          // 🛡️ KRITISK SIZING GUARD: Binance positionAmt er aggregeret på tværs af ALLE slots.
+          // 🛡️ UFRAVIGELIG HARD CAP: Binance positionAmt er aggregeret på tværs af ALLE slots.
           // Vi må ALDRIG bruge den rå Binance-mængde som slot-quantity.
-          // Beregn slot-maximum og cap quantity til det.
+          // TRIN 1: Forsøg slot-specifik beregning
+          // TRIN 2: ALTID anvend absolut portfolio-baseret hard cap som sikkerhedsnet
           let safeQuantity = absQuantity;
+          const portfolioCapital = Number(existingPortfolio?.futures_capital) || 0;
           
+          // TRIN 1: Slot-specifik cap (præcis)
           if (signalSlotId && activeSlots && activeSlots.length > 0) {
             const matchedSlot = activeSlots.find(s => s.id === signalSlotId);
             if (matchedSlot) {
@@ -521,8 +524,7 @@ serve(async (req) => {
               const slotPositionSizePct = Number(slotConfig?.position_size_percent) || 0;
               const slotLeverage = Number(slotConfig?.leverage) || Number(leverageUsed) || 3;
               
-              if (existingPortfolio && slotCapitalPercent > 0 && slotPositionSizePct > 0 && entryPrice > 0) {
-                const portfolioCapital = Number(existingPortfolio.futures_capital) || 0;
+              if (portfolioCapital > 0 && slotCapitalPercent > 0 && slotPositionSizePct > 0 && entryPrice > 0) {
                 const maxExpectedQty = calculateMaxExpectedSlotQuantity({
                   portfolioCapital,
                   slotCapitalPercent,
@@ -535,20 +537,38 @@ serve(async (req) => {
                   const maxAllowedQty = maxExpectedQty * SLOT_QUANTITY_TOLERANCE_MULTIPLIER;
                   
                   if (absQuantity > maxAllowedQty) {
-                    console.warn(`🛡️ SYNC SIZE CAP: ${binancePos.symbol} Binance qty ${absQuantity.toFixed(4)} exceeds slot max ${maxAllowedQty.toFixed(4)} (expected ${maxExpectedQty.toFixed(4)} × ${SLOT_QUANTITY_TOLERANCE_MULTIPLIER})`);
+                    console.warn(`🛡️ SYNC SLOT CAP: ${binancePos.symbol} Binance qty ${absQuantity.toFixed(4)} exceeds slot max ${maxAllowedQty.toFixed(4)} (expected ${maxExpectedQty.toFixed(4)} × ${SLOT_QUANTITY_TOLERANCE_MULTIPLIER})`);
                     console.warn(`   Portfolio: $${portfolioCapital.toFixed(2)}, Slot capital: ${slotCapitalPercent}%, Position size: ${slotPositionSizePct}%, Leverage: ${slotLeverage}x`);
-                    console.warn(`   Capping quantity from ${absQuantity.toFixed(4)} → ${maxAllowedQty.toFixed(4)}`);
                     safeQuantity = maxAllowedQty;
                   } else {
                     console.log(`✅ SYNC SIZE OK: qty ${absQuantity.toFixed(4)} <= slot max ${maxAllowedQty.toFixed(4)}`);
                   }
-                } else {
-                  console.warn(`⚠️ Cannot calculate slot max qty (maxExpectedQty=${maxExpectedQty}), using Binance qty as-is`);
                 }
-              } else {
-                console.warn(`⚠️ Missing portfolio/slot config data for size cap, using Binance qty as-is`);
               }
             }
+          }
+          
+          // TRIN 2: 🚨 ABSOLUT HARD CAP — kører ALTID, uanset slot-data
+          // Max notional = portfolio × 50% × max leverage (20x) = absolut sikkerhedsgrænse
+          // Dette forhindrer ALDRIG en position med notional > halv portfolio × 20x
+          if (portfolioCapital > 0 && entryPrice > 0) {
+            const ABSOLUTE_MAX_PORTFOLIO_FRACTION = 0.50; // Max 50% af portfolio som margin
+            const ABSOLUTE_MAX_LEVERAGE = 20;
+            const absoluteMaxNotional = portfolioCapital * ABSOLUTE_MAX_PORTFOLIO_FRACTION * ABSOLUTE_MAX_LEVERAGE;
+            const absoluteMaxQty = absoluteMaxNotional / entryPrice;
+            const currentNotional = safeQuantity * entryPrice;
+            
+            if (safeQuantity > absoluteMaxQty) {
+              console.error(`🚨 ABSOLUT HARD CAP TRIGGERED: ${binancePos.symbol}`);
+              console.error(`   Notional $${currentNotional.toFixed(2)} > absolut max $${absoluteMaxNotional.toFixed(2)} (portfolio $${portfolioCapital.toFixed(2)} × 50% × 20x)`);
+              console.error(`   Capping quantity: ${safeQuantity.toFixed(4)} → ${absoluteMaxQty.toFixed(4)}`);
+              safeQuantity = absoluteMaxQty;
+            }
+          } else if (portfolioCapital <= 0) {
+            // Ingen portfolio data = BLOKÉR positionen helt
+            console.error(`🚨 BLOKERET: Ingen portfolio capital data tilgængelig. Kan ikke synce ${binancePos.symbol} sikkert.`);
+            console.error(`   Binance qty=${absQuantity}, notional=$${(absQuantity * entryPrice).toFixed(2)} — SKIPPED`);
+            continue;
           }
           
           const positionData: any = {
