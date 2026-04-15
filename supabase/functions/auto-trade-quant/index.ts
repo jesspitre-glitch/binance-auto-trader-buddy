@@ -3599,6 +3599,25 @@ serve(async (req) => {
       // senere bliver blokeret af unified gate, max positions, sizing eller margin guards.
       const signalsToTrade = eligibleSignals;
       
+      // 📊 Populate slot summary with scan results
+      slotSummary.symbolsScanned = validSignals.length;
+      slotSummary.signalsDetected = validSignals.filter(s => s.signal !== 'NONE').length;
+      slotSummary.signalsPassed = eligibleSignals.length;
+      // Track top blocker reasons
+      for (const sig of validSignals) {
+        if (sig.signal === 'NONE' || !sig.hardFiltersPassed) {
+          const fs = sig.analysis?.filterStatus?.hard || {};
+          let blocker = 'CONDITIONS';
+          if (fs.stochrsi?.passed === false) blocker = 'STOCHRSI';
+          else if (fs.adx?.passed === false) blocker = 'ADX';
+          else if (fs.atr?.passed === false) blocker = 'ATR';
+          else if (fs.medium_trend?.passed === false) blocker = 'EMA_TREND';
+          else if (fs.volume_long?.passed === false || fs.volume_short?.passed === false) blocker = 'VOLUME';
+          else if (fs.emaSpread?.passed === false) blocker = 'EMA_SPREAD';
+          slotSummary.topBlockers[blocker] = (slotSummary.topBlockers[blocker] || 0) + 1;
+        }
+      }
+      
       console.log(`\n📊 Efter hård filtrering: ${eligibleSignals.length}/${topCandidates.length} top signaler passerede hårde filtre`);
       console.log(`🛡️ RACE CONDITION GUARD: Forsøger eligible signaler sekventielt og stopper efter første åbne position (${signalsToTrade.length} eligible)`);
       
