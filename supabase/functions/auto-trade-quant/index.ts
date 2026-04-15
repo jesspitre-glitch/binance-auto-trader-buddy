@@ -3091,6 +3091,19 @@ serve(async (req) => {
       klinesCache = new KlinesCache();
       console.log(`🗄️ Klines cache initialized for ${slotIterations.length} slot(s)`);
 
+      // 📊 PER-SLOT SUMMARY TRACKER
+      const slotSummaries: Array<{
+        slotName: string;
+        slotId: string | null;
+        symbolsScanned: number;
+        signalsDetected: number;
+        signalsPassed: number;
+        positionOpened: boolean;
+        openedSymbol: string | null;
+        maxPositionsReached: boolean;
+        topBlockers: Record<string, number>;
+      }> = [];
+
       for (const { config, slotId, capitalPercent, slotName } of slotIterations) {
         console.log(`\n🎰 === SLOT: "${slotName}" | ID: ${slotId ?? 'legacy'} | Capital: ${capitalPercent}% ===`);
         if (!config || !config.enabled) continue;
