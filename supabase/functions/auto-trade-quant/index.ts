@@ -5292,6 +5292,8 @@ serve(async (req) => {
           // NOTE: Removed immediate sync call to avoid race conditions
           // sync-binance-futures-positions runs on its own schedule via auto-monitor-quant
           positionOpenedForSlot = true;
+          slotSummary.positionOpened = true;
+          slotSummary.openedSymbol = symbol;
           break;
             
         } catch (error: any) {
