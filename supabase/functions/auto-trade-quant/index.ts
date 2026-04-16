@@ -2978,35 +2978,55 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // 🔒 DATABASE SCAN LOCK: Prevent concurrent auto-trade-quant executions
-    // This prevents race conditions where two invocations both see N positions and each open one
-    const lockId = crypto.randomUUID();
-    const { data: lockResult, error: lockError } = await supabaseClient
+    // 🔒 ATOMIC DATABASE SCAN LOCK: Prevent concurrent auto-trade-quant executions
+    // The previous logic first read last_scan_at and only then wrote it, which allowed
+    // overlapping invocations to pass the guard simultaneously and place two orders.
+    // Here we acquire the lock by updating scanner_status ONLY if the timestamp is stale.
+    const lockNowIso = new Date().toISOString();
+    const lockCutoffIso = new Date(Date.now() - 2000).toISOString();
+
+    let { data: lockResult, error: lockError } = await supabaseClient
       .from('scanner_status')
-      .update({ 
-        last_heartbeat_at: new Date().toISOString()
+      .update({
+        last_scan_at: lockNowIso,
+        last_heartbeat_at: lockNowIso,
       })
       .eq('id', 'main')
       .eq('is_active', true)
-      .select('last_scan_at')
-      .single();
+      .lt('last_scan_at', lockCutoffIso)
+      .select('id, last_scan_at')
+      .maybeSingle();
 
-    // Check if another scan is currently running (started within last 8 seconds)
-    if (lockResult?.last_scan_at) {
-      const lastScanAge = Date.now() - new Date(lockResult.last_scan_at).getTime();
-      if (lastScanAge < 2000) {
-        console.log(`🔒 SCAN LOCK: Another scan completed ${lastScanAge}ms ago, skipping to prevent race condition`);
-        return new Response(JSON.stringify({ message: 'Scan skipped - concurrent lock', lockAge: lastScanAge }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+    if (lockError) {
+      throw lockError;
     }
 
-    // Mark scan as started
-    await supabaseClient
-      .from('scanner_status')
-      .update({ last_scan_at: new Date().toISOString() })
-      .eq('id', 'main');
+    if (!lockResult) {
+      const nullLockAttempt = await supabaseClient
+        .from('scanner_status')
+        .update({
+          last_scan_at: lockNowIso,
+          last_heartbeat_at: lockNowIso,
+        })
+        .eq('id', 'main')
+        .eq('is_active', true)
+        .is('last_scan_at', null)
+        .select('id, last_scan_at')
+        .maybeSingle();
+
+      if (nullLockAttempt.error) {
+        throw nullLockAttempt.error;
+      }
+
+      lockResult = nullLockAttempt.data;
+    }
+
+    if (!lockResult) {
+      console.log(`🔒 ATOMIC SCAN LOCK: Another auto-trade-quant invocation already owns the 2s window; skipping this run`);
+      return new Response(JSON.stringify({ message: 'Scan skipped - atomic concurrent lock active' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Get active trading sessions
     const { data: sessions, error: sessionsError } = await supabaseClient
