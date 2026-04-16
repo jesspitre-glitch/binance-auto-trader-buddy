@@ -396,6 +396,72 @@ serve(async (req) => {
               updates.push({ symbol: binancePos.symbol, action: 'updated', id: dbPos.id, price: currentPrice, pnl: slotPnl });
             }
           }
+          
+          // 🔍 DRIFT DETECTION: Check if Binance has MORE quantity than the sum of all DB rows
+          // This would mean there's untracked exposure (e.g. from manual trades or failed syncs)
+          const totalDbQty = matchingPositions.reduce((sum, p) => sum + Math.abs(Number(p.quantity) || 0), 0);
+          const driftQty = absQuantity - totalDbQty;
+          const driftTolerance = absQuantity * 0.02; // 2% tolerance
+          
+          if (driftQty > driftTolerance) {
+            console.warn(`⚠️ DRIFT DETECTED: ${binancePos.symbol} — Binance qty ${absQuantity.toFixed(6)} > DB total qty ${totalDbQty.toFixed(6)} (drift: ${driftQty.toFixed(6)})`);
+            console.warn(`   This means there's untracked exposure on Binance that should be reconciled.`);
+            console.warn(`   The excess will be imported as a new position.`);
+            
+            // Find the slot that originally opened this symbol (use the first matching position's slot)
+            const originalSlotId = matchingPositions[0]?.slot_id || null;
+            const originalSlotName = matchingPositions[0]?.indicators_snapshot 
+              ? (matchingPositions[0].indicators_snapshot as any)?.slot_name || 'Unknown'
+              : 'Unknown';
+            
+            // Calculate PnL for the drift portion
+            const driftPnl = side === 'LONG'
+              ? (currentPrice - binanceEntryPrice) * driftQty
+              : (binanceEntryPrice - currentPrice) * driftQty;
+            
+            // Insert a new position row for the untracked exposure
+            const driftPositionData: any = {
+              user_id: userId,
+              symbol: binancePos.symbol,
+              side,
+              entry_price: binanceEntryPrice,
+              quantity: driftQty,
+              current_price: currentPrice,
+              peak_price: currentPrice,
+              stop_loss: side === 'LONG' 
+                ? binanceEntryPrice * 0.97  // 3% fallback SL
+                : binanceEntryPrice * 1.03,
+              trailing_stop: side === 'LONG'
+                ? binanceEntryPrice * 0.97
+                : binanceEntryPrice * 1.03,
+              trailing_stop_percent: 2.0,
+              unrealized_pnl: driftPnl,
+              status: 'OPEN',
+              open_reason: `DRIFT_RECONCILED: Untracked Binance exposure (${driftQty.toFixed(6)} qty) imported from ${binancePos.symbol}`,
+              indicators_snapshot: {
+                is_synced_position: true,
+                exit_type: 'FALLBACK_SL',
+                synced_without_signal: true,
+                drift_reconciled: true,
+                original_slot_name: originalSlotName,
+              },
+            };
+            
+            if (originalSlotId) {
+              driftPositionData.slot_id = originalSlotId;
+            }
+            
+            const { error: driftInsertError } = await supabaseClient
+              .from('positions')
+              .insert(driftPositionData);
+            
+            if (driftInsertError) {
+              console.error(`❌ Failed to import drift position for ${binancePos.symbol}:`, driftInsertError.message);
+            } else {
+              console.log(`✅ DRIFT RECONCILED: Imported ${driftQty.toFixed(6)} qty of ${binancePos.symbol} into slot ${originalSlotName}`);
+              updates.push({ symbol: binancePos.symbol, action: 'drift_reconciled', quantity: driftQty, slot: originalSlotName });
+            }
+          }
         } else {
           // 🟢 BINANCE ER MASTER: Alle Binance-positioner SKAL trackes i DB
           console.log(`Fandt ny Binance position: ${binancePos.symbol} - søger efter bot-signal for slot-tildeling...`);
