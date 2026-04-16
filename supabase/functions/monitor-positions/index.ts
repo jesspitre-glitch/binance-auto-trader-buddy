@@ -444,28 +444,8 @@ async function validatePositionAgainstSlotUi(params: {
     };
   }
 
-  const entryPrice = parseFiniteNumber(position.entry_price);
-  const quantity = Math.abs(parseFiniteNumber(position.quantity) ?? 0);
-  const actualEntryNotional = (entryPrice ?? 0) * quantity;
-  const liveNotional = Math.abs(currentPrice) * quantity;
-  const maxAllowedNotional = configuredPortfolioBalance * (capitalPercent / 100) * (positionSizePercent / 100) * expectedLeverage;
-  const notionalTolerance = Math.max(0.01, Math.abs(currentPrice) * 0.01);
-
-  if (!Number.isFinite(actualEntryNotional) || actualEntryNotional <= 0) {
-    return {
-      compliant: false,
-      reason: 'SLOT_UI_MISMATCH',
-      details: `Invalid position notional (${actualEntryNotional})`,
-    };
-  }
-
-  if (actualEntryNotional > maxAllowedNotional + notionalTolerance) {
-    return {
-      compliant: false,
-      reason: 'SLOT_UI_MISMATCH',
-      details: `Entry notional $${actualEntryNotional.toFixed(2)} exceeds UI max $${maxAllowedNotional.toFixed(2)} for slot ${slotData.name ?? position.slot_id}`,
-    };
-  }
+  // Notional check REMOVED — Binance er master, sync opdaterer quantity/entry direkte.
+  // Alle handler styres af appen, så notional kan ændre sig via Binance sync.
 
   const apiKey = Deno.env.get('BINANCE_API_KEY');
   const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
@@ -485,7 +465,7 @@ async function validatePositionAgainstSlotUi(params: {
     }
   }
 
-  console.log(`✅ SLOT UI COMPLIANCE | ${position.symbol} | slot=${slotData.name ?? position.slot_id} | entryNotional=$${actualEntryNotional.toFixed(2)} | liveNotional=$${liveNotional.toFixed(2)} | uiMax=$${maxAllowedNotional.toFixed(2)} | leverage=${expectedLeverage}x`);
+  console.log(`✅ SLOT UI COMPLIANCE | ${position.symbol} | slot=${slotData.name ?? position.slot_id} | leverage=${expectedLeverage}x`);
 
   return { compliant: true };
 }

@@ -6,44 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const SLOT_QUANTITY_TOLERANCE_MULTIPLIER = 1.25;
-
-function calculateMaxExpectedSlotQuantity(params: {
-  portfolioCapital: number;
-  slotCapitalPercent: number;
-  positionSizePercent: number;
-  leverage: number;
-  entryPrice: number;
-}): number {
-  const {
-    portfolioCapital,
-    slotCapitalPercent,
-    positionSizePercent,
-    leverage,
-    entryPrice,
-  } = params;
-
-  if (
-    !Number.isFinite(portfolioCapital) ||
-    !Number.isFinite(slotCapitalPercent) ||
-    !Number.isFinite(positionSizePercent) ||
-    !Number.isFinite(leverage) ||
-    !Number.isFinite(entryPrice) ||
-    portfolioCapital <= 0 ||
-    slotCapitalPercent <= 0 ||
-    positionSizePercent <= 0 ||
-    leverage <= 0 ||
-    entryPrice <= 0
-  ) {
-    return NaN;
-  }
-
-  const slotBalance = portfolioCapital * (slotCapitalPercent / 100);
-  const marginToUse = slotBalance * (positionSizePercent / 100);
-  const positionNotional = marginToUse * leverage;
-
-  return positionNotional / entryPrice;
-}
+// Binance er master — alle handler styres af appen, ingen manuelle handler.
 
 async function createSignature(queryString: string, secret: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -310,31 +273,22 @@ serve(async (req) => {
         const matchingPositions = dbPositions?.filter(p => p.symbol === binancePos.symbol) || [];
         
         if (matchingPositions.length > 0) {
-          // Update ALL matching positions with live mark price from Binance.
-          // NEVER overwrite quantity or entry_price — these are set at order time per-slot.
-          // Binance positionAmt/entryPrice are AGGREGATED across all slots and manual trades.
-          // Overwriting would trigger SLOT_UI_MISMATCH closures from monitor-positions.
-          for (const dbPos of matchingPositions) {
-            const dbQty = Number(dbPos.quantity) || 0;
-            const dbEntry = Number(dbPos.entry_price) || 0;
-            const dbSide = dbPos.side as string;
-            // Calculate PnL using slot's own qty/entry but Binance's live mark price
-            const syncedUnrealizedPnl = dbSide === 'LONG' 
-              ? (currentPrice - dbEntry) * dbQty 
-              : (dbEntry - currentPrice) * dbQty;
-
-            console.log(`Updating ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): Price ${currentPrice}, P&L ${syncedUnrealizedPnl.toFixed(6)} (qty ${dbQty}, entry ${dbEntry})`);
+          // BINANCE ER MASTER: Alt styres af appen, så Binance data er den absolutte sandhed.
+          // Sync quantity, entry_price og unrealized_pnl direkte fra Binance.
+          
+          if (matchingPositions.length === 1) {
+            // Single position for this symbol — sync 1:1 from Binance
+            const dbPos = matchingPositions[0];
+            console.log(`Syncing 1:1 ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): qty ${absQuantity}, entry ${binanceEntryPrice}, price ${currentPrice}, pnl ${unrealizedPnl}`);
             
             let updateData: any = {
               current_price: currentPrice,
-              unrealized_pnl: syncedUnrealizedPnl,
+              quantity: absQuantity,
+              entry_price: binanceEntryPrice,
+              unrealized_pnl: unrealizedPnl,
               updated_at: new Date().toISOString(),
             };
 
-            // Note: entry_price is only synced from Binance when there's a single DB position.
-            // With multiple slots, each keeps its own entry_price for isolated P&L.
-
-            // If missing indicators_snapshot, try to find a recent bot signal
             if (!dbPos.indicators_snapshot) {
               const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
               const { data: recentSignals } = await supabaseClient
@@ -350,7 +304,6 @@ serve(async (req) => {
               if (recentSignals && recentSignals.length > 0) {
                 const signal = recentSignals[0];
                 const indicators = signal.indicators as any;
-                
                 updateData.indicators_snapshot = signal.indicators;
                 updateData.open_reason = `${side} signal på ${binancePos.symbol} - ` +
                   `Trend: ${indicators.trend || 'UNKNOWN'}. ` +
@@ -358,7 +311,6 @@ serve(async (req) => {
                   `MACD: ${indicators.macd?.toFixed(4) || 'N/A'}, ` +
                   `EMA: Fast ${indicators.emaFast?.toFixed(2) || 'N/A'} vs Slow ${indicators.emaSlow?.toFixed(2) || 'N/A'}, ` +
                   `ADX: ${indicators.adx?.toFixed(2) || 'N/A'}`;
-                
                 console.log(`✅ Updated ${binancePos.symbol} with bot signal data`);
               }
             }
@@ -369,13 +321,60 @@ serve(async (req) => {
               .eq('id', dbPos.id);
             
             if (error) console.error('Update error:', error);
-            updates.push({ 
-              symbol: binancePos.symbol, 
-              action: 'updated', 
-              id: dbPos.id,
-              price: currentPrice,
-              pnl: syncedUnrealizedPnl,
-            });
+            updates.push({ symbol: binancePos.symbol, action: 'updated', id: dbPos.id, price: currentPrice, pnl: unrealizedPnl });
+          } else {
+            // Multiple slots have same symbol — distribute Binance values proportionally
+            const totalDbQty = matchingPositions.reduce((sum, p) => sum + Math.abs(Number(p.quantity) || 0), 0);
+            
+            for (const dbPos of matchingPositions) {
+              const dbQty = Math.abs(Number(dbPos.quantity) || 0);
+              const proportion = totalDbQty > 0 ? dbQty / totalDbQty : 1 / matchingPositions.length;
+              const slotQty = absQuantity * proportion;
+              const slotPnl = unrealizedPnl * proportion;
+              
+              console.log(`Syncing proportional ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): ${(proportion * 100).toFixed(1)}%, qty ${slotQty}, entry ${binanceEntryPrice}, pnl ${slotPnl.toFixed(6)}`);
+              
+              let updateData: any = {
+                current_price: currentPrice,
+                quantity: slotQty,
+                entry_price: binanceEntryPrice,
+                unrealized_pnl: slotPnl,
+                updated_at: new Date().toISOString(),
+              };
+
+              if (!dbPos.indicators_snapshot) {
+                const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+                const { data: recentSignals } = await supabaseClient
+                  .from('scan_results')
+                  .select('*')
+                  .eq('user_id', userId)
+                  .eq('symbol', binancePos.symbol)
+                  .eq('signal', side)
+                  .gte('created_at', tenMinutesAgo)
+                  .order('created_at', { ascending: false })
+                  .limit(1);
+                
+                if (recentSignals && recentSignals.length > 0) {
+                  const signal = recentSignals[0];
+                  const indicators = signal.indicators as any;
+                  updateData.indicators_snapshot = signal.indicators;
+                  updateData.open_reason = `${side} signal på ${binancePos.symbol} - ` +
+                    `Trend: ${indicators.trend || 'UNKNOWN'}. ` +
+                    `RSI: ${indicators.rsi?.toFixed(2) || 'N/A'}, ` +
+                    `MACD: ${indicators.macd?.toFixed(4) || 'N/A'}, ` +
+                    `EMA: Fast ${indicators.emaFast?.toFixed(2) || 'N/A'} vs Slow ${indicators.emaSlow?.toFixed(2) || 'N/A'}, ` +
+                    `ADX: ${indicators.adx?.toFixed(2) || 'N/A'}`;
+                }
+              }
+              
+              const { error } = await supabaseClient
+                .from('positions')
+                .update(updateData)
+                .eq('id', dbPos.id);
+              
+              if (error) console.error('Update error:', error);
+              updates.push({ symbol: binancePos.symbol, action: 'updated', id: dbPos.id, price: currentPrice, pnl: slotPnl });
+            }
           }
         } else {
           // 🟢 BINANCE ER MASTER: Alle Binance-positioner SKAL trackes i DB
