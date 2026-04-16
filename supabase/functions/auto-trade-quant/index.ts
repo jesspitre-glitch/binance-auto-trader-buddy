@@ -4183,6 +4183,44 @@ serve(async (req) => {
             continue;
           }
           console.log(`🛡️ Safety guard OK: notional $${actualNotional.toFixed(2)} <= max $${maxAllowedNotional.toFixed(2)}`);
+
+          // 🚨 RECONCILIATION GUARD: before adding MORE size to a symbol, our DB view of the
+          // symbol must already match the live Binance exposure. Otherwise we compound hidden
+          // drift and both size + PnL become wrong.
+          const liveBinancePositionBeforeOrder = await verifyPositionOnBinance(symbol);
+          const liveBinanceQtyBeforeOrder = Math.abs(Number(liveBinancePositionBeforeOrder?.positionAmt) || 0);
+          const { data: trackedSymbolPositions, error: trackedSymbolPositionsError } = await supabaseClient
+            .from('positions')
+            .select('id, quantity, slot_id, status')
+            .eq('user_id', session.user_id)
+            .eq('symbol', symbol)
+            .in('status', ['OPEN', 'PENDING']);
+
+          if (trackedSymbolPositionsError) {
+            console.error(`❌ Could not validate tracked symbol exposure for ${symbol}:`, trackedSymbolPositionsError.message);
+            continue;
+          }
+
+          const trackedQtyBeforeOrder = (trackedSymbolPositions || []).reduce(
+            (sum, position) => sum + Math.abs(Number(position.quantity) || 0),
+            0
+          );
+          const reconciliationTolerance = Math.max(step, step * 1.01);
+          const exposureDrift = Math.abs(liveBinanceQtyBeforeOrder - trackedQtyBeforeOrder);
+
+          if (exposureDrift > reconciliationTolerance) {
+            console.error(`🚫 RECONCILIATION BLOCK: ${symbol} has unmatched live Binance exposure`);
+            console.error(`   Binance qty: ${liveBinanceQtyBeforeOrder.toFixed(qtyPrecision)}`);
+            console.error(`   Tracked DB qty: ${trackedQtyBeforeOrder.toFixed(qtyPrecision)}`);
+            console.error(`   Drift: ${exposureDrift.toFixed(qtyPrecision)} > tolerance ${reconciliationTolerance.toFixed(qtyPrecision)}`);
+            console.error(`   ❌ Trade AFVIST indtil sync/data igen matcher Binance 1:1`);
+            continue;
+          }
+
+          console.log(
+            `✅ Reconciliation OK before order: Binance qty ${liveBinanceQtyBeforeOrder.toFixed(qtyPrecision)} ` +
+            `matches tracked qty ${trackedQtyBeforeOrder.toFixed(qtyPrecision)} within tolerance ${reconciliationTolerance.toFixed(qtyPrecision)}`
+          );
           
           // 🚨 ABSOLUT HARD CAP: Portfolio-baseret ultimativ grænse
           // Ingen trade må NOGENSINDE have notional > portfolio × 50% × 20x

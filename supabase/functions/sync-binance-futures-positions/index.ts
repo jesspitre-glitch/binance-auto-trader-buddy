@@ -279,19 +279,26 @@ serve(async (req) => {
           // Vi syncer kun: current_price og beregner per-slot PnL fra slottets egne værdier.
           
           if (matchingPositions.length === 1) {
-            // Single position for this symbol — sync price, calculate PnL from slot's own qty
+            // Single DB position for this symbol = this row must mirror Binance 1:1.
+            // If Binance has more size than DB, that means the account-level position has
+            // drifted away from our local decomposition. In that case Binance must win.
             const dbPos = matchingPositions[0];
             const dbQty = Math.abs(Number(dbPos.quantity) || 0);
             const dbEntry = Number(dbPos.entry_price) || 0;
-            // Calculate PnL from slot's own quantity × price delta (not Binance aggregate PnL)
-            const slotPnl = side === 'LONG'
-              ? (currentPrice - dbEntry) * dbQty
-              : (dbEntry - currentPrice) * dbQty;
-            console.log(`Syncing price-only ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): slotQty ${dbQty}, entry ${dbEntry}, price ${currentPrice}, slotPnl ${slotPnl.toFixed(6)} (Binance aggregate: qty ${absQuantity}, pnl ${unrealizedPnl})`);
+            const qtyDrift = Math.abs(absQuantity - dbQty);
+            const entryDrift = Math.abs(binanceEntryPrice - dbEntry);
+
+            console.log(
+              `Syncing single-source ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): ` +
+              `dbQty ${dbQty}, binanceQty ${absQuantity}, dbEntry ${dbEntry}, binanceEntry ${binanceEntryPrice}, ` +
+              `price ${currentPrice}, binancePnl ${unrealizedPnl}, qtyDrift ${qtyDrift.toFixed(8)}, entryDrift ${entryDrift.toFixed(8)}`
+            );
             
             let updateData: any = {
+              entry_price: binanceEntryPrice,
+              quantity: absQuantity,
               current_price: currentPrice,
-              unrealized_pnl: slotPnl,
+              unrealized_pnl: unrealizedPnl,
               updated_at: new Date().toISOString(),
             };
 
@@ -327,7 +334,15 @@ serve(async (req) => {
               .eq('id', dbPos.id);
             
             if (error) console.error('Update error:', error);
-            updates.push({ symbol: binancePos.symbol, action: 'updated', id: dbPos.id, price: currentPrice, pnl: slotPnl });
+            updates.push({
+              symbol: binancePos.symbol,
+              action: 'updated',
+              id: dbPos.id,
+              price: currentPrice,
+              pnl: unrealizedPnl,
+              quantity: absQuantity,
+              entry_price: binanceEntryPrice,
+            });
           } else {
             // Multiple slots have same symbol — each slot keeps its own qty, PnL from own values
             
