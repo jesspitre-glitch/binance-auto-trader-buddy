@@ -6,6 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const POSITION_MONITOR_INTERVAL_MS = 30_000;
+
 const getUserIdFromAuthHeader = (req: Request): string | null => {
   try {
     const auth = req.headers.get('authorization') ?? req.headers.get('Authorization');
@@ -166,7 +168,20 @@ serve(async (req) => {
       console.log('[continuous-scan] Tick: Running scan...');
       
       try {
+        const startedAtMs = Date.now();
         const { data, error } = await supabaseClient.functions.invoke('auto-trade-quant');
+        const shouldRunMonitor = !statusData?.last_heartbeat_at || (startedAtMs - new Date(statusData.last_heartbeat_at).getTime()) >= POSITION_MONITOR_INTERVAL_MS;
+        let monitorResult: any = null;
+        let monitorError: any = null;
+
+        if (shouldRunMonitor) {
+          const monitorResponse = await supabaseClient.functions.invoke('monitor-positions');
+          monitorResult = monitorResponse.data;
+          monitorError = monitorResponse.error;
+          if (monitorError) {
+            console.error('[continuous-scan] Tick monitor error:', monitorError);
+          }
+        }
         
         await supabaseClient
           .from('scanner_status')
@@ -181,7 +196,9 @@ serve(async (req) => {
           return new Response(JSON.stringify({ 
             status: 'active', 
             tick: 'error',
-            error: error.message
+            error: error.message,
+            monitor_result: monitorResult,
+            monitor_error: monitorError?.message ?? null
           }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -190,7 +207,9 @@ serve(async (req) => {
         return new Response(JSON.stringify({ 
           status: 'active', 
           tick: 'completed',
-          scan_result: data
+          scan_result: data,
+          monitor_result: monitorResult,
+          monitor_error: monitorError?.message ?? null
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -221,6 +240,8 @@ serve(async (req) => {
       const maxDurationMs = 50000; // Run for max 50 seconds (leave buffer before 60s timeout)
       const startTime = Date.now();
       let scanCount = 0;
+      let monitorCount = 0;
+      let lastMonitorRunAt = statusData.last_heartbeat_at ? new Date(statusData.last_heartbeat_at).getTime() : 0;
 
       console.log(`[continuous-scan] Starting loop, interval=${loopIntervalMs}ms, maxDuration=${maxDurationMs}ms`);
 
@@ -241,6 +262,18 @@ serve(async (req) => {
           console.log(`[continuous-scan] Loop scan #${scanCount + 1}...`);
           await supabaseClient.functions.invoke('auto-trade-quant');
           scanCount++;
+
+          const nowMs = Date.now();
+          if (nowMs - lastMonitorRunAt >= POSITION_MONITOR_INTERVAL_MS) {
+            console.log('[continuous-scan] Running 30s position compliance monitor...');
+            const monitorResponse = await supabaseClient.functions.invoke('monitor-positions');
+            if (monitorResponse.error) {
+              console.error('[continuous-scan] Loop monitor error:', monitorResponse.error);
+            } else {
+              monitorCount++;
+              lastMonitorRunAt = nowMs;
+            }
+          }
           
           await supabaseClient
             .from('scanner_status')
@@ -267,6 +300,7 @@ serve(async (req) => {
         status: 'active', 
         loop_completed: true,
         scans_executed: scanCount,
+        monitor_runs_executed: monitorCount,
         duration_ms: Date.now() - startTime
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -363,6 +363,133 @@ async function closePositionOnBinance(symbol: string, side: string, quantity: nu
   };
 }
 
+type SlotComplianceResult = {
+  compliant: boolean;
+  reason?: string;
+  details?: string;
+};
+
+function parseFiniteNumber(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function validatePositionAgainstSlotUi(params: {
+  currentPrice: number;
+  position: any;
+  slotData: { config_id?: string | null; name?: string | null; capital_percent?: number | null; is_active?: boolean | null } | null;
+  configData: { leverage?: number | null; position_size_percent?: number | null } | null;
+  supabaseClient: any;
+}): Promise<SlotComplianceResult> {
+  const { position, currentPrice, slotData, configData, supabaseClient } = params;
+
+  if (!position.slot_id) {
+    return { compliant: true };
+  }
+
+  if (!slotData) {
+    return { compliant: false, reason: 'SLOT_UI_MISMATCH', details: 'Slot configuration could not be found' };
+  }
+
+  if (slotData.is_active === false) {
+    return {
+      compliant: false,
+      reason: 'SLOT_UI_MISMATCH',
+      details: `Slot "${slotData.name ?? position.slot_id}" is inactive in UI`,
+    };
+  }
+
+  const capitalPercent = parseFiniteNumber(slotData.capital_percent);
+  const positionSizePercent = parseFiniteNumber(configData?.position_size_percent);
+  const expectedLeverage = parseFiniteNumber(configData?.leverage);
+
+  if (capitalPercent === null || capitalPercent <= 0 || capitalPercent > 100) {
+    return {
+      compliant: false,
+      reason: 'SLOT_UI_MISMATCH',
+      details: `Invalid slot capital percent (${slotData.capital_percent})`,
+    };
+  }
+
+  if (positionSizePercent === null || positionSizePercent <= 0 || positionSizePercent > 100) {
+    return {
+      compliant: false,
+      reason: 'SLOT_UI_MISMATCH',
+      details: `Invalid UI position size percent (${configData?.position_size_percent})`,
+    };
+  }
+
+  if (expectedLeverage === null || expectedLeverage <= 0) {
+    return {
+      compliant: false,
+      reason: 'SLOT_UI_MISMATCH',
+      details: `Invalid UI leverage (${configData?.leverage})`,
+    };
+  }
+
+  const { data: portfolioData, error: portfolioError } = await supabaseClient
+    .from('user_portfolio')
+    .select('futures_capital')
+    .eq('user_id', position.user_id)
+    .maybeSingle();
+
+  if (portfolioError) throw portfolioError;
+
+  const configuredPortfolioBalance = parseFiniteNumber(portfolioData?.futures_capital);
+  if (configuredPortfolioBalance === null || configuredPortfolioBalance <= 0) {
+    return {
+      compliant: false,
+      reason: 'SLOT_UI_MISMATCH',
+      details: 'Missing valid UI futures capital baseline',
+    };
+  }
+
+  const entryPrice = parseFiniteNumber(position.entry_price);
+  const quantity = Math.abs(parseFiniteNumber(position.quantity) ?? 0);
+  const actualEntryNotional = (entryPrice ?? 0) * quantity;
+  const liveNotional = Math.abs(currentPrice) * quantity;
+  const maxAllowedNotional = configuredPortfolioBalance * (capitalPercent / 100) * (positionSizePercent / 100) * expectedLeverage;
+  const notionalTolerance = Math.max(0.01, Math.abs(currentPrice) * 0.01);
+
+  if (!Number.isFinite(actualEntryNotional) || actualEntryNotional <= 0) {
+    return {
+      compliant: false,
+      reason: 'SLOT_UI_MISMATCH',
+      details: `Invalid position notional (${actualEntryNotional})`,
+    };
+  }
+
+  if (actualEntryNotional > maxAllowedNotional + notionalTolerance) {
+    return {
+      compliant: false,
+      reason: 'SLOT_UI_MISMATCH',
+      details: `Entry notional $${actualEntryNotional.toFixed(2)} exceeds UI max $${maxAllowedNotional.toFixed(2)} for slot ${slotData.name ?? position.slot_id}`,
+    };
+  }
+
+  const apiKey = Deno.env.get('BINANCE_API_KEY');
+  const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
+  if (!apiKey || !apiSecret) {
+    throw new Error('Binance API credentials not configured');
+  }
+
+  const livePosition = await getPositionFromBinance(position.symbol, apiKey, apiSecret);
+  if (livePosition) {
+    const liveLeverage = parseFiniteNumber(livePosition.leverage);
+    if (liveLeverage !== null && Math.abs(liveLeverage - expectedLeverage) > 0.001) {
+      return {
+        compliant: false,
+        reason: 'SLOT_UI_MISMATCH',
+        details: `Binance leverage ${liveLeverage}x does not match slot UI ${expectedLeverage}x for ${slotData.name ?? position.slot_id}`,
+      };
+    }
+  }
+
+  console.log(`✅ SLOT UI COMPLIANCE | ${position.symbol} | slot=${slotData.name ?? position.slot_id} | entryNotional=$${actualEntryNotional.toFixed(2)} | liveNotional=$${liveNotional.toFixed(2)} | uiMax=$${maxAllowedNotional.toFixed(2)} | leverage=${expectedLeverage}x`);
+
+  return { compliant: true };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -388,6 +515,9 @@ serve(async (req) => {
       .from('positions')
       .select('*')
       .eq('status', 'OPEN');
+
+    const slotCache = new Map<string, any>();
+    const configCache = new Map<string, any>();
 
     if (positionsError) throw positionsError;
     if (!positions || positions.length === 0) {
@@ -427,22 +557,33 @@ serve(async (req) => {
         
         // 🔴 STRATEGY SLOTS: Resolve config via slot_id first, then fall back to trading_session
         let configData: any = null;
+        let slotData: any = null;
         
         if (position.slot_id) {
-          // Position belongs to a strategy slot — get config from slot's config_id
-          const { data: slotData } = await supabaseClient
-            .from('strategy_slots')
-            .select('config_id, name')
-            .eq('id', position.slot_id)
-            .single();
+          if (slotCache.has(position.slot_id)) {
+            slotData = slotCache.get(position.slot_id);
+          } else {
+            const { data: fetchedSlotData } = await supabaseClient
+              .from('strategy_slots')
+              .select('config_id, name, capital_percent, is_active')
+              .eq('id', position.slot_id)
+              .single();
+            slotData = fetchedSlotData;
+            slotCache.set(position.slot_id, slotData ?? null);
+          }
           
           if (slotData?.config_id) {
-            const { data: slotConfig } = await supabaseClient
-              .from('indicator_config')
-              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max')
-              .eq('id', slotData.config_id)
-              .single();
-            configData = slotConfig;
+            if (configCache.has(slotData.config_id)) {
+              configData = configCache.get(slotData.config_id);
+            } else {
+              const { data: slotConfig } = await supabaseClient
+                .from('indicator_config')
+                .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max, position_size_percent, leverage')
+                .eq('id', slotData.config_id)
+                .single();
+              configData = slotConfig;
+              configCache.set(slotData.config_id, configData ?? null);
+            }
             console.log(`📋 Bruger SLOT config "${slotData.name}" (slot: ${position.slot_id}, config: ${slotData.config_id}): timeout=${configData?.max_position_duration_minutes}min`);
           } else {
             console.warn(`⚠️ Slot ${position.slot_id} har ingen config_id — falder tilbage til trading_session`);
@@ -460,7 +601,7 @@ serve(async (req) => {
           if (sessionData?.active_config_id) {
             const { data: activeConfig } = await supabaseClient
               .from('indicator_config')
-              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max')
+              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max, position_size_percent, leverage')
               .eq('id', sessionData.active_config_id)
               .single();
             configData = activeConfig;
@@ -469,7 +610,7 @@ serve(async (req) => {
             // Fallback til første config hvis ingen session
             const { data: fallbackConfig } = await supabaseClient
               .from('indicator_config')
-              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max')
+              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max, position_size_percent, leverage')
               .eq('user_id', position.user_id)
               .order('created_at', { ascending: false })
               .limit(1)
@@ -522,6 +663,22 @@ serve(async (req) => {
           maxPositionDurationMinutes = configData.max_position_duration_minutes;
           conditionalTimeExitEnabled = configData.conditional_time_exit_enabled ?? true;
           adxFloor = configData.adx_floor ?? 20;
+
+          if (!shouldClose) {
+            const complianceResult = await validatePositionAgainstSlotUi({
+              currentPrice,
+              position,
+              slotData,
+              configData,
+              supabaseClient,
+            });
+
+            if (!complianceResult.compliant) {
+              shouldClose = true;
+              closeReason = complianceResult.reason ?? 'SLOT_UI_MISMATCH';
+              console.error(`🚨 SLOT UI MISMATCH | ${position.symbol} | ${complianceResult.details ?? 'Position no longer matches slot UI'}`);
+            }
+          }
 
           // Break-even config
           breakEvenMasterEnabled = configData.break_even_enabled ?? true;
