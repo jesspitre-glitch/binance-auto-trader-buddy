@@ -465,7 +465,7 @@ async function validatePositionAgainstSlotUi(params: {
     }
   }
 
-  console.log(`✅ SLOT UI COMPLIANCE | ${position.symbol} | slot=${slotData.name ?? position.slot_id} | entryNotional=$${actualEntryNotional.toFixed(2)} | liveNotional=$${liveNotional.toFixed(2)} | uiMax=$${maxAllowedNotional.toFixed(2)} | leverage=${expectedLeverage}x`);
+  console.log(`✅ SLOT UI COMPLIANCE | ${position.symbol} | slot=${slotData.name ?? position.slot_id} | leverage=${expectedLeverage}x`);
 
   return { compliant: true };
 }
