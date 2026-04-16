@@ -310,15 +310,15 @@ serve(async (req) => {
         const matchingPositions = dbPositions?.filter(p => p.symbol === binancePos.symbol) || [];
         
         if (matchingPositions.length > 0) {
-          // Update ALL matching positions with live market data from Binance
-          // Each position may belong to a different slot — do NOT aggregate or close "duplicates"
+          // Update ALL matching positions with live mark price from Binance.
+          // NEVER overwrite quantity or entry_price — these are set at order time per-slot.
+          // Binance positionAmt/entryPrice are AGGREGATED across all slots and manual trades.
+          // Overwriting would trigger SLOT_UI_MISMATCH closures from monitor-positions.
           for (const dbPos of matchingPositions) {
-            // ALWAYS calculate P&L per-position using DB's own qty and entry_price.
-            // Never use Binance's aggregate unRealizedProfit — it includes ALL positions
-            // for the symbol (including manual trades outside the bot) and would inflate P&L.
             const dbQty = Number(dbPos.quantity) || 0;
             const dbEntry = Number(dbPos.entry_price) || 0;
             const dbSide = dbPos.side as string;
+            // Calculate PnL using slot's own qty/entry but Binance's live mark price
             const syncedUnrealizedPnl = dbSide === 'LONG' 
               ? (currentPrice - dbEntry) * dbQty 
               : (dbEntry - currentPrice) * dbQty;
@@ -328,15 +328,12 @@ serve(async (req) => {
             let updateData: any = {
               current_price: currentPrice,
               unrealized_pnl: syncedUnrealizedPnl,
-              // Do NOT overwrite quantity — it was set at order time per-slot
-              // Do NOT overwrite side — it was set at order time
               updated_at: new Date().toISOString(),
             };
 
-            // IMPORTANT: Never overwrite entry_price for existing DB positions.
-            // Binance positionRisk.entryPrice is aggregated per symbol and can corrupt
-            // per-slot P&L when multiple slots trade the same symbol.
-            
+            // Note: entry_price is only synced from Binance when there's a single DB position.
+            // With multiple slots, each keeps its own entry_price for isolated P&L.
+
             // If missing indicators_snapshot, try to find a recent bot signal
             if (!dbPos.indicators_snapshot) {
               const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
