@@ -20,6 +20,9 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeD
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
   
+  const snapshot = trade.indicators_snapshot ?? {};
+  const leverage = trade.leverage_used ?? snapshot.leverage ?? null;
+  
   const isProfitable = trade.pnl >= 0;
   const durationMinutes = trade.duration_minutes || 0;
   const hours = Math.floor(durationMinutes / 60);
@@ -670,7 +673,7 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeD
                     </div>
                     <div className="flex justify-between border rounded p-2">
                       <span className="text-muted-foreground">Leverage:</span>
-                      <span className="font-mono">3x</span>
+                      <span className="font-mono">{leverage != null ? `${Number(leverage)}x` : "-"}</span>
                     </div>
                     <div className="flex justify-between border rounded p-2">
                       <span className="text-muted-foreground">Position Size:</span>
