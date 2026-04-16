@@ -5244,15 +5244,13 @@ serve(async (req) => {
             }
           }
 
-          // Save position to database with verified Binance data and indicators
-          const positionInsertData: any = {
-              user_id: session.user_id,
-              symbol,
+          // Promote PENDING position to OPEN with verified Binance data
+          const positionUpdateData: any = {
               side: signal,
               entry_price: actualEntryPrice,
               quantity: actualQuantity,
               stop_loss: finalStopLoss,
-              take_profit: null, // TP er fjernet, vi bruger kun trailing stop
+              take_profit: null,
               trailing_stop: parseFloat(initialTrailingStop.toFixed(8)),
               current_price: actualEntryPrice,
               peak_price: actualEntryPrice,
@@ -5264,19 +5262,18 @@ serve(async (req) => {
               opened_at: openedAtNow.toISOString(),
               indicators_snapshot: { ...comprehensiveSnapshot, slot_id: slotId, slot_name: slotName },
           };
-          if (slotId) {
-            positionInsertData.slot_id = slotId;
-          }
 
           const { data: insertedPosition, error: insertError } = await supabaseClient
             .from('positions')
-            .insert(positionInsertData)
+            .update(positionUpdateData)
+            .eq('id', pendingPositionId)
             .select()
             .single();
 
           if (insertError) {
-            console.error(`❌ DATABASE INSERT FAILED for ${symbol}:`, insertError);
-            console.error(`   Position exists on Binance but not in DB!`);
+            console.error(`❌ DATABASE UPDATE FAILED for ${symbol}:`, insertError);
+            console.error(`   Pending position ID: ${pendingPositionId}`);
+            console.error(`   Position exists on Binance but not properly in DB!`);
             console.error(`   Order ID: ${orderData.orderId}`);
             console.error(`   Manual sync required`);
             continue;
