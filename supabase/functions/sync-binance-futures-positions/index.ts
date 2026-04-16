@@ -310,42 +310,25 @@ serve(async (req) => {
         const matchingPositions = dbPositions?.filter(p => p.symbol === binancePos.symbol) || [];
         
         if (matchingPositions.length > 0) {
-          // When there's exactly ONE DB position for this symbol, Binance IS the source of truth.
-          // Sync quantity, entry_price and use Binance's unrealizedProfit directly.
-          const isSinglePosition = matchingPositions.length === 1;
-          
+          // Update ALL matching positions with live mark price from Binance.
+          // NEVER overwrite quantity or entry_price — these are set at order time per-slot.
+          // Binance positionAmt/entryPrice are AGGREGATED across all slots and manual trades.
+          // Overwriting would trigger SLOT_UI_MISMATCH closures from monitor-positions.
           for (const dbPos of matchingPositions) {
-            let effectiveQty: number;
-            let effectiveEntry: number;
-            let syncedUnrealizedPnl: number;
-            
-            if (isSinglePosition) {
-              // Single position: Binance is ground truth for qty, entry, and PnL
-              effectiveQty = absQuantity;
-              effectiveEntry = binanceEntryPrice;
-              syncedUnrealizedPnl = unrealizedPnl;
-              console.log(`SINGLE-POS SYNC ${binancePos.symbol}: Binance qty=${absQuantity}, entry=${binanceEntryPrice}, PnL=${unrealizedPnl.toFixed(6)}`);
-            } else {
-              // Multiple slots: use per-slot qty and entry for isolated PnL
-              effectiveQty = Number(dbPos.quantity) || 0;
-              effectiveEntry = Number(dbPos.entry_price) || 0;
-              const dbSide = dbPos.side as string;
-              syncedUnrealizedPnl = dbSide === 'LONG' 
-                ? (currentPrice - effectiveEntry) * effectiveQty 
-                : (effectiveEntry - currentPrice) * effectiveQty;
-              console.log(`MULTI-POS SYNC ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): Price ${currentPrice}, P&L ${syncedUnrealizedPnl.toFixed(6)} (qty ${effectiveQty}, entry ${effectiveEntry})`);
-            }
+            const dbQty = Number(dbPos.quantity) || 0;
+            const dbEntry = Number(dbPos.entry_price) || 0;
+            const dbSide = dbPos.side as string;
+            // Calculate PnL using slot's own qty/entry but Binance's live mark price
+            const syncedUnrealizedPnl = dbSide === 'LONG' 
+              ? (currentPrice - dbEntry) * dbQty 
+              : (dbEntry - currentPrice) * dbQty;
+
+            console.log(`Updating ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): Price ${currentPrice}, P&L ${syncedUnrealizedPnl.toFixed(6)} (qty ${dbQty}, entry ${dbEntry})`);
             
             let updateData: any = {
               current_price: currentPrice,
               unrealized_pnl: syncedUnrealizedPnl,
               updated_at: new Date().toISOString(),
-              // Single position: sync qty and entry from Binance
-              ...(isSinglePosition ? {
-                quantity: effectiveQty,
-                entry_price: effectiveEntry,
-                side: side,
-              } : {}),
             };
 
             // Note: entry_price is only synced from Binance when there's a single DB position.
