@@ -273,19 +273,25 @@ serve(async (req) => {
         const matchingPositions = dbPositions?.filter(p => p.symbol === binancePos.symbol) || [];
         
         if (matchingPositions.length > 0) {
-          // BINANCE ER MASTER: Alt styres af appen, så Binance data er den absolutte sandhed.
-          // Sync quantity, entry_price og unrealized_pnl direkte fra Binance.
+          // BINANCE ER MASTER for pris og PnL, men SLOT EJER sin egen quantity og entry_price.
+          // Binances positionAmt er aggregeret på tværs af ALLE slots for samme symbol.
+          // Derfor må vi ALDRIG overskrive slot-quantity med Binances aggregerede tal.
+          // Vi syncer kun: current_price og beregner per-slot PnL fra slottets egne værdier.
           
           if (matchingPositions.length === 1) {
-            // Single position for this symbol — sync 1:1 from Binance
+            // Single position for this symbol — sync price, calculate PnL from slot's own qty
             const dbPos = matchingPositions[0];
-            console.log(`Syncing 1:1 ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): qty ${absQuantity}, entry ${binanceEntryPrice}, price ${currentPrice}, pnl ${unrealizedPnl}`);
+            const dbQty = Math.abs(Number(dbPos.quantity) || 0);
+            const dbEntry = Number(dbPos.entry_price) || 0;
+            // Calculate PnL from slot's own quantity × price delta (not Binance aggregate PnL)
+            const slotPnl = side === 'LONG'
+              ? (currentPrice - dbEntry) * dbQty
+              : (dbEntry - currentPrice) * dbQty;
+            console.log(`Syncing price-only ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): slotQty ${dbQty}, entry ${dbEntry}, price ${currentPrice}, slotPnl ${slotPnl.toFixed(6)} (Binance aggregate: qty ${absQuantity}, pnl ${unrealizedPnl})`);
             
             let updateData: any = {
               current_price: currentPrice,
-              quantity: absQuantity,
-              entry_price: binanceEntryPrice,
-              unrealized_pnl: unrealizedPnl,
+              unrealized_pnl: slotPnl,
               updated_at: new Date().toISOString(),
             };
 
@@ -321,23 +327,21 @@ serve(async (req) => {
               .eq('id', dbPos.id);
             
             if (error) console.error('Update error:', error);
-            updates.push({ symbol: binancePos.symbol, action: 'updated', id: dbPos.id, price: currentPrice, pnl: unrealizedPnl });
+            updates.push({ symbol: binancePos.symbol, action: 'updated', id: dbPos.id, price: currentPrice, pnl: slotPnl });
           } else {
-            // Multiple slots have same symbol — distribute Binance values proportionally
-            const totalDbQty = matchingPositions.reduce((sum, p) => sum + Math.abs(Number(p.quantity) || 0), 0);
+            // Multiple slots have same symbol — each slot keeps its own qty, PnL from own values
             
             for (const dbPos of matchingPositions) {
               const dbQty = Math.abs(Number(dbPos.quantity) || 0);
-              const proportion = totalDbQty > 0 ? dbQty / totalDbQty : 1 / matchingPositions.length;
-              const slotQty = absQuantity * proportion;
-              const slotPnl = unrealizedPnl * proportion;
+              const dbEntry = Number(dbPos.entry_price) || 0;
+              const slotPnl = side === 'LONG'
+                ? (currentPrice - dbEntry) * dbQty
+                : (dbEntry - currentPrice) * dbQty;
               
-              console.log(`Syncing proportional ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): ${(proportion * 100).toFixed(1)}%, qty ${slotQty}, entry ${binanceEntryPrice}, pnl ${slotPnl.toFixed(6)}`);
+              console.log(`Syncing price-only ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): slotQty ${dbQty}, entry ${dbEntry}, price ${currentPrice}, slotPnl ${slotPnl.toFixed(6)}`);
               
               let updateData: any = {
                 current_price: currentPrice,
-                quantity: slotQty,
-                entry_price: binanceEntryPrice,
                 unrealized_pnl: slotPnl,
                 updated_at: new Date().toISOString(),
               };
