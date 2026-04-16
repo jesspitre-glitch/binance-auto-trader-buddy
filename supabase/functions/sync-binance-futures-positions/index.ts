@@ -6,44 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const SLOT_QUANTITY_TOLERANCE_MULTIPLIER = 1.25;
-
-function calculateMaxExpectedSlotQuantity(params: {
-  portfolioCapital: number;
-  slotCapitalPercent: number;
-  positionSizePercent: number;
-  leverage: number;
-  entryPrice: number;
-}): number {
-  const {
-    portfolioCapital,
-    slotCapitalPercent,
-    positionSizePercent,
-    leverage,
-    entryPrice,
-  } = params;
-
-  if (
-    !Number.isFinite(portfolioCapital) ||
-    !Number.isFinite(slotCapitalPercent) ||
-    !Number.isFinite(positionSizePercent) ||
-    !Number.isFinite(leverage) ||
-    !Number.isFinite(entryPrice) ||
-    portfolioCapital <= 0 ||
-    slotCapitalPercent <= 0 ||
-    positionSizePercent <= 0 ||
-    leverage <= 0 ||
-    entryPrice <= 0
-  ) {
-    return NaN;
-  }
-
-  const slotBalance = portfolioCapital * (slotCapitalPercent / 100);
-  const marginToUse = slotBalance * (positionSizePercent / 100);
-  const positionNotional = marginToUse * leverage;
-
-  return positionNotional / entryPrice;
-}
+// Binance er master — alle handler styres af appen, ingen manuelle handler.
 
 async function createSignature(queryString: string, secret: string): Promise<string> {
   const encoder = new TextEncoder();
