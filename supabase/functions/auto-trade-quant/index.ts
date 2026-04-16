@@ -4233,6 +4233,31 @@ serve(async (req) => {
             continue;
           }
           
+          // 🛡️ GLOBAL CROSS-SLOT SYMBOL LOCK: Prevent multiple slots from opening the same symbol on Binance.
+          // Even though each slot has its own unique index, two slots processing simultaneously could
+          // both pass checks and both place orders for the same symbol, creating an oversized aggregate position.
+          const { data: crossSlotPositions } = await supabaseClient
+            .from('positions')
+            .select('id, slot_id, status, quantity')
+            .eq('user_id', session.user_id)
+            .eq('symbol', symbol)
+            .in('status', ['OPEN', 'PENDING']);
+          
+          if (crossSlotPositions && crossSlotPositions.length > 0) {
+            const otherSlotPositions = crossSlotPositions.filter(p => p.slot_id !== slotId);
+            if (otherSlotPositions.length > 0) {
+              console.log(`🛡️ GLOBAL SYMBOL LOCK: ${symbol} already OPEN/PENDING in another slot (${otherSlotPositions.map(p => p.slot_id).join(', ')})`);
+              console.log(`   ❌ Trade AFVIST — samme symbol kan kun være åben i ét slot ad gangen`);
+              continue;
+            }
+            // Same slot already has it - the unique index will catch this, but check early
+            const sameSlotPositions = crossSlotPositions.filter(p => p.slot_id === slotId);
+            if (sameSlotPositions.length > 0) {
+              console.log(`🛡️ SLOT SYMBOL LOCK: ${symbol} already OPEN/PENDING in this slot ${slotName}`);
+              continue;
+            }
+          }
+
           // 🛡️ PRE-TRADE INTENT LOCK: Insert a PENDING position BEFORE placing the Binance order.
           // The unique partial index (user_id, slot_id, symbol) WHERE status IN ('OPEN','PENDING')
           // will reject duplicates at the database level — impossible to bypass.
