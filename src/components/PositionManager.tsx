@@ -182,17 +182,20 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
           ) : (
             <div className="space-y-3 md:space-y-4">
               {positions.map((position) => {
-                // Live price and PnL calculation — always prefer live mark price from Binance WS
+                // Live price and PnL calculation — prefer Binance WS mark price, fallback to DB synced
                 const livePrice = livePrices[position.symbol] ?? position.current_price ?? position.entry_price;
-                const pnlLiveBase = position.side === "LONG"
-                  ? (livePrice - position.entry_price) * position.quantity
-                  : (position.entry_price - livePrice) * position.quantity;
-                // Use live calculation as primary (matches Binance mark price 1:1)
-                // Only fall back to DB synced value when no live price available
+                // Use DB-synced unrealized_pnl from Binance as base, adjust with live price delta
                 const hasLivePrice = !!livePrices[position.symbol];
-                const pnl = hasLivePrice && Number.isFinite(pnlLiveBase)
-                  ? pnlLiveBase
-                  : (Number.isFinite(Number(position.unrealized_pnl)) ? Number(position.unrealized_pnl) : (Number.isFinite(pnlLiveBase) ? pnlLiveBase : 0));
+                const dbPnl = Number.isFinite(Number(position.unrealized_pnl)) ? Number(position.unrealized_pnl) : 0;
+                let pnl: number;
+                if (hasLivePrice && position.current_price) {
+                  // Adjust DB PnL by the price difference since last sync
+                  const priceDelta = livePrice - Number(position.current_price);
+                  const qtyAdjustment = position.side === "LONG" ? priceDelta * position.quantity : -priceDelta * position.quantity;
+                  pnl = dbPnl + qtyAdjustment;
+                } else {
+                  pnl = dbPnl;
+                }
                 const isProfitable = pnl >= 0;
                 
                 // Live peak price calculation
