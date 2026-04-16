@@ -279,26 +279,27 @@ serve(async (req) => {
           // Vi syncer kun: current_price og beregner per-slot PnL fra slottets egne værdier.
           
           if (matchingPositions.length === 1) {
-            // Single DB position for this symbol = this row must mirror Binance 1:1.
-            // If Binance has more size than DB, that means the account-level position has
-            // drifted away from our local decomposition. In that case Binance must win.
+            // Én DB-række betyder IKKE at Binance aggregate qty må overtage row'en.
+            // Appen ejer alle handler, og auto-trade gemmer bevidst slot/order-qty.
+            // Hvis vi overskriver med Binance positionAmt, pustes positionen kunstigt op.
             const dbPos = matchingPositions[0];
             const dbQty = Math.abs(Number(dbPos.quantity) || 0);
             const dbEntry = Number(dbPos.entry_price) || 0;
+            const slotPnl = side === 'LONG'
+              ? (currentPrice - dbEntry) * dbQty
+              : (dbEntry - currentPrice) * dbQty;
             const qtyDrift = Math.abs(absQuantity - dbQty);
             const entryDrift = Math.abs(binanceEntryPrice - dbEntry);
 
             console.log(
-              `Syncing single-source ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): ` +
+              `Syncing single-row price-only ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): ` +
               `dbQty ${dbQty}, binanceQty ${absQuantity}, dbEntry ${dbEntry}, binanceEntry ${binanceEntryPrice}, ` +
-              `price ${currentPrice}, binancePnl ${unrealizedPnl}, qtyDrift ${qtyDrift.toFixed(8)}, entryDrift ${entryDrift.toFixed(8)}`
+              `price ${currentPrice}, slotPnl ${slotPnl.toFixed(8)}, qtyDrift ${qtyDrift.toFixed(8)}, entryDrift ${entryDrift.toFixed(8)}`
             );
             
             let updateData: any = {
-              entry_price: binanceEntryPrice,
-              quantity: absQuantity,
               current_price: currentPrice,
-              unrealized_pnl: unrealizedPnl,
+              unrealized_pnl: slotPnl,
               updated_at: new Date().toISOString(),
             };
 
@@ -339,9 +340,9 @@ serve(async (req) => {
               action: 'updated',
               id: dbPos.id,
               price: currentPrice,
-              pnl: unrealizedPnl,
-              quantity: absQuantity,
-              entry_price: binanceEntryPrice,
+              pnl: slotPnl,
+              quantity: dbQty,
+              entry_price: dbEntry,
             });
           } else {
             // Multiple slots have same symbol — each slot keeps its own qty, PnL from own values
