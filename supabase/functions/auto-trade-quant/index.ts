@@ -3028,6 +3028,13 @@ serve(async (req) => {
       });
     }
 
+    // 🧹 Clean up stale PENDING positions (older than 60s) — these are leftover from crashed runs
+    await supabaseClient
+      .from('positions')
+      .delete()
+      .eq('status', 'PENDING')
+      .lt('opened_at', new Date(Date.now() - 60000).toISOString());
+
     // Get active trading sessions
     const { data: sessions, error: sessionsError } = await supabaseClient
       .from('trading_session')
@@ -3943,9 +3950,9 @@ serve(async (req) => {
           // and must not block active slots from opening new positions
           let posCountQuery = supabaseClient
             .from('positions')
-            .select('id, symbol, slot_id')
+            .select('id, symbol, slot_id, status')
             .eq('user_id', session.user_id)
-            .eq('status', 'OPEN');
+            .in('status', ['OPEN', 'PENDING']);
           if (slotId) {
             posCountQuery = posCountQuery.eq('slot_id', slotId);
           }
@@ -4188,6 +4195,39 @@ serve(async (req) => {
             continue;
           }
           
+          // 🛡️ PRE-TRADE INTENT LOCK: Insert a PENDING position BEFORE placing the Binance order.
+          // The unique partial index (user_id, slot_id, symbol) WHERE status IN ('OPEN','PENDING')
+          // will reject duplicates at the database level — impossible to bypass.
+          const pendingInsertData: any = {
+            user_id: session.user_id,
+            symbol,
+            side: signal,
+            entry_price: analysis.indicators.price,
+            quantity: quantityRounded,
+            stop_loss: analysis.stopLoss,
+            status: 'PENDING',
+            opened_at: new Date().toISOString(),
+          };
+          if (slotId) {
+            pendingInsertData.slot_id = slotId;
+          }
+
+          const { data: pendingPosition, error: pendingError } = await supabaseClient
+            .from('positions')
+            .insert(pendingInsertData)
+            .select('id')
+            .single();
+
+          if (pendingError) {
+            // Unique constraint violation = another scan already claimed this symbol
+            console.log(`🛡️ INTENT LOCK BLOCKED: ${symbol} for slot ${slotName} — already OPEN or PENDING`);
+            console.log(`   DB error: ${pendingError.message}`);
+            continue;
+          }
+
+          const pendingPositionId = pendingPosition.id;
+          console.log(`🔒 INTENT LOCK ACQUIRED: ${symbol} (pending ID: ${pendingPositionId})`);
+
           // Place order
           const side = signal === 'LONG' ? 'BUY' : 'SELL';
           console.log(`\n🚀 PLACING ORDER on ${symbol}:`);
@@ -4214,6 +4254,12 @@ serve(async (req) => {
           } catch (orderError: any) {
             console.error(`❌ ORDER PLACEMENT FAILED for ${symbol}:`, orderError.message);
             console.error(`   Full error:`, orderError);
+            // Release the intent lock
+            await supabaseClient
+              .from('positions')
+              .delete()
+              .eq('id', pendingPositionId);
+            console.log(`🔓 INTENT LOCK RELEASED: ${symbol} (order failed)`);
             continue;
           }
           
@@ -5205,15 +5251,13 @@ serve(async (req) => {
             }
           }
 
-          // Save position to database with verified Binance data and indicators
-          const positionInsertData: any = {
-              user_id: session.user_id,
-              symbol,
+          // Promote PENDING position to OPEN with verified Binance data
+          const positionUpdateData: any = {
               side: signal,
               entry_price: actualEntryPrice,
               quantity: actualQuantity,
               stop_loss: finalStopLoss,
-              take_profit: null, // TP er fjernet, vi bruger kun trailing stop
+              take_profit: null,
               trailing_stop: parseFloat(initialTrailingStop.toFixed(8)),
               current_price: actualEntryPrice,
               peak_price: actualEntryPrice,
@@ -5225,19 +5269,18 @@ serve(async (req) => {
               opened_at: openedAtNow.toISOString(),
               indicators_snapshot: { ...comprehensiveSnapshot, slot_id: slotId, slot_name: slotName },
           };
-          if (slotId) {
-            positionInsertData.slot_id = slotId;
-          }
 
           const { data: insertedPosition, error: insertError } = await supabaseClient
             .from('positions')
-            .insert(positionInsertData)
+            .update(positionUpdateData)
+            .eq('id', pendingPositionId)
             .select()
             .single();
 
           if (insertError) {
-            console.error(`❌ DATABASE INSERT FAILED for ${symbol}:`, insertError);
-            console.error(`   Position exists on Binance but not in DB!`);
+            console.error(`❌ DATABASE UPDATE FAILED for ${symbol}:`, insertError);
+            console.error(`   Pending position ID: ${pendingPositionId}`);
+            console.error(`   Position exists on Binance but not properly in DB!`);
             console.error(`   Order ID: ${orderData.orderId}`);
             console.error(`   Manual sync required`);
             continue;
