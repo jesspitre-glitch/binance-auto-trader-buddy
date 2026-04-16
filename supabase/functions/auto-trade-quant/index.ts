@@ -3943,9 +3943,9 @@ serve(async (req) => {
           // and must not block active slots from opening new positions
           let posCountQuery = supabaseClient
             .from('positions')
-            .select('id, symbol, slot_id')
+            .select('id, symbol, slot_id, status')
             .eq('user_id', session.user_id)
-            .eq('status', 'OPEN');
+            .in('status', ['OPEN', 'PENDING']);
           if (slotId) {
             posCountQuery = posCountQuery.eq('slot_id', slotId);
           }
