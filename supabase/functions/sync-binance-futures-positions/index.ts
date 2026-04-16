@@ -348,10 +348,9 @@ serve(async (req) => {
               } : {}),
             };
 
-            // IMPORTANT: Never overwrite entry_price for existing DB positions.
-            // Binance positionRisk.entryPrice is aggregated per symbol and can corrupt
-            // per-slot P&L when multiple slots trade the same symbol.
-            
+            // Note: entry_price is only synced from Binance when there's a single DB position.
+            // With multiple slots, each keeps its own entry_price for isolated P&L.
+
             // If missing indicators_snapshot, try to find a recent bot signal
             if (!dbPos.indicators_snapshot) {
               const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
