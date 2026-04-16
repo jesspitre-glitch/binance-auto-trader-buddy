@@ -4188,6 +4188,39 @@ serve(async (req) => {
             continue;
           }
           
+          // 🛡️ PRE-TRADE INTENT LOCK: Insert a PENDING position BEFORE placing the Binance order.
+          // The unique partial index (user_id, slot_id, symbol) WHERE status IN ('OPEN','PENDING')
+          // will reject duplicates at the database level — impossible to bypass.
+          const pendingInsertData: any = {
+            user_id: session.user_id,
+            symbol,
+            side: signal,
+            entry_price: analysis.indicators.price,
+            quantity: quantityRounded,
+            stop_loss: analysis.stopLoss,
+            status: 'PENDING',
+            opened_at: new Date().toISOString(),
+          };
+          if (slotId) {
+            pendingInsertData.slot_id = slotId;
+          }
+
+          const { data: pendingPosition, error: pendingError } = await supabaseClient
+            .from('positions')
+            .insert(pendingInsertData)
+            .select('id')
+            .single();
+
+          if (pendingError) {
+            // Unique constraint violation = another scan already claimed this symbol
+            console.log(`🛡️ INTENT LOCK BLOCKED: ${symbol} for slot ${slotName} — already OPEN or PENDING`);
+            console.log(`   DB error: ${pendingError.message}`);
+            continue;
+          }
+
+          const pendingPositionId = pendingPosition.id;
+          console.log(`🔒 INTENT LOCK ACQUIRED: ${symbol} (pending ID: ${pendingPositionId})`);
+
           // Place order
           const side = signal === 'LONG' ? 'BUY' : 'SELL';
           console.log(`\n🚀 PLACING ORDER on ${symbol}:`);
@@ -4214,6 +4247,12 @@ serve(async (req) => {
           } catch (orderError: any) {
             console.error(`❌ ORDER PLACEMENT FAILED for ${symbol}:`, orderError.message);
             console.error(`   Full error:`, orderError);
+            // Release the intent lock
+            await supabaseClient
+              .from('positions')
+              .delete()
+              .eq('id', pendingPositionId);
+            console.log(`🔓 INTENT LOCK RELEASED: ${symbol} (order failed)`);
             continue;
           }
           
