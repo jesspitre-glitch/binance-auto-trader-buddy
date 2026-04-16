@@ -3028,6 +3028,13 @@ serve(async (req) => {
       });
     }
 
+    // 🧹 Clean up stale PENDING positions (older than 60s) — these are leftover from crashed runs
+    await supabaseClient
+      .from('positions')
+      .delete()
+      .eq('status', 'PENDING')
+      .lt('opened_at', new Date(Date.now() - 60000).toISOString());
+
     // Get active trading sessions
     const { data: sessions, error: sessionsError } = await supabaseClient
       .from('trading_session')
