@@ -1073,6 +1073,7 @@ export type Database = {
           active_config_id: string | null
           id: string
           is_active: boolean | null
+          master_scan_slot_id: string | null
           started_at: string | null
           updated_at: string | null
           user_id: string
@@ -1081,6 +1082,7 @@ export type Database = {
           active_config_id?: string | null
           id?: string
           is_active?: boolean | null
+          master_scan_slot_id?: string | null
           started_at?: string | null
           updated_at?: string | null
           user_id: string
@@ -1089,6 +1091,7 @@ export type Database = {
           active_config_id?: string | null
           id?: string
           is_active?: boolean | null
+          master_scan_slot_id?: string | null
           started_at?: string | null
           updated_at?: string | null
           user_id?: string
@@ -1099,6 +1102,13 @@ export type Database = {
             columns: ["active_config_id"]
             isOneToOne: false
             referencedRelation: "indicator_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trading_session_master_scan_slot_id_fkey"
+            columns: ["master_scan_slot_id"]
+            isOneToOne: false
+            referencedRelation: "strategy_slots"
             referencedColumns: ["id"]
           },
         ]

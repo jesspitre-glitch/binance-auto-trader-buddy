@@ -3117,6 +3117,31 @@ serve(async (req) => {
 
       if (slotIterations.length === 0) continue;
 
+      // ═══════════════════════════════════════════════════════════════════
+      // 🎯 MASTER SCAN SLOT — drives global symbol pool for fair A/B testing
+      // If session.master_scan_slot_id is set, that slot runs FIRST and its
+      // qualified top-N signals become the candidate pool. All OTHER slots
+      // then evaluate ONLY those symbols (against their own filters), so every
+      // slot tests the SAME trades. This makes strategy comparison meaningful.
+      // ═══════════════════════════════════════════════════════════════════
+      const masterScanSlotId: string | null = (session as any).master_scan_slot_id ?? null;
+      if (masterScanSlotId) {
+        const masterIdx = slotIterations.findIndex(s => s.slotId === masterScanSlotId);
+        if (masterIdx > 0) {
+          const [master] = slotIterations.splice(masterIdx, 1);
+          slotIterations.unshift(master);
+          console.log(`🎯 MASTER SCAN: slot "${master.slotName}" (${master.slotId}) moved to front to drive candidate pool`);
+        } else if (masterIdx === 0) {
+          console.log(`🎯 MASTER SCAN: slot "${slotIterations[0].slotName}" already first — drives candidate pool`);
+        } else {
+          console.warn(`⚠️ MASTER SCAN: configured slot ${masterScanSlotId} not active/found — falling back to per-slot independent scans`);
+        }
+      }
+      // Candidate symbols built by master slot (symbol → side). Empty until master runs.
+      // When set, downstream slots restrict their scan to just these symbols.
+      let masterCandidateSymbols: Set<string> | null = masterScanSlotId ? new Set<string>() : null;
+      const MASTER_TOP_N = 10; // top-N qualified signals from master define the pool
+
       // Reset klines cache for this scan cycle - all slots share same cached klines
       klinesCache = new KlinesCache();
       console.log(`🗄️ Klines cache initialized for ${slotIterations.length} slot(s)`);
@@ -3227,8 +3252,19 @@ serve(async (req) => {
 
       // Analyze all USDC perpetual futures pairs
       const symbolFilters = await fetchSymbolFilters();
-      const symbols = await fetchAllUSDCSymbols();
-      console.log(`🔍 Scanning ${symbols.length} USDC pairs for user ${session.user_id}`);
+      let symbols = await fetchAllUSDCSymbols();
+      // 🎯 MASTER SCAN POOL: non-master slots only evaluate symbols the master qualified
+      const isMasterSlot = masterScanSlotId !== null && slotId === masterScanSlotId;
+      if (masterCandidateSymbols && !isMasterSlot) {
+        if (masterCandidateSymbols.size === 0) {
+          console.log(`⏭️ Slot "${slotName}": master scan produced 0 candidates this cycle — skipping`);
+          continue;
+        }
+        symbols = symbols.filter(s => masterCandidateSymbols!.has(s));
+        console.log(`🎯 Slot "${slotName}": restricted to ${symbols.length} master-candidate symbol(s): ${symbols.join(', ')}`);
+      } else {
+        console.log(`🔍 Scanning ${symbols.length} USDC pairs for user ${session.user_id}${isMasterSlot ? ' [MASTER SCAN]' : ''}`);
+      }
       
       // 📊 STEP 1: Collect all valid signals with their strength
       interface SignalCandidate {
@@ -3559,6 +3595,16 @@ serve(async (req) => {
         const filterStatus = sig.hardFiltersPassed ? '✅' : '❌';
         console.log(`   ${idx + 1}. ${sig.symbol} ${sig.signal} [${filterStatus}] - Styrke: ${sig.strength.toFixed(1)}`);
       });
+
+      // 🎯 MASTER SCAN: if this is the master slot, populate the candidate pool
+      // with the top-N qualified signals so subsequent slots evaluate the same symbols.
+      if (isMasterSlot && masterCandidateSymbols) {
+        const qualified = validSignals
+          .filter(s => s.hardFiltersPassed && s.signal !== 'NONE')
+          .slice(0, MASTER_TOP_N);
+        for (const c of qualified) masterCandidateSymbols.add(c.symbol);
+        console.log(`🎯 MASTER POOL: ${qualified.length} qualified candidate(s) for downstream slots: ${qualified.map(c => `${c.symbol}(${c.signal})`).join(', ')}`);
+      }
       
       // 🎯 STEP 3: Calculate how many positions we can open
       const slotsAvailable = config.max_open_positions - (positions?.length || 0);
@@ -5477,7 +5523,10 @@ serve(async (req) => {
           positionOpenedForSlot = true;
           slotSummary.positionOpened = true;
           slotSummary.openedSymbol = symbol;
-          break;
+          // 🎯 NO BREAK: continue trying remaining eligible signals so this slot opens
+          // ALL master-pool candidates it qualifies (up to its own max_open_positions —
+          // enforced by the per-iteration max_open_positions guard earlier in this loop).
+          continue;
             
         } catch (error: any) {
           console.error(`\n❌❌❌ CRITICAL ERROR in order placement for ${symbol}:`);
