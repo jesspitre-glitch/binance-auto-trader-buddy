@@ -235,9 +235,9 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { symbol } = await req.json();
-    if (!symbol) {
-      return new Response(JSON.stringify({ error: 'Missing symbol' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    const { symbol, positionId } = await req.json();
+    if (!symbol && !positionId) {
+      return new Response(JSON.stringify({ error: 'Missing symbol or positionId' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const apiKey = Deno.env.get('BINANCE_API_KEY');
@@ -246,18 +246,30 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Binance API keys not configured' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // 1) Read the latest OPEN position for this symbol
-    const { data: openPositions } = await supabaseClient
+    // 1) Resolve DB position context
+    let positionQuery = supabaseClient
       .from('positions')
       .select('*')
-      .eq('symbol', symbol)
       .eq('status', 'OPEN')
-      .order('opened_at', { ascending: false })
-      .limit(1);
+      .order('opened_at', { ascending: false });
+
+    if (positionId) {
+      positionQuery = positionQuery.eq('id', positionId).limit(1);
+    } else {
+      positionQuery = positionQuery.eq('symbol', symbol).limit(1);
+    }
+
+    const { data: openPositions } = await positionQuery;
     const position = openPositions?.[0];
+    const resolvedSymbol = symbol || position?.symbol;
+
+    if (!resolvedSymbol) {
+      return new Response(JSON.stringify({ error: 'Could not resolve symbol to close' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     // 2) Close position on Binance
-    const closeRes = await closeOnBinance(symbol, apiKey, apiSecret, Number(position?.quantity) || undefined);
+    const requestedQty = positionId ? (Number(position?.quantity) || undefined) : undefined;
+    const closeRes = await closeOnBinance(resolvedSymbol, apiKey, apiSecret, requestedQty);
     const order = (closeRes as any).order ?? {};
 
     // 3) Resolve exit price from order response or fallback
@@ -339,6 +351,8 @@ serve(async (req) => {
         strategy_hash: position.strategy_hash,
         open_reason: position.open_reason,
         close_reason: 'MANUAL',
+        slot_id: position.slot_id,
+        indicators_snapshot: position.indicators_snapshot,
         entry_fee: 0,
         exit_fee: 0,
         total_fee: totalFee,

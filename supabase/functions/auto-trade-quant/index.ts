@@ -3622,7 +3622,6 @@ serve(async (req) => {
       console.log(`\n🎯 Ledige positioner: ${slotsAvailable}/${config.max_open_positions}`);
       
       // 📈 STEP 4: Tag top 3x slots, filtrer for hårde filtre + MACD retning
-      // 🛡️ RACE CONDITION FIX: Kun behandl ÉT signal per scan-cyklus for at undgå race conditions
       const topCandidates = validSignals.slice(0, Math.min(slotsAvailable * 3, validSignals.length));
       
       // 🕐 SIGNAL TIMING GATE: Hvis CANDLE_CLOSE mode, bloker signaler medmindre candle er lukket
@@ -3630,24 +3629,12 @@ serve(async (req) => {
       let candleCloseGatedSignals: typeof topCandidates = [];
       
       if (signalTimingMode === 'CANDLE_CLOSE') {
-        // I CANDLE_CLOSE mode: 
-        // 1. Signal kvalificeres KUN hvis forrige candle (den vi analyserer) er lukket
-        // 2. Entry må KUN ske i candle N+1 (dvs. vi skal være i starten af en NY candle)
-        // 
-        // Eksempel (15m timeframe):
-        // - Candle N: 10:00-10:15, lukker kl 10:15:00
-        // - Hvis scanneren kører kl 10:15:01, er vi stadig i "slutningen" af candle N's data
-        //   men vi er TEKNISK i candle N+1 (10:15-10:30)
-        // - Vi tjekker is_new_candle_start for at sikre vi er inde i candle N+1
-        
         const filteredByCandleClose = topCandidates.filter(s => {
           const candleAudit = s.analysis?.indicators?.volume_candle_audit ?? s.analysis?.indicators?.volumeCandleAudit;
           const isClosed = candleAudit?.is_closed === true;
           const isNewCandleStart = candleAudit?.is_new_candle_start === true;
           const msIntoCurrent = candleAudit?.ms_into_current_candle;
           
-          // For CANDLE_CLOSE mode: Candle skal være lukket OG vi skal være i en ny candle
-          // is_new_candle_start sikrer at vi er i de første minutter af candle N+1
           if (!isClosed) {
             console.log(`🕐 CANDLE_CLOSE_GATE: ${s.symbol} ${s.signal} BLOKERET - candle ikke lukket endnu`);
             return false;
@@ -3665,13 +3652,12 @@ serve(async (req) => {
         candleCloseGatedSignals = filteredByCandleClose;
         console.log(`\n🕐 SIGNAL_TIMING=CANDLE_CLOSE: ${filteredByCandleClose.length}/${topCandidates.length} signaler kvalificeret (candle lukket + ny candle start)`);
       } else {
-        // LIVE mode: Alle signaler er gyldige (nuværende adfærd)
         candleCloseGatedSignals = topCandidates;
         console.log(`\n⚡ SIGNAL_TIMING=LIVE: Intra-candle signaler tilladt`);
       }
       
       const eligibleSignals = candleCloseGatedSignals
-        .filter(s => s.hardFiltersPassed && s.signal !== 'NONE'); // KRITISK: Bloker NONE signaler (MACD retningsfilter)
+        .filter(s => s.hardFiltersPassed && s.signal !== 'NONE');
       
       // 🚨 LOG ALLE SIGNALS DER BLOKERES AF HÅRDE FILTRE
       const hardFilterBlockedSignals = topCandidates.filter(s => !s.hardFiltersPassed && s.signal !== 'NONE');
@@ -3693,7 +3679,6 @@ serve(async (req) => {
           const fs = sig.analysis.filterStatus;
           const ind = sig.analysis.indicators;
           
-          // Tæl rejection reasons
           if (fs?.hard?.stochrsi?.short !== true && config.stochrsi_hard_filter) {
             rejectionReasons['stochrsi_hard=false'] = (rejectionReasons['stochrsi_hard=false'] || 0) + 1;
           }
@@ -3714,7 +3699,6 @@ serve(async (req) => {
           }
         }
         
-        // Log top 3 blockers
         const sortedReasons = Object.entries(rejectionReasons)
           .sort((a, b) => b[1] - a[1])
           .slice(0, 3);
@@ -3722,17 +3706,16 @@ serve(async (req) => {
           console.log(`   ${reason}: ${count} symboler blokeret`);
         }
       }
-      
-      // 🛡️ KRITISK: Forsøg eligible signaler i styrke-rækkefølge, men stop efter FØRSTE succes.
-      // Det bevarer max 1 ny position per scan-cyklus og giver fallback hvis topsignalet
-      // senere bliver blokeret af unified gate, max positions, sizing eller margin guards.
-      const signalsToTrade = eligibleSignals;
+
+      const sharedMasterSymbols = masterCandidateSymbols ? new Set(masterCandidateSymbols) : null;
+      const signalsToTrade = isMasterSlot && sharedMasterSymbols
+        ? eligibleSignals.filter(s => sharedMasterSymbols.has(s.symbol)).slice(0, MASTER_TOP_N)
+        : eligibleSignals;
       
       // 📊 Populate slot summary with scan results
       slotSummary.symbolsScanned = validSignals.length;
       slotSummary.signalsDetected = validSignals.filter(s => s.signal !== 'NONE').length;
-      slotSummary.signalsPassed = eligibleSignals.length;
-      // Track top blocker reasons
+      slotSummary.signalsPassed = signalsToTrade.length;
       for (const sig of validSignals) {
         if (sig.signal === 'NONE' || !sig.hardFiltersPassed) {
           const fs = sig.analysis?.filterStatus?.hard || {};
@@ -3748,7 +3731,8 @@ serve(async (req) => {
       }
       
       console.log(`\n📊 Efter hård filtrering: ${eligibleSignals.length}/${topCandidates.length} top signaler passerede hårde filtre`);
-      console.log(`🛡️ RACE CONDITION GUARD: Forsøger eligible signaler sekventielt og stopper efter første åbne position (${signalsToTrade.length} eligible)`);
+      console.log(`🎯 DELT SYMBOLSÆT: ${signalsToTrade.map(s => `${s.symbol}(${s.signal})`).join(', ') || 'ingen'}`);
+      console.log(`🛡️ EN POSITION PR SLOT PR CYKLUS: Forsøger eligible signaler sekventielt og stopper efter første åbne position (${signalsToTrade.length} eligible)`);
       
       if (signalsToTrade.length === 0) {
         console.log(`⚠️ Ingen signaler at handle eller ingen ledige positioner`);
@@ -5541,10 +5525,10 @@ serve(async (req) => {
           positionOpenedForSlot = true;
           slotSummary.positionOpened = true;
           slotSummary.openedSymbol = symbol;
-          // 🎯 NO BREAK: continue trying remaining eligible signals so this slot opens
-          // ALL master-pool candidates it qualifies (up to its own max_open_positions —
-          // enforced by the per-iteration max_open_positions guard earlier in this loop).
-          continue;
+          // 🎯 STRICT FAIRNESS: exactly one symbol may be opened per slot per cycle.
+          // The master slot defines the shared symbol set, and every slot either opens
+          // that same candidate (if qualified) or nothing in this cycle.
+          break;
             
         } catch (error: any) {
           console.error(`\n❌❌❌ CRITICAL ERROR in order placement for ${symbol}:`);
