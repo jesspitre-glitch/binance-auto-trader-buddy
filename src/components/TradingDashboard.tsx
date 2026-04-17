@@ -34,6 +34,7 @@ export const TradingDashboard = () => {
   const [activeConfigId, setActiveConfigId] = useState<string | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [masterScanSlotId, setMasterScanSlotId] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Get the selected slot's config for the Config tab
