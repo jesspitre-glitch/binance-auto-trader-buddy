@@ -269,7 +269,7 @@ export const TradingDashboard = () => {
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">Strategy Slots</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <SlotSelector
             slots={slots}
             selectedSlotId={selectedSlotId}
@@ -277,6 +277,56 @@ export const TradingDashboard = () => {
             configs={configs.map((c) => ({ id: c.id, name: c.name }))}
             onSlotsChanged={fetchSlotsAndConfigs}
           />
+
+          {/* Master Scan Slot — drives the global symbol scan; all other active
+              slots evaluate the resulting candidate symbols against their own filters
+              so every slot tests the SAME trades for fair A/B comparison. */}
+          {slots.length > 0 && (
+            <div className="border-t pt-4">
+              <Label className="text-sm font-medium">Master Scan Slot</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Dette slot scanner markedet og bestemmer hvilke symboler alle aktive slots evaluerer i hver cyklus.
+                Hvert slot åbner kun de kandidater det selv kvalificerer (op til sit eget max_open_positions).
+              </p>
+              <Select
+                value={masterScanSlotId ?? "none"}
+                onValueChange={async (v) => {
+                  const newVal = v === "none" ? null : v;
+                  setMasterScanSlotId(newVal);
+                  try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (!user) return;
+                    await supabase
+                      .from("trading_session")
+                      .upsert(
+                        { user_id: user.id, master_scan_slot_id: newVal, active_config_id: activeConfigId },
+                        { onConflict: 'user_id' }
+                      );
+                    toast({
+                      title: "Master scan slot opdateret",
+                      description: newVal
+                        ? `Slot "${slots.find(s => s.id === newVal)?.name}" driver nu det globale scan.`
+                        : "Master scan deaktiveret — hvert slot scanner uafhængigt (gammel adfærd).",
+                    });
+                  } catch (err: any) {
+                    toast({ title: "Fejl", description: err.message, variant: "destructive" });
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Vælg master scan slot" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Ingen — hvert slot scanner uafhængigt</SelectItem>
+                  {slots.filter(s => s.is_active).map((slot) => (
+                    <SelectItem key={slot.id} value={slot.id}>
+                      {slot.name} {slot.is_active ? "" : "(Inaktiv)"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </CardContent>
       </Card>
 
