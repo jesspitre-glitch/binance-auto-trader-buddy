@@ -3147,10 +3147,11 @@ serve(async (req) => {
         console.log(`🎯 MASTER SCAN: no persisted master slot set — defaulting to first active slot "${slotIterations[0].slotName}" (${slotIterations[0].slotId})`);
       }
 
-      // Candidate symbols built by master slot (symbol → side). Empty until master runs.
-      // When set, downstream slots restrict their scan to just these symbols.
+      // Candidate symbols built by master slot. Downstream slots must evaluate the SAME
+      // symbol set for fair strategy comparison, so we intentionally share only the single
+      // best master candidate per cycle.
       let masterCandidateSymbols: Set<string> | null = effectiveMasterScanSlotId ? new Set<string>() : null;
-      const MASTER_TOP_N = 10; // top-N qualified signals from master define the pool
+      const MASTER_TOP_N = 1;
 
       // Reset klines cache for this scan cycle - all slots share same cached klines
       klinesCache = new KlinesCache();
@@ -3754,7 +3755,7 @@ serve(async (req) => {
         continue;
       }
       
-      console.log(`\n📈 Forsøger signaler i prioriteret rækkefølge indtil én position åbnes:`);
+      console.log(`\n📈 Forsøger signaler i prioriteret rækkefølge for delt master-pool:`);
       let positionOpenedForSlot = false;
       let attemptedEligibleSignals = 0;
       
@@ -5389,15 +5390,22 @@ serve(async (req) => {
           openedAtMinute.setSeconds(0, 0); // Afrund til nærmeste minut
           
           // Tjek for eksisterende position med samme nøgle (inden for samme minut)
-          const { data: existingDuplicate } = await supabaseClient
+          let duplicateQuery = supabaseClient
             .from('positions')
             .select('id, symbol, side, entry_price, opened_at')
             .eq('user_id', session.user_id)
             .eq('symbol', symbol)
             .eq('side', signal)
             .gte('opened_at', openedAtMinute.toISOString())
-            .lt('opened_at', new Date(openedAtMinute.getTime() + 60000).toISOString())
-            .maybeSingle();
+            .lt('opened_at', new Date(openedAtMinute.getTime() + 60000).toISOString());
+
+          if (slotId) {
+            duplicateQuery = duplicateQuery.eq('slot_id', slotId);
+          } else {
+            duplicateQuery = duplicateQuery.is('slot_id', null);
+          }
+
+          const { data: existingDuplicate } = await duplicateQuery.maybeSingle();
           
           if (existingDuplicate) {
             // Tjek også entry_price (inden for 0.1% tolerance)
