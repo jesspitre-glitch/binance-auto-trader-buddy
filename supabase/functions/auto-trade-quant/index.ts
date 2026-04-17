@@ -3595,6 +3595,16 @@ serve(async (req) => {
         const filterStatus = sig.hardFiltersPassed ? '✅' : '❌';
         console.log(`   ${idx + 1}. ${sig.symbol} ${sig.signal} [${filterStatus}] - Styrke: ${sig.strength.toFixed(1)}`);
       });
+
+      // 🎯 MASTER SCAN: if this is the master slot, populate the candidate pool
+      // with the top-N qualified signals so subsequent slots evaluate the same symbols.
+      if (isMasterSlot && masterCandidateSymbols) {
+        const qualified = validSignals
+          .filter(s => s.hardFiltersPassed && s.signal !== 'NONE')
+          .slice(0, MASTER_TOP_N);
+        for (const c of qualified) masterCandidateSymbols.add(c.symbol);
+        console.log(`🎯 MASTER POOL: ${qualified.length} qualified candidate(s) for downstream slots: ${qualified.map(c => `${c.symbol}(${c.signal})`).join(', ')}`);
+      }
       
       // 🎯 STEP 3: Calculate how many positions we can open
       const slotsAvailable = config.max_open_positions - (positions?.length || 0);
