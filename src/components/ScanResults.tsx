@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Search, TrendingUp, TrendingDown, RefreshCw, Activity } from "lucide-react";
+import { Loader2, Search, TrendingUp, TrendingDown, RefreshCw, Activity, GitCompare } from "lucide-react";
 import { ScanResultVisual } from "./ScanResultVisual";
 import { LiveScanMonitor } from "./LiveScanMonitor";
 import { RegimeIndicator } from "./RegimeIndicator";
+import { SignalTransparencyDialog } from "./SignalTransparencyDialog";
 
 interface ScanResultsProps {
   slotId?: string | null;
