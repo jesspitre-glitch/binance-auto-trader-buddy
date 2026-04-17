@@ -5523,7 +5523,10 @@ serve(async (req) => {
           positionOpenedForSlot = true;
           slotSummary.positionOpened = true;
           slotSummary.openedSymbol = symbol;
-          break;
+          // 🎯 NO BREAK: continue trying remaining eligible signals so this slot opens
+          // ALL master-pool candidates it qualifies (up to its own max_open_positions —
+          // enforced by the per-iteration max_open_positions guard earlier in this loop).
+          continue;
             
         } catch (error: any) {
           console.error(`\n❌❌❌ CRITICAL ERROR in order placement for ${symbol}:`);
