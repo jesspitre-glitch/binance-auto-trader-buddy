@@ -3051,6 +3051,9 @@ serve(async (req) => {
     const results = [];
 
     for (const session of sessions) {
+      // 🔍 SIGNAL TRANSPARENCY: One scan-cycle UUID groups all per-slot evaluations for this user run
+      const scanCycleId = crypto.randomUUID();
+
       // ═══════════════════════════════════════════════════════════════════
       // STRATEGY SLOTS: Fetch active slots for this user
       // If slots exist, iterate per-slot with slot-specific config & capital
@@ -3412,6 +3415,48 @@ serve(async (req) => {
             take_profit: analysis.takeProfit,
             action_taken: actionTaken,
           });
+
+          // 🔍 SIGNAL TRANSPARENCY: log this slot's decision for this symbol in this scan cycle
+          // Initial state — may be updated later if position opens or post-signal block triggers
+          let slotEvalQualified = filteredSignal !== 'NONE';
+          let slotEvalReason: string | null = null;
+          let slotEvalAction: string = actionTaken;
+          if (!slotEvalQualified) {
+            slotEvalReason = primaryBlocker === 'NONE' ? 'No signal generated' : `Hard filter: ${primaryBlocker}`;
+          }
+          const { data: insertedEval } = await supabaseClient
+            .from('slot_signal_evaluations')
+            .insert({
+              user_id: session.user_id,
+              slot_id: slotId,
+              scan_cycle_id: scanCycleId,
+              symbol,
+              signal: filteredSignal,
+              qualified: slotEvalQualified,
+              action_taken: slotEvalAction,
+              block_reason: slotEvalReason,
+              indicators_summary: {
+                price: analysis.indicators.price,
+                rsi: analysis.indicators.rsi,
+                adx: analysis.indicators.adx,
+                trend,
+                higherTrend,
+                slot_name: slotName,
+                primary_blocker: primaryBlocker,
+              },
+            })
+            .select('id')
+            .single();
+          const slotEvalId: string | null = insertedEval?.id ?? null;
+
+          // Helper to update this evaluation when downstream block/open happens
+          const updateSlotEval = async (action: string, reason: string | null) => {
+            if (!slotEvalId) return;
+            await supabaseClient
+              .from('slot_signal_evaluations')
+              .update({ action_taken: action, block_reason: reason })
+              .eq('id', slotEvalId);
+          };
 
           results.push({
             userId: session.user_id,
@@ -3966,6 +4011,7 @@ serve(async (req) => {
           // Strict check: >= means at or above limit (per-slot)
           if (currentPositions && currentPositions.length >= config.max_open_positions) {
             console.log(`Max positions LIMIT REACHED (${currentPositions.length}/${config.max_open_positions}) for slot ${slotName}, skipping ${symbol}`);
+            await updateSlotEval('BLOCKED_MAX_POSITIONS', `Slot at limit: ${currentPositions.length}/${config.max_open_positions}`);
             continue;
           }
           
@@ -3973,6 +4019,7 @@ serve(async (req) => {
           const existingPositionForSymbol = currentPositions?.find(p => p.symbol === symbol);
           if (existingPositionForSymbol) {
             console.log(`Skipping ${symbol}: Already have an open position for this symbol (snapshot)`);
+            await updateSlotEval('BLOCKED_DUPLICATE', 'Slot already holds this symbol');
             continue;
           }
           
@@ -3996,6 +4043,7 @@ serve(async (req) => {
           }
           if (existingOpenForSymbol) {
             console.log(`Skipping ${symbol}: Already open in this slot (fresh DB check)`);
+            await updateSlotEval('BLOCKED_DUPLICATE', 'Slot already holds this symbol (fresh DB)');
             continue;
           }
 
@@ -5340,8 +5388,12 @@ serve(async (req) => {
             console.error(`   Position exists on Binance but not properly in DB!`);
             console.error(`   Order ID: ${orderData.orderId}`);
             console.error(`   Manual sync required`);
+            await updateSlotEval('POSITION_OPEN_FAILED', `DB update error: ${insertError.message}`);
             continue;
           }
+
+          // 🔍 SIGNAL TRANSPARENCY: mark slot evaluation as successfully opened
+          await updateSlotEval('POSITION_OPENED', null);
           
           // 🚨 POST-INSERT ASSERT: Verificer at ATR blev gemt korrekt
           if (insertedPosition) {

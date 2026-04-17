@@ -858,6 +858,56 @@ export type Database = {
         }
         Relationships: []
       }
+      slot_signal_evaluations: {
+        Row: {
+          action_taken: string | null
+          block_reason: string | null
+          created_at: string
+          id: string
+          indicators_summary: Json | null
+          qualified: boolean
+          scan_cycle_id: string
+          signal: string
+          slot_id: string
+          symbol: string
+          user_id: string
+        }
+        Insert: {
+          action_taken?: string | null
+          block_reason?: string | null
+          created_at?: string
+          id?: string
+          indicators_summary?: Json | null
+          qualified?: boolean
+          scan_cycle_id: string
+          signal: string
+          slot_id: string
+          symbol: string
+          user_id: string
+        }
+        Update: {
+          action_taken?: string | null
+          block_reason?: string | null
+          created_at?: string
+          id?: string
+          indicators_summary?: Json | null
+          qualified?: boolean
+          scan_cycle_id?: string
+          signal?: string
+          slot_id?: string
+          symbol?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "slot_signal_evaluations_slot_id_fkey"
+            columns: ["slot_id"]
+            isOneToOne: false
+            referencedRelation: "strategy_slots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       strategy_slots: {
         Row: {
           capital_percent: number

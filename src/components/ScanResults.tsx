@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Search, TrendingUp, TrendingDown, RefreshCw, Activity } from "lucide-react";
+import { Loader2, Search, TrendingUp, TrendingDown, RefreshCw, Activity, GitCompare } from "lucide-react";
 import { ScanResultVisual } from "./ScanResultVisual";
 import { LiveScanMonitor } from "./LiveScanMonitor";
 import { RegimeIndicator } from "./RegimeIndicator";
+import { SignalTransparencyDialog } from "./SignalTransparencyDialog";
 
 interface ScanResultsProps {
   slotId?: string | null;
@@ -20,6 +21,7 @@ export const ScanResults = ({ slotId, includeLegacyData = false }: ScanResultsPr
   const [scanning, setScanning] = useState(false);
   const [selectedResult, setSelectedResult] = useState<any>(null);
   const [liveMonitorOpen, setLiveMonitorOpen] = useState(false);
+  const [transparencySymbol, setTransparencySymbol] = useState<string | null>(null);
   const [config, setConfig] = useState<any>(null);
   const { toast } = useToast();
 
@@ -249,16 +251,28 @@ export const ScanResults = ({ slotId, includeLegacyData = false }: ScanResultsPr
                   )}
                 </div>
 
-                <div className="text-right">
+                <div className="text-right flex flex-col items-end gap-2">
                   <div className="text-sm text-muted-foreground">
                     {result.action_taken?.replace(/_/g, " ")}
                   </div>
                   {result.signal !== "NONE" && (
-                    <div className="text-xs space-y-1 mt-1">
+                    <div className="text-xs space-y-1">
                       <div>SL: ${result.stop_loss?.toFixed(2)}</div>
                       <div>TP: ${result.take_profit?.toFixed(2)}</div>
                     </div>
                   )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTransparencySymbol(result.symbol);
+                    }}
+                  >
+                    <GitCompare className="h-3 w-3 mr-1" />
+                    Slot-beslutninger
+                  </Button>
                 </div>
               </div>
             ))}
@@ -276,6 +290,12 @@ export const ScanResults = ({ slotId, includeLegacyData = false }: ScanResultsPr
       <LiveScanMonitor
         open={liveMonitorOpen}
         onOpenChange={setLiveMonitorOpen}
+      />
+
+      <SignalTransparencyDialog
+        open={!!transparencySymbol}
+        onOpenChange={(open) => !open && setTransparencySymbol(null)}
+        symbol={transparencySymbol}
       />
     </Card>
   );
