@@ -3051,6 +3051,9 @@ serve(async (req) => {
     const results = [];
 
     for (const session of sessions) {
+      // 🔍 SIGNAL TRANSPARENCY: One scan-cycle UUID groups all per-slot evaluations for this user run
+      const scanCycleId = crypto.randomUUID();
+
       // ═══════════════════════════════════════════════════════════════════
       // STRATEGY SLOTS: Fetch active slots for this user
       // If slots exist, iterate per-slot with slot-specific config & capital
