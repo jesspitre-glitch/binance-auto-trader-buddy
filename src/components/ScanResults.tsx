@@ -251,16 +251,28 @@ export const ScanResults = ({ slotId, includeLegacyData = false }: ScanResultsPr
                   )}
                 </div>
 
-                <div className="text-right">
+                <div className="text-right flex flex-col items-end gap-2">
                   <div className="text-sm text-muted-foreground">
                     {result.action_taken?.replace(/_/g, " ")}
                   </div>
                   {result.signal !== "NONE" && (
-                    <div className="text-xs space-y-1 mt-1">
+                    <div className="text-xs space-y-1">
                       <div>SL: ${result.stop_loss?.toFixed(2)}</div>
                       <div>TP: ${result.take_profit?.toFixed(2)}</div>
                     </div>
                   )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTransparencySymbol(result.symbol);
+                    }}
+                  >
+                    <GitCompare className="h-3 w-3 mr-1" />
+                    Slot-beslutninger
+                  </Button>
                 </div>
               </div>
             ))}
@@ -278,6 +290,12 @@ export const ScanResults = ({ slotId, includeLegacyData = false }: ScanResultsPr
       <LiveScanMonitor
         open={liveMonitorOpen}
         onOpenChange={setLiveMonitorOpen}
+      />
+
+      <SignalTransparencyDialog
+        open={!!transparencySymbol}
+        onOpenChange={(open) => !open && setTransparencySymbol(null)}
+        symbol={transparencySymbol}
       />
     </Card>
   );
