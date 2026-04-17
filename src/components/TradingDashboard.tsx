@@ -189,6 +189,7 @@ export const TradingDashboard = () => {
         user_id: user.id,
         is_active: newState,
         active_config_id: activeConfigId,
+        master_scan_slot_id: masterScanSlotId,
       };
       
       if (newState) {
