@@ -1,0 +1,1 @@
+UPDATE public.scanner_status SET is_active = false WHERE id = 'main';
