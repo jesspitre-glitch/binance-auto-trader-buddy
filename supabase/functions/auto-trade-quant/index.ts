@@ -5388,8 +5388,12 @@ serve(async (req) => {
             console.error(`   Position exists on Binance but not properly in DB!`);
             console.error(`   Order ID: ${orderData.orderId}`);
             console.error(`   Manual sync required`);
+            await updateSlotEval('POSITION_OPEN_FAILED', `DB update error: ${insertError.message}`);
             continue;
           }
+
+          // 🔍 SIGNAL TRANSPARENCY: mark slot evaluation as successfully opened
+          await updateSlotEval('POSITION_OPENED', null);
           
           // 🚨 POST-INSERT ASSERT: Verificer at ATR blev gemt korrekt
           if (insertedPosition) {
