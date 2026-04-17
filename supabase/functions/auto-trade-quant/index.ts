@@ -4011,6 +4011,7 @@ serve(async (req) => {
           // Strict check: >= means at or above limit (per-slot)
           if (currentPositions && currentPositions.length >= config.max_open_positions) {
             console.log(`Max positions LIMIT REACHED (${currentPositions.length}/${config.max_open_positions}) for slot ${slotName}, skipping ${symbol}`);
+            await updateSlotEval('BLOCKED_MAX_POSITIONS', `Slot at limit: ${currentPositions.length}/${config.max_open_positions}`);
             continue;
           }
           
@@ -4018,6 +4019,7 @@ serve(async (req) => {
           const existingPositionForSymbol = currentPositions?.find(p => p.symbol === symbol);
           if (existingPositionForSymbol) {
             console.log(`Skipping ${symbol}: Already have an open position for this symbol (snapshot)`);
+            await updateSlotEval('BLOCKED_DUPLICATE', 'Slot already holds this symbol');
             continue;
           }
           
@@ -4041,6 +4043,7 @@ serve(async (req) => {
           }
           if (existingOpenForSymbol) {
             console.log(`Skipping ${symbol}: Already open in this slot (fresh DB check)`);
+            await updateSlotEval('BLOCKED_DUPLICATE', 'Slot already holds this symbol (fresh DB)');
             continue;
           }
 
