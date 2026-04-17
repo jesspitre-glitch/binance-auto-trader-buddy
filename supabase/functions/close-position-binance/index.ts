@@ -281,12 +281,12 @@ serve(async (req) => {
       : (slotQuantity || rawExecutedQty);
 
     if (slotQuantity > 0 && rawExecutedQty > slotQuantity * 1.02) {
-      console.error(`🚨 Manual close qty mismatch for ${symbol}: executed=${rawExecutedQty}, slot=${slotQuantity}. Using slot quantity for DB/history.`);
+      console.error(`🚨 Manual close qty mismatch for ${resolvedSymbol}: executed=${rawExecutedQty}, slot=${slotQuantity}. Using slot quantity for DB/history.`);
     }
 
     let exitPrice = avgPrice;
     if (!exitPrice || !isFinite(exitPrice) || exitPrice === 0) {
-      exitPrice = await getCurrentPrice(symbol, supabaseClient);
+      exitPrice = await getCurrentPrice(resolvedSymbol, supabaseClient);
       if (!exitPrice || !isFinite(exitPrice) || exitPrice === 0) {
         exitPrice = Number(position?.current_price) || 0;
       }
@@ -303,8 +303,8 @@ serve(async (req) => {
       const closedAtTime = Date.now();
 
       // ── Binance-matched P&L via fills + income ──
-      const fills = await getPositionFills(symbol, side, apiKey, apiSecret, openedAtTime, closedAtTime);
-      const income = await getPositionIncome(symbol, apiKey, apiSecret, openedAtTime, closedAtTime);
+      const fills = await getPositionFills(resolvedSymbol, side, apiKey, apiSecret, openedAtTime, closedAtTime);
+      const income = await getPositionIncome(resolvedSymbol, apiKey, apiSecret, openedAtTime, closedAtTime);
 
       // Use fill-based avg prices for display, but Binance REALIZED_PNL as ground truth
       const finalAvgEntry = fills.avgEntry > 0 ? fills.avgEntry : entry;
@@ -323,7 +323,7 @@ serve(async (req) => {
       const feesPctOfNotional = notional > 0 ? (totalFee / notional) * 100 : 0;
       const leverageUsed = position.indicators_snapshot?.leverage ?? null;
 
-      console.log(`📊 BINANCE-MATCH | ${symbol} ${side} | realized_pnl=${income.realizedPnl.toFixed(4)} | binanceNetPnl=${binanceNetPnl.toFixed(4)} | commission=${income.commission.toFixed(4)} funding=${income.fundingFee.toFixed(4)}`);
+      console.log(`📊 BINANCE-MATCH | ${resolvedSymbol} ${side} | realized_pnl=${income.realizedPnl.toFixed(4)} | binanceNetPnl=${binanceNetPnl.toFixed(4)} | commission=${income.commission.toFixed(4)} funding=${income.fundingFee.toFixed(4)}`);
 
       await supabaseClient
         .from('positions')
