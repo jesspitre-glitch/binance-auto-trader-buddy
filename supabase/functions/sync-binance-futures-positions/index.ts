@@ -8,6 +8,30 @@ const corsHeaders = {
 
 // Binance er master — alle handler styres af appen, ingen manuelle handler.
 
+// Slot quantity tolerance (10% headroom over expected slot quantity to absorb rounding)
+const SLOT_QUANTITY_TOLERANCE_MULTIPLIER = 1.10;
+
+/**
+ * Beregner max forventet quantity for et slot baseret på slot-konfiguration.
+ * Formel: (portfolio × slotCapital% × positionSize% × leverage) / entryPrice
+ */
+function calculateMaxExpectedSlotQuantity(params: {
+  portfolioCapital: number;
+  slotCapitalPercent: number;
+  positionSizePercent: number;
+  leverage: number;
+  entryPrice: number;
+}): number {
+  const { portfolioCapital, slotCapitalPercent, positionSizePercent, leverage, entryPrice } = params;
+  if (!(portfolioCapital > 0) || !(slotCapitalPercent > 0) || !(positionSizePercent > 0) || !(entryPrice > 0)) {
+    return 0;
+  }
+  const slotCapital = portfolioCapital * (slotCapitalPercent / 100);
+  const margin = slotCapital * (positionSizePercent / 100);
+  const notional = margin * (leverage > 0 ? leverage : 1);
+  return notional / entryPrice;
+}
+
 async function createSignature(queryString: string, secret: string): Promise<string> {
   const encoder = new TextEncoder();
   const keyData = encoder.encode(secret);
