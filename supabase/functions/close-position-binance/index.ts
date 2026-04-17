@@ -155,6 +155,35 @@ async function getPositionIncome(
   } catch (e) { console.error('Error fetching income:', e); return result; }
 }
 
+// Cache exchangeInfo step sizes per cold start
+let stepSizeCache: Record<string, string> | null = null;
+async function getStepSize(symbol: string): Promise<string> {
+  if (!stepSizeCache) {
+    try {
+      const r = await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo');
+      const data = await r.json();
+      const map: Record<string, string> = {};
+      for (const s of (data.symbols || [])) {
+        const f = (s.filters || []).find((x: any) => x.filterType === 'LOT_SIZE');
+        if (f && f.stepSize) map[s.symbol] = f.stepSize;
+      }
+      stepSizeCache = map;
+    } catch (e) {
+      console.error('Failed to load exchangeInfo:', e);
+      stepSizeCache = {};
+    }
+  }
+  return stepSizeCache[symbol] || '0.001';
+}
+
+function roundDownToStep(qty: number, stepSize: string): string {
+  const step = parseFloat(stepSize);
+  if (!step || !isFinite(step)) return qty.toString();
+  const decimals = stepSize.includes('.') ? stepSize.split('.')[1].replace(/0+$/, '').length : 0;
+  const rounded = Math.floor(qty / step) * step;
+  return rounded.toFixed(decimals);
+}
+
 async function closeOnBinance(symbol: string, apiKey: string, apiSecret: string, requestedQty?: number) {
   const pos = await getPositionRisk(symbol, apiKey, apiSecret);
   const amt = parseFloat(pos.positionAmt);
@@ -165,16 +194,24 @@ async function closeOnBinance(symbol: string, apiKey: string, apiSecret: string,
   const side = amt > 0 ? 'SELL' : 'BUY';
   const livePositionQty = Math.abs(amt);
   const desiredQty = Math.abs(Number(requestedQty) || 0);
-  const quantity = desiredQty > 0 ? Math.min(desiredQty, livePositionQty) : livePositionQty;
+  const rawQuantity = desiredQty > 0 ? Math.min(desiredQty, livePositionQty) : livePositionQty;
 
   if (desiredQty > livePositionQty) {
     console.warn(`Requested manual close qty for ${symbol} exceeds live Binance qty (${desiredQty} > ${livePositionQty}) - clamping to live qty`);
   }
 
+  // Round DOWN to symbol's stepSize to avoid -1111 "Precision over max" errors
+  const stepSize = await getStepSize(symbol);
+  const quantityStr = roundDownToStep(rawQuantity, stepSize);
+  const quantity = parseFloat(quantityStr);
+  if (!quantity || quantity <= 0) {
+    return { message: 'Quantity rounds to zero', symbol, livePositionQty, stepSize };
+  }
+
   const serverTime = await getBinanceServerTime();
   const params = new URLSearchParams({
     symbol, side, type: 'MARKET', reduceOnly: 'true',
-    quantity: quantity.toString(), newOrderRespType: 'RESULT',
+    quantity: quantityStr, newOrderRespType: 'RESULT',
     timestamp: serverTime.toString(), recvWindow: '10000',
   });
   const signature = await createSignature(params.toString(), apiSecret);
@@ -184,7 +221,7 @@ async function closeOnBinance(symbol: string, apiKey: string, apiSecret: string,
   const order = await res.json();
 
   await cancelAllOpenOrders(symbol, apiKey, apiSecret);
-  return { order, requestedQty: quantity, livePositionQty };
+  return { order, requestedQty: quantity, livePositionQty, stepSize };
 }
 
 serve(async (req) => {
