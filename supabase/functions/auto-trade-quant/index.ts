@@ -3416,6 +3416,48 @@ serve(async (req) => {
             action_taken: actionTaken,
           });
 
+          // 🔍 SIGNAL TRANSPARENCY: log this slot's decision for this symbol in this scan cycle
+          // Initial state — may be updated later if position opens or post-signal block triggers
+          let slotEvalQualified = filteredSignal !== 'NONE';
+          let slotEvalReason: string | null = null;
+          let slotEvalAction: string = actionTaken;
+          if (!slotEvalQualified) {
+            slotEvalReason = primaryBlocker === 'NONE' ? 'No signal generated' : `Hard filter: ${primaryBlocker}`;
+          }
+          const { data: insertedEval } = await supabaseClient
+            .from('slot_signal_evaluations')
+            .insert({
+              user_id: session.user_id,
+              slot_id: slotId,
+              scan_cycle_id: scanCycleId,
+              symbol,
+              signal: filteredSignal,
+              qualified: slotEvalQualified,
+              action_taken: slotEvalAction,
+              block_reason: slotEvalReason,
+              indicators_summary: {
+                price: analysis.indicators.price,
+                rsi: analysis.indicators.rsi,
+                adx: analysis.indicators.adx,
+                trend,
+                higherTrend,
+                slot_name: slotName,
+                primary_blocker: primaryBlocker,
+              },
+            })
+            .select('id')
+            .single();
+          const slotEvalId: string | null = insertedEval?.id ?? null;
+
+          // Helper to update this evaluation when downstream block/open happens
+          const updateSlotEval = async (action: string, reason: string | null) => {
+            if (!slotEvalId) return;
+            await supabaseClient
+              .from('slot_signal_evaluations')
+              .update({ action_taken: action, block_reason: reason })
+              .eq('id', slotEvalId);
+          };
+
           results.push({
             userId: session.user_id,
             symbol,
