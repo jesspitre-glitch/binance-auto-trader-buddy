@@ -104,6 +104,7 @@ export const TradingDashboard = () => {
         if (data.active_config_id) {
           setActiveConfigId(data.active_config_id);
         }
+        setMasterScanSlotId((data as any).master_scan_slot_id ?? null);
         
         if (data.is_active) {
           try {
