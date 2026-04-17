@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS public.uniq_open_position_per_user_symbol;
