@@ -1,10 +1,18 @@
 ---
-name: Global cross-slot symbol lock
-description: Prevents multiple slots from opening the same Binance symbol simultaneously — only one slot can hold a given symbol at a time
-type: feature
+name: Cross-slot symbol parallelism (NO global lock)
+description: Multiple slots ARE allowed to open the same symbol in parallel — this is intentional for strategy comparison. Only per-slot duplicate prevention is enforced.
+type: constraint
 ---
-Before the PENDING intent lock in `auto-trade-quant`, a cross-slot check queries ALL positions (OPEN + PENDING) for the symbol across ALL slots. If any other slot already holds the symbol, the trade is rejected.
+**DO NOT re-introduce a global cross-slot symbol lock.** The user explicitly wants multiple slots to be able to take the same signal in parallel so different strategies can be compared on identical market conditions.
 
-This prevents the scenario where two slots both detect the same signal and both place BUY orders, creating an oversized aggregate position on Binance.
+What IS enforced (per-slot only):
+- Unique partial DB index `(user_id, slot_id, symbol) WHERE status IN ('OPEN','PENDING')` — physically prevents the SAME slot from opening duplicate positions on the same symbol.
+- Pre-trade check in `auto-trade-quant` filters by `slot_id` (not just symbol).
 
-Additionally, `sync-binance-futures-positions` includes drift detection: if Binance qty > sum of all DB rows for a symbol, the excess is imported as a new position row in the original slot with a 3% fallback SL.
+What is NOT enforced (by design):
+- Slot 1 and Slot 2 can both hold an OPEN BTCUSDT position simultaneously.
+- Binance aggregates these into one combined position on their side (one-way mode), but the DB tracks them as separate rows per slot for performance attribution.
+
+Sync handling: `sync-binance-futures-positions` correctly handles N DB rows per symbol via `matchingPositions` array and uses `totalDbQty` (sum of all slot rows) vs Binance `absQuantity` for drift detection — so parallel slots on the same symbol do NOT trigger false drift alerts.
+
+**Why:** The whole point of multi-slot is A/B testing different strategies on the same market. Blocking parallel entries defeats this goal.
