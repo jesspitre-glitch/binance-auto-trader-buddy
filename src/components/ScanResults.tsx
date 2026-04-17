@@ -21,6 +21,7 @@ export const ScanResults = ({ slotId, includeLegacyData = false }: ScanResultsPr
   const [scanning, setScanning] = useState(false);
   const [selectedResult, setSelectedResult] = useState<any>(null);
   const [liveMonitorOpen, setLiveMonitorOpen] = useState(false);
+  const [transparencySymbol, setTransparencySymbol] = useState<string | null>(null);
   const [config, setConfig] = useState<any>(null);
   const { toast } = useToast();
 
