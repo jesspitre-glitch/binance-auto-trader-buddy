@@ -3117,6 +3117,31 @@ serve(async (req) => {
 
       if (slotIterations.length === 0) continue;
 
+      // ═══════════════════════════════════════════════════════════════════
+      // 🎯 MASTER SCAN SLOT — drives global symbol pool for fair A/B testing
+      // If session.master_scan_slot_id is set, that slot runs FIRST and its
+      // qualified top-N signals become the candidate pool. All OTHER slots
+      // then evaluate ONLY those symbols (against their own filters), so every
+      // slot tests the SAME trades. This makes strategy comparison meaningful.
+      // ═══════════════════════════════════════════════════════════════════
+      const masterScanSlotId: string | null = (session as any).master_scan_slot_id ?? null;
+      if (masterScanSlotId) {
+        const masterIdx = slotIterations.findIndex(s => s.slotId === masterScanSlotId);
+        if (masterIdx > 0) {
+          const [master] = slotIterations.splice(masterIdx, 1);
+          slotIterations.unshift(master);
+          console.log(`🎯 MASTER SCAN: slot "${master.slotName}" (${master.slotId}) moved to front to drive candidate pool`);
+        } else if (masterIdx === 0) {
+          console.log(`🎯 MASTER SCAN: slot "${slotIterations[0].slotName}" already first — drives candidate pool`);
+        } else {
+          console.warn(`⚠️ MASTER SCAN: configured slot ${masterScanSlotId} not active/found — falling back to per-slot independent scans`);
+        }
+      }
+      // Candidate symbols built by master slot (symbol → side). Empty until master runs.
+      // When set, downstream slots restrict their scan to just these symbols.
+      let masterCandidateSymbols: Set<string> | null = masterScanSlotId ? new Set<string>() : null;
+      const MASTER_TOP_N = 10; // top-N qualified signals from master define the pool
+
       // Reset klines cache for this scan cycle - all slots share same cached klines
       klinesCache = new KlinesCache();
       console.log(`🗄️ Klines cache initialized for ${slotIterations.length} slot(s)`);
