@@ -135,11 +135,27 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
       setCurrentTime(Date.now());
     }, 1000);
 
+    // Safety-net: periodic refetch every 5s to guarantee sync with DB
+    // even if realtime websocket drops or misses events.
+    const refetchInterval = setInterval(() => {
+      fetchPositions();
+    }, 5000);
+
+    // Refetch on tab visibility change (browser may pause realtime in background)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchPositions();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
       supabase.removeChannel(channel);
       clearInterval(timeInterval);
+      clearInterval(refetchInterval);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [slotId]);
+  }, [slotId, includeLegacyData]);
 
   // Live Binance prices for open symbols
   const symbols = positions.map((p) => p.symbol).filter(Boolean);
