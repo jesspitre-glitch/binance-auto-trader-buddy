@@ -3663,10 +3663,8 @@ serve(async (req) => {
         }
       }
 
-      const sharedMasterSymbols = masterCandidateSymbols ? new Set(masterCandidateSymbols) : null;
-      const signalsToTrade = isMasterSlot && sharedMasterSymbols
-        ? eligibleSignals.filter(s => sharedMasterSymbols.has(s.symbol)).slice(0, MASTER_TOP_N)
-        : eligibleSignals;
+      // Master gating disabled — every slot trades from its own eligibleSignals pool
+      const signalsToTrade = eligibleSignals;
       
       // 📊 Populate slot summary with scan results
       slotSummary.symbolsScanned = validSignals.length;
