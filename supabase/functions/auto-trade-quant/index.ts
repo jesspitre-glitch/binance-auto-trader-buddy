@@ -3118,40 +3118,12 @@ serve(async (req) => {
       if (slotIterations.length === 0) continue;
 
       // ═══════════════════════════════════════════════════════════════════
-      // 🎯 MASTER SCAN SLOT — drives global symbol pool for fair A/B testing
-      // If session.master_scan_slot_id is set, that slot runs FIRST and its
-      // qualified top-N signals become the candidate pool. All OTHER slots
-      // then evaluate ONLY those symbols (against their own filters), so every
-      // slot tests the SAME trades. This makes strategy comparison meaningful.
+      // 🎯 SLOT-INDEPENDENT MASTER SCAN
+      // Markedsdata (klines) hentes ÉN gang via shared klinesCache, men HVER
+      // slot evaluerer alle USDC-symboler uafhængigt mod sine egne filtre.
+      // Ingen gating fra "master slot" — hver strategi får fuld eksponering.
       // ═══════════════════════════════════════════════════════════════════
-      const preferredMasterScanSlotId: string | null = (session as any).master_scan_slot_id ?? null;
-      let effectiveMasterScanSlotId: string | null = null;
-
-      if (preferredMasterScanSlotId) {
-        const masterIdx = slotIterations.findIndex(s => s.slotId === preferredMasterScanSlotId);
-        if (masterIdx > 0) {
-          const [master] = slotIterations.splice(masterIdx, 1);
-          slotIterations.unshift(master);
-          effectiveMasterScanSlotId = master.slotId;
-          console.log(`🎯 MASTER SCAN: slot "${master.slotName}" (${master.slotId}) moved to front to drive candidate pool`);
-        } else if (masterIdx === 0) {
-          effectiveMasterScanSlotId = slotIterations[0].slotId;
-          console.log(`🎯 MASTER SCAN: slot "${slotIterations[0].slotName}" already first — drives candidate pool`);
-        } else {
-          console.warn(`⚠️ MASTER SCAN: configured slot ${preferredMasterScanSlotId} not active/found — defaulting to first active slot instead of independent scans`);
-        }
-      }
-
-      if (!effectiveMasterScanSlotId && slotIterations[0]?.slotId) {
-        effectiveMasterScanSlotId = slotIterations[0].slotId;
-        console.log(`🎯 MASTER SCAN: no persisted master slot set — defaulting to first active slot "${slotIterations[0].slotName}" (${slotIterations[0].slotId})`);
-      }
-
-      // Candidate symbols built by master slot. Downstream slots must evaluate the SAME
-      // symbol set for fair strategy comparison, so we intentionally share only the single
-      // best master candidate per cycle.
-      let masterCandidateSymbols: Set<string> | null = effectiveMasterScanSlotId ? new Set<string>() : null;
-      const MASTER_TOP_N = 1;
+      console.log(`🎯 SLOT-INDEPENDENT SCAN: ${slotIterations.length} slot(s) will each evaluate ALL USDC pairs against own filters`);
 
       // Reset klines cache for this scan cycle - all slots share same cached klines
       klinesCache = new KlinesCache();
@@ -3263,19 +3235,9 @@ serve(async (req) => {
 
       // Analyze all USDC perpetual futures pairs
       const symbolFilters = await fetchSymbolFilters();
-      let symbols = await fetchAllUSDCSymbols();
-      // 🎯 MASTER SCAN POOL: non-master slots only evaluate symbols the master qualified
-      const isMasterSlot = effectiveMasterScanSlotId !== null && slotId === effectiveMasterScanSlotId;
-      if (masterCandidateSymbols && !isMasterSlot) {
-        if (masterCandidateSymbols.size === 0) {
-          console.log(`⏭️ Slot "${slotName}": master scan produced 0 candidates this cycle — skipping`);
-          continue;
-        }
-        symbols = symbols.filter(s => masterCandidateSymbols!.has(s));
-        console.log(`🎯 Slot "${slotName}": restricted to ${symbols.length} master-candidate symbol(s): ${symbols.join(', ')}`);
-      } else {
-        console.log(`🔍 Scanning ${symbols.length} USDC pairs for user ${session.user_id}${isMasterSlot ? ' [MASTER SCAN]' : ''}`);
-      }
+      const symbols = await fetchAllUSDCSymbols();
+      const isMasterSlot = false; // master gating disabled — every slot scans full pool
+      console.log(`🔍 Slot "${slotName}" scanning ${symbols.length} USDC pairs independently`);
       
       // 📊 STEP 1: Collect all valid signals with their strength
       interface SignalCandidate {
@@ -3607,16 +3569,8 @@ serve(async (req) => {
         console.log(`   ${idx + 1}. ${sig.symbol} ${sig.signal} [${filterStatus}] - Styrke: ${sig.strength.toFixed(1)}`);
       });
 
-      // 🎯 MASTER SCAN: if this is the master slot, populate the candidate pool
-      // with the top-N qualified signals so subsequent slots evaluate the same symbols.
-      if (isMasterSlot && masterCandidateSymbols) {
-        const qualified = validSignals
-          .filter(s => s.hardFiltersPassed && s.signal !== 'NONE')
-          .slice(0, MASTER_TOP_N);
-        for (const c of qualified) masterCandidateSymbols.add(c.symbol);
-        console.log(`🎯 MASTER POOL: ${qualified.length} qualified candidate(s) for downstream slots: ${qualified.map(c => `${c.symbol}(${c.signal})`).join(', ')}`);
-      }
-      
+      // (Master pool gating disabled — every slot evaluates full symbol pool independently)
+
       // 🎯 STEP 3: Calculate how many positions we can open
       const slotsAvailable = config.max_open_positions - (positions?.length || 0);
       console.log(`\n🎯 Ledige positioner: ${slotsAvailable}/${config.max_open_positions}`);
@@ -3707,10 +3661,8 @@ serve(async (req) => {
         }
       }
 
-      const sharedMasterSymbols = masterCandidateSymbols ? new Set(masterCandidateSymbols) : null;
-      const signalsToTrade = isMasterSlot && sharedMasterSymbols
-        ? eligibleSignals.filter(s => sharedMasterSymbols.has(s.symbol)).slice(0, MASTER_TOP_N)
-        : eligibleSignals;
+      // Master gating disabled — every slot trades from its own eligibleSignals pool
+      const signalsToTrade = eligibleSignals;
       
       // 📊 Populate slot summary with scan results
       slotSummary.symbolsScanned = validSignals.length;
