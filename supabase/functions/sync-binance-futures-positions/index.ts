@@ -32,6 +32,36 @@ function calculateMaxExpectedSlotQuantity(params: {
   return notional / entryPrice;
 }
 
+function distributeBinanceQuantityAcrossRows(existingRows: any[], totalBinanceQty: number): number[] {
+  if (existingRows.length === 0) return [];
+  if (existingRows.length === 1) return [totalBinanceQty];
+
+  const existingQtys = existingRows.map((row) => Math.abs(Number(row.quantity) || 0));
+  const existingTotalQty = existingQtys.reduce((sum, qty) => sum + qty, 0);
+
+  if (!(existingTotalQty > 0)) {
+    return existingRows.map((_, index) => (index === 0 ? totalBinanceQty : 0));
+  }
+
+  let remainingQty = totalBinanceQty;
+
+  return existingRows.map((_, index) => {
+    if (index === existingRows.length - 1) {
+      return remainingQty;
+    }
+
+    const allocatedQty = totalBinanceQty * (existingQtys[index] / existingTotalQty);
+    remainingQty -= allocatedQty;
+    return allocatedQty;
+  });
+}
+
+function calculatePositionPnl(side: 'LONG' | 'SHORT', currentPrice: number, entryPrice: number, quantity: number): number {
+  return side === 'LONG'
+    ? (currentPrice - entryPrice) * quantity
+    : (entryPrice - currentPrice) * quantity;
+}
+
 async function createSignature(queryString: string, secret: string): Promise<string> {
   const encoder = new TextEncoder();
   const keyData = encoder.encode(secret);
@@ -306,34 +336,34 @@ serve(async (req) => {
         const matchingPositions = dbPositions?.filter(p => p.symbol === binancePos.symbol) || [];
         
         if (matchingPositions.length > 0) {
-          // BINANCE ER MASTER for pris og PnL, men SLOT EJER sin egen quantity og entry_price.
-          // Binances positionAmt er aggregeret på tværs af ALLE slots for samme symbol.
-          // Derfor må vi ALDRIG overskrive slot-quantity med Binances aggregerede tal.
-          // Vi syncer kun: current_price og beregner per-slot PnL fra slottets egne værdier.
-          
-          if (matchingPositions.length === 1) {
-            // Én DB-række betyder IKKE at Binance aggregate qty må overtage row'en.
-            // Appen ejer alle handler, og auto-trade gemmer bevidst slot/order-qty.
-            // Hvis vi overskriver med Binance positionAmt, pustes positionen kunstigt op.
-            const dbPos = matchingPositions[0];
-            const dbQty = Math.abs(Number(dbPos.quantity) || 0);
-            const dbEntry = Number(dbPos.entry_price) || 0;
-            const slotPnl = side === 'LONG'
-              ? (currentPrice - dbEntry) * dbQty
-              : (dbEntry - currentPrice) * dbQty;
-            const qtyDrift = Math.abs(absQuantity - dbQty);
-            const entryDrift = Math.abs(binanceEntryPrice - dbEntry);
+          const totalDbQty = matchingPositions.reduce((sum, p) => sum + Math.abs(Number(p.quantity) || 0), 0);
+          const qtyDrift = Math.abs(absQuantity - totalDbQty);
+          const distributedQuantities = distributeBinanceQuantityAcrossRows(matchingPositions, absQuantity);
+          const syncTimestamp = new Date().toISOString();
+          const qtyTolerance = Math.max(absQuantity * 0.0001, 0.00000001);
+
+          if (qtyDrift > qtyTolerance) {
+            console.warn(`⚠️ BINANCE MASTER OVERRIDE: ${binancePos.symbol} qty ${totalDbQty.toFixed(8)} → ${absQuantity.toFixed(8)} across ${matchingPositions.length} DB row(s)`);
+          }
+
+          for (let index = 0; index < matchingPositions.length; index += 1) {
+            const dbPos = matchingPositions[index];
+            const syncedQty = distributedQuantities[index];
+            const syncedPnl = calculatePositionPnl(side, currentPrice, binanceEntryPrice, syncedQty);
 
             console.log(
-              `Syncing single-row price-only ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): ` +
-              `dbQty ${dbQty}, binanceQty ${absQuantity}, dbEntry ${dbEntry}, binanceEntry ${binanceEntryPrice}, ` +
-              `price ${currentPrice}, slotPnl ${slotPnl.toFixed(8)}, qtyDrift ${qtyDrift.toFixed(8)}, entryDrift ${entryDrift.toFixed(8)}`
+              `Syncing Binance-master ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): ` +
+              `dbQty ${Number(dbPos.quantity || 0)}, syncedQty ${syncedQty}, dbEntry ${Number(dbPos.entry_price || 0)}, ` +
+              `binanceEntry ${binanceEntryPrice}, price ${currentPrice}, pnl ${syncedPnl.toFixed(8)}`
             );
-            
+
             let updateData: any = {
+              side,
+              quantity: syncedQty,
+              entry_price: binanceEntryPrice,
               current_price: currentPrice,
-              unrealized_pnl: slotPnl,
-              updated_at: new Date().toISOString(),
+              unrealized_pnl: syncedPnl,
+              updated_at: syncTimestamp,
             };
 
             if (!dbPos.indicators_snapshot) {
@@ -347,7 +377,7 @@ serve(async (req) => {
                 .gte('created_at', tenMinutesAgo)
                 .order('created_at', { ascending: false })
                 .limit(1);
-              
+
               if (recentSignals && recentSignals.length > 0) {
                 const signal = recentSignals[0];
                 const indicators = signal.indicators as any;
@@ -358,141 +388,25 @@ serve(async (req) => {
                   `MACD: ${indicators.macd?.toFixed(4) || 'N/A'}, ` +
                   `EMA: Fast ${indicators.emaFast?.toFixed(2) || 'N/A'} vs Slow ${indicators.emaSlow?.toFixed(2) || 'N/A'}, ` +
                   `ADX: ${indicators.adx?.toFixed(2) || 'N/A'}`;
-                console.log(`✅ Updated ${binancePos.symbol} with bot signal data`);
               }
             }
-            
+
             const { error } = await supabaseClient
               .from('positions')
               .update(updateData)
               .eq('id', dbPos.id);
-            
-            if (error) console.error('Update error:', error);
-            updates.push({
-              symbol: binancePos.symbol,
-              action: 'updated',
-              id: dbPos.id,
-              price: currentPrice,
-              pnl: slotPnl,
-              quantity: dbQty,
-              entry_price: dbEntry,
-            });
-          } else {
-            // Multiple slots have same symbol — each slot keeps its own qty, PnL from own values
-            
-            for (const dbPos of matchingPositions) {
-              const dbQty = Math.abs(Number(dbPos.quantity) || 0);
-              const dbEntry = Number(dbPos.entry_price) || 0;
-              const slotPnl = side === 'LONG'
-                ? (currentPrice - dbEntry) * dbQty
-                : (dbEntry - currentPrice) * dbQty;
-              
-              console.log(`Syncing price-only ${binancePos.symbol} (slot: ${dbPos.slot_id || 'legacy'}): slotQty ${dbQty}, entry ${dbEntry}, price ${currentPrice}, slotPnl ${slotPnl.toFixed(6)}`);
-              
-              let updateData: any = {
-                current_price: currentPrice,
-                unrealized_pnl: slotPnl,
-                updated_at: new Date().toISOString(),
-              };
 
-              if (!dbPos.indicators_snapshot) {
-                const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-                const { data: recentSignals } = await supabaseClient
-                  .from('scan_results')
-                  .select('*')
-                  .eq('user_id', userId)
-                  .eq('symbol', binancePos.symbol)
-                  .eq('signal', side)
-                  .gte('created_at', tenMinutesAgo)
-                  .order('created_at', { ascending: false })
-                  .limit(1);
-                
-                if (recentSignals && recentSignals.length > 0) {
-                  const signal = recentSignals[0];
-                  const indicators = signal.indicators as any;
-                  updateData.indicators_snapshot = signal.indicators;
-                  updateData.open_reason = `${side} signal på ${binancePos.symbol} - ` +
-                    `Trend: ${indicators.trend || 'UNKNOWN'}. ` +
-                    `RSI: ${indicators.rsi?.toFixed(2) || 'N/A'}, ` +
-                    `MACD: ${indicators.macd?.toFixed(4) || 'N/A'}, ` +
-                    `EMA: Fast ${indicators.emaFast?.toFixed(2) || 'N/A'} vs Slow ${indicators.emaSlow?.toFixed(2) || 'N/A'}, ` +
-                    `ADX: ${indicators.adx?.toFixed(2) || 'N/A'}`;
-                }
-              }
-              
-              const { error } = await supabaseClient
-                .from('positions')
-                .update(updateData)
-                .eq('id', dbPos.id);
-              
-              if (error) console.error('Update error:', error);
-              updates.push({ symbol: binancePos.symbol, action: 'updated', id: dbPos.id, price: currentPrice, pnl: slotPnl });
-            }
-          }
-          
-          // 🔍 DRIFT DETECTION: Check if Binance has MORE quantity than the sum of all DB rows
-          // This would mean there's untracked exposure (e.g. from manual trades or failed syncs)
-          const totalDbQty = matchingPositions.reduce((sum, p) => sum + Math.abs(Number(p.quantity) || 0), 0);
-          const driftQty = absQuantity - totalDbQty;
-          const driftTolerance = absQuantity * 0.02; // 2% tolerance
-          
-          if (driftQty > driftTolerance) {
-            console.warn(`⚠️ DRIFT DETECTED: ${binancePos.symbol} — Binance qty ${absQuantity.toFixed(6)} > DB total qty ${totalDbQty.toFixed(6)} (drift: ${driftQty.toFixed(6)})`);
-            console.warn(`   This means there's untracked exposure on Binance that should be reconciled.`);
-            console.warn(`   The excess will be imported as a new position.`);
-            
-            // Find the slot that originally opened this symbol (use the first matching position's slot)
-            const originalSlotId = matchingPositions[0]?.slot_id || null;
-            const originalSlotName = matchingPositions[0]?.indicators_snapshot 
-              ? (matchingPositions[0].indicators_snapshot as any)?.slot_name || 'Unknown'
-              : 'Unknown';
-            
-            // Calculate PnL for the drift portion
-            const driftPnl = side === 'LONG'
-              ? (currentPrice - binanceEntryPrice) * driftQty
-              : (binanceEntryPrice - currentPrice) * driftQty;
-            
-            // Insert a new position row for the untracked exposure
-            const driftPositionData: any = {
-              user_id: userId,
-              symbol: binancePos.symbol,
-              side,
-              entry_price: binanceEntryPrice,
-              quantity: driftQty,
-              current_price: currentPrice,
-              peak_price: currentPrice,
-              stop_loss: side === 'LONG' 
-                ? binanceEntryPrice * 0.97  // 3% fallback SL
-                : binanceEntryPrice * 1.03,
-              trailing_stop: side === 'LONG'
-                ? binanceEntryPrice * 0.97
-                : binanceEntryPrice * 1.03,
-              trailing_stop_percent: 2.0,
-              unrealized_pnl: driftPnl,
-              status: 'OPEN',
-              open_reason: `DRIFT_RECONCILED: Untracked Binance exposure (${driftQty.toFixed(6)} qty) imported from ${binancePos.symbol}`,
-              indicators_snapshot: {
-                is_synced_position: true,
-                exit_type: 'FALLBACK_SL',
-                synced_without_signal: true,
-                drift_reconciled: true,
-                original_slot_name: originalSlotName,
-              },
-            };
-            
-            if (originalSlotId) {
-              driftPositionData.slot_id = originalSlotId;
-            }
-            
-            const { error: driftInsertError } = await supabaseClient
-              .from('positions')
-              .insert(driftPositionData);
-            
-            if (driftInsertError) {
-              console.error(`❌ Failed to import drift position for ${binancePos.symbol}:`, driftInsertError.message);
+            if (error) {
+              console.error('Update error:', error);
             } else {
-              console.log(`✅ DRIFT RECONCILED: Imported ${driftQty.toFixed(6)} qty of ${binancePos.symbol} into slot ${originalSlotName}`);
-              updates.push({ symbol: binancePos.symbol, action: 'drift_reconciled', quantity: driftQty, slot: originalSlotName });
+              updates.push({
+                symbol: binancePos.symbol,
+                action: 'binance_master_synced',
+                id: dbPos.id,
+                quantity: syncedQty,
+                entry_price: binanceEntryPrice,
+                pnl: syncedPnl,
+              });
             }
           }
         } else {
@@ -623,75 +537,12 @@ serve(async (req) => {
           
           console.log(`✅ Opretter Binance-master position: ${binancePos.symbol} ${side} qty=${absQuantity} slot=${signalSlotName}`);
           
-          // 🛡️ UFRAVIGELIG HARD CAP: Binance positionAmt er aggregeret på tværs af ALLE slots.
-          // Vi må ALDRIG bruge den rå Binance-mængde som slot-quantity.
-          // TRIN 1: Forsøg slot-specifik beregning
-          // TRIN 2: ALTID anvend absolut portfolio-baseret hard cap som sikkerhedsnet
-          let safeQuantity = absQuantity;
-          const portfolioCapital = Number(existingPortfolio?.futures_capital) || 0;
-          
-          // TRIN 1: Slot-specifik cap (præcis)
-          if (signalSlotId && activeSlots && activeSlots.length > 0) {
-            const matchedSlot = activeSlots.find(s => s.id === signalSlotId);
-            if (matchedSlot) {
-              const slotConfig = matchedSlot.indicator_config as any;
-              const slotCapitalPercent = Number(matchedSlot.capital_percent) || 0;
-              const slotPositionSizePct = Number(slotConfig?.position_size_percent) || 0;
-              const slotLeverage = Number(slotConfig?.leverage) || Number(leverageUsed) || 3;
-              
-              if (portfolioCapital > 0 && slotCapitalPercent > 0 && slotPositionSizePct > 0 && entryPrice > 0) {
-                const maxExpectedQty = calculateMaxExpectedSlotQuantity({
-                  portfolioCapital,
-                  slotCapitalPercent,
-                  positionSizePercent: slotPositionSizePct,
-                  leverage: slotLeverage,
-                  entryPrice,
-                });
-                
-                if (Number.isFinite(maxExpectedQty) && maxExpectedQty > 0) {
-                  const maxAllowedQty = maxExpectedQty * SLOT_QUANTITY_TOLERANCE_MULTIPLIER;
-                  
-                  if (absQuantity > maxAllowedQty) {
-                    console.warn(`🛡️ SYNC SLOT CAP: ${binancePos.symbol} Binance qty ${absQuantity.toFixed(4)} exceeds slot max ${maxAllowedQty.toFixed(4)} (expected ${maxExpectedQty.toFixed(4)} × ${SLOT_QUANTITY_TOLERANCE_MULTIPLIER})`);
-                    console.warn(`   Portfolio: $${portfolioCapital.toFixed(2)}, Slot capital: ${slotCapitalPercent}%, Position size: ${slotPositionSizePct}%, Leverage: ${slotLeverage}x`);
-                    safeQuantity = maxAllowedQty;
-                  } else {
-                    console.log(`✅ SYNC SIZE OK: qty ${absQuantity.toFixed(4)} <= slot max ${maxAllowedQty.toFixed(4)}`);
-                  }
-                }
-              }
-            }
-          }
-          
-          // TRIN 2: 🚨 ABSOLUT HARD CAP — kører ALTID, uanset slot-data
-          // Max notional = portfolio × 50% × max leverage (20x) = absolut sikkerhedsgrænse
-          // Dette forhindrer ALDRIG en position med notional > halv portfolio × 20x
-          if (portfolioCapital > 0 && entryPrice > 0) {
-            const ABSOLUTE_MAX_PORTFOLIO_FRACTION = 0.50; // Max 50% af portfolio som margin
-            const ABSOLUTE_MAX_LEVERAGE = 20;
-            const absoluteMaxNotional = portfolioCapital * ABSOLUTE_MAX_PORTFOLIO_FRACTION * ABSOLUTE_MAX_LEVERAGE;
-            const absoluteMaxQty = absoluteMaxNotional / entryPrice;
-            const currentNotional = safeQuantity * entryPrice;
-            
-            if (safeQuantity > absoluteMaxQty) {
-              console.error(`🚨 ABSOLUT HARD CAP TRIGGERED: ${binancePos.symbol}`);
-              console.error(`   Notional $${currentNotional.toFixed(2)} > absolut max $${absoluteMaxNotional.toFixed(2)} (portfolio $${portfolioCapital.toFixed(2)} × 50% × 20x)`);
-              console.error(`   Capping quantity: ${safeQuantity.toFixed(4)} → ${absoluteMaxQty.toFixed(4)}`);
-              safeQuantity = absoluteMaxQty;
-            }
-          } else if (portfolioCapital <= 0) {
-            // Ingen portfolio data = BLOKÉR positionen helt
-            console.error(`🚨 BLOKERET: Ingen portfolio capital data tilgængelig. Kan ikke synce ${binancePos.symbol} sikkert.`);
-            console.error(`   Binance qty=${absQuantity}, notional=$${(absQuantity * entryPrice).toFixed(2)} — SKIPPED`);
-            continue;
-          }
-          
           const positionData: any = {
             user_id: userId,
             symbol: binancePos.symbol,
             side,
             entry_price: entryPrice,
-            quantity: safeQuantity,
+            quantity: absQuantity,
             current_price: currentPrice,
             peak_price: currentPrice,
             stop_loss: stopLoss,
