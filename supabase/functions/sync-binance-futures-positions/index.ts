@@ -240,11 +240,20 @@ serve(async (req) => {
           .insert({
             user_id: userId,
             futures_capital: totalMarginBalance,
+            binance_unrealized_pnl: totalUnrealizedProfit,
+            binance_total_margin_balance: totalMarginBalance,
+            binance_synced_at: new Date().toISOString(),
           });
       } else {
-        console.log(
-          `Preserving user_portfolio.futures_capital for user ${userId}: ${existingPortfolio.futures_capital}`
-        );
+        // Update live Binance snapshot fields ONLY (preserve user-defined futures_capital)
+        await supabaseClient
+          .from('user_portfolio')
+          .update({
+            binance_unrealized_pnl: totalUnrealizedProfit,
+            binance_total_margin_balance: totalMarginBalance,
+            binance_synced_at: new Date().toISOString(),
+          })
+          .eq('user_id', userId);
       }
       
       // Create daily balance snapshot if it doesn't exist yet (Binance-style P&L tracking)
