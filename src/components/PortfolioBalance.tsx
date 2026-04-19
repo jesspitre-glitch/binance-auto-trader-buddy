@@ -221,10 +221,19 @@ export const PortfolioBalance = ({ slotId, includeLegacyData, slots }: Portfolio
   const deposited = portfolio?.futures_deposited || 0;
   const withdrawn = portfolio?.futures_withdrawn || 0;
   const netDeposits = deposited - withdrawn;
-  
-  // Use actual P&L from trade_history instead of balance-based calculation
+
+  // Binance live data (synced every 5s)
+  const binanceUnrealizedPnL = portfolio?.binance_unrealized_pnl ?? null;
+  const binanceMarginBalance = portfolio?.binance_total_margin_balance ?? null;
+  const binanceSyncedAt = portfolio?.binance_synced_at ?? null;
+  const hasBinanceLive = binanceUnrealizedPnL !== null && binanceSyncedAt !== null;
+
+  // Realized P&L from trade history
   const totalPnL = totalPnLFromTrades;
   const pnlPercent = futuresCapital > 0 ? (totalPnL / futuresCapital) * 100 : 0;
+  const binancePnLPercent = futuresCapital > 0 && binanceUnrealizedPnL !== null
+    ? (binanceUnrealizedPnL / futuresCapital) * 100
+    : 0;
 
   return (
     <Card>
@@ -249,16 +258,41 @@ export const PortfolioBalance = ({ slotId, includeLegacyData, slots }: Portfolio
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Wallet className="h-4 w-4" />
               <span>Total Margin Balance</span>
+              {hasBinanceLive && (
+                <span className="text-[10px] uppercase tracking-wider text-primary font-semibold">LIVE</span>
+              )}
             </div>
             <div className="text-2xl font-bold">
-              ${futuresCapital.toFixed(2)} USDC
+              ${(binanceMarginBalance ?? futuresCapital).toFixed(2)} USDC
             </div>
           </div>
+
+          {hasBinanceLive && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <TrendingUp className="h-4 w-4" />
+                <span>Unrealized P&L (Binance LIVE)</span>
+                <span className="text-[10px] uppercase tracking-wider text-primary font-semibold">LIVE</span>
+              </div>
+              <div
+                className={`text-2xl font-bold ${
+                  binanceUnrealizedPnL >= 0 ? "text-profit" : "text-loss"
+                }`}
+              >
+                {binanceUnrealizedPnL >= 0 ? "+" : ""}
+                ${binanceUnrealizedPnL.toFixed(2)} USDC
+                <span className="text-sm ml-2">
+                  ({binancePnLPercent >= 0 ? "+" : ""}
+                  {binancePnLPercent.toFixed(2)}%)
+                </span>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <TrendingUp className="h-4 w-4" />
-              <span>Total P&L</span>
+              <span>Realized P&L (alle trades)</span>
             </div>
             <div
               className={`text-2xl font-bold ${
@@ -282,9 +316,13 @@ export const PortfolioBalance = ({ slotId, includeLegacyData, slots }: Portfolio
           </div>
 
           <div className="space-y-1">
-            <div className="text-sm text-muted-foreground">Last Updated</div>
+            <div className="text-sm text-muted-foreground">
+              {hasBinanceLive ? "Binance Synced" : "Last Updated"}
+            </div>
             <div className="text-sm">
-              {portfolio?.updated_at
+              {binanceSyncedAt
+                ? new Date(binanceSyncedAt).toLocaleString("da-DK", { timeZone: "UTC" }) + " UTC"
+                : portfolio?.updated_at
                 ? new Date(portfolio.updated_at).toLocaleString("da-DK", { timeZone: "UTC" }) + " UTC"
                 : "Aldrig"}
             </div>
