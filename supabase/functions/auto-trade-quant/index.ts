@@ -3237,19 +3237,9 @@ serve(async (req) => {
 
       // Analyze all USDC perpetual futures pairs
       const symbolFilters = await fetchSymbolFilters();
-      let symbols = await fetchAllUSDCSymbols();
-      // 🎯 MASTER SCAN POOL: non-master slots only evaluate symbols the master qualified
-      const isMasterSlot = effectiveMasterScanSlotId !== null && slotId === effectiveMasterScanSlotId;
-      if (masterCandidateSymbols && !isMasterSlot) {
-        if (masterCandidateSymbols.size === 0) {
-          console.log(`⏭️ Slot "${slotName}": master scan produced 0 candidates this cycle — skipping`);
-          continue;
-        }
-        symbols = symbols.filter(s => masterCandidateSymbols!.has(s));
-        console.log(`🎯 Slot "${slotName}": restricted to ${symbols.length} master-candidate symbol(s): ${symbols.join(', ')}`);
-      } else {
-        console.log(`🔍 Scanning ${symbols.length} USDC pairs for user ${session.user_id}${isMasterSlot ? ' [MASTER SCAN]' : ''}`);
-      }
+      const symbols = await fetchAllUSDCSymbols();
+      const isMasterSlot = false; // master gating disabled — every slot scans full pool
+      console.log(`🔍 Slot "${slotName}" scanning ${symbols.length} USDC pairs independently`);
       
       // 📊 STEP 1: Collect all valid signals with their strength
       interface SignalCandidate {
