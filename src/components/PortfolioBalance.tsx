@@ -25,6 +25,7 @@ export const PortfolioBalance = ({ slotId, includeLegacyData, slots }: Portfolio
   const [syncing, setSyncing] = useState(false);
   const { toast } = useToast();
   const latestRequestRef = useRef(0);
+  const syncInFlightRef = useRef(false);
 
   const fetchPortfolio = async () => {
     const requestId = ++latestRequestRef.current;
@@ -128,9 +129,60 @@ export const PortfolioBalance = ({ slotId, includeLegacyData, slots }: Portfolio
     }
   };
 
+  const syncBalance = async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (syncInFlightRef.current) return;
+
+    syncInFlightRef.current = true;
+    if (!silent) {
+      setSyncing(true);
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const { data, error } = await supabase.functions.invoke(
+        "sync-binance-futures-positions",
+        {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      if (error) throw error;
+
+      if (!silent) {
+        toast({
+          title: "Synkroniseret",
+          description: "Balance er opdateret fra Binance",
+        });
+      }
+
+      fetchPortfolio();
+    } catch (error: any) {
+      console.error("Binance sync error:", error);
+
+      if (!silent) {
+        toast({
+          title: "Fejl",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    } finally {
+      syncInFlightRef.current = false;
+
+      if (!silent) {
+        setSyncing(false);
+      }
+    }
+  };
+
   useEffect(() => {
     setLoading(true);
     fetchPortfolio();
+    syncBalance({ silent: true });
     
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let mounted = true;
@@ -165,47 +217,20 @@ export const PortfolioBalance = ({ slotId, includeLegacyData, slots }: Portfolio
         .subscribe();
     }, 500);
 
+    const syncTimer = window.setInterval(() => {
+      if (mounted) {
+        syncBalance({ silent: true });
+      }
+    }, 5000);
+
     return () => {
       mounted = false;
       latestRequestRef.current += 1;
       window.clearTimeout(timer);
+      window.clearInterval(syncTimer);
       if (channel) supabase.removeChannel(channel);
     };
   }, [slotId, includeLegacyData]);
-
-  const syncBalance = async () => {
-    setSyncing(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Not authenticated");
-
-      const { data, error } = await supabase.functions.invoke(
-        "sync-binance-futures-positions",
-        {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        }
-      );
-
-      if (error) throw error;
-
-      toast({
-        title: "Synkroniseret",
-        description: "Balance er opdateret fra Binance",
-      });
-
-      fetchPortfolio();
-    } catch (error: any) {
-      toast({
-        title: "Fejl",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -242,7 +267,7 @@ export const PortfolioBalance = ({ slotId, includeLegacyData, slots }: Portfolio
         <Button
           variant="outline"
           size="sm"
-          onClick={syncBalance}
+          onClick={() => syncBalance()}
           disabled={syncing}
         >
           {syncing ? (
