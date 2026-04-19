@@ -3123,8 +3123,6 @@ serve(async (req) => {
       // slot evaluerer alle USDC-symboler uafhængigt mod sine egne filtre.
       // Ingen gating fra "master slot" — hver strategi får fuld eksponering.
       // ═══════════════════════════════════════════════════════════════════
-      const effectiveMasterScanSlotId: string | null = null;
-      const masterCandidateSymbols: Set<string> | null = null;
       console.log(`🎯 SLOT-INDEPENDENT SCAN: ${slotIterations.length} slot(s) will each evaluate ALL USDC pairs against own filters`);
 
       // Reset klines cache for this scan cycle - all slots share same cached klines
