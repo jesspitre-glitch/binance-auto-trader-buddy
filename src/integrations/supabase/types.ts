@@ -1115,6 +1115,9 @@ export type Database = {
       }
       user_portfolio: {
         Row: {
+          binance_synced_at: string | null
+          binance_total_margin_balance: number | null
+          binance_unrealized_pnl: number | null
           created_at: string | null
           futures_capital: number | null
           futures_deposited: number | null
@@ -1124,6 +1127,9 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          binance_synced_at?: string | null
+          binance_total_margin_balance?: number | null
+          binance_unrealized_pnl?: number | null
           created_at?: string | null
           futures_capital?: number | null
           futures_deposited?: number | null
@@ -1133,6 +1139,9 @@ export type Database = {
           user_id: string
         }
         Update: {
+          binance_synced_at?: string | null
+          binance_total_margin_balance?: number | null
+          binance_unrealized_pnl?: number | null
           created_at?: string | null
           futures_capital?: number | null
           futures_deposited?: number | null
