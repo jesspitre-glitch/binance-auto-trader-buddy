@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.preview-password-login]
 verify_jwt = false
+
+[functions.oversize-position-sanity]
+verify_jwt = false

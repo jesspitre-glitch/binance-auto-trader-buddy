@@ -4263,13 +4263,22 @@ serve(async (req) => {
             `matches tracked qty ${trackedQtyBeforeOrder.toFixed(qtyPrecision)} within tolerance ${reconciliationTolerance.toFixed(qtyPrecision)}`
           );
           
-          // 🚨 ABSOLUT HARD CAP: Portfolio-baseret ultimativ grænse
-          // Ingen trade må NOGENSINDE have notional > portfolio × 50% × 20x
-          const ABSOLUTE_MAX_PORTFOLIO_FRACTION = 0.50;
-          const ABSOLUTE_MAX_LEVERAGE = 20;
-          const absoluteMaxNotional = configuredBalance * ABSOLUTE_MAX_PORTFOLIO_FRACTION * ABSOLUTE_MAX_LEVERAGE;
-          if (actualNotional > absoluteMaxNotional) {
-            console.error(`🚨 ABSOLUT HARD CAP BLOCKED: ${symbol} notional $${actualNotional.toFixed(2)} > portfolio absolute max $${absoluteMaxNotional.toFixed(2)} (portfolio $${configuredBalance.toFixed(2)} × 50% × 20x)`);
+          // 🚨 ABSOLUT HARD CAP (Fix 2): Per-slot ultimativ grænse
+          // Formel: portfolio × slot_capital% × position_size% × leverage × 1.5 (tolerance)
+          // Erstatter den tidligere 50%×20x cap som var alt for løs (~$1470 vs ~$32 reelt loft).
+          const ABSOLUTE_TOLERANCE_MULTIPLIER = 1.5;
+          const slotFraction = (capitalPercent || 0) / 100;
+          const positionFraction = (config.position_size_percent || 0) / 100;
+          const leverageMult = config.leverage || 1;
+          const absoluteMaxNotional =
+            configuredBalance * slotFraction * positionFraction * leverageMult * ABSOLUTE_TOLERANCE_MULTIPLIER;
+          if (absoluteMaxNotional > 0 && actualNotional > absoluteMaxNotional) {
+            console.error(
+              `🚨 ABSOLUT HARD CAP BLOCKED (slot-baseret): ${symbol} notional $${actualNotional.toFixed(2)} > slot absolute max $${absoluteMaxNotional.toFixed(2)}`
+            );
+            console.error(
+              `   formel: $${configuredBalance.toFixed(2)} × ${capitalPercent}% × ${config.position_size_percent}% × ${leverageMult}x × ${ABSOLUTE_TOLERANCE_MULTIPLIER}`
+            );
             console.error(`   ❌ Trade AFVIST — dette burde ALDRIG ske`);
             continue;
           }

@@ -32,27 +32,56 @@ function calculateMaxExpectedSlotQuantity(params: {
   return notional / entryPrice;
 }
 
-function distributeBinanceQuantityAcrossRows(existingRows: any[], totalBinanceQty: number): number[] {
+/**
+ * Fordeler Binances aggregerede quantity proportionalt over DB-rows OG capper hver row mod slot-max.
+ * Fix 1+3: Single-row bypass fjernet — også enlige rows valideres mod slot-cap.
+ *          Auto-nedskalering: hvis row's beregnede andel > slot-cap × 1.10, nedskaleres til slot-cap.
+ *
+ * Eksisterende DB-qty bruges som vægt ved proportional fordeling. Hver row capper mod sin egen
+ * slot-cap (calculateMaxExpectedSlotQuantity × SLOT_QUANTITY_TOLERANCE_MULTIPLIER). Excess qty
+ * (orphan på Binance) tabes — DB skal aldrig "tro" en slot ejer mere end dens lovlige andel.
+ */
+function distributeBinanceQuantityAcrossRows(
+  existingRows: any[],
+  totalBinanceQty: number,
+  slotCaps?: number[]
+): number[] {
   if (existingRows.length === 0) return [];
-  if (existingRows.length === 1) return [totalBinanceQty];
 
   const existingQtys = existingRows.map((row) => Math.abs(Number(row.quantity) || 0));
   const existingTotalQty = existingQtys.reduce((sum, qty) => sum + qty, 0);
 
-  if (!(existingTotalQty > 0)) {
-    return existingRows.map((_, index) => (index === 0 ? totalBinanceQty : 0));
+  // Proportional fordeling baseret på DB-qty (eller lige fordelt hvis intet er kendt)
+  let raw: number[];
+  if (existingTotalQty > 0) {
+    let remainingQty = totalBinanceQty;
+    raw = existingRows.map((_, index) => {
+      if (index === existingRows.length - 1) return remainingQty;
+      const allocated = totalBinanceQty * (existingQtys[index] / existingTotalQty);
+      remainingQty -= allocated;
+      return allocated;
+    });
+  } else {
+    const equalShare = totalBinanceQty / existingRows.length;
+    raw = existingRows.map(() => equalShare);
   }
 
-  let remainingQty = totalBinanceQty;
+  // Fix 3: Cap hver row mod slot-max hvis caps er givet
+  if (!slotCaps || slotCaps.length !== existingRows.length) {
+    return raw;
+  }
 
-  return existingRows.map((_, index) => {
-    if (index === existingRows.length - 1) {
-      return remainingQty;
+  return raw.map((qty, idx) => {
+    const cap = slotCaps[idx];
+    if (!(cap > 0)) return qty; // Ingen cap kendt → bevar
+    const ceiling = cap * SLOT_QUANTITY_TOLERANCE_MULTIPLIER;
+    if (qty > ceiling) {
+      console.warn(
+        `⚠️ SLOT-CAP DOWNSCALE: row ${idx} qty ${qty.toFixed(8)} > cap ${ceiling.toFixed(8)} (cap×${SLOT_QUANTITY_TOLERANCE_MULTIPLIER}) — nedskaleret`
+      );
+      return ceiling;
     }
-
-    const allocatedQty = totalBinanceQty * (existingQtys[index] / existingTotalQty);
-    remainingQty -= allocatedQty;
-    return allocatedQty;
+    return qty;
   });
 }
 
@@ -317,6 +346,22 @@ serve(async (req) => {
         .eq('user_id', userId)
         .eq('status', 'OPEN');
 
+      // Fix 3: Hent alle aktive slots + deres configs så vi kan beregne per-row slot-cap
+      const { data: slotsForCap } = await supabaseClient
+        .from('strategy_slots')
+        .select('id, capital_percent, indicator_config:config_id(position_size_percent, leverage)')
+        .eq('user_id', userId);
+      const slotById = new Map<string, { capital_percent: number; position_size_percent: number; leverage: number }>();
+      for (const s of slotsForCap || []) {
+        const cfg: any = (s as any).indicator_config;
+        slotById.set((s as any).id, {
+          capital_percent: Number((s as any).capital_percent) || 0,
+          position_size_percent: Number(cfg?.position_size_percent) || 0,
+          leverage: Number(cfg?.leverage) || 1,
+        });
+      }
+      const portfolioCapital = Number(existingPortfolio?.futures_capital) || 0;
+
       const updates = [];
 
       // Sync each Binance position to database
@@ -338,7 +383,21 @@ serve(async (req) => {
         if (matchingPositions.length > 0) {
           const totalDbQty = matchingPositions.reduce((sum, p) => sum + Math.abs(Number(p.quantity) || 0), 0);
           const qtyDrift = Math.abs(absQuantity - totalDbQty);
-          const distributedQuantities = distributeBinanceQuantityAcrossRows(matchingPositions, absQuantity);
+
+          // Fix 3: Beregn slot-cap pr. row, så distributionen kan nedskalere oversize rows
+          const slotCaps = matchingPositions.map((dbPos) => {
+            const slotInfo = dbPos.slot_id ? slotById.get(dbPos.slot_id) : null;
+            if (!slotInfo || !(portfolioCapital > 0)) return 0;
+            return calculateMaxExpectedSlotQuantity({
+              portfolioCapital,
+              slotCapitalPercent: slotInfo.capital_percent,
+              positionSizePercent: slotInfo.position_size_percent,
+              leverage: slotInfo.leverage,
+              entryPrice: binanceEntryPrice,
+            });
+          });
+
+          const distributedQuantities = distributeBinanceQuantityAcrossRows(matchingPositions, absQuantity, slotCaps);
           const syncTimestamp = new Date().toISOString();
           const qtyTolerance = Math.max(absQuantity * 0.0001, 0.00000001);
 
