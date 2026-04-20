@@ -346,6 +346,22 @@ serve(async (req) => {
         .eq('user_id', userId)
         .eq('status', 'OPEN');
 
+      // Fix 3: Hent alle aktive slots + deres configs så vi kan beregne per-row slot-cap
+      const { data: slotsForCap } = await supabaseClient
+        .from('strategy_slots')
+        .select('id, capital_percent, indicator_config:config_id(position_size_percent, leverage)')
+        .eq('user_id', userId);
+      const slotById = new Map<string, { capital_percent: number; position_size_percent: number; leverage: number }>();
+      for (const s of slotsForCap || []) {
+        const cfg: any = (s as any).indicator_config;
+        slotById.set((s as any).id, {
+          capital_percent: Number((s as any).capital_percent) || 0,
+          position_size_percent: Number(cfg?.position_size_percent) || 0,
+          leverage: Number(cfg?.leverage) || 1,
+        });
+      }
+      const portfolioCapital = Number(existingPortfolio?.futures_capital) || 0;
+
       const updates = [];
 
       // Sync each Binance position to database
