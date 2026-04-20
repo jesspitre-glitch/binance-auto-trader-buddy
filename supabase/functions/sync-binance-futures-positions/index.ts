@@ -383,7 +383,21 @@ serve(async (req) => {
         if (matchingPositions.length > 0) {
           const totalDbQty = matchingPositions.reduce((sum, p) => sum + Math.abs(Number(p.quantity) || 0), 0);
           const qtyDrift = Math.abs(absQuantity - totalDbQty);
-          const distributedQuantities = distributeBinanceQuantityAcrossRows(matchingPositions, absQuantity);
+
+          // Fix 3: Beregn slot-cap pr. row, så distributionen kan nedskalere oversize rows
+          const slotCaps = matchingPositions.map((dbPos) => {
+            const slotInfo = dbPos.slot_id ? slotById.get(dbPos.slot_id) : null;
+            if (!slotInfo || !(portfolioCapital > 0)) return 0;
+            return calculateMaxExpectedSlotQuantity({
+              portfolioCapital,
+              slotCapitalPercent: slotInfo.capital_percent,
+              positionSizePercent: slotInfo.position_size_percent,
+              leverage: slotInfo.leverage,
+              entryPrice: binanceEntryPrice,
+            });
+          });
+
+          const distributedQuantities = distributeBinanceQuantityAcrossRows(matchingPositions, absQuantity, slotCaps);
           const syncTimestamp = new Date().toISOString();
           const qtyTolerance = Math.max(absQuantity * 0.0001, 0.00000001);
 
