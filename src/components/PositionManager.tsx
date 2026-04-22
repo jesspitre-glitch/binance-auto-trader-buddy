@@ -420,6 +420,17 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                              {trailingIsActive && trailingStopDb != null && (
                                <div className="text-sm font-mono font-bold text-profit">${trailingStopDb.toFixed(4)}</div>
                              )}
+
+                             {/* TS trigger-pris: hvad coin skal koste før trailing aktiveres */}
+                             {!trailingIsActive && trailingTriggerPrice != null && Number.isFinite(trailingTriggerPrice) && (
+                               <div className="flex items-center gap-2">
+                                 <span className="text-xs font-semibold">TS trigger:</span>
+                                 <span className="font-mono text-pink-500">${trailingTriggerPrice.toFixed(4)}</span>
+                                 <span className="text-[10px] text-muted-foreground">
+                                   ({position.side === 'LONG' ? '+' : ''}{distancePct(trailingTriggerPrice).toFixed(2)}%)
+                                 </span>
+                               </div>
+                             )}
                           </div>
                        </div>
                     </div>
