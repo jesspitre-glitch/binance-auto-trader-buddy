@@ -371,6 +371,20 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                                <span className="font-mono text-blue-500">${breakEvenLevel.toFixed(4)}</span>
                              </div>
                            )}
+
+                           {/* BE trigger-pris: hvad coin skal koste før BE aktiveres */}
+                           {!isBreakEvenActivated && breakEvenTriggerPrice != null && Number.isFinite(breakEvenTriggerPrice) && (
+                             <div className="flex items-center gap-2">
+                               <span className="text-xs font-semibold">BE trigger:</span>
+                               <span className="font-mono text-blue-500">${breakEvenTriggerPrice.toFixed(4)}</span>
+                               <span className="text-[10px] text-muted-foreground">
+                                 ({position.side === 'LONG' ? '+' : ''}{distancePct(breakEvenTriggerPrice).toFixed(2)}%)
+                               </span>
+                             </div>
+                           )}
+                           {!isBreakEvenActivated && !breakEvenEnabled && (
+                             <div className="text-[10px] text-muted-foreground italic">BE er slået fra i strategien</div>
+                           )}
                          </div>
 
                           <div className="border-t pt-2 mt-2 space-y-1">
