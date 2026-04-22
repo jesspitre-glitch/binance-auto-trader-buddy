@@ -346,10 +346,10 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                       
                       <div className="text-sm space-y-1 flex-1 min-w-0">
                         <div className="flex flex-wrap gap-x-4 gap-y-1">
-                          <div>Entry: <span className="font-mono">${position.entry_price}</span></div>
+                          <div>Entry: <span className="font-mono">${formatPrice(Number(position.entry_price))}</span></div>
                           <div>
                             Current: <span className="font-mono">
-                              ${livePrice.toFixed(4)}
+                              ${formatPrice(livePrice)}
                             </span>
                           </div>
                           <div>Qty: <span className="font-mono">{position.quantity}</span></div>
