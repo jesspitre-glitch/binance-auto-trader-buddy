@@ -26,6 +26,24 @@ interface PositionManagerProps {
   slots?: { id: string; name: string; slot_number: number }[];
 }
 
+/**
+ * Adaptiv pris-formattering: vælg antal decimaler ud fra prisens størrelse,
+ * så low-cap coins som 1000BONK/PENGU får meningsfulde decimaler.
+ */
+const formatPrice = (price: number | null | undefined): string => {
+  if (price == null || !Number.isFinite(Number(price))) return '-';
+  const abs = Math.abs(Number(price));
+  let digits: number;
+  if (abs >= 1000) digits = 2;
+  else if (abs >= 100) digits = 3;
+  else if (abs >= 1) digits = 4;
+  else if (abs >= 0.1) digits = 5;
+  else if (abs >= 0.01) digits = 6;
+  else if (abs >= 0.001) digits = 7;
+  else digits = 8;
+  return Number(price).toFixed(digits);
+};
+
 export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] }: PositionManagerProps) => {
   const [positions, setPositions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
