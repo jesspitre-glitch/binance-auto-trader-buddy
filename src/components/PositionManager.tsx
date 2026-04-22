@@ -26,6 +26,24 @@ interface PositionManagerProps {
   slots?: { id: string; name: string; slot_number: number }[];
 }
 
+/**
+ * Adaptiv pris-formattering: vælg antal decimaler ud fra prisens størrelse,
+ * så low-cap coins som 1000BONK/PENGU får meningsfulde decimaler.
+ */
+const formatPrice = (price: number | null | undefined): string => {
+  if (price == null || !Number.isFinite(Number(price))) return '-';
+  const abs = Math.abs(Number(price));
+  let digits: number;
+  if (abs >= 1000) digits = 2;
+  else if (abs >= 100) digits = 3;
+  else if (abs >= 1) digits = 4;
+  else if (abs >= 0.1) digits = 5;
+  else if (abs >= 0.01) digits = 6;
+  else if (abs >= 0.001) digits = 7;
+  else digits = 8;
+  return Number(price).toFixed(digits);
+};
+
 export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] }: PositionManagerProps) => {
   const [positions, setPositions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -328,10 +346,10 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                       
                       <div className="text-sm space-y-1 flex-1 min-w-0">
                         <div className="flex flex-wrap gap-x-4 gap-y-1">
-                          <div>Entry: <span className="font-mono">${position.entry_price}</span></div>
+                          <div>Entry: <span className="font-mono">${formatPrice(Number(position.entry_price))}</span></div>
                           <div>
                             Current: <span className="font-mono">
-                              ${livePrice.toFixed(4)}
+                              ${formatPrice(livePrice)}
                             </span>
                           </div>
                           <div>Qty: <span className="font-mono">{position.quantity}</span></div>
@@ -348,12 +366,12 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                          <div className="space-y-1">
                            <div className="flex items-center gap-2">
                              <span className="text-xs font-semibold">SL (max tab):</span>
-                             <span className="font-mono">${Number.isFinite(originalStopLoss) ? originalStopLoss.toFixed(4) : '-'}</span>
+                             <span className="font-mono">${Number.isFinite(originalStopLoss) ? formatPrice(originalStopLoss) : '-'}</span>
                            </div>
 
                            <div className="flex items-center gap-2">
                              <span className="text-xs font-semibold">Aktivt stop:</span>
-                             <span className="font-mono">${Number.isFinite(activeStopLevel) ? activeStopLevel.toFixed(4) : '-'}</span>
+                             <span className="font-mono">${Number.isFinite(activeStopLevel) ? formatPrice(activeStopLevel) : '-'}</span>
                               {trailingIsActive ? (
                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-profit/10 text-profit border-profit/20">
                                   TRAILING
@@ -368,7 +386,7 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                            {isBreakEvenActivated && (
                              <div className="flex items-center gap-2">
                                <span className="text-xs font-semibold">BE niveau:</span>
-                               <span className="font-mono text-blue-500">${breakEvenLevel.toFixed(4)}</span>
+                               <span className="font-mono text-blue-500">${formatPrice(breakEvenLevel)}</span>
                              </div>
                            )}
 
@@ -376,7 +394,7 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                            {!isBreakEvenActivated && breakEvenTriggerPrice != null && Number.isFinite(breakEvenTriggerPrice) && (
                              <div className="flex items-center gap-2">
                                <span className="text-xs font-semibold">BE trigger:</span>
-                               <span className="font-mono text-blue-500">${breakEvenTriggerPrice.toFixed(4)}</span>
+                               <span className="font-mono text-blue-500">${formatPrice(breakEvenTriggerPrice)}</span>
                                <span className="text-[10px] text-muted-foreground">
                                  ({position.side === 'LONG' ? '+' : ''}{distancePct(breakEvenTriggerPrice).toFixed(2)}%)
                                </span>
@@ -418,14 +436,14 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                              </div>
  
                              {trailingIsActive && trailingStopDb != null && (
-                               <div className="text-sm font-mono font-bold text-profit">${trailingStopDb.toFixed(4)}</div>
+                               <div className="text-sm font-mono font-bold text-profit">${formatPrice(trailingStopDb)}</div>
                              )}
 
                              {/* TS trigger-pris: hvad coin skal koste før trailing aktiveres */}
                              {!trailingIsActive && trailingTriggerPrice != null && Number.isFinite(trailingTriggerPrice) && (
                                <div className="flex items-center gap-2">
                                  <span className="text-xs font-semibold">TS trigger:</span>
-                                 <span className="font-mono text-pink-500">${trailingTriggerPrice.toFixed(4)}</span>
+                                 <span className="font-mono text-pink-500">${formatPrice(trailingTriggerPrice)}</span>
                                  <span className="text-[10px] text-muted-foreground">
                                    ({position.side === 'LONG' ? '+' : ''}{distancePct(trailingTriggerPrice).toFixed(2)}%)
                                  </span>
