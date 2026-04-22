@@ -223,12 +223,43 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                 // Get ATR-based configuration (used for status display)
                 const atr = Number(position.indicators_snapshot?.atr) || 0;
                 const trailingActivationAtr = Number(position.indicators_snapshot?.trailing_stop_activation_atr) || 1.0;
+                const trailingActivationEnabled = position.indicators_snapshot?.trailing_stop_activation_enabled ?? true;
+                const breakEvenAtr = Number(position.indicators_snapshot?.break_even_atr) || 1.0;
+                const breakEvenEnabled = position.indicators_snapshot?.break_even_enabled ?? false;
+                const breakEvenAtrModeEnabled = position.indicators_snapshot?.break_even_atr_enabled ?? true;
+                const breakEvenProfitPctEnabled = position.indicators_snapshot?.break_even_profit_pct_enabled ?? false;
+                const breakEvenProfitPctTrigger = Number(position.indicators_snapshot?.break_even_profit_pct_trigger) || 1.5;
 
                 // Calculate profit distance in ATR
                 const profitDistance = position.side === 'LONG'
                   ? livePrice - position.entry_price
                   : position.entry_price - livePrice;
                 const profitInAtr = atr > 0 ? profitDistance / atr : 0;
+
+                // Trigger-priser: hvad skal coin koste før BE/TS aktiveres
+                // BE trigger: ATR-mode bruger entry ± (break_even_atr × ATR), pct-mode bruger entry × (1 ± trigger%)
+                let breakEvenTriggerPrice: number | null = null;
+                if (breakEvenEnabled && atr > 0) {
+                  if (breakEvenAtrModeEnabled) {
+                    breakEvenTriggerPrice = position.side === 'LONG'
+                      ? position.entry_price + (breakEvenAtr * atr)
+                      : position.entry_price - (breakEvenAtr * atr);
+                  } else if (breakEvenProfitPctEnabled) {
+                    breakEvenTriggerPrice = position.side === 'LONG'
+                      ? position.entry_price * (1 + breakEvenProfitPctTrigger / 100)
+                      : position.entry_price * (1 - breakEvenProfitPctTrigger / 100);
+                  }
+                }
+
+                // TS trigger: entry ± (trailing_stop_activation_atr × ATR) — kræver også at BE er nået
+                const trailingTriggerPrice = trailingActivationEnabled && atr > 0
+                  ? (position.side === 'LONG'
+                      ? position.entry_price + (trailingActivationAtr * atr)
+                      : position.entry_price - (trailingActivationAtr * atr))
+                  : null;
+
+                // Distance fra nuværende pris til trigger (i % af entry)
+                const distancePct = (target: number) => ((target - livePrice) / position.entry_price) * 100;
 
                 // Backend source of truth flags/levels
                 const originalStopLoss = Number(position.indicators_snapshot?.original_stop_loss ?? position.stop_loss);
@@ -340,6 +371,20 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                                <span className="font-mono text-blue-500">${breakEvenLevel.toFixed(4)}</span>
                              </div>
                            )}
+
+                           {/* BE trigger-pris: hvad coin skal koste før BE aktiveres */}
+                           {!isBreakEvenActivated && breakEvenTriggerPrice != null && Number.isFinite(breakEvenTriggerPrice) && (
+                             <div className="flex items-center gap-2">
+                               <span className="text-xs font-semibold">BE trigger:</span>
+                               <span className="font-mono text-blue-500">${breakEvenTriggerPrice.toFixed(4)}</span>
+                               <span className="text-[10px] text-muted-foreground">
+                                 ({position.side === 'LONG' ? '+' : ''}{distancePct(breakEvenTriggerPrice).toFixed(2)}%)
+                               </span>
+                             </div>
+                           )}
+                           {!isBreakEvenActivated && !breakEvenEnabled && (
+                             <div className="text-[10px] text-muted-foreground italic">BE er slået fra i strategien</div>
+                           )}
                          </div>
 
                           <div className="border-t pt-2 mt-2 space-y-1">
@@ -374,6 +419,17 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
  
                              {trailingIsActive && trailingStopDb != null && (
                                <div className="text-sm font-mono font-bold text-profit">${trailingStopDb.toFixed(4)}</div>
+                             )}
+
+                             {/* TS trigger-pris: hvad coin skal koste før trailing aktiveres */}
+                             {!trailingIsActive && trailingTriggerPrice != null && Number.isFinite(trailingTriggerPrice) && (
+                               <div className="flex items-center gap-2">
+                                 <span className="text-xs font-semibold">TS trigger:</span>
+                                 <span className="font-mono text-pink-500">${trailingTriggerPrice.toFixed(4)}</span>
+                                 <span className="text-[10px] text-muted-foreground">
+                                   ({position.side === 'LONG' ? '+' : ''}{distancePct(trailingTriggerPrice).toFixed(2)}%)
+                                 </span>
+                               </div>
                              )}
                           </div>
                        </div>
