@@ -141,11 +141,15 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
               }
             }
 
-            // Update peak price
-            if (side === 'LONG' && price > peakPrice) {
-              peakPrice = price;
-            } else if (side === 'SHORT' && price < peakPrice) {
-              peakPrice = price;
+            // Update peak price (klines close)
+            // Brug også DB peak_price så vi matcher backend selv hvis peak blev sat
+            // mellem 1m candles eller på en højere timeframe.
+            if (side === 'LONG') {
+              if (price > peakPrice) peakPrice = price;
+              if (peakPriceDb != null && peakPriceDb > peakPrice) peakPrice = peakPriceDb;
+            } else {
+              if (price < peakPrice) peakPrice = price;
+              if (peakPriceDb != null && peakPriceDb > 0 && peakPriceDb < peakPrice) peakPrice = peakPriceDb;
             }
 
             // Trailing må kun aktiveres efter BE + i profit + threshold
