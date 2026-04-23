@@ -6,6 +6,22 @@ interface TradeChartProps {
   trade: any;
 }
 
+// Adaptiv prisformatering — flere decimaler for lave priser
+const formatPrice = (price: number): string => {
+  if (!isFinite(price)) return "-";
+  const abs = Math.abs(price);
+  let decimals: number;
+  if (abs === 0) decimals = 2;
+  else if (abs < 0.001) decimals = 8;
+  else if (abs < 0.01) decimals = 7;
+  else if (abs < 0.1) decimals = 6;
+  else if (abs < 1) decimals = 5;
+  else if (abs < 100) decimals = 4;
+  else if (abs < 1000) decimals = 3;
+  else decimals = 2;
+  return price.toFixed(decimals);
+};
+
 export const TradeChart = ({ trade }: TradeChartProps) => {
   const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -446,10 +462,14 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         <YAxis
           domain={[minPrice - padding, maxPrice + padding]}
           tick={{ fontSize: 11 }}
-          tickFormatter={(value) => value.toFixed(entryPrice > 100 ? 2 : 4)}
-          width={65}
+          tickFormatter={(value) => formatPrice(value)}
+          width={85}
         />
         <Tooltip
+          formatter={(value: any, name: any) => [
+            typeof value === "number" ? formatPrice(value) : String(value),
+            name,
+          ]}
           labelFormatter={(value) =>
             typeof value === "number"
               ? new Date(value).toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" })
