@@ -161,8 +161,10 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
                 trailingStopActivatedAt = timestamp;
               }
 
-              // Brug DB-afledt trailing-distance når muligt, ellers ATR-baseret distance
-              const trailingDistance = trailingDistanceDbValid ?? (atrValue * atrTrailingMultiplier);
+              // Brug ATR-baseret distance (matcher backend monitor logik).
+              // DB trailing_stop bruges KUN som "current snapshot" til at bekræfte aktivering,
+              // ikke som distance-kilde (den kan være låst på et historisk peak).
+              const trailingDistance = atrTrailingDistance;
 
               // Forventet trailing (uden at mutere stop_loss). Active stop beregnes separat (Model B).
               const calculatedTrailing = side === "LONG"
