@@ -6,6 +6,22 @@ interface TradeChartProps {
   trade: any;
 }
 
+// Adaptiv prisformatering — flere decimaler for lave priser
+const formatPrice = (price: number): string => {
+  if (!isFinite(price)) return "-";
+  const abs = Math.abs(price);
+  let decimals: number;
+  if (abs === 0) decimals = 2;
+  else if (abs < 0.001) decimals = 8;
+  else if (abs < 0.01) decimals = 7;
+  else if (abs < 0.1) decimals = 6;
+  else if (abs < 1) decimals = 5;
+  else if (abs < 100) decimals = 4;
+  else if (abs < 1000) decimals = 3;
+  else decimals = 2;
+  return price.toFixed(decimals);
+};
+
 export const TradeChart = ({ trade }: TradeChartProps) => {
   const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
