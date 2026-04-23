@@ -466,6 +466,10 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
           width={85}
         />
         <Tooltip
+          formatter={(value: any, name: any) => [
+            typeof value === "number" ? formatPrice(value) : String(value),
+            name,
+          ]}
           labelFormatter={(value) =>
             typeof value === "number"
               ? new Date(value).toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" })
