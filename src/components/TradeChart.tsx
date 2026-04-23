@@ -446,8 +446,8 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         <YAxis
           domain={[minPrice - padding, maxPrice + padding]}
           tick={{ fontSize: 11 }}
-          tickFormatter={(value) => value.toFixed(entryPrice > 100 ? 2 : 4)}
-          width={65}
+          tickFormatter={(value) => formatPrice(value)}
+          width={85}
         />
         <Tooltip
           labelFormatter={(value) =>
