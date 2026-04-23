@@ -73,19 +73,14 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
         const peakLockMinProfitFloorPct = Number(trade.indicators_snapshot?.peak_lock_min_profit_floor_pct) || 0.15;
         const peakLockRatchetOnly = trade.indicators_snapshot?.peak_lock_ratchet_only ?? true;
         
-        // Hvis trailing_stop findes i databasen, afled trailing-distance fra (peak - trailing_stop)
-        // så chartet matcher backend selv hvis multipliers ikke ligger i snapshot.
+        // Trailing-distance: brug ALTID ATR-baseret distance for kortrekonstruktion
+        // (matcher backend monitor-logik). DB-trailing_stop kan være "låst" på et historisk peak,
+        // så hvis vi udleder distance derfra får vi en forkert/skæv linje.
+        // Vi bruger DB-værdien udelukkende som "snapshot of truth" for nuværende trailing-niveau,
+        // ikke som distance-kilde.
         const trailingStopDb = trade.trailing_stop != null ? Number(trade.trailing_stop) : null;
         const peakPriceDb = trade.peak_price != null ? Number(trade.peak_price) : null;
-        const trailingDistanceFromDb =
-          trailingStopDb != null && isFinite(trailingStopDb) && trailingStopDb > 0 &&
-          peakPriceDb != null && isFinite(peakPriceDb) && peakPriceDb > 0
-            ? (side === "LONG" ? peakPriceDb - trailingStopDb : trailingStopDb - peakPriceDb)
-            : null;
-        const trailingDistanceDbValid =
-          trailingDistanceFromDb != null && isFinite(trailingDistanceFromDb) && trailingDistanceFromDb > 0
-            ? trailingDistanceFromDb
-            : null;
+        const atrTrailingDistance = atrValue * atrTrailingMultiplier;
         
         // Start altid fra entry price for at vise trailing stop evolution korrekt
         let peakPrice = entryPrice;
@@ -146,11 +141,15 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
               }
             }
 
-            // Update peak price
-            if (side === 'LONG' && price > peakPrice) {
-              peakPrice = price;
-            } else if (side === 'SHORT' && price < peakPrice) {
-              peakPrice = price;
+            // Update peak price (klines close)
+            // Brug også DB peak_price så vi matcher backend selv hvis peak blev sat
+            // mellem 1m candles eller på en højere timeframe.
+            if (side === 'LONG') {
+              if (price > peakPrice) peakPrice = price;
+              if (peakPriceDb != null && peakPriceDb > peakPrice) peakPrice = peakPriceDb;
+            } else {
+              if (price < peakPrice) peakPrice = price;
+              if (peakPriceDb != null && peakPriceDb > 0 && peakPriceDb < peakPrice) peakPrice = peakPriceDb;
             }
 
             // Trailing må kun aktiveres efter BE + i profit + threshold
@@ -166,8 +165,10 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
                 trailingStopActivatedAt = timestamp;
               }
 
-              // Brug DB-afledt trailing-distance når muligt, ellers ATR-baseret distance
-              const trailingDistance = trailingDistanceDbValid ?? (atrValue * atrTrailingMultiplier);
+              // Brug ATR-baseret distance (matcher backend monitor logik).
+              // DB trailing_stop bruges KUN som "current snapshot" til at bekræfte aktivering,
+              // ikke som distance-kilde (den kan være låst på et historisk peak).
+              const trailingDistance = atrTrailingDistance;
 
               // Forventet trailing (uden at mutere stop_loss). Active stop beregnes separat (Model B).
               const calculatedTrailing = side === "LONG"
