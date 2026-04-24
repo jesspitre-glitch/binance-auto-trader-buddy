@@ -388,6 +388,12 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       max_position_duration_minutes: config.max_position_duration_minutes ?? 240,
       auto_exit_enabled: config.auto_exit_enabled !== undefined ? config.auto_exit_enabled : true,
       conditional_time_exit_enabled: config.conditional_time_exit_enabled !== undefined ? config.conditional_time_exit_enabled : true,
+      stale_exit_enabled: (config as any).stale_exit_enabled ?? false,
+      stale_exit_max_duration_tf_mult: (config as any).stale_exit_max_duration_tf_mult ?? null,
+      stale_exit_peak_inactivity_tf_mult: (config as any).stale_exit_peak_inactivity_tf_mult ?? null,
+      stale_exit_trailing_inactivity_tf_mult: (config as any).stale_exit_trailing_inactivity_tf_mult ?? null,
+      stale_exit_min_move_atr_mult: (config as any).stale_exit_min_move_atr_mult ?? null,
+      stale_exit_use_momentum_filter: (config as any).stale_exit_use_momentum_filter ?? false,
       // Leverage
       leverage: config.leverage ?? 10,
       // Hard filter toggles
