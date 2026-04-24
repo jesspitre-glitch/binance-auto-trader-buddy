@@ -2096,6 +2096,11 @@ serve(async (req) => {
         // Så når trailing aktiveres senere, har vi den korrekte peak
         if (newPeakPrice !== position.peak_price) {
           updateData.peak_price = newPeakPrice;
+          // 🟢 STALE EXIT TRACKING: marker tidspunkt for ny peak (uden at påvirke andet)
+          updateData.indicators_snapshot = {
+            ...(updateData.indicators_snapshot ?? position.indicators_snapshot ?? {}),
+            stale_exit_peak_updated_at: new Date().toISOString(),
+          };
           console.log(`📈 PEAK GEMT | ${position.symbol} | ${position.peak_price || 'null'} → ${newPeakPrice}`);
         }
         
@@ -2114,6 +2119,13 @@ serve(async (req) => {
         if (trailingStopActive && trailingValidThisCycle && newTrailingStop !== null && newTrailingStop !== undefined && isFinite(newTrailingStop)) {
           updateData.peak_price = newPeakPrice;
           updateData.trailing_stop = newTrailingStop;
+          // 🟢 STALE EXIT TRACKING: marker tidspunkt for trailing-opdatering kun ved reel ændring
+          if (newTrailingStop !== position.trailing_stop) {
+            updateData.indicators_snapshot = {
+              ...(updateData.indicators_snapshot ?? position.indicators_snapshot ?? {}),
+              stale_exit_trailing_updated_at: new Date().toISOString(),
+            };
+          }
 
           console.log(`📈 TRAILING OPDATERET | ${position.symbol} | peak=${newPeakPrice} ts=${newTrailingStop}`);
         } else if (trailingStopActive && !trailingValidThisCycle) {
