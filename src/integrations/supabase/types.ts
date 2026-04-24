@@ -283,6 +283,12 @@ export type Database = {
           scan_interval: string | null
           signal_conditions_required: number | null
           signal_timing_mode: string
+          stale_exit_enabled: boolean | null
+          stale_exit_max_duration_tf_mult: number | null
+          stale_exit_min_move_atr_mult: number | null
+          stale_exit_peak_inactivity_tf_mult: number | null
+          stale_exit_trailing_inactivity_tf_mult: number | null
+          stale_exit_use_momentum_filter: boolean | null
           stochrsi_d_period: number | null
           stochrsi_enabled: boolean | null
           stochrsi_hard_filter: boolean | null
@@ -444,6 +450,12 @@ export type Database = {
           scan_interval?: string | null
           signal_conditions_required?: number | null
           signal_timing_mode?: string
+          stale_exit_enabled?: boolean | null
+          stale_exit_max_duration_tf_mult?: number | null
+          stale_exit_min_move_atr_mult?: number | null
+          stale_exit_peak_inactivity_tf_mult?: number | null
+          stale_exit_trailing_inactivity_tf_mult?: number | null
+          stale_exit_use_momentum_filter?: boolean | null
           stochrsi_d_period?: number | null
           stochrsi_enabled?: boolean | null
           stochrsi_hard_filter?: boolean | null
@@ -605,6 +617,12 @@ export type Database = {
           scan_interval?: string | null
           signal_conditions_required?: number | null
           signal_timing_mode?: string
+          stale_exit_enabled?: boolean | null
+          stale_exit_max_duration_tf_mult?: number | null
+          stale_exit_min_move_atr_mult?: number | null
+          stale_exit_peak_inactivity_tf_mult?: number | null
+          stale_exit_trailing_inactivity_tf_mult?: number | null
+          stale_exit_use_momentum_filter?: boolean | null
           stochrsi_d_period?: number | null
           stochrsi_enabled?: boolean | null
           stochrsi_hard_filter?: boolean | null

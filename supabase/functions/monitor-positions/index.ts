@@ -95,7 +95,6 @@ function calculatePSARForTrailing(highs: number[], lows: number[], closes: numbe
   return { value: sar, direction: isUpTrend ? 'up' : 'down' };
 }
 
-
 async function createSignature(queryString: string, apiSecret: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
@@ -558,7 +557,7 @@ serve(async (req) => {
             } else {
               const { data: slotConfig } = await supabaseClient
                 .from('indicator_config')
-                .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max, position_size_percent, leverage')
+                .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max, position_size_percent, leverage, scan_interval, stale_exit_enabled, stale_exit_max_duration_tf_mult, stale_exit_peak_inactivity_tf_mult, stale_exit_trailing_inactivity_tf_mult, stale_exit_min_move_atr_mult, stale_exit_use_momentum_filter')
                 .eq('id', slotData.config_id)
                 .single();
               configData = slotConfig;
@@ -581,7 +580,7 @@ serve(async (req) => {
           if (sessionData?.active_config_id) {
             const { data: activeConfig } = await supabaseClient
               .from('indicator_config')
-              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max, position_size_percent, leverage')
+              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max, position_size_percent, leverage, scan_interval, stale_exit_enabled, stale_exit_max_duration_tf_mult, stale_exit_peak_inactivity_tf_mult, stale_exit_trailing_inactivity_tf_mult, stale_exit_min_move_atr_mult, stale_exit_use_momentum_filter')
               .eq('id', sessionData.active_config_id)
               .single();
             configData = activeConfig;
@@ -590,7 +589,7 @@ serve(async (req) => {
             // Fallback til første config hvis ingen session
             const { data: fallbackConfig } = await supabaseClient
               .from('indicator_config')
-              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max, position_size_percent, leverage')
+              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max, position_size_percent, leverage, scan_interval, stale_exit_enabled, stale_exit_max_duration_tf_mult, stale_exit_peak_inactivity_tf_mult, stale_exit_trailing_inactivity_tf_mult, stale_exit_min_move_atr_mult, stale_exit_use_momentum_filter')
               .eq('user_id', position.user_id)
               .order('created_at', { ascending: false })
               .limit(1)
@@ -2070,6 +2069,126 @@ serve(async (req) => {
           console.log(`⏱️ Position ${position.symbol} - max duration disabled (set to ${maxPositionDurationMinutes}), will only close on stop loss or trailing stop`);
         }
 
+        // ═══════════════════════════════════════════════════════════════════
+        // 🟢 STALE POSITION EXIT (isoleret tilføjelse — påvirker INTET andet)
+        // Kører som ALLERSIDSTE check. Hvis feature er slukket eller blot ÉT felt
+        // mangler i UI, springes hele blokken over (ingen defaults, ingen fallback).
+        // ═══════════════════════════════════════════════════════════════════
+        if (!shouldClose && autoExitEnabled && configData) {
+          const sx_enabled = (configData as any).stale_exit_enabled;
+          const sx_maxDurMult = (configData as any).stale_exit_max_duration_tf_mult;
+          const sx_peakInactMult = (configData as any).stale_exit_peak_inactivity_tf_mult;
+          const sx_trailInactMult = (configData as any).stale_exit_trailing_inactivity_tf_mult;
+          const sx_minMoveAtrMult = (configData as any).stale_exit_min_move_atr_mult;
+          const sx_useMomentumFilter = (configData as any).stale_exit_use_momentum_filter;
+          const sx_scanInterval: string | null = (configData as any).scan_interval ?? null;
+
+          // Parser timeframe (fx "15m", "1h", "4h", "8h", "1d") til minutter — ingen fallback
+          const parseTfToMinutes = (tf: string | null): number | null => {
+            if (!tf || typeof tf !== 'string') return null;
+            const m = tf.trim().match(/^(\d+)\s*([smhdw])$/i);
+            if (!m) return null;
+            const n = parseInt(m[1], 10);
+            const u = m[2].toLowerCase();
+            if (!Number.isFinite(n) || n <= 0) return null;
+            switch (u) {
+              case 's': return n / 60;
+              case 'm': return n;
+              case 'h': return n * 60;
+              case 'd': return n * 1440;
+              case 'w': return n * 10080;
+              default: return null;
+            }
+          };
+          const tfMinutes = parseTfToMinutes(sx_scanInterval);
+
+          // Strikt: ALLE felter skal være sat. Toggle skal være true. Multipliers > 0.
+          const allFieldsSet =
+            sx_enabled === true &&
+            typeof sx_maxDurMult === 'number' && Number.isFinite(sx_maxDurMult) && sx_maxDurMult > 0 &&
+            typeof sx_peakInactMult === 'number' && Number.isFinite(sx_peakInactMult) && sx_peakInactMult > 0 &&
+            typeof sx_trailInactMult === 'number' && Number.isFinite(sx_trailInactMult) && sx_trailInactMult > 0 &&
+            typeof sx_minMoveAtrMult === 'number' && Number.isFinite(sx_minMoveAtrMult) && sx_minMoveAtrMult > 0 &&
+            typeof sx_useMomentumFilter === 'boolean' &&
+            tfMinutes !== null && tfMinutes > 0;
+
+          if (allFieldsSet) {
+            const nowMs = now.getTime();
+            const openedMs = openedAt.getTime();
+            const ageMin = (nowMs - openedMs) / 60000;
+            const requiredAgeMin = sx_maxDurMult * tfMinutes;
+            const peakWindowMin = sx_peakInactMult * tfMinutes;
+            const trailWindowMin = sx_trailInactMult * tfMinutes;
+
+            // Krav 1: position varighed > X × TF
+            const ageOk = ageMin > requiredAgeMin;
+
+            // Krav 2: Ingen ny peak i Y × TF.
+            // Kilde: stale_exit_peak_updated_at i indicators_snapshot.
+            // Hvis aldrig opdateret -> brug opened_at (positionens start) som baseline.
+            const peakUpdatedRaw = position.indicators_snapshot?.stale_exit_peak_updated_at ?? null;
+            const peakUpdatedMs = peakUpdatedRaw ? new Date(peakUpdatedRaw).getTime() : openedMs;
+            const peakInactiveMin = (nowMs - peakUpdatedMs) / 60000;
+            const peakInactiveOk = peakInactiveMin >= peakWindowMin;
+
+            // Krav 3: Trailing stop ikke opdateret i Y × TF.
+            // Hvis trailing aldrig blev aktiveret -> brug opened_at som baseline.
+            const trailUpdatedRaw = position.indicators_snapshot?.stale_exit_trailing_updated_at ?? null;
+            const trailUpdatedMs = trailUpdatedRaw ? new Date(trailUpdatedRaw).getTime() : openedMs;
+            const trailInactiveMin = (nowMs - trailUpdatedMs) / 60000;
+            const trailInactiveOk = trailInactiveMin >= trailWindowMin;
+
+            // Krav 4: Prisbevægelse < Z × ATR i samme periode.
+            // Måles som spændet mellem peak_price og low_price (samlet excursion).
+            // Falder tilbage til |current - entry| hvis peak/low ikke findes.
+            const snapshotAtr = typeof position.indicators_snapshot?.atr === 'number'
+              ? position.indicators_snapshot.atr
+              : null;
+            let priceSpan: number | null = null;
+            if (
+              typeof position.peak_price === 'number' && position.peak_price > 0 &&
+              typeof position.low_price === 'number' && position.low_price > 0
+            ) {
+              priceSpan = Math.abs(position.peak_price - position.low_price);
+            } else if (typeof currentPrice === 'number') {
+              priceSpan = Math.abs(currentPrice - position.entry_price);
+            }
+            const atrThreshold = (snapshotAtr && snapshotAtr > 0) ? snapshotAtr * sx_minMoveAtrMult : null;
+            const moveOk = (priceSpan !== null && atrThreshold !== null) ? priceSpan < atrThreshold : false;
+
+            // Krav 5: Momentum filter (valgfri). MACD histogram momentum ≤ 0.
+            let momentumOk = true;
+            if (sx_useMomentumFilter) {
+              const histNow = typeof position.indicators_snapshot?.macd_histogram === 'number'
+                ? position.indicators_snapshot.macd_histogram
+                : null;
+              if (histNow === null) {
+                momentumOk = false; // mangler data -> ikke svagt momentum bekræftet
+              } else {
+                // Svagt momentum for LONG: histogram <= 0. For SHORT: histogram >= 0.
+                momentumOk = position.side === 'LONG' ? histNow <= 0 : histNow >= 0;
+              }
+            }
+
+            const allConditions = ageOk && peakInactiveOk && trailInactiveOk && moveOk && momentumOk;
+            console.log(
+              `🟢 STALE EXIT CHECK | ${position.symbol} | tf=${sx_scanInterval}(${tfMinutes}m) | ` +
+              `age=${ageMin.toFixed(1)}/${requiredAgeMin.toFixed(1)}min(${ageOk}) | ` +
+              `peakInact=${peakInactiveMin.toFixed(1)}/${peakWindowMin.toFixed(1)}min(${peakInactiveOk}) | ` +
+              `trailInact=${trailInactiveMin.toFixed(1)}/${trailWindowMin.toFixed(1)}min(${trailInactiveOk}) | ` +
+              `move=${priceSpan?.toFixed(8) ?? 'n/a'}<${atrThreshold?.toFixed(8) ?? 'n/a'}(${moveOk}) | ` +
+              `momentum=${momentumOk}(filter=${sx_useMomentumFilter})`
+            );
+
+            if (allConditions) {
+              shouldClose = true;
+              closeReason = 'STALE_EXIT';
+              console.log(`🟢 STALE_EXIT TRIGGER | ${position.symbol} | alle betingelser opfyldt -> LUKKES`);
+            }
+          }
+        }
+
+
         // Calculate unrealized PnL
         const pnl = position.side === 'LONG' 
           ? (currentPrice - position.entry_price) * position.quantity
@@ -2096,6 +2215,11 @@ serve(async (req) => {
         // Så når trailing aktiveres senere, har vi den korrekte peak
         if (newPeakPrice !== position.peak_price) {
           updateData.peak_price = newPeakPrice;
+          // 🟢 STALE EXIT TRACKING: marker tidspunkt for ny peak (uden at påvirke andet)
+          updateData.indicators_snapshot = {
+            ...(updateData.indicators_snapshot ?? position.indicators_snapshot ?? {}),
+            stale_exit_peak_updated_at: new Date().toISOString(),
+          };
           console.log(`📈 PEAK GEMT | ${position.symbol} | ${position.peak_price || 'null'} → ${newPeakPrice}`);
         }
         
@@ -2114,6 +2238,13 @@ serve(async (req) => {
         if (trailingStopActive && trailingValidThisCycle && newTrailingStop !== null && newTrailingStop !== undefined && isFinite(newTrailingStop)) {
           updateData.peak_price = newPeakPrice;
           updateData.trailing_stop = newTrailingStop;
+          // 🟢 STALE EXIT TRACKING: marker tidspunkt for trailing-opdatering kun ved reel ændring
+          if (newTrailingStop !== position.trailing_stop) {
+            updateData.indicators_snapshot = {
+              ...(updateData.indicators_snapshot ?? position.indicators_snapshot ?? {}),
+              stale_exit_trailing_updated_at: new Date().toISOString(),
+            };
+          }
 
           console.log(`📈 TRAILING OPDATERET | ${position.symbol} | peak=${newPeakPrice} ts=${newTrailingStop}`);
         } else if (trailingStopActive && !trailingValidThisCycle) {

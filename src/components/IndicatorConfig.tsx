@@ -187,6 +187,14 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
     max_position_duration_minutes: config?.max_position_duration_minutes || 240,
     auto_exit_enabled: config?.auto_exit_enabled !== undefined ? config?.auto_exit_enabled : true,
     conditional_time_exit_enabled: config?.conditional_time_exit_enabled !== undefined ? config?.conditional_time_exit_enabled : true,
+
+    // Stale Position Exit (isoleret feature — INGEN defaults, alt styres af UI)
+    stale_exit_enabled: (config as any)?.stale_exit_enabled ?? false,
+    stale_exit_max_duration_tf_mult: (config as any)?.stale_exit_max_duration_tf_mult ?? null,
+    stale_exit_peak_inactivity_tf_mult: (config as any)?.stale_exit_peak_inactivity_tf_mult ?? null,
+    stale_exit_trailing_inactivity_tf_mult: (config as any)?.stale_exit_trailing_inactivity_tf_mult ?? null,
+    stale_exit_min_move_atr_mult: (config as any)?.stale_exit_min_move_atr_mult ?? null,
+    stale_exit_use_momentum_filter: (config as any)?.stale_exit_use_momentum_filter ?? false,
     
     // Leverage
     leverage: config?.leverage || 10,
@@ -380,6 +388,12 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       max_position_duration_minutes: config.max_position_duration_minutes ?? 240,
       auto_exit_enabled: config.auto_exit_enabled !== undefined ? config.auto_exit_enabled : true,
       conditional_time_exit_enabled: config.conditional_time_exit_enabled !== undefined ? config.conditional_time_exit_enabled : true,
+      stale_exit_enabled: (config as any).stale_exit_enabled ?? false,
+      stale_exit_max_duration_tf_mult: (config as any).stale_exit_max_duration_tf_mult ?? null,
+      stale_exit_peak_inactivity_tf_mult: (config as any).stale_exit_peak_inactivity_tf_mult ?? null,
+      stale_exit_trailing_inactivity_tf_mult: (config as any).stale_exit_trailing_inactivity_tf_mult ?? null,
+      stale_exit_min_move_atr_mult: (config as any).stale_exit_min_move_atr_mult ?? null,
+      stale_exit_use_momentum_filter: (config as any).stale_exit_use_momentum_filter ?? false,
       // Leverage
       leverage: config.leverage ?? 10,
       // Hard filter toggles
@@ -569,6 +583,12 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
       max_position_duration_minutes: config.max_position_duration_minutes ?? 240,
       auto_exit_enabled: config.auto_exit_enabled !== undefined ? config.auto_exit_enabled : true,
       conditional_time_exit_enabled: config.conditional_time_exit_enabled !== undefined ? config.conditional_time_exit_enabled : true,
+      stale_exit_enabled: (config as any).stale_exit_enabled ?? false,
+      stale_exit_max_duration_tf_mult: (config as any).stale_exit_max_duration_tf_mult ?? null,
+      stale_exit_peak_inactivity_tf_mult: (config as any).stale_exit_peak_inactivity_tf_mult ?? null,
+      stale_exit_trailing_inactivity_tf_mult: (config as any).stale_exit_trailing_inactivity_tf_mult ?? null,
+      stale_exit_min_move_atr_mult: (config as any).stale_exit_min_move_atr_mult ?? null,
+      stale_exit_use_momentum_filter: (config as any).stale_exit_use_momentum_filter ?? false,
       leverage: config.leverage ?? 10,
       // Hard filter toggles
       ema_hard_filter: config.ema_hard_filter !== undefined ? config.ema_hard_filter : true,
@@ -3182,7 +3202,119 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
         </CardContent>
       </Card>
 
-      <div className="flex flex-col gap-3">
+      {/* 🟢 Stale Position Exit — isoleret feature, ingen defaults */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Stale Position Exit</CardTitle>
+          <CardDescription>
+            Lukker positioner uden progression. Alle felter er timeframe-relative (multiplier af aktivt scan-interval).
+            Hvis ÉT felt er tomt eller toggle er slukket, gør feature ingenting.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label htmlFor="stale_exit_enabled">Aktiver Stale Exit</Label>
+              <p className="text-xs text-muted-foreground">Master switch — alle felter SKAL også være udfyldt</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.stale_exit_enabled ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="stale_exit_enabled"
+                checked={!!formData.stale_exit_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, stale_exit_enabled: checked })}
+                disabled={!formData.auto_exit_enabled}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="stale_exit_max_duration_tf_mult">Max varighed (× timeframe)</Label>
+              <Input
+                id="stale_exit_max_duration_tf_mult"
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="ingen værdi = inaktiv"
+                value={formData.stale_exit_max_duration_tf_mult ?? ""}
+                onChange={(e) => setFormData({ ...formData, stale_exit_max_duration_tf_mult: e.target.value === "" ? null : parseFloat(e.target.value) })}
+              />
+              <p className="text-xs text-muted-foreground">Position skal være ældre end (X × scan_interval)</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="stale_exit_peak_inactivity_tf_mult">Peak inaktivitet (× timeframe)</Label>
+              <Input
+                id="stale_exit_peak_inactivity_tf_mult"
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="ingen værdi = inaktiv"
+                value={formData.stale_exit_peak_inactivity_tf_mult ?? ""}
+                onChange={(e) => setFormData({ ...formData, stale_exit_peak_inactivity_tf_mult: e.target.value === "" ? null : parseFloat(e.target.value) })}
+              />
+              <p className="text-xs text-muted-foreground">Ingen ny peak (high/low) i (Y × scan_interval)</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="stale_exit_trailing_inactivity_tf_mult">Trailing inaktivitet (× timeframe)</Label>
+              <Input
+                id="stale_exit_trailing_inactivity_tf_mult"
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="ingen værdi = inaktiv"
+                value={formData.stale_exit_trailing_inactivity_tf_mult ?? ""}
+                onChange={(e) => setFormData({ ...formData, stale_exit_trailing_inactivity_tf_mult: e.target.value === "" ? null : parseFloat(e.target.value) })}
+              />
+              <p className="text-xs text-muted-foreground">Trailing stop ikke opdateret i (Y × scan_interval)</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="stale_exit_min_move_atr_mult">Min prisbevægelse (× ATR)</Label>
+              <Input
+                id="stale_exit_min_move_atr_mult"
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="ingen værdi = inaktiv"
+                value={formData.stale_exit_min_move_atr_mult ?? ""}
+                onChange={(e) => setFormData({ ...formData, stale_exit_min_move_atr_mult: e.target.value === "" ? null : parseFloat(e.target.value) })}
+              />
+              <p className="text-xs text-muted-foreground">Trigger hvis prisbevægelse &lt; (Z × ATR)</p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between border-t pt-4">
+            <div className="space-y-1">
+              <Label htmlFor="stale_exit_use_momentum_filter">Brug momentum filter</Label>
+              <p className="text-xs text-muted-foreground">
+                Kræv også svagt MACD histogram momentum (LONG: ≤ 0, SHORT: ≥ 0) før trigger
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{formData.stale_exit_use_momentum_filter ? "Tændt" : "Slukket"}</span>
+              <Switch
+                id="stale_exit_use_momentum_filter"
+                checked={!!formData.stale_exit_use_momentum_filter}
+                onCheckedChange={(checked) => setFormData({ ...formData, stale_exit_use_momentum_filter: checked })}
+              />
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-md">
+            <strong>Triggerer KUN hvis ALLE betingelser opfyldt:</strong><br/>
+            • Position varighed &gt; (Max varighed × timeframe)<br/>
+            • Ingen ny peak i (Peak inaktivitet × timeframe)<br/>
+            • Trailing stop ikke opdateret i (Trailing inaktivitet × timeframe)<br/>
+            • Prisbevægelse &lt; (Min prisbevægelse × ATR)<br/>
+            • (Valgfrit) MACD histogram momentum svagt<br/><br/>
+            Denne exit påvirker IKKE SL, BE, Trailing eller Anti-Sour. Den kører som sidste check og kan trigge selv hvis trailing er aktiv.
+          </p>
+        </CardContent>
+      </Card>
+
         <Button 
           onClick={() => {
             const onOff = (v: boolean) => v ? "Tændt" : "Slukket";
