@@ -3647,6 +3647,5 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
           </Button>
         </div>
       </div>
-    </div>
   );
 };
