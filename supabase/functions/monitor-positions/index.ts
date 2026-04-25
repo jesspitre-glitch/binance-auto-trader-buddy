@@ -2102,12 +2102,13 @@ serve(async (req) => {
           };
           const tfMinutes = parseTfToMinutes(sx_scanInterval);
 
-          // Strikt: ALLE felter skal være sat. Toggle skal være true. Multipliers > 0.
+          // Strikt: ALLE nødvendige felter skal være sat. Toggle skal være true. Multipliers > 0.
+          // BEMÆRK: stale_exit_trailing_inactivity_tf_mult bruges IKKE længere som krav.
+          // I stedet kræver vi at trailing IKKE er aktiv (position.trailing_stop er tom/0).
           const allFieldsSet =
             sx_enabled === true &&
             typeof sx_maxDurMult === 'number' && Number.isFinite(sx_maxDurMult) && sx_maxDurMult > 0 &&
             typeof sx_peakInactMult === 'number' && Number.isFinite(sx_peakInactMult) && sx_peakInactMult > 0 &&
-            typeof sx_trailInactMult === 'number' && Number.isFinite(sx_trailInactMult) && sx_trailInactMult > 0 &&
             typeof sx_minMoveAtrMult === 'number' && Number.isFinite(sx_minMoveAtrMult) && sx_minMoveAtrMult > 0 &&
             typeof sx_useMomentumFilter === 'boolean' &&
             tfMinutes !== null && tfMinutes > 0;
@@ -2118,7 +2119,6 @@ serve(async (req) => {
             const ageMin = (nowMs - openedMs) / 60000;
             const requiredAgeMin = sx_maxDurMult * tfMinutes;
             const peakWindowMin = sx_peakInactMult * tfMinutes;
-            const trailWindowMin = sx_trailInactMult * tfMinutes;
 
             // Krav 1: position varighed > X × TF
             const ageOk = ageMin > requiredAgeMin;
@@ -2131,12 +2131,9 @@ serve(async (req) => {
             const peakInactiveMin = (nowMs - peakUpdatedMs) / 60000;
             const peakInactiveOk = peakInactiveMin >= peakWindowMin;
 
-            // Krav 3: Trailing stop ikke opdateret i Y × TF.
-            // Hvis trailing aldrig blev aktiveret -> brug opened_at som baseline.
-            const trailUpdatedRaw = position.indicators_snapshot?.stale_exit_trailing_updated_at ?? null;
-            const trailUpdatedMs = trailUpdatedRaw ? new Date(trailUpdatedRaw).getTime() : openedMs;
-            const trailInactiveMin = (nowMs - trailUpdatedMs) / 60000;
-            const trailInactiveOk = trailInactiveMin >= trailWindowMin;
+            // Krav 3: Trailing er IKKE aktiv. Hvis trailing_stop er sat (>0) -> Stale Exit må IKKE lukke.
+            const trailingActive = typeof position.trailing_stop === 'number' && position.trailing_stop > 0;
+            const trailingInactiveOk = !trailingActive;
 
             // Krav 4: Prisbevægelse < Z × ATR i samme periode.
             // Måles som spændet mellem peak_price og low_price (samlet excursion).
