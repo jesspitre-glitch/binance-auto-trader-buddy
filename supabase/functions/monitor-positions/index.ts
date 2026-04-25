@@ -2167,12 +2167,12 @@ serve(async (req) => {
               }
             }
 
-            const allConditions = ageOk && peakInactiveOk && trailInactiveOk && moveOk && momentumOk;
+            const allConditions = ageOk && peakInactiveOk && trailingInactiveOk && moveOk && momentumOk;
             console.log(
               `🟢 STALE EXIT CHECK | ${position.symbol} | tf=${sx_scanInterval}(${tfMinutes}m) | ` +
               `age=${ageMin.toFixed(1)}/${requiredAgeMin.toFixed(1)}min(${ageOk}) | ` +
               `peakInact=${peakInactiveMin.toFixed(1)}/${peakWindowMin.toFixed(1)}min(${peakInactiveOk}) | ` +
-              `trailInact=${trailInactiveMin.toFixed(1)}/${trailWindowMin.toFixed(1)}min(${trailInactiveOk}) | ` +
+              `trailingActive=${trailingActive}(blockIfActive=${!trailingInactiveOk ? 'YES' : 'no'}) | ` +
               `move=${priceSpan?.toFixed(8) ?? 'n/a'}<${atrThreshold?.toFixed(8) ?? 'n/a'}(${moveOk}) | ` +
               `momentum=${momentumOk}(filter=${sx_useMomentumFilter})`
             );
