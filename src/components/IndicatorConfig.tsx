@@ -3258,17 +3258,11 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="stale_exit_trailing_inactivity_tf_mult">Trailing inaktivitet (× timeframe)</Label>
-              <Input
-                id="stale_exit_trailing_inactivity_tf_mult"
-                type="number"
-                step="0.1"
-                min="0"
-                placeholder="ingen værdi = inaktiv"
-                value={formData.stale_exit_trailing_inactivity_tf_mult ?? ""}
-                onChange={(e) => setFormData({ ...formData, stale_exit_trailing_inactivity_tf_mult: e.target.value === "" ? null : parseFloat(e.target.value) })}
-              />
-              <p className="text-xs text-muted-foreground">Trailing stop ikke opdateret i (Y × scan_interval)</p>
+              <Label className="text-muted-foreground">Trailing-krav</Label>
+              <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                Stale Exit må <strong>ikke</strong> lukke positioner hvor trailing stop allerede er aktiv.
+                Kravet er hardkodet — ingen UI-værdi nødvendig.
+              </div>
             </div>
 
             <div className="space-y-2">
