@@ -3301,10 +3301,10 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
             <strong>Triggerer KUN hvis ALLE betingelser opfyldt:</strong><br/>
             • Position varighed &gt; (Max varighed × timeframe)<br/>
             • Ingen ny peak i (Peak inaktivitet × timeframe)<br/>
-            • Trailing stop ikke opdateret i (Trailing inaktivitet × timeframe)<br/>
+            • Trailing stop er IKKE aktiv<br/>
             • Prisbevægelse &lt; (Min prisbevægelse × ATR)<br/>
             • (Valgfrit) MACD histogram momentum svagt<br/><br/>
-            Denne exit påvirker IKKE SL, BE, Trailing eller Anti-Sour. Den kører som sidste check og kan trigge selv hvis trailing er aktiv.
+            Denne exit påvirker IKKE SL, BE, Trailing eller Anti-Sour. Den kører som sidste check og kan IKKE trigge hvis trailing er aktiv.
           </p>
         </CardContent>
       </Card>
