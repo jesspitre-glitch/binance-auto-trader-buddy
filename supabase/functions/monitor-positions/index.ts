@@ -2131,9 +2131,17 @@ serve(async (req) => {
             const peakInactiveMin = (nowMs - peakUpdatedMs) / 60000;
             const peakInactiveOk = peakInactiveMin >= peakWindowMin;
 
-            // Krav 3: Trailing er IKKE aktiv. Hvis trailing_stop er sat (>0) -> Stale Exit må IKKE lukke.
-            const trailingActive = typeof position.trailing_stop === 'number' && position.trailing_stop > 0;
-            const trailingInactiveOk = !trailingActive;
+            // Krav 3: Trailing er IKKE reelt aktiveret.
+            // VIGTIGT: position.trailing_stop > 0 betyder kun at et initial-stop er forberedt
+            // (svarer til "STANDBY (afventer BE)" i UI). Trailing er først REELT aktiv når enten:
+            //   (a) Break-Even er aktiveret (breakEvenActivatedState = true), ELLER
+            //   (b) Profit har overskredet trailing-aktiveringstærsklen (trailingProfitThresholdPassed)
+            //       — gælder kun hvis trailingActivationEnabled er true.
+            // Dette matcher UI-definitionen: "STANDBY" = ikke aktiv, "AKTIV" = aktiv.
+            const trailingReallyActive =
+              breakEvenActivatedState === true ||
+              (trailingActivationEnabled === true && trailingProfitThresholdPassed === true);
+            const trailingInactiveOk = !trailingReallyActive;
 
             // Krav 4: Prisbevægelse < Z × ATR i samme periode.
             // Måles som spændet mellem peak_price og low_price (samlet excursion).
@@ -2172,7 +2180,7 @@ serve(async (req) => {
               `🟢 STALE EXIT CHECK | ${position.symbol} | tf=${sx_scanInterval}(${tfMinutes}m) | ` +
               `age=${ageMin.toFixed(1)}/${requiredAgeMin.toFixed(1)}min(${ageOk}) | ` +
               `peakInact=${peakInactiveMin.toFixed(1)}/${peakWindowMin.toFixed(1)}min(${peakInactiveOk}) | ` +
-              `trailingActive=${trailingActive}(blockIfActive=${!trailingInactiveOk ? 'YES' : 'no'}) | ` +
+              `trailingReallyActive=${trailingReallyActive}(BE=${breakEvenActivatedState},trailThrPassed=${trailingProfitThresholdPassed},trailActEn=${trailingActivationEnabled})(blockIfActive=${!trailingInactiveOk ? 'YES' : 'no'}) | ` +
               `move=${priceSpan?.toFixed(8) ?? 'n/a'}<${atrThreshold?.toFixed(8) ?? 'n/a'}(${moveOk}) | ` +
               `momentum=${momentumOk}(filter=${sx_useMomentumFilter})`
             );
