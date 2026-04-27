@@ -9,6 +9,24 @@ import { formatTradeForExport } from "@/lib/tradeExportUtils";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
+/**
+ * Adaptiv pris-formattering: vælg antal decimaler ud fra prisens størrelse,
+ * så low-cap coins som PENGU/BONK får meningsfulde decimaler i stedet for "$0.01".
+ */
+const formatPrice = (price: number | null | undefined): string => {
+  if (price == null || !Number.isFinite(Number(price))) return '-';
+  const abs = Math.abs(Number(price));
+  let digits: number;
+  if (abs >= 1000) digits = 2;
+  else if (abs >= 100) digits = 3;
+  else if (abs >= 1) digits = 4;
+  else if (abs >= 0.1) digits = 5;
+  else if (abs >= 0.01) digits = 6;
+  else if (abs >= 0.001) digits = 7;
+  else digits = 8;
+  return Number(price).toFixed(digits);
+};
+
 interface TradeDetailsDialogProps {
   trade: any;
   isOpen: boolean;
