@@ -10,6 +10,7 @@ import {
   Scatter,
   Line,
   ComposedChart,
+  Customized,
 } from "recharts";
 import { Loader2 } from "lucide-react";
 
@@ -396,28 +397,136 @@ const tooltipProps = {
 };
 
 // =============================================================================
-// Hjælper — beregn smart label-placering for trigger-linjer (undgå overlap)
+// Label-stack — render alle pris-labels som én SVG-overlay så de aldrig overlapper
 // =============================================================================
-const assignLabelPositions = (
-  levels: { value: number; key: string }[],
-): Record<string, "insideTopLeft" | "insideTopRight" | "insideBottomLeft" | "insideBottomRight" | "insideLeft" | "insideRight"> => {
-  // Sorter efter pris og fordel labels skiftevis venstre/højre + top/bottom
-  const sorted = [...levels].sort((a, b) => b.value - a.value);
-  const out: Record<string, any> = {};
-  const positions: Array<
-    "insideTopLeft" | "insideTopRight" | "insideLeft" | "insideRight" | "insideBottomLeft" | "insideBottomRight"
-  > = [
-    "insideTopLeft",
-    "insideTopRight",
-    "insideLeft",
-    "insideRight",
-    "insideBottomLeft",
-    "insideBottomRight",
-  ];
-  sorted.forEach((lvl, i) => {
-    out[lvl.key] = positions[i % positions.length];
+interface PriceLabel {
+  value: number;
+  text: string;
+  color: string;
+  bold?: boolean;
+  side?: "left" | "right"; // anker
+}
+
+const PriceLabelStack = (props: any) => {
+  const { viewBox, labels, yMin, yMax } = props as {
+    viewBox: { x: number; y: number; width: number; height: number };
+    labels: PriceLabel[];
+    yMin: number;
+    yMax: number;
+  };
+  if (!viewBox || !labels || labels.length === 0) return null;
+  const { x, y, width, height } = viewBox;
+
+  // Konverter pris -> y-pixel
+  const priceToY = (p: number) => {
+    if (yMax === yMin) return y + height / 2;
+    return y + height - ((p - yMin) / (yMax - yMin)) * height;
+  };
+
+  // Sorter labels og adskil i venstre/højre kolonne baseret på pris (skiftevis)
+  // Sorteret high -> low. Lige indeks = højre, ulige = venstre.
+  const sorted = [...labels].sort((a, b) => b.value - a.value);
+  const ROW_H = 14; // min lodret afstand mellem labels
+  const PADDING_X = 6;
+
+  // Beregn ønsket y for hver label, og forskyd hvis de overlapper inden for samme kolonne
+  const placeColumn = (items: typeof sorted) => {
+    const placed = items
+      .map((l) => ({ ...l, yIdeal: priceToY(l.value) }))
+      .sort((a, b) => a.yIdeal - b.yIdeal);
+    // Skub ned hvis for tæt på naboen ovenover
+    for (let i = 1; i < placed.length; i++) {
+      if (placed[i].yIdeal - placed[i - 1].yIdeal < ROW_H) {
+        placed[i].yIdeal = placed[i - 1].yIdeal + ROW_H;
+      }
+    }
+    // Hvis vi løber ud nederst, skub op fra bunden
+    const bottom = y + height - 2;
+    for (let i = placed.length - 1; i > 0; i--) {
+      if (placed[i].yIdeal > bottom) placed[i].yIdeal = bottom - (placed.length - 1 - i) * ROW_H;
+    }
+    // Klem til top
+    const top = y + 10;
+    for (let i = 0; i < placed.length; i++) {
+      if (placed[i].yIdeal < top) placed[i].yIdeal = top + i * ROW_H;
+    }
+    return placed;
+  };
+
+  const rightItems: PriceLabel[] = [];
+  const leftItems: PriceLabel[] = [];
+  sorted.forEach((l, i) => {
+    if (l.side === "left") leftItems.push(l);
+    else if (l.side === "right") rightItems.push(l);
+    else (i % 2 === 0 ? rightItems : leftItems).push(l);
   });
-  return out;
+
+  const rightPlaced = placeColumn(rightItems);
+  const leftPlaced = placeColumn(leftItems);
+
+  return (
+    <g>
+      {rightPlaced.map((l, i) => (
+        <g key={`r-${i}`}>
+          {/* lille forbinder-streg fra ideel y til faktisk position */}
+          <line
+            x1={x + width - 2}
+            x2={x + width - 50}
+            y1={priceToY(l.value)}
+            y2={l.yIdeal}
+            stroke={l.color}
+            strokeOpacity={0.35}
+            strokeWidth={1}
+          />
+          <text
+            x={x + width - PADDING_X}
+            y={l.yIdeal}
+            fill={l.color}
+            fontSize={10}
+            fontWeight={l.bold ? "bold" : "normal"}
+            textAnchor="end"
+            style={{
+              paintOrder: "stroke",
+              stroke: "hsl(var(--background))",
+              strokeWidth: 3,
+              strokeLinejoin: "round",
+            }}
+          >
+            {l.text}
+          </text>
+        </g>
+      ))}
+      {leftPlaced.map((l, i) => (
+        <g key={`l-${i}`}>
+          <line
+            x1={x + 2}
+            x2={x + 50}
+            y1={priceToY(l.value)}
+            y2={l.yIdeal}
+            stroke={l.color}
+            strokeOpacity={0.35}
+            strokeWidth={1}
+          />
+          <text
+            x={x + PADDING_X}
+            y={l.yIdeal}
+            fill={l.color}
+            fontSize={10}
+            fontWeight={l.bold ? "bold" : "normal"}
+            textAnchor="start"
+            style={{
+              paintOrder: "stroke",
+              stroke: "hsl(var(--background))",
+              strokeWidth: 3,
+              strokeLinejoin: "round",
+            }}
+          >
+            {l.text}
+          </text>
+        </g>
+      ))}
+    </g>
+  );
 };
 
 // =============================================================================
@@ -652,24 +761,102 @@ const ChartShell = ({
     return { yMin: min - padding, yMax: max + padding };
   }, [chartData, trade, triggers, isClosed]);
 
-  // ---- Smart label-placering for trigger-linjer ---------------------------
-  const labelPositions = useMemo(() => {
-    const lvls: { value: number; key: string }[] = [];
-    if (trade.entry_price)
-      lvls.push({ value: Number(trade.entry_price), key: "entry" });
-    const initialSL =
-      trade.indicators_snapshot?.original_stop_loss ?? trade.stop_loss;
-    if (initialSL) lvls.push({ value: Number(initialSL), key: "initialSl" });
-    if (triggers.breakEvenTrigger != null)
-      lvls.push({ value: triggers.breakEvenTrigger, key: "beTrigger" });
-    if (triggers.trailingTrigger != null)
-      lvls.push({ value: triggers.trailingTrigger, key: "tsTrigger" });
-    if (triggers.peakLockTrigger != null)
-      lvls.push({ value: triggers.peakLockTrigger, key: "plTrigger" });
-    if (isClosed && trade.exit_price)
-      lvls.push({ value: Number(trade.exit_price), key: "exit" });
-    return assignLabelPositions(lvls);
-  }, [trade, triggers, isClosed]);
+  // ---- Vis-flag for triggers (skal være kendt før priceLabels-memo) -------
+  const showBeTrigger =
+    markers.breakEvenAt == null && triggers.breakEvenTrigger != null;
+  const showTsTrigger =
+    markers.trailingAt == null && triggers.trailingTrigger != null;
+  const showPlTrigger =
+    markers.peakLockAt == null && triggers.peakLockTrigger != null;
+
+  // ---- Saml alle pris-labels til én overlay-stak --------------------------
+  const priceLabels = useMemo(() => {
+    const out: PriceLabel[] = [];
+    const entry = Number(trade.entry_price);
+    if (entry > 0)
+      out.push({
+        value: entry,
+        text: `📍 Entry $${formatPriceAdaptive(entry)}`,
+        color: "#16a34a",
+        bold: true,
+      });
+
+    const initSl = Number(
+      trade.indicators_snapshot?.original_stop_loss ?? trade.stop_loss,
+    );
+    if (initSl > 0)
+      out.push({
+        value: initSl,
+        text: `Initial SL $${formatPriceAdaptive(initSl)}`,
+        color: "#dc2626",
+      });
+
+    if (showBeTrigger && triggers.breakEvenTrigger != null)
+      out.push({
+        value: triggers.breakEvenTrigger,
+        text: `BE Trigger $${formatPriceAdaptive(triggers.breakEvenTrigger)}`,
+        color: "#a855f7",
+      });
+    if (showTsTrigger && triggers.trailingTrigger != null)
+      out.push({
+        value: triggers.trailingTrigger,
+        text: `TS Trigger $${formatPriceAdaptive(triggers.trailingTrigger)}`,
+        color: "#ec4899",
+      });
+    if (showPlTrigger && triggers.peakLockTrigger != null)
+      out.push({
+        value: triggers.peakLockTrigger,
+        text: `PL Trigger $${formatPriceAdaptive(triggers.peakLockTrigger)}`,
+        color: "#06b6d4",
+      });
+
+    if (trade.peak_price && Number(trade.peak_price) > 0) {
+      out.push({
+        value: Number(trade.peak_price),
+        text: `🔝 Peak $${formatPriceAdaptive(trade.peak_price)}`,
+        color: "#0891b2",
+      });
+    }
+
+    if (isClosed && trade.exit_price != null) {
+      out.push({
+        value: Number(trade.exit_price),
+        text: `🚪 Exit $${formatPriceAdaptive(trade.exit_price)}`,
+        color: "#dc2626",
+        bold: true,
+      });
+    }
+
+    const lastTs = [...chartData].reverse().find((d) => d.trailingStop != null)
+      ?.trailingStop;
+    if (lastTs != null)
+      out.push({
+        value: lastTs,
+        text: `🎯 TS $${formatPriceAdaptive(lastTs)}`,
+        color: "#ec4899",
+        bold: true,
+      });
+
+    const lastEff = [...chartData].reverse().find((d) => d.effectiveStop != null)
+      ?.effectiveStop;
+    if (lastEff != null && lastEff !== lastTs)
+      out.push({
+        value: lastEff,
+        text: `🛑 Aktiv $${formatPriceAdaptive(lastEff)}`,
+        color: "#f97316",
+        bold: true,
+      });
+
+    return out;
+  }, [
+    trade,
+    triggers,
+    showBeTrigger,
+    showTsTrigger,
+    showPlTrigger,
+    chartData,
+    isClosed,
+  ]);
 
   if (loading) {
     return (
@@ -686,13 +873,17 @@ const ChartShell = ({
     );
   }
 
-  // Vis kun BE/TS trigger-linjer hvis de IKKE allerede er aktiverede
-  const showBeTrigger = markers.breakEvenAt == null && triggers.breakEvenTrigger != null;
-  const showTsTrigger = markers.trailingAt == null && triggers.trailingTrigger != null;
-  const showPlTrigger = markers.peakLockAt == null && triggers.peakLockTrigger != null;
-
   const initialSlPrice =
     trade.indicators_snapshot?.original_stop_loss ?? trade.stop_loss;
+
+  // Filtrér aktiveringsmarkører der ligger meget tæt på open-tidspunktet
+  const openTime = trade.opened_at ? new Date(trade.opened_at).getTime() : 0;
+  const totalSpan =
+    chartData.length > 1
+      ? chartData[chartData.length - 1].timestamp - chartData[0].timestamp
+      : 1;
+  const tooCloseToOpen = (t: number | null) =>
+    t == null || Math.abs(t - openTime) < totalSpan * 0.04;
 
   return (
     <div className="space-y-2">
@@ -701,8 +892,8 @@ const ChartShell = ({
           ? `Lukket handel — viser ${15} candles efter exit`
           : "Åben handel — opdateres med live prisudvikling"}
       </div>
-      <ResponsiveContainer width="100%" height={320}>
-        <ComposedChart data={chartData} margin={{ top: 16, right: 24, left: 8, bottom: 8 }}>
+      <ResponsiveContainer width="100%" height={340}>
+        <ComposedChart data={chartData} margin={{ top: 16, right: 90, left: 8, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.3} />
           <XAxis
             dataKey="timestamp"
@@ -816,23 +1007,14 @@ const ChartShell = ({
             />
           )}
 
-          {/* Entry pris-linje */}
+          {/* --- Pris-linjer UDEN labels (samles i overlay nedenfor) --- */}
           <ReferenceLine
             y={Number(trade.entry_price)}
             stroke="#16a34a"
             strokeWidth={1.5}
             strokeDasharray="10 5"
             strokeOpacity={0.7}
-            label={{
-              value: `Entry $${formatPriceAdaptive(trade.entry_price)}`,
-              fill: "#16a34a",
-              fontSize: 11,
-              fontWeight: "bold",
-              position: labelPositions.entry ?? "insideTopRight",
-            }}
           />
-
-          {/* Initial Stop Loss */}
           {initialSlPrice && Number(initialSlPrice) > 0 && (
             <ReferenceLine
               y={Number(initialSlPrice)}
@@ -840,17 +1022,8 @@ const ChartShell = ({
               strokeWidth={1.5}
               strokeDasharray="6 3"
               strokeOpacity={0.55}
-              label={{
-                value: `Initial SL $${formatPriceAdaptive(initialSlPrice)}`,
-                fill: "#dc2626",
-                fontSize: 10,
-                fontWeight: "bold",
-                position: labelPositions.initialSl ?? "insideBottomRight",
-              }}
             />
           )}
-
-          {/* BE Trigger (kun hvis ikke aktiveret endnu) */}
           {showBeTrigger && (
             <ReferenceLine
               y={triggers.breakEvenTrigger as number}
@@ -858,17 +1031,8 @@ const ChartShell = ({
               strokeWidth={1.25}
               strokeDasharray="2 4"
               strokeOpacity={0.55}
-              label={{
-                value: `BE Trigger $${formatPriceAdaptive(triggers.breakEvenTrigger)}`,
-                fill: "#a855f7",
-                fontSize: 10,
-                fontWeight: "normal",
-                position: labelPositions.beTrigger ?? "insideTopLeft",
-              }}
             />
           )}
-
-          {/* TS Trigger (kun hvis ikke aktiveret endnu) */}
           {showTsTrigger && (
             <ReferenceLine
               y={triggers.trailingTrigger as number}
@@ -876,17 +1040,8 @@ const ChartShell = ({
               strokeWidth={1.25}
               strokeDasharray="2 4"
               strokeOpacity={0.55}
-              label={{
-                value: `TS Trigger $${formatPriceAdaptive(triggers.trailingTrigger)}`,
-                fill: "#ec4899",
-                fontSize: 10,
-                fontWeight: "normal",
-                position: labelPositions.tsTrigger ?? "insideTopRight",
-              }}
             />
           )}
-
-          {/* Peak-Lock Trigger (kun hvis ikke aktiveret endnu) */}
           {showPlTrigger && (
             <ReferenceLine
               y={triggers.peakLockTrigger as number}
@@ -894,17 +1049,8 @@ const ChartShell = ({
               strokeWidth={1.25}
               strokeDasharray="2 4"
               strokeOpacity={0.55}
-              label={{
-                value: `PL Trigger $${formatPriceAdaptive(triggers.peakLockTrigger)}`,
-                fill: "#06b6d4",
-                fontSize: 10,
-                fontWeight: "normal",
-                position: labelPositions.plTrigger ?? "insideBottomLeft",
-              }}
             />
           )}
-
-          {/* Peak price (kun hvis data findes) */}
           {trade.peak_price && Number(trade.peak_price) > 0 && (
             <ReferenceLine
               y={Number(trade.peak_price)}
@@ -912,17 +1058,8 @@ const ChartShell = ({
               strokeWidth={1}
               strokeDasharray="1 3"
               strokeOpacity={0.5}
-              label={{
-                value: `Peak $${formatPriceAdaptive(trade.peak_price)}`,
-                fill: "#0891b2",
-                fontSize: 10,
-                fontWeight: "normal",
-                position: "insideRight",
-              }}
             />
           )}
-
-          {/* Exit pris-linje (kun lukket) */}
           {isClosed && trade.exit_price != null && (
             <ReferenceLine
               y={Number(trade.exit_price)}
@@ -930,17 +1067,10 @@ const ChartShell = ({
               strokeWidth={1.5}
               strokeDasharray="3 3"
               strokeOpacity={0.65}
-              label={{
-                value: `Exit $${formatPriceAdaptive(trade.exit_price)}`,
-                fill: "#dc2626",
-                fontSize: 11,
-                fontWeight: "bold",
-                position: labelPositions.exit ?? "insideTopRight",
-              }}
             />
           )}
 
-          {/* Lodret Exit-streg så post-exit zone er tydelig */}
+          {/* Lodret Exit-streg */}
           {isClosed && trade.closed_at && (
             <ReferenceLine
               x={new Date(trade.closed_at).getTime()}
@@ -957,6 +1087,73 @@ const ChartShell = ({
               }}
             />
           )}
+
+          {/* Aktiveringsmarkører — kun hvis ikke alt for tæt på entry */}
+          {!tooCloseToOpen(markers.breakEvenAt) && (
+            <ReferenceLine
+              x={markers.breakEvenAt as number}
+              stroke="#a855f7"
+              strokeWidth={1.5}
+              strokeDasharray="4 2"
+              strokeOpacity={0.7}
+              label={{
+                value: "⚖️ BE",
+                fill: "#a855f7",
+                fontSize: 10,
+                fontWeight: "bold",
+                position: "insideTop",
+              }}
+            />
+          )}
+          {!tooCloseToOpen(markers.trailingAt) && (
+            <ReferenceLine
+              x={markers.trailingAt as number}
+              stroke="#ec4899"
+              strokeWidth={1.5}
+              strokeDasharray="4 2"
+              strokeOpacity={0.7}
+              label={{
+                value: "🎯 TS",
+                fill: "#ec4899",
+                fontSize: 10,
+                fontWeight: "bold",
+                position: "insideTop",
+              }}
+            />
+          )}
+          {!tooCloseToOpen(markers.peakLockAt) && (
+            <ReferenceLine
+              x={markers.peakLockAt as number}
+              stroke="#06b6d4"
+              strokeWidth={1.5}
+              strokeDasharray="4 2"
+              strokeOpacity={0.7}
+              label={{
+                value: "🔒 PL",
+                fill: "#06b6d4",
+                fontSize: 10,
+                fontWeight: "bold",
+                position: "insideTop",
+              }}
+            />
+          )}
+
+          {/* Label-stack overlay — alle pris-labels samlet, ingen overlap */}
+          <Customized
+            component={(p: any) => (
+              <PriceLabelStack
+                viewBox={{
+                  x: p.offset?.left ?? 0,
+                  y: p.offset?.top ?? 0,
+                  width: p.offset?.width ?? 0,
+                  height: p.offset?.height ?? 0,
+                }}
+                labels={priceLabels}
+                yMin={yMin}
+                yMax={yMax}
+              />
+            )}
+          />
 
           {/* Aktiveringsmarkører (lodret) */}
           {markers.breakEvenAt != null && (
