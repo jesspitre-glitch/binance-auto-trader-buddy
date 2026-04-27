@@ -9,6 +9,24 @@ import { formatTradeForExport } from "@/lib/tradeExportUtils";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
+/**
+ * Adaptiv pris-formattering: vælg antal decimaler ud fra prisens størrelse,
+ * så low-cap coins som PENGU/BONK får meningsfulde decimaler i stedet for "$0.01".
+ */
+const formatPrice = (price: number | null | undefined): string => {
+  if (price == null || !Number.isFinite(Number(price))) return '-';
+  const abs = Math.abs(Number(price));
+  let digits: number;
+  if (abs >= 1000) digits = 2;
+  else if (abs >= 100) digits = 3;
+  else if (abs >= 1) digits = 4;
+  else if (abs >= 0.1) digits = 5;
+  else if (abs >= 0.01) digits = 6;
+  else if (abs >= 0.001) digits = 7;
+  else digits = 8;
+  return Number(price).toFixed(digits);
+};
+
 interface TradeDetailsDialogProps {
   trade: any;
   isOpen: boolean;
@@ -139,13 +157,13 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeD
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Entry → Current</div>
                   <div className="font-mono text-lg font-bold">
-                    ${entryPrice.toFixed(2)} → ${currentPrice.toFixed(4)}
+                    ${formatPrice(entryPrice)} → ${formatPrice(currentPrice)}
                   </div>
                   <div className={`text-sm ${isLiveProfitable ? 'text-profit' : 'text-loss'}`}>
                     {trade.side === 'LONG' ? 
                       (currentPrice > entryPrice ? '↑' : '↓') : 
                       (currentPrice < entryPrice ? '↑' : '↓')
-                    } ${Math.abs(currentPrice - entryPrice).toFixed(4)}
+                    } ${formatPrice(Math.abs(currentPrice - entryPrice))}
                   </div>
                 </div>
                 
@@ -285,7 +303,7 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeD
                   Stop Loss {trade.break_even_activated && "(Break-Even)"}
                 </div>
                 <div className="font-mono font-semibold text-loss">
-                  ${(trade.stop_loss || trade.indicators_snapshot?.stop_loss)}
+                  ${formatPrice(Number(trade.stop_loss || trade.indicators_snapshot?.stop_loss))}
                 </div>
               </div>
             )}
@@ -312,7 +330,7 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeD
                     )}
                   </div>
                   <div className={`font-mono font-semibold ${trailingHasOvertaken ? 'text-muted-foreground' : 'text-blue-400'}`}>
-                    ${Number(trade.indicators_snapshot?.break_even_at_price ?? trade.stop_loss ?? trade.entry_price).toFixed(4)}
+                    ${formatPrice(Number(trade.indicators_snapshot?.break_even_at_price ?? trade.stop_loss ?? trade.entry_price))}
                   </div>
                 </div>
               );
@@ -344,7 +362,7 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeD
                     )}
                   </div>
                   <div className={`font-mono font-semibold ${trailingIsActive ? 'text-profit' : 'text-warning'}`}>
-                    ${trailingStopValue.toFixed(2)}
+                    ${formatPrice(trailingStopValue)}
                   </div>
                   {distanceFromPeak !== null && (
                     <div className="text-xs text-muted-foreground">
@@ -369,7 +387,7 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeD
                 <div className="space-y-1">
                   {trade.indicators_snapshot?.peak_lock_stop_price && (
                     <div className="font-mono font-semibold text-cyan-400">
-                      Stop: ${Number(trade.indicators_snapshot.peak_lock_stop_price).toFixed(4)}
+                      Stop: ${formatPrice(Number(trade.indicators_snapshot.peak_lock_stop_price))}
                     </div>
                   )}
                   <div className="text-xs text-muted-foreground grid grid-cols-2 gap-1">
@@ -389,7 +407,7 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeD
                   📈 Peak Price {trade.side === 'SHORT' ? '(Lowest)' : '(Highest)'}
                 </div>
                 <div className="font-mono font-semibold">
-                  ${Number(trade.peak_price || trade.indicators_snapshot?.peak_price).toFixed(2)}
+                  ${formatPrice(Number(trade.peak_price || trade.indicators_snapshot?.peak_price))}
                 </div>
               </div>
             )}
