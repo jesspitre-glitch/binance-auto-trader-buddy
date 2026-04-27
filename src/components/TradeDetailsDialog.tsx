@@ -303,7 +303,7 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeD
                   Stop Loss {trade.break_even_activated && "(Break-Even)"}
                 </div>
                 <div className="font-mono font-semibold text-loss">
-                  ${(trade.stop_loss || trade.indicators_snapshot?.stop_loss)}
+                  ${formatPrice(Number(trade.stop_loss || trade.indicators_snapshot?.stop_loss))}
                 </div>
               </div>
             )}
