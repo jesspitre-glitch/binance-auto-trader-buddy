@@ -330,7 +330,7 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeD
                     )}
                   </div>
                   <div className={`font-mono font-semibold ${trailingHasOvertaken ? 'text-muted-foreground' : 'text-blue-400'}`}>
-                    ${Number(trade.indicators_snapshot?.break_even_at_price ?? trade.stop_loss ?? trade.entry_price).toFixed(4)}
+                    ${formatPrice(Number(trade.indicators_snapshot?.break_even_at_price ?? trade.stop_loss ?? trade.entry_price))}
                   </div>
                 </div>
               );
