@@ -396,28 +396,136 @@ const tooltipProps = {
 };
 
 // =============================================================================
-// Hjælper — beregn smart label-placering for trigger-linjer (undgå overlap)
+// Label-stack — render alle pris-labels som én SVG-overlay så de aldrig overlapper
 // =============================================================================
-const assignLabelPositions = (
-  levels: { value: number; key: string }[],
-): Record<string, "insideTopLeft" | "insideTopRight" | "insideBottomLeft" | "insideBottomRight" | "insideLeft" | "insideRight"> => {
-  // Sorter efter pris og fordel labels skiftevis venstre/højre + top/bottom
-  const sorted = [...levels].sort((a, b) => b.value - a.value);
-  const out: Record<string, any> = {};
-  const positions: Array<
-    "insideTopLeft" | "insideTopRight" | "insideLeft" | "insideRight" | "insideBottomLeft" | "insideBottomRight"
-  > = [
-    "insideTopLeft",
-    "insideTopRight",
-    "insideLeft",
-    "insideRight",
-    "insideBottomLeft",
-    "insideBottomRight",
-  ];
-  sorted.forEach((lvl, i) => {
-    out[lvl.key] = positions[i % positions.length];
+interface PriceLabel {
+  value: number;
+  text: string;
+  color: string;
+  bold?: boolean;
+  side?: "left" | "right"; // anker
+}
+
+const PriceLabelStack = (props: any) => {
+  const { viewBox, labels, yMin, yMax } = props as {
+    viewBox: { x: number; y: number; width: number; height: number };
+    labels: PriceLabel[];
+    yMin: number;
+    yMax: number;
+  };
+  if (!viewBox || !labels || labels.length === 0) return null;
+  const { x, y, width, height } = viewBox;
+
+  // Konverter pris -> y-pixel
+  const priceToY = (p: number) => {
+    if (yMax === yMin) return y + height / 2;
+    return y + height - ((p - yMin) / (yMax - yMin)) * height;
+  };
+
+  // Sorter labels og adskil i venstre/højre kolonne baseret på pris (skiftevis)
+  // Sorteret high -> low. Lige indeks = højre, ulige = venstre.
+  const sorted = [...labels].sort((a, b) => b.value - a.value);
+  const ROW_H = 14; // min lodret afstand mellem labels
+  const PADDING_X = 6;
+
+  // Beregn ønsket y for hver label, og forskyd hvis de overlapper inden for samme kolonne
+  const placeColumn = (items: typeof sorted) => {
+    const placed = items
+      .map((l) => ({ ...l, yIdeal: priceToY(l.value) }))
+      .sort((a, b) => a.yIdeal - b.yIdeal);
+    // Skub ned hvis for tæt på naboen ovenover
+    for (let i = 1; i < placed.length; i++) {
+      if (placed[i].yIdeal - placed[i - 1].yIdeal < ROW_H) {
+        placed[i].yIdeal = placed[i - 1].yIdeal + ROW_H;
+      }
+    }
+    // Hvis vi løber ud nederst, skub op fra bunden
+    const bottom = y + height - 2;
+    for (let i = placed.length - 1; i > 0; i--) {
+      if (placed[i].yIdeal > bottom) placed[i].yIdeal = bottom - (placed.length - 1 - i) * ROW_H;
+    }
+    // Klem til top
+    const top = y + 10;
+    for (let i = 0; i < placed.length; i++) {
+      if (placed[i].yIdeal < top) placed[i].yIdeal = top + i * ROW_H;
+    }
+    return placed;
+  };
+
+  const rightItems: PriceLabel[] = [];
+  const leftItems: PriceLabel[] = [];
+  sorted.forEach((l, i) => {
+    if (l.side === "left") leftItems.push(l);
+    else if (l.side === "right") rightItems.push(l);
+    else (i % 2 === 0 ? rightItems : leftItems).push(l);
   });
-  return out;
+
+  const rightPlaced = placeColumn(rightItems);
+  const leftPlaced = placeColumn(leftItems);
+
+  return (
+    <g>
+      {rightPlaced.map((l, i) => (
+        <g key={`r-${i}`}>
+          {/* lille forbinder-streg fra ideel y til faktisk position */}
+          <line
+            x1={x + width - 2}
+            x2={x + width - 50}
+            y1={priceToY(l.value)}
+            y2={l.yIdeal}
+            stroke={l.color}
+            strokeOpacity={0.35}
+            strokeWidth={1}
+          />
+          <text
+            x={x + width - PADDING_X}
+            y={l.yIdeal}
+            fill={l.color}
+            fontSize={10}
+            fontWeight={l.bold ? "bold" : "normal"}
+            textAnchor="end"
+            style={{
+              paintOrder: "stroke",
+              stroke: "hsl(var(--background))",
+              strokeWidth: 3,
+              strokeLinejoin: "round",
+            }}
+          >
+            {l.text}
+          </text>
+        </g>
+      ))}
+      {leftPlaced.map((l, i) => (
+        <g key={`l-${i}`}>
+          <line
+            x1={x + 2}
+            x2={x + 50}
+            y1={priceToY(l.value)}
+            y2={l.yIdeal}
+            stroke={l.color}
+            strokeOpacity={0.35}
+            strokeWidth={1}
+          />
+          <text
+            x={x + PADDING_X}
+            y={l.yIdeal}
+            fill={l.color}
+            fontSize={10}
+            fontWeight={l.bold ? "bold" : "normal"}
+            textAnchor="start"
+            style={{
+              paintOrder: "stroke",
+              stroke: "hsl(var(--background))",
+              strokeWidth: 3,
+              strokeLinejoin: "round",
+            }}
+          >
+            {l.text}
+          </text>
+        </g>
+      ))}
+    </g>
+  );
 };
 
 // =============================================================================
