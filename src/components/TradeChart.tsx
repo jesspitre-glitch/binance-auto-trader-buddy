@@ -614,7 +614,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
             strokeWidth={1.5}
             strokeDasharray="2 4"
             strokeOpacity={0.5}
-            label={{ value: `BE TRIGGER ${formatPriceAdaptive(triggerLevels.breakEvenTrigger)}`, fill: "#a855f7", fontSize: 9, fontWeight: "normal", position: "insideTopLeft" }}
+            label={{ value: `BE TRIGGER ${formatPrice(triggerLevels.breakEvenTrigger)}`, fill: "#a855f7", fontSize: 9, fontWeight: "normal", position: "insideTopLeft" }}
           />
         )}
         
@@ -626,7 +626,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
             strokeWidth={1.5}
             strokeDasharray="2 4"
             strokeOpacity={0.5}
-            label={{ value: `TS TRIGGER ${formatPriceAdaptive(triggerLevels.trailingTrigger)}`, fill: "#ec4899", fontSize: 9, fontWeight: "normal", position: "insideTopRight" }}
+            label={{ value: `TS TRIGGER ${formatPrice(triggerLevels.trailingTrigger)}`, fill: "#ec4899", fontSize: 9, fontWeight: "normal", position: "insideTopRight" }}
           />
         )}
         
@@ -638,7 +638,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
             strokeWidth={1.5}
             strokeDasharray="2 4"
             strokeOpacity={0.5}
-            label={{ value: `PL TRIGGER ${formatPriceAdaptive(triggerLevels.peakLockTrigger)}`, fill: "#06b6d4", fontSize: 9, fontWeight: "normal", position: "insideBottomLeft" }}
+            label={{ value: `PL TRIGGER ${formatPrice(triggerLevels.peakLockTrigger)}`, fill: "#06b6d4", fontSize: 9, fontWeight: "normal", position: "insideBottomLeft" }}
           />
         )}
         
