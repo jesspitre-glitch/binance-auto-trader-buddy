@@ -301,6 +301,28 @@ const buildSeries = (
     };
   });
 
+  // ---- Reconciliation: tving sidste in-trade candle til at matche DB-state.
+  // Hvis backend har en eksplicit trailing_stop-værdi, bruger vi den som
+  // "sandhed" på sidste candle, så TS-linjen ender præcist hvor dashboardets
+  // trailing_stop-felt siger.
+  const lastInTradeIdx = (() => {
+    for (let i = data.length - 1; i >= 0; i--) {
+      if (!data[i].isPostExit && data[i].timestamp >= openTime) return i;
+    }
+    return -1;
+  })();
+  if (lastInTradeIdx >= 0) {
+    const last = data[lastInTradeIdx];
+    if (trailingStopDb != null && isFinite(trailingStopDb) && trailingStopDb > 0) {
+      last.trailingStop = trailingStopDb;
+      const initSl = isFinite(stopLoss) && stopLoss > 0 ? stopLoss : entryPrice;
+      last.effectiveStop =
+        side === "LONG"
+          ? Math.max(initSl, trailingStopDb)
+          : Math.min(initSl, trailingStopDb);
+    }
+  }
+
   // Triggere (faste niveauer)
   const triggers: TriggerLevels = {
     breakEvenTrigger:
