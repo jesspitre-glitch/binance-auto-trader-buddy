@@ -157,13 +157,13 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeD
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Entry → Current</div>
                   <div className="font-mono text-lg font-bold">
-                    ${entryPrice.toFixed(2)} → ${currentPrice.toFixed(4)}
+                    ${formatPrice(entryPrice)} → ${formatPrice(currentPrice)}
                   </div>
                   <div className={`text-sm ${isLiveProfitable ? 'text-profit' : 'text-loss'}`}>
                     {trade.side === 'LONG' ? 
                       (currentPrice > entryPrice ? '↑' : '↓') : 
                       (currentPrice < entryPrice ? '↑' : '↓')
-                    } ${Math.abs(currentPrice - entryPrice).toFixed(4)}
+                    } ${formatPrice(Math.abs(currentPrice - entryPrice))}
                   </div>
                 </div>
                 
