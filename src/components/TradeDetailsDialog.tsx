@@ -362,7 +362,7 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeD
                     )}
                   </div>
                   <div className={`font-mono font-semibold ${trailingIsActive ? 'text-profit' : 'text-warning'}`}>
-                    ${trailingStopValue.toFixed(2)}
+                    ${formatPrice(trailingStopValue)}
                   </div>
                   {distanceFromPeak !== null && (
                     <div className="text-xs text-muted-foreground">
