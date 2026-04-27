@@ -194,60 +194,51 @@ const buildSeries = (
         }
       }
 
-      // ---- Peak price ------------------------------------------------------
+      // ---- Peak price (HISTORISK rekonstruktion ud fra candles) -----------
+      // Brug high/low for korrekt peak — IKKE close. Og brug ALDRIG peakPriceDb
+      // her, da det er en "future-leak" der spreader nutidens peak bagud i tid
+      // og får TS-linjen til at se ud som en flad linje der følger prisen.
       if (side === "LONG") {
-        if (price > peakPrice) peakPrice = price;
-        if (peakPriceDb != null && peakPriceDb > peakPrice) peakPrice = peakPriceDb;
+        if (high > peakPrice) peakPrice = high;
       } else {
-        if (price < peakPrice) peakPrice = price;
-        if (peakPriceDb != null && peakPriceDb > 0 && peakPriceDb < peakPrice)
-          peakPrice = peakPriceDb;
+        if (low < peakPrice || peakPrice === entryPrice) {
+          if (low > 0) peakPrice = Math.min(peakPrice, low);
+        }
       }
 
       // ---- Trailing Stop ---------------------------------------------------
-      // Aktivering: enten DB siger TS er aktiv, ELLER vi har nået activation-tærsklen.
-      // BE er IKKE en forudsætning — trailing kan aktiveres uafhængigt.
+      // Aktivering: rent historisk — har profit-in-ATR ramt activation-tærsklen?
+      // (DB-flag bruges KUN som fallback for sidste candle hvis vi ikke nåede
+      // tærsklen i rekonstruktionen — håndteres efter loopet.)
       const trailingActive =
-        (trailingStopDb != null && isFinite(trailingStopDb) && trailingStopDb > 0) ||
-        (isInProfit &&
-          (!trailingActivationEnabled || profitInAtr >= trailingActivationAtr));
+        isInProfit &&
+        (!trailingActivationEnabled || profitInAtr >= trailingActivationAtr);
 
       if (trailingActive) {
         if (trailingStopActivatedAt == null) trailingStopActivatedAt = timestamp;
 
-        // Beregn rekonstrueret TS ud fra peak − ATR-distance
+        // Rekonstrueret TS ud fra historisk peak − ATR-distance
         const calcTs =
           side === "LONG"
             ? peakPrice - atrTrailingDistance
             : peakPrice + atrTrailingDistance;
 
-        // KORREKT SIDE: LONG trailing skal ALTID være under prisen, SHORT over.
-        // Hvis calcTs ligger på "forkerte" side af current price, er det ikke et
-        // gyldigt trailing-niveau (positionen ville være stoppet ud).
-        const onCorrectSideOfPrice =
-          side === "LONG" ? calcTs < price : calcTs > price;
-
-        // Skal forbedre eksisterende stop (ratchet)
+        // Ratchet: TS må kun forbedres, aldrig forværres
         const improves =
           side === "LONG" ? calcTs > currentStopLoss : calcTs < currentStopLoss;
 
-        if (onCorrectSideOfPrice && improves) {
-          trailingStop = calcTs;
-        } else {
-          trailingStop = null;
-        }
+        // Vis TS-linjen uanset om prisen er over eller under — prisen SKAL
+        // kunne krydse TS (det er jo selve exit-eventet).
+        trailingStop = improves ? calcTs : currentStopLoss;
 
-        effectiveStop = currentStopLoss;
-        if (trailingStop != null) {
-          // Most-protective: tag det stop der er tættest på prisen
-          effectiveStop =
+        // Most-protective effective stop
+        if (improves) {
+          currentStopLoss =
             side === "LONG"
-              ? Math.max(effectiveStop, trailingStop)
-              : Math.min(effectiveStop, trailingStop);
-          // Sanity: effectiveStop må heller aldrig krydse prisen
-          if (side === "LONG" && effectiveStop >= price) effectiveStop = currentStopLoss;
-          if (side === "SHORT" && effectiveStop <= price) effectiveStop = currentStopLoss;
+              ? Math.max(currentStopLoss, calcTs)
+              : Math.min(currentStopLoss, calcTs);
         }
+        effectiveStop = currentStopLoss;
       }
 
       // ---- Peak-Lock -------------------------------------------------------
@@ -309,6 +300,28 @@ const buildSeries = (
       isPostExit,
     };
   });
+
+  // ---- Reconciliation: tving sidste in-trade candle til at matche DB-state.
+  // Hvis backend har en eksplicit trailing_stop-værdi, bruger vi den som
+  // "sandhed" på sidste candle, så TS-linjen ender præcist hvor dashboardets
+  // trailing_stop-felt siger.
+  const lastInTradeIdx = (() => {
+    for (let i = data.length - 1; i >= 0; i--) {
+      if (!data[i].isPostExit && data[i].timestamp >= openTime) return i;
+    }
+    return -1;
+  })();
+  if (lastInTradeIdx >= 0) {
+    const last = data[lastInTradeIdx];
+    if (trailingStopDb != null && isFinite(trailingStopDb) && trailingStopDb > 0) {
+      last.trailingStop = trailingStopDb;
+      const initSl = isFinite(stopLoss) && stopLoss > 0 ? stopLoss : entryPrice;
+      last.effectiveStop =
+        side === "LONG"
+          ? Math.max(initSl, trailingStopDb)
+          : Math.min(initSl, trailingStopDb);
+    }
+  }
 
   // Triggere (faste niveauer)
   const triggers: TriggerLevels = {
