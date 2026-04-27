@@ -204,33 +204,48 @@ const buildSeries = (
       }
 
       // ---- Trailing Stop ---------------------------------------------------
+      // Aktivering: enten DB siger TS er aktiv, ELLER vi har nået activation-tærsklen.
+      // BE er IKKE en forudsætning — trailing kan aktiveres uafhængigt.
       const trailingActive =
         (trailingStopDb != null && isFinite(trailingStopDb) && trailingStopDb > 0) ||
-        (breakEvenActivated &&
-          isInProfit &&
+        (isInProfit &&
           (!trailingActivationEnabled || profitInAtr >= trailingActivationAtr));
 
       if (trailingActive) {
         if (trailingStopActivatedAt == null) trailingStopActivatedAt = timestamp;
 
+        // Beregn rekonstrueret TS ud fra peak − ATR-distance
         const calcTs =
           side === "LONG"
             ? peakPrice - atrTrailingDistance
             : peakPrice + atrTrailingDistance;
-        const inProfitZone =
-          side === "LONG" ? calcTs > entryPrice : calcTs < entryPrice;
+
+        // KORREKT SIDE: LONG trailing skal ALTID være under prisen, SHORT over.
+        // Hvis calcTs ligger på "forkerte" side af current price, er det ikke et
+        // gyldigt trailing-niveau (positionen ville være stoppet ud).
+        const onCorrectSideOfPrice =
+          side === "LONG" ? calcTs < price : calcTs > price;
+
+        // Skal forbedre eksisterende stop (ratchet)
         const improves =
           side === "LONG" ? calcTs > currentStopLoss : calcTs < currentStopLoss;
 
-        if (inProfitZone && improves) trailingStop = calcTs;
-        else trailingStop = null;
+        if (onCorrectSideOfPrice && improves) {
+          trailingStop = calcTs;
+        } else {
+          trailingStop = null;
+        }
 
         effectiveStop = currentStopLoss;
         if (trailingStop != null) {
+          // Most-protective: tag det stop der er tættest på prisen
           effectiveStop =
             side === "LONG"
               ? Math.max(effectiveStop, trailingStop)
               : Math.min(effectiveStop, trailingStop);
+          // Sanity: effectiveStop må heller aldrig krydse prisen
+          if (side === "LONG" && effectiveStop >= price) effectiveStop = currentStopLoss;
+          if (side === "SHORT" && effectiveStop <= price) effectiveStop = currentStopLoss;
         }
       }
 
