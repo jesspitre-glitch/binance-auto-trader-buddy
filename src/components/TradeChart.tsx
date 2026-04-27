@@ -872,13 +872,17 @@ const ChartShell = ({
     );
   }
 
-  // Vis kun BE/TS trigger-linjer hvis de IKKE allerede er aktiverede
-  const showBeTrigger = markers.breakEvenAt == null && triggers.breakEvenTrigger != null;
-  const showTsTrigger = markers.trailingAt == null && triggers.trailingTrigger != null;
-  const showPlTrigger = markers.peakLockAt == null && triggers.peakLockTrigger != null;
-
   const initialSlPrice =
     trade.indicators_snapshot?.original_stop_loss ?? trade.stop_loss;
+
+  // Filtrér aktiveringsmarkører der ligger meget tæt på open-tidspunktet
+  const openTime = trade.opened_at ? new Date(trade.opened_at).getTime() : 0;
+  const totalSpan =
+    chartData.length > 1
+      ? chartData[chartData.length - 1].timestamp - chartData[0].timestamp
+      : 1;
+  const tooCloseToOpen = (t: number | null) =>
+    t == null || Math.abs(t - openTime) < totalSpan * 0.04;
 
   return (
     <div className="space-y-2">
@@ -887,8 +891,8 @@ const ChartShell = ({
           ? `Lukket handel — viser ${15} candles efter exit`
           : "Åben handel — opdateres med live prisudvikling"}
       </div>
-      <ResponsiveContainer width="100%" height={320}>
-        <ComposedChart data={chartData} margin={{ top: 16, right: 24, left: 8, bottom: 8 }}>
+      <ResponsiveContainer width="100%" height={340}>
+        <ComposedChart data={chartData} margin={{ top: 16, right: 90, left: 8, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.3} />
           <XAxis
             dataKey="timestamp"
@@ -1002,23 +1006,14 @@ const ChartShell = ({
             />
           )}
 
-          {/* Entry pris-linje */}
+          {/* --- Pris-linjer UDEN labels (samles i overlay nedenfor) --- */}
           <ReferenceLine
             y={Number(trade.entry_price)}
             stroke="#16a34a"
             strokeWidth={1.5}
             strokeDasharray="10 5"
             strokeOpacity={0.7}
-            label={{
-              value: `Entry $${formatPriceAdaptive(trade.entry_price)}`,
-              fill: "#16a34a",
-              fontSize: 11,
-              fontWeight: "bold",
-              position: labelPositions.entry ?? "insideTopRight",
-            }}
           />
-
-          {/* Initial Stop Loss */}
           {initialSlPrice && Number(initialSlPrice) > 0 && (
             <ReferenceLine
               y={Number(initialSlPrice)}
@@ -1026,17 +1021,8 @@ const ChartShell = ({
               strokeWidth={1.5}
               strokeDasharray="6 3"
               strokeOpacity={0.55}
-              label={{
-                value: `Initial SL $${formatPriceAdaptive(initialSlPrice)}`,
-                fill: "#dc2626",
-                fontSize: 10,
-                fontWeight: "bold",
-                position: labelPositions.initialSl ?? "insideBottomRight",
-              }}
             />
           )}
-
-          {/* BE Trigger (kun hvis ikke aktiveret endnu) */}
           {showBeTrigger && (
             <ReferenceLine
               y={triggers.breakEvenTrigger as number}
@@ -1044,17 +1030,8 @@ const ChartShell = ({
               strokeWidth={1.25}
               strokeDasharray="2 4"
               strokeOpacity={0.55}
-              label={{
-                value: `BE Trigger $${formatPriceAdaptive(triggers.breakEvenTrigger)}`,
-                fill: "#a855f7",
-                fontSize: 10,
-                fontWeight: "normal",
-                position: labelPositions.beTrigger ?? "insideTopLeft",
-              }}
             />
           )}
-
-          {/* TS Trigger (kun hvis ikke aktiveret endnu) */}
           {showTsTrigger && (
             <ReferenceLine
               y={triggers.trailingTrigger as number}
@@ -1062,17 +1039,8 @@ const ChartShell = ({
               strokeWidth={1.25}
               strokeDasharray="2 4"
               strokeOpacity={0.55}
-              label={{
-                value: `TS Trigger $${formatPriceAdaptive(triggers.trailingTrigger)}`,
-                fill: "#ec4899",
-                fontSize: 10,
-                fontWeight: "normal",
-                position: labelPositions.tsTrigger ?? "insideTopRight",
-              }}
             />
           )}
-
-          {/* Peak-Lock Trigger (kun hvis ikke aktiveret endnu) */}
           {showPlTrigger && (
             <ReferenceLine
               y={triggers.peakLockTrigger as number}
@@ -1080,17 +1048,8 @@ const ChartShell = ({
               strokeWidth={1.25}
               strokeDasharray="2 4"
               strokeOpacity={0.55}
-              label={{
-                value: `PL Trigger $${formatPriceAdaptive(triggers.peakLockTrigger)}`,
-                fill: "#06b6d4",
-                fontSize: 10,
-                fontWeight: "normal",
-                position: labelPositions.plTrigger ?? "insideBottomLeft",
-              }}
             />
           )}
-
-          {/* Peak price (kun hvis data findes) */}
           {trade.peak_price && Number(trade.peak_price) > 0 && (
             <ReferenceLine
               y={Number(trade.peak_price)}
@@ -1098,17 +1057,8 @@ const ChartShell = ({
               strokeWidth={1}
               strokeDasharray="1 3"
               strokeOpacity={0.5}
-              label={{
-                value: `Peak $${formatPriceAdaptive(trade.peak_price)}`,
-                fill: "#0891b2",
-                fontSize: 10,
-                fontWeight: "normal",
-                position: "insideRight",
-              }}
             />
           )}
-
-          {/* Exit pris-linje (kun lukket) */}
           {isClosed && trade.exit_price != null && (
             <ReferenceLine
               y={Number(trade.exit_price)}
@@ -1116,17 +1066,10 @@ const ChartShell = ({
               strokeWidth={1.5}
               strokeDasharray="3 3"
               strokeOpacity={0.65}
-              label={{
-                value: `Exit $${formatPriceAdaptive(trade.exit_price)}`,
-                fill: "#dc2626",
-                fontSize: 11,
-                fontWeight: "bold",
-                position: labelPositions.exit ?? "insideTopRight",
-              }}
             />
           )}
 
-          {/* Lodret Exit-streg så post-exit zone er tydelig */}
+          {/* Lodret Exit-streg */}
           {isClosed && trade.closed_at && (
             <ReferenceLine
               x={new Date(trade.closed_at).getTime()}
@@ -1143,6 +1086,73 @@ const ChartShell = ({
               }}
             />
           )}
+
+          {/* Aktiveringsmarkører — kun hvis ikke alt for tæt på entry */}
+          {!tooCloseToOpen(markers.breakEvenAt) && (
+            <ReferenceLine
+              x={markers.breakEvenAt as number}
+              stroke="#a855f7"
+              strokeWidth={1.5}
+              strokeDasharray="4 2"
+              strokeOpacity={0.7}
+              label={{
+                value: "⚖️ BE",
+                fill: "#a855f7",
+                fontSize: 10,
+                fontWeight: "bold",
+                position: "insideTop",
+              }}
+            />
+          )}
+          {!tooCloseToOpen(markers.trailingAt) && (
+            <ReferenceLine
+              x={markers.trailingAt as number}
+              stroke="#ec4899"
+              strokeWidth={1.5}
+              strokeDasharray="4 2"
+              strokeOpacity={0.7}
+              label={{
+                value: "🎯 TS",
+                fill: "#ec4899",
+                fontSize: 10,
+                fontWeight: "bold",
+                position: "insideTop",
+              }}
+            />
+          )}
+          {!tooCloseToOpen(markers.peakLockAt) && (
+            <ReferenceLine
+              x={markers.peakLockAt as number}
+              stroke="#06b6d4"
+              strokeWidth={1.5}
+              strokeDasharray="4 2"
+              strokeOpacity={0.7}
+              label={{
+                value: "🔒 PL",
+                fill: "#06b6d4",
+                fontSize: 10,
+                fontWeight: "bold",
+                position: "insideTop",
+              }}
+            />
+          )}
+
+          {/* Label-stack overlay — alle pris-labels samlet, ingen overlap */}
+          <Customized
+            component={(p: any) => (
+              <PriceLabelStack
+                viewBox={{
+                  x: p.offset?.left ?? 0,
+                  y: p.offset?.top ?? 0,
+                  width: p.offset?.width ?? 0,
+                  height: p.offset?.height ?? 0,
+                }}
+                labels={priceLabels}
+                yMin={yMin}
+                yMax={yMax}
+              />
+            )}
+          />
 
           {/* Aktiveringsmarkører (lodret) */}
           {markers.breakEvenAt != null && (
