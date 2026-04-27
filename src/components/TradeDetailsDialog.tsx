@@ -387,7 +387,7 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeD
                 <div className="space-y-1">
                   {trade.indicators_snapshot?.peak_lock_stop_price && (
                     <div className="font-mono font-semibold text-cyan-400">
-                      Stop: ${Number(trade.indicators_snapshot.peak_lock_stop_price).toFixed(4)}
+                      Stop: ${formatPrice(Number(trade.indicators_snapshot.peak_lock_stop_price))}
                     </div>
                   )}
                   <div className="text-xs text-muted-foreground grid grid-cols-2 gap-1">
