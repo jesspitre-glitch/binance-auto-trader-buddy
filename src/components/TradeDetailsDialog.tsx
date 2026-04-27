@@ -407,7 +407,7 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeD
                   📈 Peak Price {trade.side === 'SHORT' ? '(Lowest)' : '(Highest)'}
                 </div>
                 <div className="font-mono font-semibold">
-                  ${Number(trade.peak_price || trade.indicators_snapshot?.peak_price).toFixed(2)}
+                  ${formatPrice(Number(trade.peak_price || trade.indicators_snapshot?.peak_price))}
                 </div>
               </div>
             )}
