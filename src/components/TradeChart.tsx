@@ -10,6 +10,7 @@ import {
   Scatter,
   Line,
   ComposedChart,
+  Customized,
 } from "recharts";
 import { Loader2 } from "lucide-react";
 
