@@ -760,24 +760,102 @@ const ChartShell = ({
     return { yMin: min - padding, yMax: max + padding };
   }, [chartData, trade, triggers, isClosed]);
 
-  // ---- Smart label-placering for trigger-linjer ---------------------------
-  const labelPositions = useMemo(() => {
-    const lvls: { value: number; key: string }[] = [];
-    if (trade.entry_price)
-      lvls.push({ value: Number(trade.entry_price), key: "entry" });
-    const initialSL =
-      trade.indicators_snapshot?.original_stop_loss ?? trade.stop_loss;
-    if (initialSL) lvls.push({ value: Number(initialSL), key: "initialSl" });
-    if (triggers.breakEvenTrigger != null)
-      lvls.push({ value: triggers.breakEvenTrigger, key: "beTrigger" });
-    if (triggers.trailingTrigger != null)
-      lvls.push({ value: triggers.trailingTrigger, key: "tsTrigger" });
-    if (triggers.peakLockTrigger != null)
-      lvls.push({ value: triggers.peakLockTrigger, key: "plTrigger" });
-    if (isClosed && trade.exit_price)
-      lvls.push({ value: Number(trade.exit_price), key: "exit" });
-    return assignLabelPositions(lvls);
-  }, [trade, triggers, isClosed]);
+  // ---- Vis-flag for triggers (skal være kendt før priceLabels-memo) -------
+  const showBeTrigger =
+    markers.breakEvenAt == null && triggers.breakEvenTrigger != null;
+  const showTsTrigger =
+    markers.trailingAt == null && triggers.trailingTrigger != null;
+  const showPlTrigger =
+    markers.peakLockAt == null && triggers.peakLockTrigger != null;
+
+  // ---- Saml alle pris-labels til én overlay-stak --------------------------
+  const priceLabels = useMemo(() => {
+    const out: PriceLabel[] = [];
+    const entry = Number(trade.entry_price);
+    if (entry > 0)
+      out.push({
+        value: entry,
+        text: `📍 Entry $${formatPriceAdaptive(entry)}`,
+        color: "#16a34a",
+        bold: true,
+      });
+
+    const initSl = Number(
+      trade.indicators_snapshot?.original_stop_loss ?? trade.stop_loss,
+    );
+    if (initSl > 0)
+      out.push({
+        value: initSl,
+        text: `Initial SL $${formatPriceAdaptive(initSl)}`,
+        color: "#dc2626",
+      });
+
+    if (showBeTrigger && triggers.breakEvenTrigger != null)
+      out.push({
+        value: triggers.breakEvenTrigger,
+        text: `BE Trigger $${formatPriceAdaptive(triggers.breakEvenTrigger)}`,
+        color: "#a855f7",
+      });
+    if (showTsTrigger && triggers.trailingTrigger != null)
+      out.push({
+        value: triggers.trailingTrigger,
+        text: `TS Trigger $${formatPriceAdaptive(triggers.trailingTrigger)}`,
+        color: "#ec4899",
+      });
+    if (showPlTrigger && triggers.peakLockTrigger != null)
+      out.push({
+        value: triggers.peakLockTrigger,
+        text: `PL Trigger $${formatPriceAdaptive(triggers.peakLockTrigger)}`,
+        color: "#06b6d4",
+      });
+
+    if (trade.peak_price && Number(trade.peak_price) > 0) {
+      out.push({
+        value: Number(trade.peak_price),
+        text: `🔝 Peak $${formatPriceAdaptive(trade.peak_price)}`,
+        color: "#0891b2",
+      });
+    }
+
+    if (isClosed && trade.exit_price != null) {
+      out.push({
+        value: Number(trade.exit_price),
+        text: `🚪 Exit $${formatPriceAdaptive(trade.exit_price)}`,
+        color: "#dc2626",
+        bold: true,
+      });
+    }
+
+    const lastTs = [...chartData].reverse().find((d) => d.trailingStop != null)
+      ?.trailingStop;
+    if (lastTs != null)
+      out.push({
+        value: lastTs,
+        text: `🎯 TS $${formatPriceAdaptive(lastTs)}`,
+        color: "#ec4899",
+        bold: true,
+      });
+
+    const lastEff = [...chartData].reverse().find((d) => d.effectiveStop != null)
+      ?.effectiveStop;
+    if (lastEff != null && lastEff !== lastTs)
+      out.push({
+        value: lastEff,
+        text: `🛑 Aktiv $${formatPriceAdaptive(lastEff)}`,
+        color: "#f97316",
+        bold: true,
+      });
+
+    return out;
+  }, [
+    trade,
+    triggers,
+    showBeTrigger,
+    showTsTrigger,
+    showPlTrigger,
+    chartData,
+    isClosed,
+  ]);
 
   if (loading) {
     return (
