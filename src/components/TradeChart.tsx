@@ -326,12 +326,20 @@ const buildSeries = (
   if (lastInTradeIdx >= 0) {
     const last = data[lastInTradeIdx];
     if (trailingStopDb != null && isFinite(trailingStopDb) && trailingStopDb > 0) {
-      last.trailingStop = trailingStopDb;
-      const initSl = isFinite(stopLoss) && stopLoss > 0 ? stopLoss : entryPrice;
-      last.effectiveStop =
-        side === "LONG"
-          ? Math.max(initSl, trailingStopDb)
-          : Math.min(initSl, trailingStopDb);
+      // Side-validering også på reconciliation: LONG-stop må ikke ligge over high,
+      // SHORT-stop må ikke ligge under low på samme candle.
+      const sideOk =
+        side === "LONG" ? trailingStopDb <= last.high : trailingStopDb >= last.low;
+      if (sideOk) {
+        last.trailingStop = trailingStopDb;
+        const initSl = isFinite(stopLoss) && stopLoss > 0 ? stopLoss : entryPrice;
+        const eff =
+          side === "LONG"
+            ? Math.max(initSl, trailingStopDb)
+            : Math.min(initSl, trailingStopDb);
+        const effOk = side === "LONG" ? eff <= last.high : eff >= last.low;
+        if (effOk) last.effectiveStop = eff;
+      }
     }
   }
 
