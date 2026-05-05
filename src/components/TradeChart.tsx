@@ -580,24 +580,12 @@ const ChartShell = ({
     let pool: number[] = [...priceValues];
     if (entryPrice > 0) pool.push(entryPrice);
 
-    // Stop-linjer skal ALTID indgå i y-domain så de ikke ryger udenfor grafen.
-    if (priceValues.length > 0) {
-      const pMin = Math.min(...priceValues);
-      const pMax = Math.max(...priceValues);
-      const range = Math.max(pMax - pMin, entryPrice * 0.005);
-      const maxDist = range * 5; // mere generøs for at undgå at klippe TS
-
-      chartData.forEach((d) => {
-        if (d.effectiveStop != null && Math.abs(d.effectiveStop - entryPrice) <= maxDist) {
-          pool.push(d.effectiveStop);
-        }
-        if (d.trailingStop != null && Math.abs(d.trailingStop - entryPrice) <= maxDist) {
-          pool.push(d.trailingStop);
-        }
-        if (d.breakEven != null) pool.push(d.breakEven);
-        if (d.peakLockStop != null) pool.push(d.peakLockStop);
-      });
-    }
+    chartData.forEach((d) => {
+      if (d.effectiveStop != null) pool.push(d.effectiveStop);
+      if (d.trailingStop != null) pool.push(d.trailingStop);
+      if (d.breakEven != null) pool.push(d.breakEven);
+      if (d.peakLockStop != null) pool.push(d.peakLockStop);
+    });
 
     // TS / peak fra DB (single value) — sikrer at en aktiv TS altid er i view
     const tsDb = trade.trailing_stop != null ? Number(trade.trailing_stop) : null;
@@ -605,11 +593,10 @@ const ChartShell = ({
     const pkDb = trade.peak_price != null ? Number(trade.peak_price) : null;
     if (pkDb != null && isFinite(pkDb) && pkDb > 0) pool.push(pkDb);
 
-    // Stop loss og exit hvis inden for 10%
+    // Stop loss og exit fra trade
     const stopLoss = Number(trade.stop_loss);
     if (stopLoss && isFinite(stopLoss) && stopLoss > 0) {
-      const distPct = (Math.abs(stopLoss - entryPrice) / entryPrice) * 100;
-      if (distPct <= 12) pool.push(stopLoss);
+      pool.push(stopLoss);
     }
     if (isClosed && trade.exit_price && isFinite(trade.exit_price)) {
       pool.push(Number(trade.exit_price));
@@ -649,9 +636,7 @@ const ChartShell = ({
         bold: true,
       });
 
-    const initSl = Number(
-      trade.indicators_snapshot?.original_stop_loss ?? trade.stop_loss,
-    );
+    const initSl = Number(trade.stop_loss);
     if (initSl > 0)
       out.push({
         value: initSl,
@@ -743,9 +728,7 @@ const ChartShell = ({
 
   const entryPrice = Number(trade.entry_price);
   const exitPrice = isClosed && trade.exit_price != null ? Number(trade.exit_price) : null;
-  const initialSlPrice = Number(
-    trade.indicators_snapshot?.original_stop_loss ?? trade.stop_loss,
-  );
+  const initialSlPrice = Number(trade.stop_loss);
   const peakPrice = trade.peak_price != null ? Number(trade.peak_price) : null;
 
   const openTime = trade.opened_at ? new Date(trade.opened_at).getTime() : null;
@@ -758,6 +741,8 @@ const ChartShell = ({
   const hasEffective = chartData.some((d) => d.effectiveStop != null);
   const hasInitialSl = isFinite(initialSlPrice) && initialSlPrice > 0;
   const hasPeak = peakPrice != null && isFinite(peakPrice) && peakPrice > 0;
+  const currentTrailingStop = [...chartData].reverse().find((d) => d.trailingStop != null)?.trailingStop ?? null;
+  const currentEffectiveStop = [...chartData].reverse().find((d) => d.effectiveStop != null)?.effectiveStop ?? null;
 
   // Kun hide-fra-legend payload — Recharts viser ALT som default; vi
   // angiver i stedet eksplicit hvilke linjer der overhovedet renderes.
