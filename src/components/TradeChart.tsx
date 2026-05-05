@@ -577,7 +577,7 @@ const ChartShell = ({
       .map((d) => d.price)
       .filter((p) => p != null && isFinite(p) && p > 0);
 
-    let pool: number[] = [...priceValues];
+    const pool: number[] = [...priceValues];
     if (entryPrice > 0) pool.push(entryPrice);
 
     chartData.forEach((d) => {
