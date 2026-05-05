@@ -95,7 +95,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
 };
 
 // =============================================================================
-// Fælles indikator-rekonstruktion (BE / TS / Peak-Lock niveauer over tid)
+// Fælles chart-serie — læser kun faktiske trade-værdier, ingen lokal simulation
 // =============================================================================
 const buildSeries = (
   trade: any,
@@ -108,47 +108,28 @@ const buildSeries = (
 } => {
   const side = trade.side as "LONG" | "SHORT";
 
-  // ---- KUN ÆGTE DB-VÆRDIER — ingen lokal rekonstruktion -------------------
+  const toPositiveNumber = (value: any): number | null => {
+    const n = Number(value);
+    return value != null && isFinite(n) && n > 0 ? n : null;
+  };
+
+  // ---- KUN FAKTISKE TRADE-VÆRDIER ----------------------------------------
   const stopLossDb =
-    trade.stop_loss != null && isFinite(Number(trade.stop_loss)) && Number(trade.stop_loss) > 0
-      ? Number(trade.stop_loss)
-      : null;
+    toPositiveNumber(trade.stop_loss);
 
   const breakEvenTriggered = trade.break_even_triggered === true;
   const breakEvenAtPrice =
-    breakEvenTriggered &&
-    trade.break_even_at_price != null &&
-    isFinite(Number(trade.break_even_at_price)) &&
-    Number(trade.break_even_at_price) > 0
-      ? Number(trade.break_even_at_price)
-      : null;
+    breakEvenTriggered ? toPositiveNumber(trade.break_even_at_price) : null;
 
   const trailingStopDb =
-    trade.trailing_stop != null && isFinite(Number(trade.trailing_stop)) && Number(trade.trailing_stop) > 0
-      ? Number(trade.trailing_stop)
-      : null;
+    toPositiveNumber(trade.trailing_stop);
 
   const peakLockActivated = trade.peak_lock_activated === true;
   const peakLockStopPrice =
-    peakLockActivated &&
-    trade.peak_lock_stop_price != null &&
-    isFinite(Number(trade.peak_lock_stop_price)) &&
-    Number(trade.peak_lock_stop_price) > 0
-      ? Number(trade.peak_lock_stop_price)
-      : null;
+    peakLockActivated ? toPositiveNumber(trade.peak_lock_stop_price) : null;
 
-  // ---- Most-protective effective stop fra DB (én værdi, ikke pr. candle) --
-  const candidates = [
-    stopLossDb,
-    breakEvenAtPrice,
-    trailingStopDb,
-    peakLockStopPrice,
-  ].filter((v): v is number => v != null);
-  const effectiveStopDb = candidates.length
-    ? side === "LONG"
-      ? Math.max(...candidates)
-      : Math.min(...candidates)
-    : null;
+  // Aktiv Stop er kun den aktuelle trade-værdi: TS hvis den findes, ellers SL.
+  const effectiveStopDb = trailingStopDb ?? stopLossDb;
 
   const closeTime = trade.closed_at
     ? new Date(trade.closed_at).getTime()
@@ -161,15 +142,6 @@ const buildSeries = (
     const low = parseFloat(k[3]);
 
     const isPostExit = timestamp > closeTime;
-    const inTradeWindow = timestamp >= openTime && !isPostExit;
-
-    // Side-validering: skip hvis værdien ikke giver mening for siden på denne candle
-    const validForSide = (v: number | null): number | null => {
-      if (v == null || !isFinite(v) || v <= 0) return null;
-      if (side === "LONG" && v > high) return null;
-      if (side === "SHORT" && v < low) return null;
-      return v;
-    };
 
     return {
       timestamp,
@@ -180,18 +152,38 @@ const buildSeries = (
       price,
       high,
       low,
-      // Konstante DB-værdier tegnet henover hele trade-vinduet
-      effectiveStop: inTradeWindow ? validForSide(effectiveStopDb) : null,
-      trailingStop: inTradeWindow ? validForSide(trailingStopDb) : null,
-      breakEven: inTradeWindow ? validForSide(breakEvenAtPrice) : null,
-      peakLockStop: inTradeWindow ? validForSide(peakLockStopPrice) : null,
+      // Aktuelle stop-niveauer sættes kun på seneste candle i trade-vinduet nedenfor.
+      effectiveStop: null,
+      trailingStop: null,
+      breakEven: null,
+      peakLockStop: null,
       entryMarker: null,
       exitMarker: null,
       isPostExit,
     };
   });
 
-  // Ingen triggere/markers fra rekonstruktion — chart visualiserer kun ægte data.
+  const validForSide = (v: number | null, row: ChartRow): number | null => {
+    if (v == null || !isFinite(v) || v <= 0) return null;
+    if (side === "LONG" && v > row.high) return null;
+    if (side === "SHORT" && v < row.low) return null;
+    return v;
+  };
+
+  const latestInTradeIndex = data.reduce((latest, row, idx) => {
+    if (row.timestamp < openTime || row.isPostExit) return latest;
+    return idx;
+  }, -1);
+
+  if (latestInTradeIndex >= 0) {
+    const row = data[latestInTradeIndex];
+    row.trailingStop = validForSide(trailingStopDb, row);
+    row.effectiveStop = validForSide(effectiveStopDb, row);
+    row.breakEven = validForSide(breakEvenAtPrice, row);
+    row.peakLockStop = validForSide(peakLockStopPrice, row);
+  }
+
+  // Ingen triggere/markers fra chart-logik — chart visualiserer kun trade-data.
   return {
     data,
     triggers: {
