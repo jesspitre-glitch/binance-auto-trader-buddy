@@ -963,57 +963,15 @@ const ChartShell = ({
                 isAnimationActive={false}
               />
 
-              {hasTrailing && (
+              {hasExitStop && (
                 <Line
                   type="stepAfter"
-                  dataKey="trailingStop"
-                  stroke="#ec4899"
-                  strokeWidth={2.5}
-                  strokeDasharray="6 3"
-                  dot={{ r: 4, strokeWidth: 2 }}
-                  name="🎯 Trailing Stop"
-                  connectNulls={false}
-                  isAnimationActive={false}
-                />
-              )}
-
-              {hasEffective && (
-                <Line
-                  type="stepAfter"
-                  dataKey="effectiveStop"
+                  dataKey="exitStop"
                   stroke="#f97316"
                   strokeWidth={2.5}
                   strokeDasharray="8 4"
-                  dot={{ r: 4, strokeWidth: 2 }}
-                  name="🛑 Aktiv Stop"
-                  connectNulls={false}
-                  isAnimationActive={false}
-                />
-              )}
-
-              {hasBreakEven && (
-                <Line
-                  type="stepAfter"
-                  dataKey="breakEven"
-                  stroke="#a855f7"
-                  strokeWidth={1.5}
-                  strokeDasharray="4 4"
                   dot={false}
-                  name="⚖️ Break-Even"
-                  connectNulls={false}
-                  isAnimationActive={false}
-                />
-              )}
-
-              {hasPeakLock && (
-                <Line
-                  type="stepAfter"
-                  dataKey="peakLockStop"
-                  stroke="#06b6d4"
-                  strokeWidth={1.5}
-                  strokeDasharray="3 2"
-                  dot={false}
-                  name="🔒 Peak-Lock"
+                  name="🛑 Exit Stop"
                   connectNulls={false}
                   isAnimationActive={false}
                 />
