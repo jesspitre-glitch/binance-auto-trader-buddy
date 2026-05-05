@@ -1182,6 +1182,7 @@ const ChartShell = ({
       <ChartDebugPanel
         trade={trade}
         chartData={chartData}
+        exitStopSeries={exitStopSeries}
         triggers={triggers}
         markers={markers}
         tsDiagnostic={tsDiagnostic}
