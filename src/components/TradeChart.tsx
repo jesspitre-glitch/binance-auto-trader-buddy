@@ -13,6 +13,7 @@ import {
   Customized,
 } from "recharts";
 import { Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface TradeChartProps {
   trade: any;
