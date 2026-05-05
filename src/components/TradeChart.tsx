@@ -873,352 +873,310 @@ const ChartShell = ({
 
   if (loading) {
     return (
-      <div className="h-[300px] flex items-center justify-center">
+      <div className="h-[380px] flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
   if (chartData.length === 0) {
     return (
-      <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+      <div className="h-[380px] flex items-center justify-center text-muted-foreground text-sm">
         Ingen chart data tilgængelig
       </div>
     );
   }
 
-  const initialSlPrice =
-    trade.indicators_snapshot?.original_stop_loss ?? trade.stop_loss;
+  const entryPrice = Number(trade.entry_price);
+  const exitPrice = isClosed && trade.exit_price != null ? Number(trade.exit_price) : null;
+  const initialSlPrice = Number(
+    trade.indicators_snapshot?.original_stop_loss ?? trade.stop_loss,
+  );
+  const peakPrice = trade.peak_price != null ? Number(trade.peak_price) : null;
 
-  // Filtrér aktiveringsmarkører der ligger meget tæt på open-tidspunktet
-  const openTime = trade.opened_at ? new Date(trade.opened_at).getTime() : 0;
-  const totalSpan =
-    chartData.length > 1
-      ? chartData[chartData.length - 1].timestamp - chartData[0].timestamp
-      : 1;
-  const tooCloseToOpen = (t: number | null) =>
-    t == null || Math.abs(t - openTime) < totalSpan * 0.04;
+  const openTime = trade.opened_at ? new Date(trade.opened_at).getTime() : null;
+  const closeTime = isClosed && trade.closed_at ? new Date(trade.closed_at).getTime() : null;
+
+  // ---- Hvilke serier har vi reelt data for? -----------------------------
+  const hasTrailing = chartData.some((d) => d.trailingStop != null);
+  const hasBreakEven = chartData.some((d) => d.breakEven != null);
+  const hasPeakLock = chartData.some((d) => d.peakLockStop != null);
+  const hasEffective = chartData.some((d) => d.effectiveStop != null);
+  const hasInitialSl = isFinite(initialSlPrice) && initialSlPrice > 0;
+  const hasPeak = peakPrice != null && isFinite(peakPrice) && peakPrice > 0;
+
+  // Kun hide-fra-legend payload — Recharts viser ALT som default; vi
+  // angiver i stedet eksplicit hvilke linjer der overhovedet renderes.
+
+  // ---- X-akse ticks: vis kun start, entry, exit (hvis lukket) og slut --
+  const firstTs = chartData[0]?.timestamp;
+  const lastTs = chartData[chartData.length - 1]?.timestamp;
+  const xTicks = Array.from(
+    new Set(
+      [firstTs, openTime, closeTime, lastTs].filter(
+        (v): v is number => v != null && isFinite(v),
+      ),
+    ),
+  ).sort((a, b) => a - b);
+
+  const fmtTimeShort = (ts: number) =>
+    new Date(ts).toLocaleString("da-DK", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "UTC",
+    });
+
+  // ---- Custom tooltip ---------------------------------------------------
+  const renderTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload || payload.length === 0) return null;
+    const row = payload[0]?.payload as ChartRow | undefined;
+    if (!row) return null;
+    const pctFromEntry =
+      entryPrice > 0 ? ((row.price - entryPrice) / entryPrice) * 100 : null;
+    return (
+      <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-xl">
+        <div className="font-semibold mb-1 text-popover-foreground">
+          {fmtTimeShort(label)} UTC
+        </div>
+        <div className="space-y-0.5 text-popover-foreground">
+          <div>
+            <span className="text-muted-foreground">Pris:</span>{" "}
+            <span className="font-mono">${formatPriceAdaptive(row.price)}</span>
+            {pctFromEntry != null && (
+              <span
+                className={`ml-2 ${
+                  pctFromEntry >= 0 ? "text-emerald-500" : "text-rose-500"
+                }`}
+              >
+                {pctFromEntry >= 0 ? "+" : ""}
+                {pctFromEntry.toFixed(2)}%
+              </span>
+            )}
+          </div>
+          {row.entryMarker != null && (
+            <div className="text-emerald-500">
+              📍 Entry ${formatPriceAdaptive(row.entryMarker)}
+            </div>
+          )}
+          {row.exitMarker != null && (
+            <div className="text-rose-500">
+              🚪 Exit ${formatPriceAdaptive(row.exitMarker)}
+            </div>
+          )}
+          {row.effectiveStop != null && (
+            <div className="text-orange-500">
+              🛑 Aktiv Stop ${formatPriceAdaptive(row.effectiveStop)}
+            </div>
+          )}
+          {row.trailingStop != null && (
+            <div className="text-pink-500">
+              🎯 TS ${formatPriceAdaptive(row.trailingStop)}
+            </div>
+          )}
+          {row.breakEven != null && (
+            <div className="text-purple-500">
+              ⚖️ BE ${formatPriceAdaptive(row.breakEven)}
+            </div>
+          )}
+          {row.peakLockStop != null && (
+            <div className="text-cyan-500">
+              🔒 Peak-Lock ${formatPriceAdaptive(row.peakLockStop)}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-2">
       <div className="text-xs text-muted-foreground px-1">
         {isClosed
-          ? `Lukket handel — viser ${15} candles efter exit`
+          ? `Lukket handel — viser 15 candles efter exit`
           : "Åben handel — opdateres med live prisudvikling"}
       </div>
-      <ResponsiveContainer width="100%" height={340}>
-        <ComposedChart data={chartData} margin={{ top: 16, right: 90, left: 8, bottom: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.3} />
-          <XAxis
-            dataKey="timestamp"
-            type="number"
-            scale="time"
-            domain={["dataMin", "dataMax"]}
-            tick={{ fontSize: 10 }}
-            tickFormatter={(v) =>
-              new Date(v).toLocaleTimeString("da-DK", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            }
-          />
-          <YAxis
-            domain={[yMin, yMax]}
-            tick={{ fontSize: 11 }}
-            tickFormatter={(v) => formatPriceAdaptive(v)}
-            width={95}
-          />
-          <Tooltip {...tooltipProps} />
-          <Legend
-            wrapperStyle={{
-              paddingTop: "16px",
-              fontSize: "13px",
-              fontWeight: 600,
-            }}
-            iconType="line"
-          />
 
-          {/* Pris */}
-          <Line
-            type="monotone"
-            dataKey="price"
-            stroke="#2563eb"
-            strokeWidth={3}
-            dot={false}
-            name="💰 Pris"
-            isAnimationActive={false}
-          />
-
-          {/* Trailing Stop */}
-          <Line
-            type="stepAfter"
-            dataKey="trailingStop"
-            stroke="#ec4899"
-            strokeWidth={3}
-            strokeDasharray="6 3"
-            dot={false}
-            name="🎯 Trailing Stop"
-            connectNulls={false}
-            isAnimationActive={false}
-          />
-
-          {/* Aktiv stop */}
-          <Line
-            type="stepAfter"
-            dataKey="effectiveStop"
-            stroke="#f97316"
-            strokeWidth={4}
-            strokeDasharray="8 4"
-            dot={false}
-            name="🛑 Aktiv Stop"
-            connectNulls={false}
-            isAnimationActive={false}
-          />
-
-          {/* Break-Even */}
-          <Line
-            type="stepAfter"
-            dataKey="breakEven"
-            stroke="#a855f7"
-            strokeWidth={2.5}
-            strokeDasharray="4 4"
-            dot={false}
-            name="⚖️ Break-Even"
-            connectNulls={false}
-            isAnimationActive={false}
-          />
-
-          {/* Peak-Lock */}
-          <Line
-            type="stepAfter"
-            dataKey="peakLockStop"
-            stroke="#06b6d4"
-            strokeWidth={2.5}
-            strokeDasharray="3 2"
-            dot={false}
-            name="🔒 Peak-Lock"
-            connectNulls={false}
-            isAnimationActive={false}
-          />
-
-          {/* Entry marker */}
-          <Scatter
-            dataKey="entryMarker"
-            fill="#16a34a"
-            shape={<CustomShape />}
-            name="📍 Entry"
-            isAnimationActive={false}
-          />
-
-          {/* Exit marker (kun lukket) */}
-          {isClosed && (
-            <Scatter
-              dataKey="exitMarker"
-              fill="#dc2626"
-              shape={<CustomShape />}
-              name="🚪 Exit"
-              isAnimationActive={false}
-            />
-          )}
-
-          {/* --- Pris-linjer UDEN labels (samles i overlay nedenfor) --- */}
-          <ReferenceLine
-            y={Number(trade.entry_price)}
-            stroke="#16a34a"
-            strokeWidth={1.5}
-            strokeDasharray="10 5"
-            strokeOpacity={0.7}
-          />
-          {initialSlPrice && Number(initialSlPrice) > 0 && (
-            <ReferenceLine
-              y={Number(initialSlPrice)}
-              stroke="#dc2626"
-              strokeWidth={1.5}
-              strokeDasharray="6 3"
-              strokeOpacity={0.55}
-            />
-          )}
-          {showBeTrigger && (
-            <ReferenceLine
-              y={triggers.breakEvenTrigger as number}
-              stroke="#a855f7"
-              strokeWidth={1.25}
-              strokeDasharray="2 4"
-              strokeOpacity={0.55}
-            />
-          )}
-          {showTsTrigger && (
-            <ReferenceLine
-              y={triggers.trailingTrigger as number}
-              stroke="#ec4899"
-              strokeWidth={1.25}
-              strokeDasharray="2 4"
-              strokeOpacity={0.55}
-            />
-          )}
-          {showPlTrigger && (
-            <ReferenceLine
-              y={triggers.peakLockTrigger as number}
-              stroke="#06b6d4"
-              strokeWidth={1.25}
-              strokeDasharray="2 4"
-              strokeOpacity={0.55}
-            />
-          )}
-          {trade.peak_price && Number(trade.peak_price) > 0 && (
-            <ReferenceLine
-              y={Number(trade.peak_price)}
-              stroke="#0891b2"
-              strokeWidth={1}
-              strokeDasharray="1 3"
-              strokeOpacity={0.5}
-            />
-          )}
-          {isClosed && trade.exit_price != null && (
-            <ReferenceLine
-              y={Number(trade.exit_price)}
-              stroke="#dc2626"
-              strokeWidth={1.5}
-              strokeDasharray="3 3"
-              strokeOpacity={0.65}
-            />
-          )}
-
-          {/* Lodret Exit-streg */}
-          {isClosed && trade.closed_at && (
-            <ReferenceLine
-              x={new Date(trade.closed_at).getTime()}
-              stroke="#dc2626"
-              strokeWidth={1.5}
-              strokeDasharray="2 4"
-              strokeOpacity={0.6}
-              label={{
-                value: "EXIT",
-                fill: "#dc2626",
-                fontSize: 10,
-                fontWeight: "bold",
-                position: "insideTop",
-              }}
-            />
-          )}
-
-          {/* Aktiveringsmarkører — kun hvis ikke alt for tæt på entry */}
-          {!tooCloseToOpen(markers.breakEvenAt) && (
-            <ReferenceLine
-              x={markers.breakEvenAt as number}
-              stroke="#a855f7"
-              strokeWidth={1.5}
-              strokeDasharray="4 2"
-              strokeOpacity={0.7}
-              label={{
-                value: "⚖️ BE",
-                fill: "#a855f7",
-                fontSize: 10,
-                fontWeight: "bold",
-                position: "insideTop",
-              }}
-            />
-          )}
-          {!tooCloseToOpen(markers.trailingAt) && (
-            <ReferenceLine
-              x={markers.trailingAt as number}
-              stroke="#ec4899"
-              strokeWidth={1.5}
-              strokeDasharray="4 2"
-              strokeOpacity={0.7}
-              label={{
-                value: "🎯 TS",
-                fill: "#ec4899",
-                fontSize: 10,
-                fontWeight: "bold",
-                position: "insideTop",
-              }}
-            />
-          )}
-          {!tooCloseToOpen(markers.peakLockAt) && (
-            <ReferenceLine
-              x={markers.peakLockAt as number}
-              stroke="#06b6d4"
-              strokeWidth={1.5}
-              strokeDasharray="4 2"
-              strokeOpacity={0.7}
-              label={{
-                value: "🔒 PL",
-                fill: "#06b6d4",
-                fontSize: 10,
-                fontWeight: "bold",
-                position: "insideTop",
-              }}
-            />
-          )}
-
-          {/* Label-stack overlay — alle pris-labels samlet, ingen overlap */}
-          <Customized
-            component={(p: any) => (
-              <PriceLabelStack
-                viewBox={{
-                  x: p.offset?.left ?? 0,
-                  y: p.offset?.top ?? 0,
-                  width: p.offset?.width ?? 0,
-                  height: p.offset?.height ?? 0,
-                }}
-                labels={priceLabels}
-                yMin={yMin}
-                yMax={yMax}
+      {/* Horisontal scroll på mobil — minimum bredde sikrer læsbarhed */}
+      <div className="w-full overflow-x-auto -mx-1 px-1">
+        <div className="min-w-[560px]">
+          <ResponsiveContainer width="100%" height={380}>
+            <ComposedChart
+              data={chartData}
+              margin={{ top: 16, right: 18, left: 8, bottom: 24 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.25} />
+              <XAxis
+                dataKey="timestamp"
+                type="number"
+                scale="time"
+                domain={["dataMin", "dataMax"]}
+                ticks={xTicks}
+                tick={{ fontSize: 10 }}
+                tickFormatter={fmtTimeShort}
+                minTickGap={40}
               />
-            )}
-          />
+              <YAxis
+                domain={[yMin, yMax]}
+                tick={{ fontSize: 10 }}
+                tickFormatter={(v) => formatPriceAdaptive(v)}
+                width={78}
+              />
+              <Tooltip content={renderTooltip} />
+              <Legend
+                wrapperStyle={{ paddingTop: "10px", fontSize: "11px" }}
+                iconType="line"
+                iconSize={10}
+              />
 
-          {/* Aktiveringsmarkører (lodret) */}
-          {markers.breakEvenAt != null && (
-            <ReferenceLine
-              x={markers.breakEvenAt}
-              stroke="#a855f7"
-              strokeWidth={1.5}
-              strokeDasharray="4 2"
-              strokeOpacity={0.7}
-              label={{
-                value: "⚖️ BE",
-                fill: "#a855f7",
-                fontSize: 10,
-                fontWeight: "bold",
-                position: "insideTop",
-              }}
-            />
-          )}
-          {markers.trailingAt != null && (
-            <ReferenceLine
-              x={markers.trailingAt}
-              stroke="#ec4899"
-              strokeWidth={1.5}
-              strokeDasharray="4 2"
-              strokeOpacity={0.7}
-              label={{
-                value: "🎯 TS",
-                fill: "#ec4899",
-                fontSize: 10,
-                fontWeight: "bold",
-                position: "insideTop",
-              }}
-            />
-          )}
-          {markers.peakLockAt != null && (
-            <ReferenceLine
-              x={markers.peakLockAt}
-              stroke="#06b6d4"
-              strokeWidth={1.5}
-              strokeDasharray="4 2"
-              strokeOpacity={0.7}
-              label={{
-                value: "🔒 PL",
-                fill: "#06b6d4",
-                fontSize: 10,
-                fontWeight: "bold",
-                position: "insideTop",
-              }}
-            />
-          )}
-        </ComposedChart>
-      </ResponsiveContainer>
+              {/* Pris */}
+              <Line
+                type="monotone"
+                dataKey="price"
+                stroke="#2563eb"
+                strokeWidth={2}
+                dot={false}
+                name="💰 Pris"
+                isAnimationActive={false}
+              />
+
+              {hasTrailing && (
+                <Line
+                  type="stepAfter"
+                  dataKey="trailingStop"
+                  stroke="#ec4899"
+                  strokeWidth={2}
+                  strokeDasharray="6 3"
+                  dot={false}
+                  name="🎯 Trailing Stop"
+                  connectNulls={false}
+                  isAnimationActive={false}
+                />
+              )}
+
+              {hasEffective && (
+                <Line
+                  type="stepAfter"
+                  dataKey="effectiveStop"
+                  stroke="#f97316"
+                  strokeWidth={2.5}
+                  strokeDasharray="8 4"
+                  dot={false}
+                  name="🛑 Aktiv Stop"
+                  connectNulls={false}
+                  isAnimationActive={false}
+                />
+              )}
+
+              {hasBreakEven && (
+                <Line
+                  type="stepAfter"
+                  dataKey="breakEven"
+                  stroke="#a855f7"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 4"
+                  dot={false}
+                  name="⚖️ Break-Even"
+                  connectNulls={false}
+                  isAnimationActive={false}
+                />
+              )}
+
+              {hasPeakLock && (
+                <Line
+                  type="stepAfter"
+                  dataKey="peakLockStop"
+                  stroke="#06b6d4"
+                  strokeWidth={1.5}
+                  strokeDasharray="3 2"
+                  dot={false}
+                  name="🔒 Peak-Lock"
+                  connectNulls={false}
+                  isAnimationActive={false}
+                />
+              )}
+
+              {/* Entry marker */}
+              <Scatter
+                dataKey="entryMarker"
+                fill="#16a34a"
+                shape={<CustomShape />}
+                name="📍 Entry"
+                isAnimationActive={false}
+              />
+
+              {isClosed && (
+                <Scatter
+                  dataKey="exitMarker"
+                  fill="#dc2626"
+                  shape={<CustomShape />}
+                  name="🚪 Exit"
+                  isAnimationActive={false}
+                />
+              )}
+
+              {/* --- Reference-linjer (uden støjende labels) --- */}
+              {entryPrice > 0 && (
+                <ReferenceLine
+                  y={entryPrice}
+                  stroke="#16a34a"
+                  strokeWidth={1}
+                  strokeDasharray="6 4"
+                  strokeOpacity={0.55}
+                />
+              )}
+              {hasInitialSl && (
+                <ReferenceLine
+                  y={initialSlPrice}
+                  stroke="#dc2626"
+                  strokeWidth={1}
+                  strokeDasharray="4 3"
+                  strokeOpacity={0.45}
+                />
+              )}
+              {hasPeak && (
+                <ReferenceLine
+                  y={peakPrice as number}
+                  stroke="#0891b2"
+                  strokeWidth={1}
+                  strokeDasharray="2 3"
+                  strokeOpacity={0.5}
+                />
+              )}
+              {exitPrice != null && (
+                <ReferenceLine
+                  y={exitPrice}
+                  stroke="#dc2626"
+                  strokeWidth={1}
+                  strokeDasharray="3 3"
+                  strokeOpacity={0.55}
+                />
+              )}
+
+              {/* Lodret entry-streg */}
+              {openTime != null && (
+                <ReferenceLine
+                  x={openTime}
+                  stroke="#16a34a"
+                  strokeWidth={1}
+                  strokeDasharray="2 4"
+                  strokeOpacity={0.5}
+                />
+              )}
+              {/* Lodret exit-streg */}
+              {closeTime != null && (
+                <ReferenceLine
+                  x={closeTime}
+                  stroke="#dc2626"
+                  strokeWidth={1}
+                  strokeDasharray="2 4"
+                  strokeOpacity={0.5}
+                />
+              )}
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
     </div>
   );
 };
