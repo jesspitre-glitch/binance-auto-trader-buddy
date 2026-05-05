@@ -1208,6 +1208,331 @@ const ChartShell = ({
             </ComposedChart>
           </ResponsiveContainer>
       </div>
+
+      {/* ===================== DEBUG PANEL (midlertidig) ===================== */}
+      <ChartDebugPanel
+        trade={trade}
+        chartData={chartData}
+        triggers={triggers}
+        markers={markers}
+        flags={{ hasTrailing, hasEffective, hasBreakEven, hasPeakLock, hasInitialSl, hasPeak }}
+        derived={{ entryPrice, exitPrice, initialSlPrice, peakPrice, openTime, closeTime }}
+      />
     </div>
+  );
+};
+
+// =============================================================================
+// DEBUG PANEL — midlertidig diagnose af hvor hver linje kommer fra
+// =============================================================================
+const ChartDebugPanel = ({
+  trade,
+  chartData,
+  triggers,
+  markers,
+  flags,
+  derived,
+}: {
+  trade: any;
+  chartData: ChartRow[];
+  triggers: TriggerLevels;
+  markers: ActivationMarkers;
+  flags: {
+    hasTrailing: boolean;
+    hasEffective: boolean;
+    hasBreakEven: boolean;
+    hasPeakLock: boolean;
+    hasInitialSl: boolean;
+    hasPeak: boolean;
+  };
+  derived: {
+    entryPrice: number;
+    exitPrice: number | null;
+    initialSlPrice: number;
+    peakPrice: number | null;
+    openTime: number | null;
+    closeTime: number | null;
+  };
+}) => {
+  const side = trade.side as "LONG" | "SHORT";
+  const fmt = (v: any): any =>
+    v == null ? (
+      <span className="text-muted-foreground italic">null</span>
+    ) : typeof v === "number" ? (
+      <span className="font-mono">{formatPriceAdaptive(v)}</span>
+    ) : typeof v === "boolean" ? (
+      <span className={v ? "text-emerald-500" : "text-rose-500"}>{String(v)}</span>
+    ) : (
+      <span className="font-mono break-all">{String(v)}</span>
+    );
+
+  const summarize = (
+    name: string,
+    sourceField: string,
+    values: (number | null)[],
+    rendered: boolean,
+    reason: string,
+  ) => {
+    const nn = values.filter((v): v is number => v != null && isFinite(v));
+    return {
+      name,
+      sourceField,
+      count: nn.length,
+      first: nn[0] ?? null,
+      last: nn[nn.length - 1] ?? null,
+      min: nn.length ? Math.min(...nn) : null,
+      max: nn.length ? Math.max(...nn) : null,
+      rendered,
+      reason,
+    };
+  };
+
+  const tsVals = chartData.map((d) => d.trailingStop);
+  const effVals = chartData.map((d) => d.effectiveStop);
+  const beVals = chartData.map((d) => d.breakEven);
+  const plVals = chartData.map((d) => d.peakLockStop);
+
+  const series = [
+    summarize("Pris", "klines[].close", chartData.map((d) => d.price), true, "altid"),
+    summarize(
+      "Entry",
+      "trade.entry_price",
+      [derived.entryPrice],
+      derived.entryPrice > 0,
+      "DB",
+    ),
+    summarize(
+      "Exit",
+      "trade.exit_price",
+      [derived.exitPrice],
+      derived.exitPrice != null,
+      "DB",
+    ),
+    summarize(
+      "Trailing Stop",
+      "buildSeries() rekonstr. + trade.trailing_stop reconciliation (sidste candle)",
+      tsVals,
+      flags.hasTrailing,
+      flags.hasTrailing
+        ? `≥1 candle har TS. trade.trailing_stop=${trade.trailing_stop ?? "null"}`
+        : "ingen TS",
+    ),
+    summarize(
+      "Aktiv Stop",
+      "buildSeries() currentStopLoss (start = trade.stop_loss, opdateres af BE/TS/PL)",
+      effVals,
+      flags.hasEffective,
+      flags.hasEffective ? `stop_loss=${trade.stop_loss ?? "null"}` : "ingen",
+    ),
+    summarize(
+      "Break-Even",
+      "buildSeries() — entryPrice±offset når lokal rekonstruktion sætter breakEvenActivated=true",
+      beVals,
+      flags.hasBreakEven,
+      flags.hasBreakEven
+        ? `LOKAL rekonstr. (DB break_even_triggered=${trade.break_even_triggered})`
+        : "ej aktiveret",
+    ),
+    summarize(
+      "Peak-Lock",
+      "buildSeries() peakLockStopValue når peak_lock_enabled && profit≥threshold",
+      plVals,
+      flags.hasPeakLock,
+      flags.hasPeakLock
+        ? `peak_lock_enabled=${trade.indicators_snapshot?.peak_lock_enabled ?? "?"}`
+        : "ej aktiveret",
+    ),
+    summarize("Peak", "trade.peak_price", [derived.peakPrice], flags.hasPeak, "DB"),
+    summarize(
+      "Initial SL",
+      "indicators_snapshot.original_stop_loss ?? trade.stop_loss",
+      [derived.initialSlPrice],
+      flags.hasInitialSl,
+      "DB",
+    ),
+  ];
+
+  const validate = (key: "trailingStop" | "effectiveStop" | "breakEven" | "peakLockStop") => {
+    let invalid = 0;
+    chartData.forEach((d) => {
+      const v = (d as any)[key];
+      if (v == null) return;
+      if (side === "LONG" && v > d.high) invalid++;
+      if (side === "SHORT" && v < d.low) invalid++;
+    });
+    return invalid;
+  };
+
+  const tsLooksFlat = (() => {
+    const nn = tsVals.filter((v): v is number => v != null);
+    if (nn.length < 2) return false;
+    return Math.min(...nn) === Math.max(...nn);
+  })();
+  const effEqualsExit =
+    derived.exitPrice != null &&
+    effVals.some((v) => v != null && Math.abs(v - (derived.exitPrice as number)) < 1e-12);
+  const beShownButNotTriggered =
+    flags.hasBreakEven && trade.break_even_triggered === false;
+  const tsShownButNoInit =
+    flags.hasTrailing &&
+    trade.trailing_stop_initial_price == null &&
+    trade.trailing_stop == null;
+
+  const firstC = chartData[0];
+  const lastC = chartData[chartData.length - 1];
+
+  return (
+    <details
+      className="mt-3 border border-amber-500/40 bg-amber-500/5 rounded-md text-[11px]"
+      open
+    >
+      <summary className="cursor-pointer px-3 py-2 font-semibold text-amber-600 dark:text-amber-400">
+        🐞 Chart Debug Panel (midlertidig)
+      </summary>
+      <div className="p-3 space-y-4">
+        <section>
+          <div className="font-semibold mb-1">1. Trade raw values</div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+            <div>side: {fmt(trade.side)}</div>
+            <div>status: {fmt(trade.status)}</div>
+            <div>entry_price: {fmt(trade.entry_price)}</div>
+            <div>exit_price: {fmt(trade.exit_price)}</div>
+            <div>stop_loss: {fmt(trade.stop_loss)}</div>
+            <div>peak_price: {fmt(trade.peak_price)}</div>
+            <div>low_price: {fmt(trade.low_price)}</div>
+            <div>break_even_triggered: {fmt(trade.break_even_triggered)}</div>
+            <div>break_even_at_price: {fmt(trade.break_even_at_price)}</div>
+            <div>trailing_stop: {fmt(trade.trailing_stop)}</div>
+            <div>trailing_stop_initial_price: {fmt(trade.trailing_stop_initial_price)}</div>
+            <div>peak_lock_activated: {fmt(trade.peak_lock_activated)}</div>
+            <div>peak_lock_stop_price: {fmt(trade.peak_lock_stop_price)}</div>
+            <div>opened_at: {fmt(trade.opened_at)}</div>
+            <div>closed_at: {fmt(trade.closed_at)}</div>
+          </div>
+          {trade.trailing_stop_exit_audit != null && (
+            <div className="mt-1 break-all">
+              trailing_stop_exit_audit:{" "}
+              <span className="font-mono">
+                {JSON.stringify(trade.trailing_stop_exit_audit)}
+              </span>
+            </div>
+          )}
+        </section>
+
+        <section>
+          <div className="font-semibold mb-1">2. Series summary</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[10px] border-collapse">
+              <thead>
+                <tr className="text-left border-b border-border/50">
+                  <th className="pr-2 py-1">Serie</th>
+                  <th className="pr-2">Source</th>
+                  <th className="pr-2">N</th>
+                  <th className="pr-2">First</th>
+                  <th className="pr-2">Last</th>
+                  <th className="pr-2">Min</th>
+                  <th className="pr-2">Max</th>
+                  <th className="pr-2">Vist?</th>
+                  <th>Hvorfor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {series.map((s) => (
+                  <tr key={s.name} className="border-b border-border/20 align-top">
+                    <td className="pr-2 py-0.5 whitespace-nowrap">{s.name}</td>
+                    <td className="pr-2 text-muted-foreground">{s.sourceField}</td>
+                    <td className="pr-2 font-mono">{s.count}</td>
+                    <td className="pr-2 font-mono">
+                      {s.first != null ? formatPriceAdaptive(s.first) : "-"}
+                    </td>
+                    <td className="pr-2 font-mono">
+                      {s.last != null ? formatPriceAdaptive(s.last) : "-"}
+                    </td>
+                    <td className="pr-2 font-mono">
+                      {s.min != null ? formatPriceAdaptive(s.min) : "-"}
+                    </td>
+                    <td className="pr-2 font-mono">
+                      {s.max != null ? formatPriceAdaptive(s.max) : "-"}
+                    </td>
+                    <td className={s.rendered ? "text-emerald-500" : "text-rose-500"}>
+                      {String(s.rendered)}
+                    </td>
+                    <td className="text-muted-foreground">{s.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section>
+          <div className="font-semibold mb-1">3. Candle merge</div>
+          <div>antal candles: <span className="font-mono">{chartData.length}</span></div>
+          <div>første ts: {firstC ? new Date(firstC.timestamp).toISOString() : "-"}</div>
+          <div>sidste ts: {lastC ? new Date(lastC.timestamp).toISOString() : "-"}</div>
+          <div>
+            trade-periode:{" "}
+            {derived.openTime ? new Date(derived.openTime).toISOString() : "-"} →{" "}
+            {derived.closeTime ? new Date(derived.closeTime).toISOString() : "(åben)"}
+          </div>
+          <div className="text-muted-foreground mt-1">
+            BE/TS/PL/Effective beregnes pr. candle i buildSeries(). TS reconciliation
+            overskriver kun SIDSTE in-trade candle med trade.trailing_stop hvis side-valid.
+          </div>
+        </section>
+
+        <section>
+          <div className="font-semibold mb-1">4. Validation (side: {side})</div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+            <div>trailingStop ugyldige: <span className="font-mono">{validate("trailingStop")}</span></div>
+            <div>effectiveStop ugyldige: <span className="font-mono">{validate("effectiveStop")}</span></div>
+            <div>breakEven ugyldige: <span className="font-mono">{validate("breakEven")}</span></div>
+            <div>peakLockStop ugyldige: <span className="font-mono">{validate("peakLockStop")}</span></div>
+          </div>
+          <div className="text-muted-foreground mt-1">
+            LONG: stop ≤ candle.high · SHORT: stop ≥ candle.low
+          </div>
+        </section>
+
+        <section>
+          <div className="font-semibold mb-1">5. Mistanke</div>
+          <ul className="space-y-0.5">
+            <li>TS-linje fuldstændig flad: {fmt(tsLooksFlat)}</li>
+            <li>Aktiv Stop = exit_price (exit-leak): {fmt(effEqualsExit)}</li>
+            <li>
+              ⚠️ BE vises men break_even_triggered=false: {fmt(beShownButNotTriggered)}
+              {beShownButNotTriggered && (
+                <div className="text-rose-500 ml-3">
+                  → buildSeries() rekonstruerer BE lokalt fra
+                  indicators_snapshot.break_even_atr, IKKE fra DB-flag.
+                </div>
+              )}
+            </li>
+            <li>
+              ⚠️ TS vises men trailing_stop_initial_price=null & trailing_stop=null:{" "}
+              {fmt(tsShownButNoInit)}
+              {tsShownButNoInit && (
+                <div className="text-rose-500 ml-3">
+                  → TS rekonstrueret fra ATR + activation-tærskel, ikke fra DB-state.
+                </div>
+              )}
+            </li>
+          </ul>
+        </section>
+
+        <section>
+          <div className="font-semibold mb-1">6. Konklusion</div>
+          <div className="text-muted-foreground">
+            <code>buildSeries()</code> rekonstruerer BE/TS/Peak-Lock pr. candle ud fra{" "}
+            <code>indicators_snapshot</code> (atr, break_even_atr,
+            trailing_stop_atr_multiplier, peak_lock_*) — IKKE ud fra DB-flagene{" "}
+            <code>break_even_triggered</code>, <code>trailing_stop_initial_price</code>{" "}
+            eller <code>peak_lock_activated</code>. Derfor kan chartet vise BE/TS/PL
+            selvom de aldrig blev aktiveret i den faktiske trade. Dette er
+            sandsynligvis rod-årsagen.
+          </div>
+        </section>
+      </div>
+    </details>
   );
 };
