@@ -646,6 +646,7 @@ const ChartShell = ({
     if (entryPrice > 0) pool.push(entryPrice);
 
     chartData.forEach((d) => {
+      if (d.exitStop != null) pool.push(d.exitStop);
       if (d.effectiveStop != null) pool.push(d.effectiveStop);
       if (d.trailingStop != null) pool.push(d.trailingStop);
       if (d.breakEven != null) pool.push(d.breakEven);
