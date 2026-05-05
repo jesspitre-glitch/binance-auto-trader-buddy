@@ -567,6 +567,7 @@ const OpenTradeChart = ({ trade }: TradeChartProps) => {
     peakLockAt: null,
   });
   const [tsDiagnostic, setTsDiagnostic] = useState<TsHistoryDiagnostic | null>(null);
+  const [exitStopSeries, setExitStopSeries] = useState<ExitStopPoint[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
