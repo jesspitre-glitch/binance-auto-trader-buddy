@@ -1266,9 +1266,12 @@ const ChartShell = ({
       </div>
 
       {layoutDebug && (
-        <div className="rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground">
-          📐 Layout: vw={layoutDebug.viewportWidth}px · card={layoutDebug.chartCardWidth}px · svg=
-          {layoutDebug.chartSvgWidth}px · bodyScrollW={layoutDebug.bodyScrollWidth}px ·{" "}
+        <div className="rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground break-all">
+          📐 Layout: vw={layoutDebug.viewportWidth} · card={layoutDebug.chartCardWidth} · svg={layoutDebug.chartSvgWidth} · bodyW={layoutDebug.bodyScrollWidth} · plotL={layoutDebug.plotAreaLeft} · plotR={layoutDebug.plotAreaRight} · yAxisW={layoutDebug.yAxisWidth} ·{" "}
+          <span className={layoutDebug.clippedRight ? "text-destructive font-semibold" : "text-profit"}>
+            clippedRight={String(layoutDebug.clippedRight)}
+          </span>{" "}
+          ·{" "}
           <span className={layoutDebug.hasHorizontalOverflow ? "text-destructive font-semibold" : "text-profit"}>
             overflow={String(layoutDebug.hasHorizontalOverflow)}
           </span>
