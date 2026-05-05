@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   XAxis,
   YAxis,
@@ -753,6 +754,39 @@ const ChartShell = ({
   mode,
 }: ChartShellProps) => {
   const isClosed = mode === "closed";
+  const isMobile = useIsMobile();
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [layoutDebug, setLayoutDebug] = useState<{
+    viewportWidth: number;
+    chartCardWidth: number;
+    chartSvgWidth: number;
+    bodyScrollWidth: number;
+    hasHorizontalOverflow: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    const update = () => {
+      const vw = window.innerWidth;
+      const cardW = wrapperRef.current?.getBoundingClientRect().width ?? 0;
+      const svg = wrapperRef.current?.querySelector("svg.recharts-surface");
+      const svgW = (svg as SVGElement | null)?.getBoundingClientRect().width ?? 0;
+      const bodyW = document.documentElement.scrollWidth;
+      setLayoutDebug({
+        viewportWidth: vw,
+        chartCardWidth: Math.round(cardW),
+        chartSvgWidth: Math.round(svgW),
+        bodyScrollWidth: bodyW,
+        hasHorizontalOverflow: bodyW > vw,
+      });
+    };
+    update();
+    const t = setTimeout(update, 250);
+    window.addEventListener("resize", update);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("resize", update);
+    };
+  });
 
   // ---- Y-akse range -------------------------------------------------------
   const { yMin, yMax } = useMemo(() => {
@@ -1017,12 +1051,20 @@ const ChartShell = ({
         </div>
       )}
       {/* Mobil-venligt: fuld bredde, aldrig vandret scroll */}
-      <div className="h-[400px] w-full max-w-full min-w-0 overflow-x-hidden sm:h-[380px]">
+      <div
+        ref={wrapperRef}
+        className="h-[360px] w-full max-w-full min-w-0 overflow-hidden sm:h-[380px]"
+        style={{ maxWidth: "100vw" }}
+      >
         <ResponsiveContainer width="100%" height="100%" debounce={1}>
 
             <ComposedChart
               data={chartData}
-              margin={{ top: 16, right: 12, left: 4, bottom: 24 }}
+              margin={
+                isMobile
+                  ? { top: 12, right: 6, left: 0, bottom: 20 }
+                  : { top: 16, right: 12, left: 4, bottom: 24 }
+              }
             >
               <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.25} />
               <XAxis
@@ -1030,18 +1072,22 @@ const ChartShell = ({
                 type="number"
                 scale="time"
                 domain={["dataMin", "dataMax"]}
-                ticks={xTicks}
+                ticks={isMobile ? (xTicks?.length ? [xTicks[0], xTicks[xTicks.length - 1]] : undefined) : xTicks}
                 tick={{ fontSize: 9 }}
                 tickFormatter={fmtTimeShort}
-                minTickGap={40}
+                minTickGap={isMobile ? 80 : 40}
+                interval="preserveStartEnd"
               />
               <YAxis
                 domain={[yMin, yMax]}
                 tick={{ fontSize: 9 }}
                 tickFormatter={(v) => formatPriceAdaptive(v)}
-                width={64}
+                width={isMobile ? 40 : 64}
               />
-              <Tooltip content={renderTooltip} />
+              <Tooltip
+                content={renderTooltip}
+                wrapperStyle={{ maxWidth: "calc(100vw - 24px)", zIndex: 50 }}
+              />
               <Legend
                 wrapperStyle={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}
                 content={({ payload }) => (
@@ -1177,6 +1223,16 @@ const ChartShell = ({
             </ComposedChart>
           </ResponsiveContainer>
       </div>
+
+      {layoutDebug && (
+        <div className="rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground">
+          📐 Layout: vw={layoutDebug.viewportWidth}px · card={layoutDebug.chartCardWidth}px · svg=
+          {layoutDebug.chartSvgWidth}px · bodyScrollW={layoutDebug.bodyScrollWidth}px ·{" "}
+          <span className={layoutDebug.hasHorizontalOverflow ? "text-destructive font-semibold" : "text-profit"}>
+            overflow={String(layoutDebug.hasHorizontalOverflow)}
+          </span>
+        </div>
+      )}
 
       {/* ===================== DEBUG PANEL (midlertidig) ===================== */}
       <ChartDebugPanel
