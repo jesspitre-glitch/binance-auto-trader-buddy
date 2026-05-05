@@ -481,7 +481,7 @@ const OpenTradeChart = ({ trade }: TradeChartProps) => {
         if (!res.ok) throw new Error("Failed to fetch klines");
         const klines = await res.json();
 
-        const { data, triggers, markers } = buildSeries(trade, klines, openTime);
+        const { data, triggers, markers, tsDiagnostic } = buildSeries(trade, klines, openTime);
 
         // Find entry-punkt
         const entryIdx = data.reduce(
@@ -499,6 +499,7 @@ const OpenTradeChart = ({ trade }: TradeChartProps) => {
         setChartData(data);
         setTriggers(triggers);
         setMarkers(markers);
+        setTsDiagnostic(tsDiagnostic);
       } catch (e) {
         console.error("OpenTradeChart fetch error:", e);
       } finally {
@@ -515,6 +516,7 @@ const OpenTradeChart = ({ trade }: TradeChartProps) => {
       trade={trade}
       triggers={triggers}
       markers={markers}
+      tsDiagnostic={tsDiagnostic}
       mode="open"
     />
   );
