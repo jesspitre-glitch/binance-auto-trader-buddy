@@ -185,6 +185,7 @@ const buildSeries = (
   history: ExitStopHistoryRow[] = [],
 ): {
   data: ChartRow[];
+  exitStopSeries: ExitStopPoint[];
   triggers: TriggerLevels;
   markers: ActivationMarkers;
   tsDiagnostic: TsHistoryDiagnostic;
@@ -237,9 +238,7 @@ const buildSeries = (
     const price = parseFloat(k[4]);
     const high = parseFloat(k[2]);
     const low = parseFloat(k[3]);
-
     const isPostExit = timestamp > closeTime;
-
     return {
       timestamp,
       time: new Date(timestamp).toLocaleTimeString("da-DK", {
@@ -261,48 +260,40 @@ const buildSeries = (
   });
 
   const ruleDistribution: Record<string, number> = {};
+  const exitStopSeries: ExitStopPoint[] = [];
 
   if (hasHistorical) {
-    // Step-funktion: for hver candle, find seneste snapshot der er ≤ candle-tidspunkt
-    let hIdx = 0;
-    let activeStop: number | null = null;
-    let activeRule: string | null = null;
-
-    data.forEach((row) => {
-      if (row.timestamp < openTime || row.isPostExit) return;
-
-      while (
-        hIdx < sortedHistory.length &&
-        sortedHistory[hIdx]._ts <= row.timestamp
-      ) {
-        const s = sortedHistory[hIdx];
-        if (s.active_stop != null && isFinite(Number(s.active_stop))) {
-          activeStop = Number(s.active_stop);
-          activeRule = s.active_exit_rule || "NONE";
-        }
-        hIdx++;
-      }
-
-      if (activeStop != null) {
-        const valid =
-          side === "LONG" ? activeStop <= row.high * 1.5 : activeStop >= row.low * 0.5;
-        if (valid) row.exitStop = activeStop;
-        if (activeRule) {
-          ruleDistribution[activeRule] = (ruleDistribution[activeRule] || 0) + 1;
-        }
-      }
+    // Byg uafhængig tidsserie direkte fra historik (egne timestamps)
+    sortedHistory.forEach((s) => {
+      const v = s.active_stop != null ? Number(s.active_stop) : null;
+      if (v == null || !isFinite(v) || v <= 0) return;
+      const rule = s.active_exit_rule || "NONE";
+      exitStopSeries.push({
+        timestamp: s._ts,
+        exitStop: v,
+        activeExitRule: rule,
+      });
+      ruleDistribution[rule] = (ruleDistribution[rule] || 0) + 1;
     });
+
+    // Forlæng med en sidste "nu"-punkt så step-linjen rækker frem til seneste candle
+    const lastCandleTs = data[data.length - 1]?.timestamp;
+    const lastPt = exitStopSeries[exitStopSeries.length - 1];
+    if (lastPt && lastCandleTs && lastCandleTs > lastPt.timestamp) {
+      exitStopSeries.push({
+        timestamp: Math.min(lastCandleTs, closeTime),
+        exitStop: lastPt.exitStop,
+        activeExitRule: lastPt.activeExitRule,
+      });
+    }
   } else if (fallbackEffectiveStop != null) {
-    // Ingen historik → vis kun ÉN flad linje med aktuel værdi
-    data.forEach((row) => {
-      if (row.timestamp >= openTime && !row.isPostExit) {
-        const valid =
-          side === "LONG"
-            ? fallbackEffectiveStop <= row.high * 1.5
-            : fallbackEffectiveStop >= row.low * 0.5;
-        if (valid) row.exitStop = fallbackEffectiveStop;
-      }
-    });
+    // Ingen historik → flad linje fra entry til nu (eller close)
+    const startTs = openTime;
+    const endTs = isFinite(closeTime) ? closeTime : data[data.length - 1]?.timestamp ?? openTime;
+    if (endTs > startTs) {
+      exitStopSeries.push({ timestamp: startTs, exitStop: fallbackEffectiveStop, activeExitRule: "FALLBACK" });
+      exitStopSeries.push({ timestamp: endTs, exitStop: fallbackEffectiveStop, activeExitRule: "FALLBACK" });
+    }
   }
 
   const validForSide = (v: number | null, row: ChartRow): number | null => {
@@ -328,6 +319,14 @@ const buildSeries = (
   const firstHist = sortedHistory[0];
   const lastHist = sortedHistory[sortedHistory.length - 1];
 
+  const renderExitStop = exitStopSeries.length > 0;
+  const renderMode = hasHistorical ? "history-step" : renderExitStop ? "fallback-flat" : "none";
+  const renderReason = renderExitStop
+    ? hasHistorical
+      ? `history.length=${sortedHistory.length}, mapped=${exitStopSeries.length}`
+      : `no history, fallback to current effective stop=${fallbackEffectiveStop}`
+    : `history.length=${sortedHistory.length}, fallbackStop=${fallbackEffectiveStop}`;
+
   const tsDiagnostic: TsHistoryDiagnostic = {
     hasHistorical,
     source: hasHistorical
@@ -347,20 +346,17 @@ const buildSeries = (
     activationTs: null,
     isReconstructed: false,
     ruleDistribution,
+    mappedExitStopPoints: exitStopSeries.length,
+    renderExitStop,
+    renderMode,
+    renderReason,
   };
 
   return {
     data,
-    triggers: {
-      breakEvenTrigger: null,
-      trailingTrigger: null,
-      peakLockTrigger: null,
-    },
-    markers: {
-      breakEvenAt: null,
-      trailingAt: null,
-      peakLockAt: null,
-    },
+    exitStopSeries,
+    triggers: { breakEvenTrigger: null, trailingTrigger: null, peakLockTrigger: null },
+    markers: { breakEvenAt: null, trailingAt: null, peakLockAt: null },
     tsDiagnostic,
   };
 };
