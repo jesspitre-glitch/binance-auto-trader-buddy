@@ -124,6 +124,47 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
 };
 
 // =============================================================================
+// Hent exit_stop_history rækker for en specifik trade (UTC vindue)
+// =============================================================================
+const fetchExitStopHistory = async (
+  trade: any,
+  openTime: number,
+  endTime: number,
+): Promise<ExitStopHistoryRow[]> => {
+  try {
+    // Padding så vi får snapshot lige før entry og lidt efter exit
+    const fromIso = new Date(openTime - 60_000).toISOString();
+    const toIso = new Date(endTime + 60_000).toISOString();
+
+    let query = (supabase as any)
+      .from("exit_stop_history")
+      .select(
+        "recorded_at, active_stop, active_exit_rule, source, trailing_stop, stop_loss, break_even_price, peak_lock_stop, position_id, symbol",
+      )
+      .eq("symbol", trade.symbol)
+      .gte("recorded_at", fromIso)
+      .lte("recorded_at", toIso)
+      .order("recorded_at", { ascending: true })
+      .limit(5000);
+
+    // Hvis trade har et position_id (åben handel), filtrér yderligere
+    if (trade.id && trade.status && trade.status !== "CLOSED") {
+      query = query.eq("position_id", trade.id);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.warn("[TradeChart] exit_stop_history fetch error:", error.message);
+      return [];
+    }
+    return (data as ExitStopHistoryRow[]) || [];
+  } catch (e) {
+    console.warn("[TradeChart] exit_stop_history fetch exception:", e);
+    return [];
+  }
+};
+
+// =============================================================================
 // Fælles chart-serie — læser kun faktiske trade-værdier, ingen lokal beregning
 // =============================================================================
 const buildSeries = (
