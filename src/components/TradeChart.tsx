@@ -60,7 +60,7 @@ interface ChartRow {
   isPostExit: boolean;
 }
 
-// Diagnose af TS-historik (vises i debug + UI banner)
+// Diagnose af exit-stop-historik (vises i debug + UI banner)
 interface TsHistoryDiagnostic {
   hasHistorical: boolean;
   source: string;
@@ -71,6 +71,18 @@ interface TsHistoryDiagnostic {
   lastValue: number | null;
   activationTs: number | null;
   isReconstructed: boolean;
+  ruleDistribution: Record<string, number>;
+}
+
+interface ExitStopHistoryRow {
+  recorded_at: string;
+  active_stop: number | null;
+  active_exit_rule: string | null;
+  source: string | null;
+  trailing_stop: number | null;
+  stop_loss: number | null;
+  break_even_price: number | null;
+  peak_lock_stop: number | null;
 }
 
 interface TriggerLevels {
