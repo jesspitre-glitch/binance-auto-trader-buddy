@@ -47,6 +47,9 @@ interface ChartRow {
   price: number;
   high: number;
   low: number;
+  // exitStop = den stop-regel der faktisk ville lukke handlen på hvert tidspunkt
+  exitStop: number | null;
+  // Bevarede felter (kun current-værdier — ingen rekonstrueret historik)
   effectiveStop: number | null;
   trailingStop: number | null;
   breakEven: number | null;
@@ -55,6 +58,19 @@ interface ChartRow {
   exitMarker: number | null;
   // Marker for "post-exit" så vi visuelt kan adskille perioden
   isPostExit: boolean;
+}
+
+// Diagnose af TS-historik (vises i debug + UI banner)
+interface TsHistoryDiagnostic {
+  hasHistorical: boolean;
+  source: string;
+  pointCount: number;
+  firstTs: number | null;
+  firstValue: number | null;
+  lastTs: number | null;
+  lastValue: number | null;
+  activationTs: number | null;
+  isReconstructed: boolean;
 }
 
 interface TriggerLevels {
@@ -105,6 +121,7 @@ const buildSeries = (
   data: ChartRow[];
   triggers: TriggerLevels;
   markers: ActivationMarkers;
+  tsDiagnostic: TsHistoryDiagnostic;
 } => {
   const side = trade.side as "LONG" | "SHORT";
 
@@ -114,22 +131,31 @@ const buildSeries = (
   };
 
   // ---- KUN FAKTISKE TRADE-VÆRDIER ----------------------------------------
-  const stopLossDb =
-    toPositiveNumber(trade.stop_loss);
+  const stopLossDb = toPositiveNumber(trade.stop_loss);
 
   const breakEvenTriggered = trade.break_even_triggered === true;
   const breakEvenAtPrice =
     breakEvenTriggered ? toPositiveNumber(trade.break_even_at_price) : null;
 
-  const trailingStopDb =
-    toPositiveNumber(trade.trailing_stop);
+  const trailingStopDb = toPositiveNumber(trade.trailing_stop);
 
   const peakLockActivated = trade.peak_lock_activated === true;
   const peakLockStopPrice =
     peakLockActivated ? toPositiveNumber(trade.peak_lock_stop_price) : null;
 
-  // Aktiv Stop er kun den aktuelle trade-værdi: TS hvis den findes, ellers SL.
-  const effectiveStopDb = trailingStopDb ?? stopLossDb;
+  // Aktiv Stop = mest beskyttende DB-værdi (LONG: max, SHORT: min)
+  const stopCandidates = [
+    stopLossDb,
+    breakEvenAtPrice,
+    trailingStopDb,
+    peakLockStopPrice,
+  ].filter((v): v is number => v != null);
+
+  let effectiveStopDb: number | null = null;
+  if (stopCandidates.length > 0) {
+    effectiveStopDb =
+      side === "LONG" ? Math.max(...stopCandidates) : Math.min(...stopCandidates);
+  }
 
   const closeTime = trade.closed_at
     ? new Date(trade.closed_at).getTime()
@@ -152,7 +178,7 @@ const buildSeries = (
       price,
       high,
       low,
-      // Aktuelle stop-niveauer sættes kun på seneste candle i trade-vinduet nedenfor.
+      exitStop: null,
       effectiveStop: null,
       trailingStop: null,
       breakEven: null,
@@ -170,6 +196,21 @@ const buildSeries = (
     return v;
   };
 
+  // Tegn exitStop som FLAD linje over hele in-trade-vinduet (ingen rekonstruktion).
+  // Dette repræsenterer "hvad ville lukke handlen lige nu" — den eneste sandhed vi har.
+  if (effectiveStopDb != null) {
+    data.forEach((row) => {
+      if (row.timestamp >= openTime && !row.isPostExit) {
+        // Side-validering: stop må ikke ligge på "forkert side" af candle
+        // (LONG: stop > high → ugyldig; SHORT: stop < low → ugyldig).
+        // Vi tillader stadig at vise den hvis den er korrekt placeret ift. close.
+        const valid =
+          side === "LONG" ? effectiveStopDb <= row.high * 1.5 : effectiveStopDb >= row.low * 0.5;
+        if (valid) row.exitStop = effectiveStopDb;
+      }
+    });
+  }
+
   const latestInTradeIndex = data.reduce((latest, row, idx) => {
     if (row.timestamp < openTime || row.isPostExit) return latest;
     return idx;
@@ -183,7 +224,22 @@ const buildSeries = (
     row.peakLockStop = validForSide(peakLockStopPrice, row);
   }
 
-  // Ingen triggere/markers fra chart-logik — chart visualiserer kun trade-data.
+  // ---- TS-historik diagnose ---------------------------------------------
+  // Vi har INGEN historisk TS-tabel i DB. Kun current value på trade.trailing_stop.
+  const tsDiagnostic: TsHistoryDiagnostic = {
+    hasHistorical: false,
+    source: trailingStopDb != null
+      ? "trade.trailing_stop (kun current value — ingen historik i DB)"
+      : "ingen TS-data tilgængelig",
+    pointCount: trailingStopDb != null ? 1 : 0,
+    firstTs: trailingStopDb != null && latestInTradeIndex >= 0 ? data[latestInTradeIndex].timestamp : null,
+    firstValue: trailingStopDb,
+    lastTs: trailingStopDb != null && latestInTradeIndex >= 0 ? data[latestInTradeIndex].timestamp : null,
+    lastValue: trailingStopDb,
+    activationTs: null, // ikke logget i DB
+    isReconstructed: false, // vi rekonstruerer IKKE — vi viser kun current
+  };
+
   return {
     data,
     triggers: {
@@ -196,6 +252,7 @@ const buildSeries = (
       trailingAt: null,
       peakLockAt: null,
     },
+    tsDiagnostic,
   };
 };
 
@@ -404,6 +461,7 @@ const OpenTradeChart = ({ trade }: TradeChartProps) => {
     trailingAt: null,
     peakLockAt: null,
   });
+  const [tsDiagnostic, setTsDiagnostic] = useState<TsHistoryDiagnostic | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -423,7 +481,7 @@ const OpenTradeChart = ({ trade }: TradeChartProps) => {
         if (!res.ok) throw new Error("Failed to fetch klines");
         const klines = await res.json();
 
-        const { data, triggers, markers } = buildSeries(trade, klines, openTime);
+        const { data, triggers, markers, tsDiagnostic } = buildSeries(trade, klines, openTime);
 
         // Find entry-punkt
         const entryIdx = data.reduce(
@@ -441,6 +499,7 @@ const OpenTradeChart = ({ trade }: TradeChartProps) => {
         setChartData(data);
         setTriggers(triggers);
         setMarkers(markers);
+        setTsDiagnostic(tsDiagnostic);
       } catch (e) {
         console.error("OpenTradeChart fetch error:", e);
       } finally {
@@ -457,6 +516,7 @@ const OpenTradeChart = ({ trade }: TradeChartProps) => {
       trade={trade}
       triggers={triggers}
       markers={markers}
+      tsDiagnostic={tsDiagnostic}
       mode="open"
     />
   );
@@ -477,6 +537,7 @@ const ClosedTradeChart = ({ trade }: TradeChartProps) => {
     trailingAt: null,
     peakLockAt: null,
   });
+  const [tsDiagnostic, setTsDiagnostic] = useState<TsHistoryDiagnostic | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -500,7 +561,7 @@ const ClosedTradeChart = ({ trade }: TradeChartProps) => {
         if (!res.ok) throw new Error("Failed to fetch klines");
         const klines = await res.json();
 
-        const { data, triggers, markers } = buildSeries(trade, klines, openTime);
+        const { data, triggers, markers, tsDiagnostic } = buildSeries(trade, klines, openTime);
 
         // Entry marker
         const entryIdx = data.reduce(
@@ -527,6 +588,7 @@ const ClosedTradeChart = ({ trade }: TradeChartProps) => {
         setChartData(data);
         setTriggers(triggers);
         setMarkers(markers);
+        setTsDiagnostic(tsDiagnostic);
       } catch (e) {
         console.error("ClosedTradeChart fetch error:", e);
       } finally {
@@ -543,6 +605,7 @@ const ClosedTradeChart = ({ trade }: TradeChartProps) => {
       trade={trade}
       triggers={triggers}
       markers={markers}
+      tsDiagnostic={tsDiagnostic}
       mode="closed"
     />
   );
@@ -557,6 +620,7 @@ interface ChartShellProps {
   trade: any;
   triggers: TriggerLevels;
   markers: ActivationMarkers;
+  tsDiagnostic: TsHistoryDiagnostic | null;
   mode: "open" | "closed";
 }
 
@@ -566,6 +630,7 @@ const ChartShell = ({
   trade,
   triggers,
   markers,
+  tsDiagnostic,
   mode,
 }: ChartShellProps) => {
   const isClosed = mode === "closed";
@@ -581,6 +646,7 @@ const ChartShell = ({
     if (entryPrice > 0) pool.push(entryPrice);
 
     chartData.forEach((d) => {
+      if (d.exitStop != null) pool.push(d.exitStop);
       if (d.effectiveStop != null) pool.push(d.effectiveStop);
       if (d.trailingStop != null) pool.push(d.trailingStop);
       if (d.breakEven != null) pool.push(d.breakEven);
@@ -735,14 +801,18 @@ const ChartShell = ({
   const closeTime = isClosed && trade.closed_at ? new Date(trade.closed_at).getTime() : null;
 
   // ---- Hvilke serier har vi reelt data for? -----------------------------
+  const hasExitStop = chartData.some((d) => d.exitStop != null);
   const hasTrailing = chartData.some((d) => d.trailingStop != null);
   const hasBreakEven = chartData.some((d) => d.breakEven != null);
   const hasPeakLock = chartData.some((d) => d.peakLockStop != null);
   const hasEffective = chartData.some((d) => d.effectiveStop != null);
   const hasInitialSl = isFinite(initialSlPrice) && initialSlPrice > 0;
   const hasPeak = peakPrice != null && isFinite(peakPrice) && peakPrice > 0;
-  const currentTrailingStop = [...chartData].reverse().find((d) => d.trailingStop != null)?.trailingStop ?? null;
-  const currentEffectiveStop = [...chartData].reverse().find((d) => d.effectiveStop != null)?.effectiveStop ?? null;
+  const currentExitStop = [...chartData].reverse().find((d) => d.exitStop != null)?.exitStop ?? null;
+  const tsMissingHistory =
+    trade.trailing_stop != null &&
+    Number(trade.trailing_stop) > 0 &&
+    tsDiagnostic?.hasHistorical === false;
 
   // Kun hide-fra-legend payload — Recharts viser ALT som default; vi
   // angiver i stedet eksplicit hvilke linjer der overhovedet renderes.
@@ -804,24 +874,9 @@ const ChartShell = ({
               🚪 Exit ${formatPriceAdaptive(row.exitMarker)}
             </div>
           )}
-          {row.effectiveStop != null && (
+          {row.exitStop != null && (
             <div className="text-orange-500">
-              🛑 Aktiv Stop ${formatPriceAdaptive(row.effectiveStop)}
-            </div>
-          )}
-          {row.trailingStop != null && (
-            <div className="text-pink-500">
-              🎯 TS ${formatPriceAdaptive(row.trailingStop)}
-            </div>
-          )}
-          {row.breakEven != null && (
-            <div className="text-purple-500">
-              ⚖️ BE ${formatPriceAdaptive(row.breakEven)}
-            </div>
-          )}
-          {row.peakLockStop != null && (
-            <div className="text-cyan-500">
-              🔒 Peak-Lock ${formatPriceAdaptive(row.peakLockStop)}
+              🛑 Exit Stop ${formatPriceAdaptive(row.exitStop)}
             </div>
           )}
         </div>
@@ -837,6 +892,11 @@ const ChartShell = ({
           : "Åben handel — opdateres med live prisudvikling"}
       </div>
 
+      {tsMissingHistory && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-700 dark:text-amber-300">
+          ⚠️ Historisk TS-data mangler — der vises kun aktuel stop-værdi som flad linje (ingen tidsserie i DB).
+        </div>
+      )}
       {/* Mobil-venligt: fuld bredde, aldrig vandret scroll */}
       <div className="h-[400px] w-full max-w-full min-w-0 overflow-x-hidden sm:h-[380px]">
         <ResponsiveContainer width="100%" height="100%" debounce={1}>
@@ -893,57 +953,15 @@ const ChartShell = ({
                 isAnimationActive={false}
               />
 
-              {hasTrailing && (
+              {hasExitStop && (
                 <Line
                   type="stepAfter"
-                  dataKey="trailingStop"
-                  stroke="#ec4899"
-                  strokeWidth={2.5}
-                  strokeDasharray="6 3"
-                  dot={{ r: 4, strokeWidth: 2 }}
-                  name="🎯 Trailing Stop"
-                  connectNulls={false}
-                  isAnimationActive={false}
-                />
-              )}
-
-              {hasEffective && (
-                <Line
-                  type="stepAfter"
-                  dataKey="effectiveStop"
+                  dataKey="exitStop"
                   stroke="#f97316"
                   strokeWidth={2.5}
                   strokeDasharray="8 4"
-                  dot={{ r: 4, strokeWidth: 2 }}
-                  name="🛑 Aktiv Stop"
-                  connectNulls={false}
-                  isAnimationActive={false}
-                />
-              )}
-
-              {hasBreakEven && (
-                <Line
-                  type="stepAfter"
-                  dataKey="breakEven"
-                  stroke="#a855f7"
-                  strokeWidth={1.5}
-                  strokeDasharray="4 4"
                   dot={false}
-                  name="⚖️ Break-Even"
-                  connectNulls={false}
-                  isAnimationActive={false}
-                />
-              )}
-
-              {hasPeakLock && (
-                <Line
-                  type="stepAfter"
-                  dataKey="peakLockStop"
-                  stroke="#06b6d4"
-                  strokeWidth={1.5}
-                  strokeDasharray="3 2"
-                  dot={false}
-                  name="🔒 Peak-Lock"
+                  name="🛑 Exit Stop"
                   connectNulls={false}
                   isAnimationActive={false}
                 />
@@ -1005,22 +1023,13 @@ const ChartShell = ({
                   strokeOpacity={0.55}
                 />
               )}
-              {currentTrailingStop != null && (
+              {currentExitStop != null && (
                 <ReferenceLine
-                  y={currentTrailingStop}
-                  stroke="#ec4899"
-                  strokeWidth={2}
-                  strokeDasharray="6 3"
-                  strokeOpacity={0.75}
-                />
-              )}
-              {currentEffectiveStop != null && currentEffectiveStop !== currentTrailingStop && (
-                <ReferenceLine
-                  y={currentEffectiveStop}
+                  y={currentExitStop}
                   stroke="#f97316"
-                  strokeWidth={2}
+                  strokeWidth={1}
                   strokeDasharray="8 4"
-                  strokeOpacity={0.75}
+                  strokeOpacity={0.4}
                 />
               )}
 
@@ -1054,7 +1063,8 @@ const ChartShell = ({
         chartData={chartData}
         triggers={triggers}
         markers={markers}
-        flags={{ hasTrailing, hasEffective, hasBreakEven, hasPeakLock, hasInitialSl, hasPeak }}
+        tsDiagnostic={tsDiagnostic}
+        flags={{ hasTrailing, hasEffective, hasBreakEven, hasPeakLock, hasInitialSl, hasPeak, hasExitStop }}
         derived={{ entryPrice, exitPrice, initialSlPrice, peakPrice, openTime, closeTime }}
       />
     </div>
@@ -1069,6 +1079,7 @@ const ChartDebugPanel = ({
   chartData,
   triggers,
   markers,
+  tsDiagnostic,
   flags,
   derived,
 }: {
@@ -1076,6 +1087,7 @@ const ChartDebugPanel = ({
   chartData: ChartRow[];
   triggers: TriggerLevels;
   markers: ActivationMarkers;
+  tsDiagnostic: TsHistoryDiagnostic | null;
   flags: {
     hasTrailing: boolean;
     hasEffective: boolean;
@@ -1083,6 +1095,7 @@ const ChartDebugPanel = ({
     hasPeakLock: boolean;
     hasInitialSl: boolean;
     hasPeak: boolean;
+    hasExitStop: boolean;
   };
   derived: {
     entryPrice: number;
@@ -1261,6 +1274,23 @@ const ChartDebugPanel = ({
           )}
         </section>
 
+        <section className="min-w-0">
+          <div className="font-semibold mb-1">1b. TS-historik diagnose</div>
+          <div className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-0.5 sm:grid-cols-2 [&>div]:min-w-0 [&>div]:break-all">
+            <div>Har historisk TS-data: {fmt(tsDiagnostic?.hasHistorical ?? false)}</div>
+            <div>Source for TS timeline: <span className="font-mono">{tsDiagnostic?.source ?? "-"}</span></div>
+            <div>Antal TS-punkter: {fmt(tsDiagnostic?.pointCount ?? 0)}</div>
+            <div>TS rekonstrueret: {fmt(tsDiagnostic?.isReconstructed ?? false)}</div>
+            <div>Første TS timestamp: <span className="font-mono">{tsDiagnostic?.firstTs ? new Date(tsDiagnostic.firstTs).toISOString() : "-"}</span></div>
+            <div>Første TS value: {fmt(tsDiagnostic?.firstValue ?? null)}</div>
+            <div>Sidste TS timestamp: <span className="font-mono">{tsDiagnostic?.lastTs ? new Date(tsDiagnostic.lastTs).toISOString() : "-"}</span></div>
+            <div>Sidste TS value: {fmt(tsDiagnostic?.lastValue ?? null)}</div>
+            <div>TS activation timestamp: <span className="font-mono">{tsDiagnostic?.activationTs ? new Date(tsDiagnostic.activationTs).toISOString() : "(ikke logget i DB)"}</span></div>
+          </div>
+          <div className="text-muted-foreground mt-1">
+            Der findes ingen TS-historik tabel (trailing_stop_history / exit_model_audit / position_snapshots). Kun current trade.trailing_stop. Exit Stop tegnes derfor som flad linje over in-trade vinduet.
+          </div>
+        </section>
         <section className="min-w-0">
           <div className="font-semibold mb-1">2. Series summary</div>
           <div className="w-full max-w-full overflow-x-auto">
