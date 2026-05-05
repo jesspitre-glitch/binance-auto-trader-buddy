@@ -106,48 +106,49 @@ const buildSeries = (
   triggers: TriggerLevels;
   markers: ActivationMarkers;
 } => {
-  const entryPrice = Number(trade.entry_price);
   const side = trade.side as "LONG" | "SHORT";
-  const stopLoss = Number(trade.stop_loss);
 
-  const snap = trade.indicators_snapshot ?? {};
+  // ---- KUN ÆGTE DB-VÆRDIER — ingen lokal rekonstruktion -------------------
+  const stopLossDb =
+    trade.stop_loss != null && isFinite(Number(trade.stop_loss)) && Number(trade.stop_loss) > 0
+      ? Number(trade.stop_loss)
+      : null;
 
-  const atrValue = Number(snap.atr) || entryPrice * 0.01;
-  const atrTrailingMultiplier =
-    Number(snap.atr_trailing_stop_multiplier) ||
-    Number(snap.trailing_stop_atr_multiplier) ||
-    1.8;
-  const atrTrailingDistance = atrValue * atrTrailingMultiplier;
-
-  const trailingActivationEnabled = snap.trailing_stop_activation_enabled ?? true;
-  const trailingActivationAtr = Number(snap.trailing_stop_activation_atr) || 1.0;
-
-  const breakEvenAtr = Number(snap.break_even_atr) || 1.5;
-  const breakEvenStopOffset =
-    (Number(snap.break_even_atr_stop_offset) || 0) * atrValue;
-
-  const peakLockEnabled = snap.peak_lock_enabled ?? false;
-  const peakLockActivateProfitPct =
-    Number(snap.peak_lock_activate_profit_pct) || 0.6;
-  const peakLockDistancePct = Number(snap.peak_lock_distance_pct) || 0.35;
-  const peakLockMinProfitFloorPct =
-    Number(snap.peak_lock_min_profit_floor_pct) || 0.15;
-  const peakLockRatchetOnly = snap.peak_lock_ratchet_only ?? true;
+  const breakEvenTriggered = trade.break_even_triggered === true;
+  const breakEvenAtPrice =
+    breakEvenTriggered &&
+    trade.break_even_at_price != null &&
+    isFinite(Number(trade.break_even_at_price)) &&
+    Number(trade.break_even_at_price) > 0
+      ? Number(trade.break_even_at_price)
+      : null;
 
   const trailingStopDb =
-    trade.trailing_stop != null ? Number(trade.trailing_stop) : null;
-  const peakPriceDb =
-    trade.peak_price != null ? Number(trade.peak_price) : null;
+    trade.trailing_stop != null && isFinite(Number(trade.trailing_stop)) && Number(trade.trailing_stop) > 0
+      ? Number(trade.trailing_stop)
+      : null;
 
-  let peakPrice = entryPrice;
-  let currentStopLoss = isFinite(stopLoss) && stopLoss > 0 ? stopLoss : entryPrice;
-  let breakEvenActivated = false;
-  let peakLockActivated = false;
-  let peakLockStopValue: number | null = null;
+  const peakLockActivated = trade.peak_lock_activated === true;
+  const peakLockStopPrice =
+    peakLockActivated &&
+    trade.peak_lock_stop_price != null &&
+    isFinite(Number(trade.peak_lock_stop_price)) &&
+    Number(trade.peak_lock_stop_price) > 0
+      ? Number(trade.peak_lock_stop_price)
+      : null;
 
-  let breakEvenActivatedAt: number | null = null;
-  let trailingStopActivatedAt: number | null = null;
-  let peakLockActivatedAt: number | null = null;
+  // ---- Most-protective effective stop fra DB (én værdi, ikke pr. candle) --
+  const candidates = [
+    stopLossDb,
+    breakEvenAtPrice,
+    trailingStopDb,
+    peakLockStopPrice,
+  ].filter((v): v is number => v != null);
+  const effectiveStopDb = candidates.length
+    ? side === "LONG"
+      ? Math.max(...candidates)
+      : Math.min(...candidates)
+    : null;
 
   const closeTime = trade.closed_at
     ? new Date(trade.closed_at).getTime()
@@ -159,132 +160,10 @@ const buildSeries = (
     const high = parseFloat(k[2]);
     const low = parseFloat(k[3]);
 
-    let trailingStop: number | null = null;
-    let effectiveStop: number | null = null;
-
     const isPostExit = timestamp > closeTime;
     const inTradeWindow = timestamp >= openTime && !isPostExit;
 
-    if (inTradeWindow) {
-      effectiveStop = currentStopLoss;
-
-      const profitInAtr =
-        side === "LONG"
-          ? (price - entryPrice) / atrValue
-          : (entryPrice - price) / atrValue;
-      const isInProfit = profitInAtr > 0;
-
-      // ---- Break-Even ------------------------------------------------------
-      if (!breakEvenActivated) {
-        const beDistance = breakEvenAtr * atrValue;
-        const beReached =
-          side === "LONG"
-            ? price >= entryPrice + beDistance
-            : price <= entryPrice - beDistance;
-
-        if (beReached) {
-          const beStop =
-            side === "LONG"
-              ? Math.max(entryPrice + breakEvenStopOffset, entryPrice)
-              : Math.min(entryPrice - breakEvenStopOffset, entryPrice);
-          currentStopLoss = beStop;
-          breakEvenActivated = true;
-          breakEvenActivatedAt = timestamp;
-          effectiveStop = currentStopLoss;
-        }
-      }
-
-      // ---- Peak price (HISTORISK rekonstruktion ud fra candles) -----------
-      // Brug high/low for korrekt peak — IKKE close. Og brug ALDRIG peakPriceDb
-      // her, da det er en "future-leak" der spreader nutidens peak bagud i tid
-      // og får TS-linjen til at se ud som en flad linje der følger prisen.
-      if (side === "LONG") {
-        if (high > peakPrice) peakPrice = high;
-      } else {
-        if (low < peakPrice || peakPrice === entryPrice) {
-          if (low > 0) peakPrice = Math.min(peakPrice, low);
-        }
-      }
-
-      // ---- Trailing Stop ---------------------------------------------------
-      // Aktivering: rent historisk — har profit-in-ATR ramt activation-tærsklen?
-      // (DB-flag bruges KUN som fallback for sidste candle hvis vi ikke nåede
-      // tærsklen i rekonstruktionen — håndteres efter loopet.)
-      const trailingActive =
-        isInProfit &&
-        (!trailingActivationEnabled || profitInAtr >= trailingActivationAtr);
-
-      if (trailingActive) {
-        if (trailingStopActivatedAt == null) trailingStopActivatedAt = timestamp;
-
-        // Rekonstrueret TS ud fra historisk peak − ATR-distance
-        const calcTs =
-          side === "LONG"
-            ? peakPrice - atrTrailingDistance
-            : peakPrice + atrTrailingDistance;
-
-        // Ratchet: TS må kun forbedres, aldrig forværres
-        const improves =
-          side === "LONG" ? calcTs > currentStopLoss : calcTs < currentStopLoss;
-
-        // Vis TS-linjen uanset om prisen er over eller under — prisen SKAL
-        // kunne krydse TS (det er jo selve exit-eventet).
-        trailingStop = improves ? calcTs : currentStopLoss;
-
-        // Most-protective effective stop
-        if (improves) {
-          currentStopLoss =
-            side === "LONG"
-              ? Math.max(currentStopLoss, calcTs)
-              : Math.min(currentStopLoss, calcTs);
-        }
-        effectiveStop = currentStopLoss;
-      }
-
-      // ---- Peak-Lock -------------------------------------------------------
-      if (peakLockEnabled && breakEvenActivated) {
-        const profitPct =
-          side === "LONG"
-            ? ((price - entryPrice) / entryPrice) * 100
-            : ((entryPrice - price) / entryPrice) * 100;
-
-        if (profitPct >= peakLockActivateProfitPct) {
-          if (peakLockActivatedAt == null) peakLockActivatedAt = timestamp;
-          peakLockActivated = true;
-
-          const plStop =
-            side === "LONG"
-              ? peakPrice * (1 - peakLockDistancePct / 100)
-              : peakPrice * (1 + peakLockDistancePct / 100);
-          const floorStop =
-            side === "LONG"
-              ? entryPrice * (1 + peakLockMinProfitFloorPct / 100)
-              : entryPrice * (1 - peakLockMinProfitFloorPct / 100);
-
-          const candidate =
-            side === "LONG" ? Math.max(plStop, floorStop) : Math.min(plStop, floorStop);
-          peakLockStopValue = candidate;
-
-          const newStop =
-            side === "LONG"
-              ? Math.max(currentStopLoss, candidate)
-              : Math.min(currentStopLoss, candidate);
-
-          if (peakLockRatchetOnly) {
-            const shouldRatchet =
-              side === "LONG" ? newStop > currentStopLoss : newStop < currentStopLoss;
-            if (shouldRatchet) currentStopLoss = newStop;
-          } else {
-            currentStopLoss = newStop;
-          }
-          effectiveStop = currentStopLoss;
-        }
-      }
-    }
-
-    // Side-validering: stop-linjer må aldrig vises på den forkerte side af
-    // candlen. LONG-stop skal ligge ≤ high; SHORT-stop skal ligge ≥ low.
-    // Hvis værdien er ugyldig, springes den over for netop denne candle.
+    // Side-validering: skip hvis værdien ikke giver mening for siden på denne candle
     const validForSide = (v: number | null): number | null => {
       if (v == null || !isFinite(v) || v <= 0) return null;
       if (side === "LONG" && v > high) return null;
@@ -301,73 +180,29 @@ const buildSeries = (
       price,
       high,
       low,
-      effectiveStop: validForSide(effectiveStop),
-      trailingStop: validForSide(trailingStop),
-      breakEven:
-        !isPostExit && breakEvenActivated ? validForSide(entryPrice) : null,
-      peakLockStop:
-        !isPostExit && peakLockActivated ? validForSide(peakLockStopValue) : null,
+      // Konstante DB-værdier tegnet henover hele trade-vinduet
+      effectiveStop: inTradeWindow ? validForSide(effectiveStopDb) : null,
+      trailingStop: inTradeWindow ? validForSide(trailingStopDb) : null,
+      breakEven: inTradeWindow ? validForSide(breakEvenAtPrice) : null,
+      peakLockStop: inTradeWindow ? validForSide(peakLockStopPrice) : null,
       entryMarker: null,
       exitMarker: null,
       isPostExit,
     };
   });
 
-  // ---- Reconciliation: tving sidste in-trade candle til at matche DB-state.
-  // Hvis backend har en eksplicit trailing_stop-værdi, bruger vi den som
-  // "sandhed" på sidste candle, så TS-linjen ender præcist hvor dashboardets
-  // trailing_stop-felt siger.
-  const lastInTradeIdx = (() => {
-    for (let i = data.length - 1; i >= 0; i--) {
-      if (!data[i].isPostExit && data[i].timestamp >= openTime) return i;
-    }
-    return -1;
-  })();
-  if (lastInTradeIdx >= 0) {
-    const last = data[lastInTradeIdx];
-    if (trailingStopDb != null && isFinite(trailingStopDb) && trailingStopDb > 0) {
-      // Side-validering også på reconciliation: LONG-stop må ikke ligge over high,
-      // SHORT-stop må ikke ligge under low på samme candle.
-      const sideOk =
-        side === "LONG" ? trailingStopDb <= last.high : trailingStopDb >= last.low;
-      if (sideOk) {
-        last.trailingStop = trailingStopDb;
-        const initSl = isFinite(stopLoss) && stopLoss > 0 ? stopLoss : entryPrice;
-        const eff =
-          side === "LONG"
-            ? Math.max(initSl, trailingStopDb)
-            : Math.min(initSl, trailingStopDb);
-        const effOk = side === "LONG" ? eff <= last.high : eff >= last.low;
-        if (effOk) last.effectiveStop = eff;
-      }
-    }
-  }
-
-  // Triggere (faste niveauer)
-  const triggers: TriggerLevels = {
-    breakEvenTrigger:
-      side === "LONG"
-        ? entryPrice + breakEvenAtr * atrValue
-        : entryPrice - breakEvenAtr * atrValue,
-    trailingTrigger: trailingActivationEnabled
-      ? side === "LONG"
-        ? entryPrice + trailingActivationAtr * atrValue
-        : entryPrice - trailingActivationAtr * atrValue
-      : null,
-    peakLockTrigger: peakLockEnabled
-      ? side === "LONG"
-        ? entryPrice * (1 + peakLockActivateProfitPct / 100)
-        : entryPrice * (1 - peakLockActivateProfitPct / 100)
-      : null,
-  };
-
+  // Ingen triggere/markers fra rekonstruktion — chart visualiserer kun ægte data.
   return {
     data,
-    triggers,
+    triggers: {
+      breakEvenTrigger: null,
+      trailingTrigger: null,
+      peakLockTrigger: null,
+    },
     markers: {
-      breakEvenAt: breakEvenActivatedAt,
-      trailingAt: trailingStopActivatedAt,
-      peakLockAt: peakLockActivatedAt,
+      breakEvenAt: null,
+      trailingAt: null,
+      peakLockAt: null,
     },
   };
 };
@@ -1025,9 +860,10 @@ const ChartShell = ({
           : "Åben handel — opdateres med live prisudvikling"}
       </div>
 
-      {/* Mobil-venligt: ingen vandret scroll, fuld bredde */}
-      <div className="w-full overflow-x-hidden">
+      {/* Mobil-venligt: fuld bredde, aldrig vandret scroll */}
+      <div className="w-full max-w-full overflow-x-hidden">
         <ResponsiveContainer width="100%" height={380}>
+
             <ComposedChart
               data={chartData}
               margin={{ top: 16, right: 12, left: 4, bottom: 24 }}
