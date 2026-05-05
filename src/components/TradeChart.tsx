@@ -762,28 +762,48 @@ const ChartShell = ({
     chartSvgWidth: number;
     bodyScrollWidth: number;
     hasHorizontalOverflow: boolean;
+    plotAreaLeft: number;
+    plotAreaRight: number;
+    yAxisWidth: number;
+    clippedRight: boolean;
   } | null>(null);
 
   useEffect(() => {
     const update = () => {
       const vw = window.innerWidth;
       const cardW = wrapperRef.current?.getBoundingClientRect().width ?? 0;
-      const svg = wrapperRef.current?.querySelector("svg.recharts-surface");
-      const svgW = (svg as SVGElement | null)?.getBoundingClientRect().width ?? 0;
+      const svg = wrapperRef.current?.querySelector("svg.recharts-surface") as SVGElement | null;
+      const svgRect = svg?.getBoundingClientRect();
+      const svgW = svgRect?.width ?? 0;
       const bodyW = document.documentElement.scrollWidth;
+      // Plot area = first cartesian grid rect
+      const gridRect = wrapperRef.current
+        ?.querySelector(".recharts-cartesian-grid rect")
+        ?.getBoundingClientRect();
+      const plotLeft = gridRect && svgRect ? Math.round(gridRect.left - svgRect.left) : 0;
+      const plotRight = gridRect && svgRect ? Math.round(svgRect.right - gridRect.right) : 0;
+      const yAxisEl = wrapperRef.current?.querySelector(".recharts-yAxis");
+      const yAxisW = yAxisEl ? Math.round((yAxisEl as SVGGraphicsElement).getBoundingClientRect().width) : 0;
+      const clippedRight = svgRect ? svgRect.right > (wrapperRef.current?.getBoundingClientRect().right ?? 0) + 1 : false;
       setLayoutDebug({
         viewportWidth: vw,
         chartCardWidth: Math.round(cardW),
         chartSvgWidth: Math.round(svgW),
         bodyScrollWidth: bodyW,
         hasHorizontalOverflow: bodyW > vw,
+        plotAreaLeft: plotLeft,
+        plotAreaRight: plotRight,
+        yAxisWidth: yAxisW,
+        clippedRight,
       });
     };
     update();
     const t = setTimeout(update, 250);
+    const t2 = setTimeout(update, 800);
     window.addEventListener("resize", update);
     return () => {
       clearTimeout(t);
+      clearTimeout(t2);
       window.removeEventListener("resize", update);
     };
   });
