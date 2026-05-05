@@ -753,12 +753,12 @@ const ChartShell = ({
     let pool: number[] = [...priceValues];
     if (entryPrice > 0) pool.push(entryPrice);
 
-    // EffectiveStop kun hvis tæt på prisen (max 3x rangen)
+    // Stop-linjer skal ALTID indgå i y-domain så de ikke ryger udenfor grafen.
     if (priceValues.length > 0) {
       const pMin = Math.min(...priceValues);
       const pMax = Math.max(...priceValues);
       const range = Math.max(pMax - pMin, entryPrice * 0.005);
-      const maxDist = range * 3;
+      const maxDist = range * 5; // mere generøs for at undgå at klippe TS
 
       chartData.forEach((d) => {
         if (d.effectiveStop != null && Math.abs(d.effectiveStop - entryPrice) <= maxDist) {
@@ -767,8 +767,16 @@ const ChartShell = ({
         if (d.trailingStop != null && Math.abs(d.trailingStop - entryPrice) <= maxDist) {
           pool.push(d.trailingStop);
         }
+        if (d.breakEven != null) pool.push(d.breakEven);
+        if (d.peakLockStop != null) pool.push(d.peakLockStop);
       });
     }
+
+    // TS / peak fra DB (single value) — sikrer at en aktiv TS altid er i view
+    const tsDb = trade.trailing_stop != null ? Number(trade.trailing_stop) : null;
+    if (tsDb != null && isFinite(tsDb) && tsDb > 0) pool.push(tsDb);
+    const pkDb = trade.peak_price != null ? Number(trade.peak_price) : null;
+    if (pkDb != null && isFinite(pkDb) && pkDb > 0) pool.push(pkDb);
 
     // Stop loss og exit hvis inden for 10%
     const stopLoss = Number(trade.stop_loss);
@@ -1017,13 +1025,12 @@ const ChartShell = ({
           : "Åben handel — opdateres med live prisudvikling"}
       </div>
 
-      {/* Horisontal scroll på mobil — minimum bredde sikrer læsbarhed */}
-      <div className="w-full overflow-x-auto -mx-1 px-1">
-        <div className="min-w-[560px]">
-          <ResponsiveContainer width="100%" height={380}>
+      {/* Mobil-venligt: ingen vandret scroll, fuld bredde */}
+      <div className="w-full overflow-x-hidden">
+        <ResponsiveContainer width="100%" height={380}>
             <ComposedChart
               data={chartData}
-              margin={{ top: 16, right: 18, left: 8, bottom: 24 }}
+              margin={{ top: 16, right: 12, left: 4, bottom: 24 }}
             >
               <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.25} />
               <XAxis
@@ -1032,24 +1039,29 @@ const ChartShell = ({
                 scale="time"
                 domain={["dataMin", "dataMax"]}
                 ticks={xTicks}
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 9 }}
                 tickFormatter={fmtTimeShort}
                 minTickGap={40}
               />
               <YAxis
                 domain={[yMin, yMax]}
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 9 }}
                 tickFormatter={(v) => formatPriceAdaptive(v)}
-                width={78}
+                width={64}
               />
               <Tooltip content={renderTooltip} />
               <Legend
-                wrapperStyle={{ paddingTop: "10px", fontSize: "11px" }}
+                wrapperStyle={{
+                  paddingTop: "8px",
+                  fontSize: "10px",
+                  lineHeight: "16px",
+                  width: "100%",
+                }}
                 iconType="line"
-                iconSize={10}
+                iconSize={9}
               />
 
-              {/* Pris */}
+              {/* Pris — render FØR trailing stop så TS-linjen tegnes ovenpå */}
               <Line
                 type="monotone"
                 dataKey="price"
@@ -1065,7 +1077,7 @@ const ChartShell = ({
                   type="stepAfter"
                   dataKey="trailingStop"
                   stroke="#ec4899"
-                  strokeWidth={2}
+                  strokeWidth={2.5}
                   strokeDasharray="6 3"
                   dot={false}
                   name="🎯 Trailing Stop"
@@ -1195,7 +1207,6 @@ const ChartShell = ({
               )}
             </ComposedChart>
           </ResponsiveContainer>
-        </div>
       </div>
     </div>
   );
