@@ -1070,8 +1070,8 @@ const ChartShell = ({
       {/* Mobil-venligt: fuld bredde, aldrig vandret scroll */}
       <div
         ref={wrapperRef}
-        className="h-[360px] w-full max-w-full min-w-0 overflow-hidden sm:h-[380px]"
-        style={{ maxWidth: "100vw" }}
+        className="h-[340px] w-full max-w-full min-w-0 overflow-hidden sm:h-[380px]"
+        style={{ maxWidth: "100%", paddingLeft: isMobile ? 4 : 0, paddingRight: isMobile ? 4 : 0 }}
       >
         <ResponsiveContainer width="100%" height="100%" debounce={1}>
 
@@ -1079,7 +1079,7 @@ const ChartShell = ({
               data={chartData}
               margin={
                 isMobile
-                  ? { top: 12, right: 6, left: 0, bottom: 20 }
+                  ? { top: 12, right: 8, left: 0, bottom: 24 }
                   : { top: 16, right: 12, left: 4, bottom: 24 }
               }
             >
@@ -1090,20 +1090,24 @@ const ChartShell = ({
                 scale="time"
                 domain={["dataMin", "dataMax"]}
                 ticks={isMobile ? (xTicks?.length ? [xTicks[0], xTicks[xTicks.length - 1]] : undefined) : xTicks}
-                tick={{ fontSize: 9 }}
-                tickFormatter={fmtTimeShort}
-                minTickGap={isMobile ? 80 : 40}
+                tick={{ fontSize: isMobile ? 9 : 10 }}
+                tickFormatter={isMobile ? fmtDateShort : fmtTimeShort}
+                minTickGap={isMobile ? 100 : 40}
                 interval="preserveStartEnd"
+                height={isMobile ? 18 : 24}
               />
               <YAxis
                 domain={[yMin, yMax]}
-                tick={{ fontSize: 9 }}
-                tickFormatter={(v) => formatPriceAdaptive(v)}
-                width={isMobile ? 40 : 64}
+                tick={{ fontSize: isMobile ? 9 : 10 }}
+                tickFormatter={(v) => (isMobile ? formatPriceCompact(v) : formatPriceAdaptive(v))}
+                width={isMobile ? 36 : 64}
+                tickCount={isMobile ? 4 : 6}
               />
               <Tooltip
                 content={renderTooltip}
-                wrapperStyle={{ maxWidth: "calc(100vw - 24px)", zIndex: 50 }}
+                wrapperStyle={{ maxWidth: isMobile ? 220 : 320, zIndex: 50, pointerEvents: "none" }}
+                allowEscapeViewBox={{ x: false, y: false }}
+                position={isMobile ? undefined : undefined}
               />
               <Legend
                 wrapperStyle={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}
