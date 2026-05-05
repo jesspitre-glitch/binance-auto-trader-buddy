@@ -907,6 +907,11 @@ const ChartShell = ({
           : "Åben handel — opdateres med live prisudvikling"}
       </div>
 
+      {tsMissingHistory && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-700 dark:text-amber-300">
+          ⚠️ Historisk TS-data mangler — der vises kun aktuel stop-værdi som flad linje (ingen tidsserie i DB).
+        </div>
+      )}
       {/* Mobil-venligt: fuld bredde, aldrig vandret scroll */}
       <div className="h-[400px] w-full max-w-full min-w-0 overflow-x-hidden sm:h-[380px]">
         <ResponsiveContainer width="100%" height="100%" debounce={1}>
