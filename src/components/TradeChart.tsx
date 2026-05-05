@@ -989,6 +989,23 @@ const ChartShell = ({
       minute: "2-digit",
       timeZone: "UTC",
     });
+  // Mobil: kun dag.måned (fx "05.05") for at spare bredde
+  const fmtDateShort = (ts: number) => {
+    const d = new Date(ts);
+    return `${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  };
+  // Mobil: kompakt prisformat — max ~6 tegn
+  const formatPriceCompact = (v: number | null | undefined): string => {
+    if (v == null || !isFinite(Number(v))) return "-";
+    const p = Number(v);
+    const abs = Math.abs(p);
+    if (abs >= 1000) return p.toFixed(0);
+    if (abs >= 100) return p.toFixed(1);
+    if (abs >= 1) return p.toFixed(2);
+    if (abs >= 0.01) return p.toFixed(4);
+    if (abs >= 0.0001) return p.toFixed(5);
+    return p.toPrecision(3);
+  };
 
   // ---- Custom tooltip ---------------------------------------------------
   const renderTooltip = ({ active, payload, label }: any) => {
