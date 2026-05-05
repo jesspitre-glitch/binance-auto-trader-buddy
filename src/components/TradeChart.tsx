@@ -718,6 +718,7 @@ const ClosedTradeChart = ({ trade }: TradeChartProps) => {
     <ChartShell
       loading={loading}
       chartData={chartData}
+      exitStopSeries={exitStopSeries}
       trade={trade}
       triggers={triggers}
       markers={markers}
@@ -733,6 +734,7 @@ const ClosedTradeChart = ({ trade }: TradeChartProps) => {
 interface ChartShellProps {
   loading: boolean;
   chartData: ChartRow[];
+  exitStopSeries: ExitStopPoint[];
   trade: any;
   triggers: TriggerLevels;
   markers: ActivationMarkers;
@@ -743,6 +745,7 @@ interface ChartShellProps {
 const ChartShell = ({
   loading,
   chartData,
+  exitStopSeries,
   trade,
   triggers,
   markers,
