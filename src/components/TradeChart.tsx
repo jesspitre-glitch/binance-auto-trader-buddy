@@ -1051,12 +1051,20 @@ const ChartShell = ({
         </div>
       )}
       {/* Mobil-venligt: fuld bredde, aldrig vandret scroll */}
-      <div className="h-[400px] w-full max-w-full min-w-0 overflow-x-hidden sm:h-[380px]">
+      <div
+        ref={wrapperRef}
+        className="h-[360px] w-full max-w-full min-w-0 overflow-hidden sm:h-[380px]"
+        style={{ maxWidth: "100vw" }}
+      >
         <ResponsiveContainer width="100%" height="100%" debounce={1}>
 
             <ComposedChart
               data={chartData}
-              margin={{ top: 16, right: 12, left: 4, bottom: 24 }}
+              margin={
+                isMobile
+                  ? { top: 12, right: 6, left: 0, bottom: 20 }
+                  : { top: 16, right: 12, left: 4, bottom: 24 }
+              }
             >
               <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.25} />
               <XAxis
@@ -1064,18 +1072,22 @@ const ChartShell = ({
                 type="number"
                 scale="time"
                 domain={["dataMin", "dataMax"]}
-                ticks={xTicks}
+                ticks={isMobile ? (xTicks?.length ? [xTicks[0], xTicks[xTicks.length - 1]] : undefined) : xTicks}
                 tick={{ fontSize: 9 }}
                 tickFormatter={fmtTimeShort}
-                minTickGap={40}
+                minTickGap={isMobile ? 80 : 40}
+                interval="preserveStartEnd"
               />
               <YAxis
                 domain={[yMin, yMax]}
                 tick={{ fontSize: 9 }}
                 tickFormatter={(v) => formatPriceAdaptive(v)}
-                width={64}
+                width={isMobile ? 40 : 64}
               />
-              <Tooltip content={renderTooltip} />
+              <Tooltip
+                content={renderTooltip}
+                wrapperStyle={{ maxWidth: "calc(100vw - 24px)", zIndex: 50 }}
+              />
               <Legend
                 wrapperStyle={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}
                 content={({ payload }) => (
