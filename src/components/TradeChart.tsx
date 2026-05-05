@@ -620,6 +620,7 @@ interface ChartShellProps {
   trade: any;
   triggers: TriggerLevels;
   markers: ActivationMarkers;
+  tsDiagnostic: TsHistoryDiagnostic | null;
   mode: "open" | "closed";
 }
 
@@ -629,6 +630,7 @@ const ChartShell = ({
   trade,
   triggers,
   markers,
+  tsDiagnostic,
   mode,
 }: ChartShellProps) => {
   const isClosed = mode === "closed";
