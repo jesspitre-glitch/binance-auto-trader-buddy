@@ -1079,6 +1079,7 @@ const ChartDebugPanel = ({
   chartData,
   triggers,
   markers,
+  tsDiagnostic,
   flags,
   derived,
 }: {
@@ -1086,6 +1087,7 @@ const ChartDebugPanel = ({
   chartData: ChartRow[];
   triggers: TriggerLevels;
   markers: ActivationMarkers;
+  tsDiagnostic: TsHistoryDiagnostic | null;
   flags: {
     hasTrailing: boolean;
     hasEffective: boolean;
@@ -1093,6 +1095,7 @@ const ChartDebugPanel = ({
     hasPeakLock: boolean;
     hasInitialSl: boolean;
     hasPeak: boolean;
+    hasExitStop: boolean;
   };
   derived: {
     entryPrice: number;
