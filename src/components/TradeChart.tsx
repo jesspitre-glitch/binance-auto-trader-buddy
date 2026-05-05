@@ -623,6 +623,7 @@ const OpenTradeChart = ({ trade }: TradeChartProps) => {
     <ChartShell
       loading={loading}
       chartData={chartData}
+      exitStopSeries={exitStopSeries}
       trade={trade}
       triggers={triggers}
       markers={markers}
