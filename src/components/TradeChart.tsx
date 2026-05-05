@@ -47,6 +47,9 @@ interface ChartRow {
   price: number;
   high: number;
   low: number;
+  // exitStop = den stop-regel der faktisk ville lukke handlen på hvert tidspunkt
+  exitStop: number | null;
+  // Bevarede felter (kun current-værdier — ingen rekonstrueret historik)
   effectiveStop: number | null;
   trailingStop: number | null;
   breakEven: number | null;
@@ -55,6 +58,19 @@ interface ChartRow {
   exitMarker: number | null;
   // Marker for "post-exit" så vi visuelt kan adskille perioden
   isPostExit: boolean;
+}
+
+// Diagnose af TS-historik (vises i debug + UI banner)
+interface TsHistoryDiagnostic {
+  hasHistorical: boolean;
+  source: string;
+  pointCount: number;
+  firstTs: number | null;
+  firstValue: number | null;
+  lastTs: number | null;
+  lastValue: number | null;
+  activationTs: number | null;
+  isReconstructed: boolean;
 }
 
 interface TriggerLevels {
