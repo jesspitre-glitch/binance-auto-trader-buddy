@@ -1130,6 +1130,8 @@ const ChartDebugPanel = ({
   const effVals = chartData.map((d) => d.effectiveStop);
   const beVals = chartData.map((d) => d.breakEven);
   const plVals = chartData.map((d) => d.peakLockStop);
+  const hasTradeTrailingStop = trade.trailing_stop != null && isFinite(Number(trade.trailing_stop)) && Number(trade.trailing_stop) > 0;
+  const hasTradeStopLoss = trade.stop_loss != null && isFinite(Number(trade.stop_loss)) && Number(trade.stop_loss) > 0;
 
   const series = [
     summarize("Pris", "klines[].close", chartData.map((d) => d.price), true, "altid"),
@@ -1149,45 +1151,49 @@ const ChartDebugPanel = ({
     ),
     summarize(
       "Trailing Stop",
-      "buildSeries() rekonstr. + trade.trailing_stop reconciliation (sidste candle)",
+      "trade.trailing_stop",
       tsVals,
       flags.hasTrailing,
       flags.hasTrailing
-        ? `≥1 candle har TS. trade.trailing_stop=${trade.trailing_stop ?? "null"}`
-        : "ingen TS",
+        ? "current-level på seneste in-trade candle"
+        : "trade.trailing_stop mangler/ugyldig eller er side-ugyldig",
     ),
     summarize(
       "Aktiv Stop",
-      "buildSeries() currentStopLoss (start = trade.stop_loss, opdateres af BE/TS/PL)",
+      "resolved current active stop from trade.trailing_stop / trade.stop_loss",
       effVals,
       flags.hasEffective,
-      flags.hasEffective ? `stop_loss=${trade.stop_loss ?? "null"}` : "ingen",
+      flags.hasEffective
+        ? hasTradeTrailingStop
+          ? "trade.trailing_stop prioriteret som aktuel stop"
+          : "trade.stop_loss brugt som aktuel stop"
+        : "ingen valid trade.stop_loss/trailing_stop",
     ),
     summarize(
       "Break-Even",
-      "buildSeries() — entryPrice±offset når lokal rekonstruktion sætter breakEvenActivated=true",
+      "trade.break_even_triggered + trade.break_even_at_price",
       beVals,
       flags.hasBreakEven,
       flags.hasBreakEven
-        ? `LOKAL rekonstr. (DB break_even_triggered=${trade.break_even_triggered})`
-        : "ej aktiveret",
+        ? "trade.break_even_triggered=true og price findes"
+        : "Break-Even shown: false",
     ),
     summarize(
       "Peak-Lock",
-      "buildSeries() peakLockStopValue når peak_lock_enabled && profit≥threshold",
+      "trade.peak_lock_activated + trade.peak_lock_stop_price",
       plVals,
       flags.hasPeakLock,
       flags.hasPeakLock
-        ? `peak_lock_enabled=${trade.indicators_snapshot?.peak_lock_enabled ?? "?"}`
-        : "ej aktiveret",
+        ? "trade.peak_lock_activated=true og price findes"
+        : "Peak-Lock shown: false",
     ),
     summarize("Peak", "trade.peak_price", [derived.peakPrice], flags.hasPeak, "DB"),
     summarize(
       "Initial SL",
-      "indicators_snapshot.original_stop_loss ?? trade.stop_loss",
+      "trade.stop_loss",
       [derived.initialSlPrice],
       flags.hasInitialSl,
-      "DB",
+      hasTradeStopLoss ? "DB" : "ingen valid stop_loss",
     ),
   ];
 
