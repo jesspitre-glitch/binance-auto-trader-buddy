@@ -95,7 +95,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
 };
 
 // =============================================================================
-// Fælles chart-serie — læser kun faktiske trade-værdier, ingen lokal simulation
+// Fælles chart-serie — læser kun faktiske trade-værdier, ingen lokal beregning
 // =============================================================================
 const buildSeries = (
   trade: any,
@@ -830,7 +830,7 @@ const ChartShell = ({
   };
 
   return (
-    <div className="space-y-2">
+    <div className="w-full max-w-full min-w-0 overflow-x-hidden space-y-2">
       <div className="text-xs text-muted-foreground px-1">
         {isClosed
           ? `Lukket handel — viser 15 candles efter exit`
@@ -838,8 +838,8 @@ const ChartShell = ({
       </div>
 
       {/* Mobil-venligt: fuld bredde, aldrig vandret scroll */}
-      <div className="w-full max-w-full overflow-x-hidden">
-        <ResponsiveContainer width="100%" height={380}>
+      <div className="h-[400px] w-full max-w-full min-w-0 overflow-x-hidden sm:h-[380px]">
+        <ResponsiveContainer width="100%" height="100%" debounce={1}>
 
             <ComposedChart
               data={chartData}
@@ -864,12 +864,20 @@ const ChartShell = ({
               />
               <Tooltip content={renderTooltip} />
               <Legend
-                wrapperStyle={{
-                  paddingTop: "8px",
-                  fontSize: "10px",
-                  lineHeight: "16px",
-                  width: "100%",
-                }}
+                wrapperStyle={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}
+                content={({ payload }) => (
+                  <div className="flex w-full max-w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 pt-2 text-[10px] leading-4">
+                    {payload?.map((item) => (
+                      <div key={`${item.value}`} className="flex min-w-0 items-center gap-1">
+                        <span
+                          className="h-0.5 w-4 shrink-0 rounded-full"
+                          style={{ backgroundColor: item.color }}
+                        />
+                        <span className="truncate">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 iconType="line"
                 iconSize={9}
               />
@@ -892,7 +900,7 @@ const ChartShell = ({
                   stroke="#ec4899"
                   strokeWidth={2.5}
                   strokeDasharray="6 3"
-                  dot={false}
+                  dot={{ r: 4, strokeWidth: 2 }}
                   name="🎯 Trailing Stop"
                   connectNulls={false}
                   isAnimationActive={false}
@@ -906,7 +914,7 @@ const ChartShell = ({
                   stroke="#f97316"
                   strokeWidth={2.5}
                   strokeDasharray="8 4"
-                  dot={false}
+                  dot={{ r: 4, strokeWidth: 2 }}
                   name="🛑 Aktiv Stop"
                   connectNulls={false}
                   isAnimationActive={false}
@@ -995,6 +1003,24 @@ const ChartShell = ({
                   strokeWidth={1}
                   strokeDasharray="3 3"
                   strokeOpacity={0.55}
+                />
+              )}
+              {currentTrailingStop != null && (
+                <ReferenceLine
+                  y={currentTrailingStop}
+                  stroke="#ec4899"
+                  strokeWidth={2}
+                  strokeDasharray="6 3"
+                  strokeOpacity={0.75}
+                />
+              )}
+              {currentEffectiveStop != null && currentEffectiveStop !== currentTrailingStop && (
+                <ReferenceLine
+                  y={currentEffectiveStop}
+                  stroke="#f97316"
+                  strokeWidth={2}
+                  strokeDasharray="8 4"
+                  strokeOpacity={0.75}
                 />
               )}
 
