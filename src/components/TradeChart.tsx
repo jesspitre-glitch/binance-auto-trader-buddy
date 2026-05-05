@@ -282,6 +282,16 @@ const buildSeries = (
       }
     }
 
+    // Side-validering: stop-linjer må aldrig vises på den forkerte side af
+    // candlen. LONG-stop skal ligge ≤ high; SHORT-stop skal ligge ≥ low.
+    // Hvis værdien er ugyldig, springes den over for netop denne candle.
+    const validForSide = (v: number | null): number | null => {
+      if (v == null || !isFinite(v) || v <= 0) return null;
+      if (side === "LONG" && v > high) return null;
+      if (side === "SHORT" && v < low) return null;
+      return v;
+    };
+
     return {
       timestamp,
       time: new Date(timestamp).toLocaleTimeString("da-DK", {
@@ -291,10 +301,12 @@ const buildSeries = (
       price,
       high,
       low,
-      effectiveStop,
-      trailingStop,
-      breakEven: !isPostExit && breakEvenActivated ? entryPrice : null,
-      peakLockStop: !isPostExit && peakLockActivated ? peakLockStopValue : null,
+      effectiveStop: validForSide(effectiveStop),
+      trailingStop: validForSide(trailingStop),
+      breakEven:
+        !isPostExit && breakEvenActivated ? validForSide(entryPrice) : null,
+      peakLockStop:
+        !isPostExit && peakLockActivated ? validForSide(peakLockStopValue) : null,
       entryMarker: null,
       exitMarker: null,
       isPostExit,
