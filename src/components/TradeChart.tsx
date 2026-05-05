@@ -1207,7 +1207,6 @@ const ChartShell = ({
               )}
             </ComposedChart>
           </ResponsiveContainer>
-        </div>
       </div>
     </div>
   );
