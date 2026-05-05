@@ -1033,22 +1033,13 @@ const ChartShell = ({
                   strokeOpacity={0.55}
                 />
               )}
-              {currentTrailingStop != null && (
+              {currentExitStop != null && (
                 <ReferenceLine
-                  y={currentTrailingStop}
-                  stroke="#ec4899"
-                  strokeWidth={2}
-                  strokeDasharray="6 3"
-                  strokeOpacity={0.75}
-                />
-              )}
-              {currentEffectiveStop != null && currentEffectiveStop !== currentTrailingStop && (
-                <ReferenceLine
-                  y={currentEffectiveStop}
+                  y={currentExitStop}
                   stroke="#f97316"
-                  strokeWidth={2}
+                  strokeWidth={1}
                   strokeDasharray="8 4"
-                  strokeOpacity={0.75}
+                  strokeOpacity={0.4}
                 />
               )}
 
