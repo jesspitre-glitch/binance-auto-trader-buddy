@@ -860,9 +860,10 @@ const ChartShell = ({
           : "Åben handel — opdateres med live prisudvikling"}
       </div>
 
-      {/* Mobil-venligt: ingen vandret scroll, fuld bredde */}
-      <div className="w-full overflow-x-hidden">
+      {/* Mobil-venligt: fuld bredde, aldrig vandret scroll */}
+      <div className="w-full max-w-full overflow-x-hidden">
         <ResponsiveContainer width="100%" height={380}>
+
             <ComposedChart
               data={chartData}
               margin={{ top: 16, right: 12, left: 4, bottom: 24 }}
