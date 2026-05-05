@@ -95,7 +95,7 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
 };
 
 // =============================================================================
-// Fælles indikator-rekonstruktion (BE / TS / Peak-Lock niveauer over tid)
+// Fælles chart-serie — læser kun faktiske trade-værdier, ingen lokal beregning
 // =============================================================================
 const buildSeries = (
   trade: any,
@@ -108,47 +108,28 @@ const buildSeries = (
 } => {
   const side = trade.side as "LONG" | "SHORT";
 
-  // ---- KUN ÆGTE DB-VÆRDIER — ingen lokal rekonstruktion -------------------
+  const toPositiveNumber = (value: any): number | null => {
+    const n = Number(value);
+    return value != null && isFinite(n) && n > 0 ? n : null;
+  };
+
+  // ---- KUN FAKTISKE TRADE-VÆRDIER ----------------------------------------
   const stopLossDb =
-    trade.stop_loss != null && isFinite(Number(trade.stop_loss)) && Number(trade.stop_loss) > 0
-      ? Number(trade.stop_loss)
-      : null;
+    toPositiveNumber(trade.stop_loss);
 
   const breakEvenTriggered = trade.break_even_triggered === true;
   const breakEvenAtPrice =
-    breakEvenTriggered &&
-    trade.break_even_at_price != null &&
-    isFinite(Number(trade.break_even_at_price)) &&
-    Number(trade.break_even_at_price) > 0
-      ? Number(trade.break_even_at_price)
-      : null;
+    breakEvenTriggered ? toPositiveNumber(trade.break_even_at_price) : null;
 
   const trailingStopDb =
-    trade.trailing_stop != null && isFinite(Number(trade.trailing_stop)) && Number(trade.trailing_stop) > 0
-      ? Number(trade.trailing_stop)
-      : null;
+    toPositiveNumber(trade.trailing_stop);
 
   const peakLockActivated = trade.peak_lock_activated === true;
   const peakLockStopPrice =
-    peakLockActivated &&
-    trade.peak_lock_stop_price != null &&
-    isFinite(Number(trade.peak_lock_stop_price)) &&
-    Number(trade.peak_lock_stop_price) > 0
-      ? Number(trade.peak_lock_stop_price)
-      : null;
+    peakLockActivated ? toPositiveNumber(trade.peak_lock_stop_price) : null;
 
-  // ---- Most-protective effective stop fra DB (én værdi, ikke pr. candle) --
-  const candidates = [
-    stopLossDb,
-    breakEvenAtPrice,
-    trailingStopDb,
-    peakLockStopPrice,
-  ].filter((v): v is number => v != null);
-  const effectiveStopDb = candidates.length
-    ? side === "LONG"
-      ? Math.max(...candidates)
-      : Math.min(...candidates)
-    : null;
+  // Aktiv Stop er kun den aktuelle trade-værdi: TS hvis den findes, ellers SL.
+  const effectiveStopDb = trailingStopDb ?? stopLossDb;
 
   const closeTime = trade.closed_at
     ? new Date(trade.closed_at).getTime()
@@ -161,15 +142,6 @@ const buildSeries = (
     const low = parseFloat(k[3]);
 
     const isPostExit = timestamp > closeTime;
-    const inTradeWindow = timestamp >= openTime && !isPostExit;
-
-    // Side-validering: skip hvis værdien ikke giver mening for siden på denne candle
-    const validForSide = (v: number | null): number | null => {
-      if (v == null || !isFinite(v) || v <= 0) return null;
-      if (side === "LONG" && v > high) return null;
-      if (side === "SHORT" && v < low) return null;
-      return v;
-    };
 
     return {
       timestamp,
@@ -180,18 +152,38 @@ const buildSeries = (
       price,
       high,
       low,
-      // Konstante DB-værdier tegnet henover hele trade-vinduet
-      effectiveStop: inTradeWindow ? validForSide(effectiveStopDb) : null,
-      trailingStop: inTradeWindow ? validForSide(trailingStopDb) : null,
-      breakEven: inTradeWindow ? validForSide(breakEvenAtPrice) : null,
-      peakLockStop: inTradeWindow ? validForSide(peakLockStopPrice) : null,
+      // Aktuelle stop-niveauer sættes kun på seneste candle i trade-vinduet nedenfor.
+      effectiveStop: null,
+      trailingStop: null,
+      breakEven: null,
+      peakLockStop: null,
       entryMarker: null,
       exitMarker: null,
       isPostExit,
     };
   });
 
-  // Ingen triggere/markers fra rekonstruktion — chart visualiserer kun ægte data.
+  const validForSide = (v: number | null, row: ChartRow): number | null => {
+    if (v == null || !isFinite(v) || v <= 0) return null;
+    if (side === "LONG" && v > row.high) return null;
+    if (side === "SHORT" && v < row.low) return null;
+    return v;
+  };
+
+  const latestInTradeIndex = data.reduce((latest, row, idx) => {
+    if (row.timestamp < openTime || row.isPostExit) return latest;
+    return idx;
+  }, -1);
+
+  if (latestInTradeIndex >= 0) {
+    const row = data[latestInTradeIndex];
+    row.trailingStop = validForSide(trailingStopDb, row);
+    row.effectiveStop = validForSide(effectiveStopDb, row);
+    row.breakEven = validForSide(breakEvenAtPrice, row);
+    row.peakLockStop = validForSide(peakLockStopPrice, row);
+  }
+
+  // Ingen triggere/markers fra chart-logik — chart visualiserer kun trade-data.
   return {
     data,
     triggers: {
@@ -585,27 +577,15 @@ const ChartShell = ({
       .map((d) => d.price)
       .filter((p) => p != null && isFinite(p) && p > 0);
 
-    let pool: number[] = [...priceValues];
+    const pool: number[] = [...priceValues];
     if (entryPrice > 0) pool.push(entryPrice);
 
-    // Stop-linjer skal ALTID indgå i y-domain så de ikke ryger udenfor grafen.
-    if (priceValues.length > 0) {
-      const pMin = Math.min(...priceValues);
-      const pMax = Math.max(...priceValues);
-      const range = Math.max(pMax - pMin, entryPrice * 0.005);
-      const maxDist = range * 5; // mere generøs for at undgå at klippe TS
-
-      chartData.forEach((d) => {
-        if (d.effectiveStop != null && Math.abs(d.effectiveStop - entryPrice) <= maxDist) {
-          pool.push(d.effectiveStop);
-        }
-        if (d.trailingStop != null && Math.abs(d.trailingStop - entryPrice) <= maxDist) {
-          pool.push(d.trailingStop);
-        }
-        if (d.breakEven != null) pool.push(d.breakEven);
-        if (d.peakLockStop != null) pool.push(d.peakLockStop);
-      });
-    }
+    chartData.forEach((d) => {
+      if (d.effectiveStop != null) pool.push(d.effectiveStop);
+      if (d.trailingStop != null) pool.push(d.trailingStop);
+      if (d.breakEven != null) pool.push(d.breakEven);
+      if (d.peakLockStop != null) pool.push(d.peakLockStop);
+    });
 
     // TS / peak fra DB (single value) — sikrer at en aktiv TS altid er i view
     const tsDb = trade.trailing_stop != null ? Number(trade.trailing_stop) : null;
@@ -613,11 +593,10 @@ const ChartShell = ({
     const pkDb = trade.peak_price != null ? Number(trade.peak_price) : null;
     if (pkDb != null && isFinite(pkDb) && pkDb > 0) pool.push(pkDb);
 
-    // Stop loss og exit hvis inden for 10%
+    // Stop loss og exit fra trade
     const stopLoss = Number(trade.stop_loss);
     if (stopLoss && isFinite(stopLoss) && stopLoss > 0) {
-      const distPct = (Math.abs(stopLoss - entryPrice) / entryPrice) * 100;
-      if (distPct <= 12) pool.push(stopLoss);
+      pool.push(stopLoss);
     }
     if (isClosed && trade.exit_price && isFinite(trade.exit_price)) {
       pool.push(Number(trade.exit_price));
@@ -657,9 +636,7 @@ const ChartShell = ({
         bold: true,
       });
 
-    const initSl = Number(
-      trade.indicators_snapshot?.original_stop_loss ?? trade.stop_loss,
-    );
+    const initSl = Number(trade.stop_loss);
     if (initSl > 0)
       out.push({
         value: initSl,
@@ -751,9 +728,7 @@ const ChartShell = ({
 
   const entryPrice = Number(trade.entry_price);
   const exitPrice = isClosed && trade.exit_price != null ? Number(trade.exit_price) : null;
-  const initialSlPrice = Number(
-    trade.indicators_snapshot?.original_stop_loss ?? trade.stop_loss,
-  );
+  const initialSlPrice = Number(trade.stop_loss);
   const peakPrice = trade.peak_price != null ? Number(trade.peak_price) : null;
 
   const openTime = trade.opened_at ? new Date(trade.opened_at).getTime() : null;
@@ -766,6 +741,8 @@ const ChartShell = ({
   const hasEffective = chartData.some((d) => d.effectiveStop != null);
   const hasInitialSl = isFinite(initialSlPrice) && initialSlPrice > 0;
   const hasPeak = peakPrice != null && isFinite(peakPrice) && peakPrice > 0;
+  const currentTrailingStop = [...chartData].reverse().find((d) => d.trailingStop != null)?.trailingStop ?? null;
+  const currentEffectiveStop = [...chartData].reverse().find((d) => d.effectiveStop != null)?.effectiveStop ?? null;
 
   // Kun hide-fra-legend payload — Recharts viser ALT som default; vi
   // angiver i stedet eksplicit hvilke linjer der overhovedet renderes.
@@ -853,7 +830,7 @@ const ChartShell = ({
   };
 
   return (
-    <div className="space-y-2">
+    <div className="w-full max-w-full min-w-0 overflow-x-hidden space-y-2">
       <div className="text-xs text-muted-foreground px-1">
         {isClosed
           ? `Lukket handel — viser 15 candles efter exit`
@@ -861,8 +838,8 @@ const ChartShell = ({
       </div>
 
       {/* Mobil-venligt: fuld bredde, aldrig vandret scroll */}
-      <div className="w-full max-w-full overflow-x-hidden">
-        <ResponsiveContainer width="100%" height={380}>
+      <div className="h-[400px] w-full max-w-full min-w-0 overflow-x-hidden sm:h-[380px]">
+        <ResponsiveContainer width="100%" height="100%" debounce={1}>
 
             <ComposedChart
               data={chartData}
@@ -887,12 +864,20 @@ const ChartShell = ({
               />
               <Tooltip content={renderTooltip} />
               <Legend
-                wrapperStyle={{
-                  paddingTop: "8px",
-                  fontSize: "10px",
-                  lineHeight: "16px",
-                  width: "100%",
-                }}
+                wrapperStyle={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}
+                content={({ payload }) => (
+                  <div className="flex w-full max-w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 pt-2 text-[10px] leading-4">
+                    {payload?.map((item) => (
+                      <div key={`${item.value}`} className="flex min-w-0 items-center gap-1">
+                        <span
+                          className="h-0.5 w-4 shrink-0 rounded-full"
+                          style={{ backgroundColor: item.color }}
+                        />
+                        <span className="truncate">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 iconType="line"
                 iconSize={9}
               />
@@ -915,7 +900,7 @@ const ChartShell = ({
                   stroke="#ec4899"
                   strokeWidth={2.5}
                   strokeDasharray="6 3"
-                  dot={false}
+                  dot={{ r: 4, strokeWidth: 2 }}
                   name="🎯 Trailing Stop"
                   connectNulls={false}
                   isAnimationActive={false}
@@ -929,7 +914,7 @@ const ChartShell = ({
                   stroke="#f97316"
                   strokeWidth={2.5}
                   strokeDasharray="8 4"
-                  dot={false}
+                  dot={{ r: 4, strokeWidth: 2 }}
                   name="🛑 Aktiv Stop"
                   connectNulls={false}
                   isAnimationActive={false}
@@ -1018,6 +1003,24 @@ const ChartShell = ({
                   strokeWidth={1}
                   strokeDasharray="3 3"
                   strokeOpacity={0.55}
+                />
+              )}
+              {currentTrailingStop != null && (
+                <ReferenceLine
+                  y={currentTrailingStop}
+                  stroke="#ec4899"
+                  strokeWidth={2}
+                  strokeDasharray="6 3"
+                  strokeOpacity={0.75}
+                />
+              )}
+              {currentEffectiveStop != null && currentEffectiveStop !== currentTrailingStop && (
+                <ReferenceLine
+                  y={currentEffectiveStop}
+                  stroke="#f97316"
+                  strokeWidth={2}
+                  strokeDasharray="8 4"
+                  strokeOpacity={0.75}
                 />
               )}
 
@@ -1127,6 +1130,8 @@ const ChartDebugPanel = ({
   const effVals = chartData.map((d) => d.effectiveStop);
   const beVals = chartData.map((d) => d.breakEven);
   const plVals = chartData.map((d) => d.peakLockStop);
+  const hasTradeTrailingStop = trade.trailing_stop != null && isFinite(Number(trade.trailing_stop)) && Number(trade.trailing_stop) > 0;
+  const hasTradeStopLoss = trade.stop_loss != null && isFinite(Number(trade.stop_loss)) && Number(trade.stop_loss) > 0;
 
   const series = [
     summarize("Pris", "klines[].close", chartData.map((d) => d.price), true, "altid"),
@@ -1146,45 +1151,49 @@ const ChartDebugPanel = ({
     ),
     summarize(
       "Trailing Stop",
-      "buildSeries() rekonstr. + trade.trailing_stop reconciliation (sidste candle)",
+      "trade.trailing_stop",
       tsVals,
       flags.hasTrailing,
       flags.hasTrailing
-        ? `≥1 candle har TS. trade.trailing_stop=${trade.trailing_stop ?? "null"}`
-        : "ingen TS",
+        ? "current-level på seneste in-trade candle"
+        : "trade.trailing_stop mangler/ugyldig eller er side-ugyldig",
     ),
     summarize(
       "Aktiv Stop",
-      "buildSeries() currentStopLoss (start = trade.stop_loss, opdateres af BE/TS/PL)",
+      "resolved current active stop from trade.trailing_stop / trade.stop_loss",
       effVals,
       flags.hasEffective,
-      flags.hasEffective ? `stop_loss=${trade.stop_loss ?? "null"}` : "ingen",
+      flags.hasEffective
+        ? hasTradeTrailingStop
+          ? "trade.trailing_stop prioriteret som aktuel stop"
+          : "trade.stop_loss brugt som aktuel stop"
+        : "ingen valid trade.stop_loss/trailing_stop",
     ),
     summarize(
       "Break-Even",
-      "buildSeries() — entryPrice±offset når lokal rekonstruktion sætter breakEvenActivated=true",
+      "trade.break_even_triggered + trade.break_even_at_price",
       beVals,
       flags.hasBreakEven,
       flags.hasBreakEven
-        ? `LOKAL rekonstr. (DB break_even_triggered=${trade.break_even_triggered})`
-        : "ej aktiveret",
+        ? "trade.break_even_triggered=true og price findes"
+        : "Break-Even shown: false",
     ),
     summarize(
       "Peak-Lock",
-      "buildSeries() peakLockStopValue når peak_lock_enabled && profit≥threshold",
+      "trade.peak_lock_activated + trade.peak_lock_stop_price",
       plVals,
       flags.hasPeakLock,
       flags.hasPeakLock
-        ? `peak_lock_enabled=${trade.indicators_snapshot?.peak_lock_enabled ?? "?"}`
-        : "ej aktiveret",
+        ? "trade.peak_lock_activated=true og price findes"
+        : "Peak-Lock shown: false",
     ),
     summarize("Peak", "trade.peak_price", [derived.peakPrice], flags.hasPeak, "DB"),
     summarize(
       "Initial SL",
-      "indicators_snapshot.original_stop_loss ?? trade.stop_loss",
+      "trade.stop_loss",
       [derived.initialSlPrice],
       flags.hasInitialSl,
-      "DB",
+      hasTradeStopLoss ? "DB" : "ingen valid stop_loss",
     ),
   ];
 
@@ -1199,11 +1208,8 @@ const ChartDebugPanel = ({
     return invalid;
   };
 
-  const tsLooksFlat = (() => {
-    const nn = tsVals.filter((v): v is number => v != null);
-    if (nn.length < 2) return false;
-    return Math.min(...nn) === Math.max(...nn);
-  })();
+  const tsPointCount = tsVals.filter((v): v is number => v != null).length;
+  const activePointCount = effVals.filter((v): v is number => v != null).length;
   const effEqualsExit =
     derived.exitPrice != null &&
     effVals.some((v) => v != null && Math.abs(v - (derived.exitPrice as number)) < 1e-12);
@@ -1219,16 +1225,16 @@ const ChartDebugPanel = ({
 
   return (
     <details
-      className="mt-3 border border-amber-500/40 bg-amber-500/5 rounded-md text-[11px]"
+      className="mt-3 w-full max-w-full min-w-0 overflow-hidden rounded-md border border-amber-500/40 bg-amber-500/5 text-[11px]"
       open
     >
       <summary className="cursor-pointer px-3 py-2 font-semibold text-amber-600 dark:text-amber-400">
         🐞 Chart Debug Panel (midlertidig)
       </summary>
-      <div className="p-3 space-y-4">
-        <section>
+      <div className="min-w-0 max-w-full space-y-4 overflow-hidden p-3">
+        <section className="min-w-0">
           <div className="font-semibold mb-1">1. Trade raw values</div>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+          <div className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-0.5 sm:grid-cols-2 [&>div]:min-w-0 [&>div]:break-all">
             <div>side: {fmt(trade.side)}</div>
             <div>status: {fmt(trade.status)}</div>
             <div>entry_price: {fmt(trade.entry_price)}</div>
@@ -1255,10 +1261,10 @@ const ChartDebugPanel = ({
           )}
         </section>
 
-        <section>
+        <section className="min-w-0">
           <div className="font-semibold mb-1">2. Series summary</div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[10px] border-collapse">
+          <div className="w-full max-w-full overflow-x-auto">
+            <table className="min-w-[760px] text-[10px] border-collapse">
               <thead>
                 <tr className="text-left border-b border-border/50">
                   <th className="pr-2 py-1">Serie</th>
@@ -1276,7 +1282,7 @@ const ChartDebugPanel = ({
                 {series.map((s) => (
                   <tr key={s.name} className="border-b border-border/20 align-top">
                     <td className="pr-2 py-0.5 whitespace-nowrap">{s.name}</td>
-                    <td className="pr-2 text-muted-foreground">{s.sourceField}</td>
+                    <td className="pr-2 text-muted-foreground max-w-[220px] whitespace-normal">{s.sourceField}</td>
                     <td className="pr-2 font-mono">{s.count}</td>
                     <td className="pr-2 font-mono">
                       {s.first != null ? formatPriceAdaptive(s.first) : "-"}
@@ -1293,7 +1299,7 @@ const ChartDebugPanel = ({
                     <td className={s.rendered ? "text-emerald-500" : "text-rose-500"}>
                       {String(s.rendered)}
                     </td>
-                    <td className="text-muted-foreground">{s.reason}</td>
+                    <td className="text-muted-foreground max-w-[220px] whitespace-normal">{s.reason}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1301,7 +1307,7 @@ const ChartDebugPanel = ({
           </div>
         </section>
 
-        <section>
+        <section className="min-w-0">
           <div className="font-semibold mb-1">3. Candle merge</div>
           <div>antal candles: <span className="font-mono">{chartData.length}</span></div>
           <div>første ts: {firstC ? new Date(firstC.timestamp).toISOString() : "-"}</div>
@@ -1312,8 +1318,7 @@ const ChartDebugPanel = ({
             {derived.closeTime ? new Date(derived.closeTime).toISOString() : "(åben)"}
           </div>
           <div className="text-muted-foreground mt-1">
-            BE/TS/PL/Effective beregnes pr. candle i buildSeries(). TS reconciliation
-            overskriver kun SIDSTE in-trade candle med trade.trailing_stop hvis side-valid.
+            BE/TS/PL/Aktiv Stop læses kun fra trade-felter. Aktuelle stop-niveauer vises kun på seneste in-trade candle.
           </div>
         </section>
 
@@ -1333,25 +1338,15 @@ const ChartDebugPanel = ({
         <section>
           <div className="font-semibold mb-1">5. Mistanke</div>
           <ul className="space-y-0.5">
-            <li>TS-linje fuldstændig flad: {fmt(tsLooksFlat)}</li>
+            <li>Trailing Stop N: <span className="font-mono">{tsPointCount}</span></li>
+            <li>Aktiv Stop N: <span className="font-mono">{activePointCount}</span></li>
             <li>Aktiv Stop = exit_price (exit-leak): {fmt(effEqualsExit)}</li>
             <li>
               ⚠️ BE vises men break_even_triggered=false: {fmt(beShownButNotTriggered)}
-              {beShownButNotTriggered && (
-                <div className="text-rose-500 ml-3">
-                  → buildSeries() rekonstruerer BE lokalt fra
-                  indicators_snapshot.break_even_atr, IKKE fra DB-flag.
-                </div>
-              )}
             </li>
             <li>
               ⚠️ TS vises men trailing_stop_initial_price=null & trailing_stop=null:{" "}
               {fmt(tsShownButNoInit)}
-              {tsShownButNoInit && (
-                <div className="text-rose-500 ml-3">
-                  → TS rekonstrueret fra ATR + activation-tærskel, ikke fra DB-state.
-                </div>
-              )}
             </li>
           </ul>
         </section>
@@ -1359,13 +1354,7 @@ const ChartDebugPanel = ({
         <section>
           <div className="font-semibold mb-1">6. Konklusion</div>
           <div className="text-muted-foreground">
-            <code>buildSeries()</code> rekonstruerer BE/TS/Peak-Lock pr. candle ud fra{" "}
-            <code>indicators_snapshot</code> (atr, break_even_atr,
-            trailing_stop_atr_multiplier, peak_lock_*) — IKKE ud fra DB-flagene{" "}
-            <code>break_even_triggered</code>, <code>trailing_stop_initial_price</code>{" "}
-            eller <code>peak_lock_activated</code>. Derfor kan chartet vise BE/TS/PL
-            selvom de aldrig blev aktiveret i den faktiske trade. Dette er
-            sandsynligvis rod-årsagen.
+            Chartet bruger kun faktiske trade-felter til stop-linjer. Trailing Stop source: <code>trade.trailing_stop</code>. Aktiv Stop source: <code>trade.trailing_stop</code> hvis den findes, ellers <code>trade.stop_loss</code>. Break-Even shown: {String(flags.hasBreakEven)}. Peak-Lock shown: {String(flags.hasPeakLock)}.
           </div>
         </section>
       </div>
