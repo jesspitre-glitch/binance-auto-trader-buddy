@@ -617,11 +617,14 @@ const ClosedTradeChart = ({ trade }: TradeChartProps) => {
         );
 
         const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${trade.symbol}&interval=${interval}&startTime=${startTime}&endTime=${endTime}&limit=1500`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Failed to fetch klines");
-        const klines = await res.json();
+        const [klinesRes, historyRes] = await Promise.all([
+          fetch(url),
+          fetchExitStopHistory(trade, openTime, closeTime),
+        ]);
+        if (!klinesRes.ok) throw new Error("Failed to fetch klines");
+        const klines = await klinesRes.json();
 
-        const { data, triggers, markers, tsDiagnostic } = buildSeries(trade, klines, openTime);
+        const { data, triggers, markers, tsDiagnostic } = buildSeries(trade, klines, openTime, historyRes);
 
         // Entry marker
         const entryIdx = data.reduce(
