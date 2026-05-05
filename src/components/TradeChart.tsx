@@ -73,6 +73,17 @@ interface TsHistoryDiagnostic {
   activationTs: number | null;
   isReconstructed: boolean;
   ruleDistribution: Record<string, number>;
+  mappedExitStopPoints: number;
+  renderExitStop: boolean;
+  renderMode: string;
+  renderReason: string;
+}
+
+// Egen tidsserie til Exit Stop (uafhængig af candle-rækker)
+interface ExitStopPoint {
+  timestamp: number;
+  exitStop: number;
+  activeExitRule: string;
 }
 
 interface ExitStopHistoryRow {
@@ -174,6 +185,7 @@ const buildSeries = (
   history: ExitStopHistoryRow[] = [],
 ): {
   data: ChartRow[];
+  exitStopSeries: ExitStopPoint[];
   triggers: TriggerLevels;
   markers: ActivationMarkers;
   tsDiagnostic: TsHistoryDiagnostic;
@@ -226,9 +238,7 @@ const buildSeries = (
     const price = parseFloat(k[4]);
     const high = parseFloat(k[2]);
     const low = parseFloat(k[3]);
-
     const isPostExit = timestamp > closeTime;
-
     return {
       timestamp,
       time: new Date(timestamp).toLocaleTimeString("da-DK", {
@@ -250,48 +260,40 @@ const buildSeries = (
   });
 
   const ruleDistribution: Record<string, number> = {};
+  const exitStopSeries: ExitStopPoint[] = [];
 
   if (hasHistorical) {
-    // Step-funktion: for hver candle, find seneste snapshot der er ≤ candle-tidspunkt
-    let hIdx = 0;
-    let activeStop: number | null = null;
-    let activeRule: string | null = null;
-
-    data.forEach((row) => {
-      if (row.timestamp < openTime || row.isPostExit) return;
-
-      while (
-        hIdx < sortedHistory.length &&
-        sortedHistory[hIdx]._ts <= row.timestamp
-      ) {
-        const s = sortedHistory[hIdx];
-        if (s.active_stop != null && isFinite(Number(s.active_stop))) {
-          activeStop = Number(s.active_stop);
-          activeRule = s.active_exit_rule || "NONE";
-        }
-        hIdx++;
-      }
-
-      if (activeStop != null) {
-        const valid =
-          side === "LONG" ? activeStop <= row.high * 1.5 : activeStop >= row.low * 0.5;
-        if (valid) row.exitStop = activeStop;
-        if (activeRule) {
-          ruleDistribution[activeRule] = (ruleDistribution[activeRule] || 0) + 1;
-        }
-      }
+    // Byg uafhængig tidsserie direkte fra historik (egne timestamps)
+    sortedHistory.forEach((s) => {
+      const v = s.active_stop != null ? Number(s.active_stop) : null;
+      if (v == null || !isFinite(v) || v <= 0) return;
+      const rule = s.active_exit_rule || "NONE";
+      exitStopSeries.push({
+        timestamp: s._ts,
+        exitStop: v,
+        activeExitRule: rule,
+      });
+      ruleDistribution[rule] = (ruleDistribution[rule] || 0) + 1;
     });
+
+    // Forlæng med en sidste "nu"-punkt så step-linjen rækker frem til seneste candle
+    const lastCandleTs = data[data.length - 1]?.timestamp;
+    const lastPt = exitStopSeries[exitStopSeries.length - 1];
+    if (lastPt && lastCandleTs && lastCandleTs > lastPt.timestamp) {
+      exitStopSeries.push({
+        timestamp: Math.min(lastCandleTs, closeTime),
+        exitStop: lastPt.exitStop,
+        activeExitRule: lastPt.activeExitRule,
+      });
+    }
   } else if (fallbackEffectiveStop != null) {
-    // Ingen historik → vis kun ÉN flad linje med aktuel værdi
-    data.forEach((row) => {
-      if (row.timestamp >= openTime && !row.isPostExit) {
-        const valid =
-          side === "LONG"
-            ? fallbackEffectiveStop <= row.high * 1.5
-            : fallbackEffectiveStop >= row.low * 0.5;
-        if (valid) row.exitStop = fallbackEffectiveStop;
-      }
-    });
+    // Ingen historik → flad linje fra entry til nu (eller close)
+    const startTs = openTime;
+    const endTs = isFinite(closeTime) ? closeTime : data[data.length - 1]?.timestamp ?? openTime;
+    if (endTs > startTs) {
+      exitStopSeries.push({ timestamp: startTs, exitStop: fallbackEffectiveStop, activeExitRule: "FALLBACK" });
+      exitStopSeries.push({ timestamp: endTs, exitStop: fallbackEffectiveStop, activeExitRule: "FALLBACK" });
+    }
   }
 
   const validForSide = (v: number | null, row: ChartRow): number | null => {
@@ -317,6 +319,14 @@ const buildSeries = (
   const firstHist = sortedHistory[0];
   const lastHist = sortedHistory[sortedHistory.length - 1];
 
+  const renderExitStop = exitStopSeries.length > 0;
+  const renderMode = hasHistorical ? "history-step" : renderExitStop ? "fallback-flat" : "none";
+  const renderReason = renderExitStop
+    ? hasHistorical
+      ? `history.length=${sortedHistory.length}, mapped=${exitStopSeries.length}`
+      : `no history, fallback to current effective stop=${fallbackEffectiveStop}`
+    : `history.length=${sortedHistory.length}, fallbackStop=${fallbackEffectiveStop}`;
+
   const tsDiagnostic: TsHistoryDiagnostic = {
     hasHistorical,
     source: hasHistorical
@@ -336,20 +346,17 @@ const buildSeries = (
     activationTs: null,
     isReconstructed: false,
     ruleDistribution,
+    mappedExitStopPoints: exitStopSeries.length,
+    renderExitStop,
+    renderMode,
+    renderReason,
   };
 
   return {
     data,
-    triggers: {
-      breakEvenTrigger: null,
-      trailingTrigger: null,
-      peakLockTrigger: null,
-    },
-    markers: {
-      breakEvenAt: null,
-      trailingAt: null,
-      peakLockAt: null,
-    },
+    exitStopSeries,
+    triggers: { breakEvenTrigger: null, trailingTrigger: null, peakLockTrigger: null },
+    markers: { breakEvenAt: null, trailingAt: null, peakLockAt: null },
     tsDiagnostic,
   };
 };
@@ -560,6 +567,7 @@ const OpenTradeChart = ({ trade }: TradeChartProps) => {
     peakLockAt: null,
   });
   const [tsDiagnostic, setTsDiagnostic] = useState<TsHistoryDiagnostic | null>(null);
+  const [exitStopSeries, setExitStopSeries] = useState<ExitStopPoint[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -582,7 +590,8 @@ const OpenTradeChart = ({ trade }: TradeChartProps) => {
         if (!klinesRes.ok) throw new Error("Failed to fetch klines");
         const klines = await klinesRes.json();
 
-        const { data, triggers, markers, tsDiagnostic } = buildSeries(trade, klines, openTime, historyRes);
+        const { data, exitStopSeries, triggers, markers, tsDiagnostic } = buildSeries(trade, klines, openTime, historyRes);
+        setExitStopSeries(exitStopSeries);
 
         // Find entry-punkt
         const entryIdx = data.reduce(
@@ -614,6 +623,7 @@ const OpenTradeChart = ({ trade }: TradeChartProps) => {
     <ChartShell
       loading={loading}
       chartData={chartData}
+      exitStopSeries={exitStopSeries}
       trade={trade}
       triggers={triggers}
       markers={markers}
@@ -639,6 +649,7 @@ const ClosedTradeChart = ({ trade }: TradeChartProps) => {
     peakLockAt: null,
   });
   const [tsDiagnostic, setTsDiagnostic] = useState<TsHistoryDiagnostic | null>(null);
+  const [exitStopSeries, setExitStopSeries] = useState<ExitStopPoint[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -665,7 +676,8 @@ const ClosedTradeChart = ({ trade }: TradeChartProps) => {
         if (!klinesRes.ok) throw new Error("Failed to fetch klines");
         const klines = await klinesRes.json();
 
-        const { data, triggers, markers, tsDiagnostic } = buildSeries(trade, klines, openTime, historyRes);
+        const { data, exitStopSeries, triggers, markers, tsDiagnostic } = buildSeries(trade, klines, openTime, historyRes);
+        setExitStopSeries(exitStopSeries);
 
         // Entry marker
         const entryIdx = data.reduce(
@@ -706,6 +718,7 @@ const ClosedTradeChart = ({ trade }: TradeChartProps) => {
     <ChartShell
       loading={loading}
       chartData={chartData}
+      exitStopSeries={exitStopSeries}
       trade={trade}
       triggers={triggers}
       markers={markers}
@@ -721,6 +734,7 @@ const ClosedTradeChart = ({ trade }: TradeChartProps) => {
 interface ChartShellProps {
   loading: boolean;
   chartData: ChartRow[];
+  exitStopSeries: ExitStopPoint[];
   trade: any;
   triggers: TriggerLevels;
   markers: ActivationMarkers;
@@ -731,6 +745,7 @@ interface ChartShellProps {
 const ChartShell = ({
   loading,
   chartData,
+  exitStopSeries,
   trade,
   triggers,
   markers,
@@ -750,12 +765,12 @@ const ChartShell = ({
     if (entryPrice > 0) pool.push(entryPrice);
 
     chartData.forEach((d) => {
-      if (d.exitStop != null) pool.push(d.exitStop);
       if (d.effectiveStop != null) pool.push(d.effectiveStop);
       if (d.trailingStop != null) pool.push(d.trailingStop);
       if (d.breakEven != null) pool.push(d.breakEven);
       if (d.peakLockStop != null) pool.push(d.peakLockStop);
     });
+    exitStopSeries.forEach((p) => { if (isFinite(p.exitStop)) pool.push(p.exitStop); });
 
     // TS / peak fra DB (single value) — sikrer at en aktiv TS altid er i view
     const tsDb = trade.trailing_stop != null ? Number(trade.trailing_stop) : null;
@@ -784,7 +799,7 @@ const ChartShell = ({
     const range = Math.max(max - min, entryPrice * 0.005);
     const padding = Math.max(range * 0.1, entryPrice * 0.003);
     return { yMin: min - padding, yMax: max + padding };
-  }, [chartData, trade, triggers, isClosed]);
+  }, [chartData, exitStopSeries, trade, triggers, isClosed]);
 
   // ---- Vis-flag for triggers (skal være kendt før priceLabels-memo) -------
   const showBeTrigger =
@@ -905,14 +920,14 @@ const ChartShell = ({
   const closeTime = isClosed && trade.closed_at ? new Date(trade.closed_at).getTime() : null;
 
   // ---- Hvilke serier har vi reelt data for? -----------------------------
-  const hasExitStop = chartData.some((d) => d.exitStop != null);
+  const hasExitStop = exitStopSeries.length > 0;
   const hasTrailing = chartData.some((d) => d.trailingStop != null);
   const hasBreakEven = chartData.some((d) => d.breakEven != null);
   const hasPeakLock = chartData.some((d) => d.peakLockStop != null);
   const hasEffective = chartData.some((d) => d.effectiveStop != null);
   const hasInitialSl = isFinite(initialSlPrice) && initialSlPrice > 0;
   const hasPeak = peakPrice != null && isFinite(peakPrice) && peakPrice > 0;
-  const currentExitStop = [...chartData].reverse().find((d) => d.exitStop != null)?.exitStop ?? null;
+  const currentExitStop = exitStopSeries[exitStopSeries.length - 1]?.exitStop ?? null;
   const tsMissingHistory =
     trade.trailing_stop != null &&
     Number(trade.trailing_stop) > 0 &&
@@ -1060,11 +1075,13 @@ const ChartShell = ({
               {hasExitStop && (
                 <Line
                   type="stepAfter"
+                  data={exitStopSeries}
                   dataKey="exitStop"
+                  xAxisId={0}
                   stroke="#f97316"
                   strokeWidth={2.5}
                   strokeDasharray="8 4"
-                  dot={false}
+                  dot={{ r: 2, fill: "#f97316" }}
                   name="🛑 Exit Stop"
                   connectNulls={false}
                   isAnimationActive={false}
@@ -1165,6 +1182,7 @@ const ChartShell = ({
       <ChartDebugPanel
         trade={trade}
         chartData={chartData}
+        exitStopSeries={exitStopSeries}
         triggers={triggers}
         markers={markers}
         tsDiagnostic={tsDiagnostic}
@@ -1181,6 +1199,7 @@ const ChartShell = ({
 const ChartDebugPanel = ({
   trade,
   chartData,
+  exitStopSeries,
   triggers,
   markers,
   tsDiagnostic,
@@ -1189,6 +1208,7 @@ const ChartDebugPanel = ({
 }: {
   trade: any;
   chartData: ChartRow[];
+  exitStopSeries: ExitStopPoint[];
   triggers: TriggerLevels;
   markers: ActivationMarkers;
   tsDiagnostic: TsHistoryDiagnostic | null;
@@ -1252,6 +1272,15 @@ const ChartDebugPanel = ({
 
   const series = [
     summarize("Pris", "klines[].close", chartData.map((d) => d.price), true, "altid"),
+    summarize(
+      "Exit Stop",
+      "exit_stop_history.active_stop",
+      exitStopSeries.map((p) => p.exitStop),
+      flags.hasExitStop,
+      flags.hasExitStop
+        ? `step-linje fra exit_stop_history (N=${exitStopSeries.length})`
+        : "ingen exit_stop_history rækker fundet",
+    ),
     summarize(
       "Entry",
       "trade.entry_price",
@@ -1398,7 +1427,11 @@ const ChartDebugPanel = ({
                       .join(", ")
                   : "-"}
               </span>
-            </div>
+            <div>mapped_exit_stop_points: {fmt(tsDiagnostic?.mappedExitStopPoints ?? 0)}</div>
+            <div>render_exit_stop: {fmt(tsDiagnostic?.renderExitStop ?? false)}</div>
+            <div>render_mode: <span className="font-mono">{tsDiagnostic?.renderMode ?? "-"}</span></div>
+            <div className="sm:col-span-2">render_reason: <span className="font-mono">{tsDiagnostic?.renderReason ?? "-"}</span></div>
+          </div>
           </div>
           <div className="text-muted-foreground mt-1">
             {tsDiagnostic?.hasHistorical
