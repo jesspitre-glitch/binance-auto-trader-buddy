@@ -676,7 +676,8 @@ const ClosedTradeChart = ({ trade }: TradeChartProps) => {
         if (!klinesRes.ok) throw new Error("Failed to fetch klines");
         const klines = await klinesRes.json();
 
-        const { data, triggers, markers, tsDiagnostic } = buildSeries(trade, klines, openTime, historyRes);
+        const { data, exitStopSeries, triggers, markers, tsDiagnostic } = buildSeries(trade, klines, openTime, historyRes);
+        setExitStopSeries(exitStopSeries);
 
         // Entry marker
         const entryIdx = data.reduce(
