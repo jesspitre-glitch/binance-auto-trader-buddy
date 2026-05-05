@@ -765,12 +765,12 @@ const ChartShell = ({
     if (entryPrice > 0) pool.push(entryPrice);
 
     chartData.forEach((d) => {
-      if (d.exitStop != null) pool.push(d.exitStop);
       if (d.effectiveStop != null) pool.push(d.effectiveStop);
       if (d.trailingStop != null) pool.push(d.trailingStop);
       if (d.breakEven != null) pool.push(d.breakEven);
       if (d.peakLockStop != null) pool.push(d.peakLockStop);
     });
+    exitStopSeries.forEach((p) => { if (isFinite(p.exitStop)) pool.push(p.exitStop); });
 
     // TS / peak fra DB (single value) — sikrer at en aktiv TS altid er i view
     const tsDb = trade.trailing_stop != null ? Number(trade.trailing_stop) : null;
