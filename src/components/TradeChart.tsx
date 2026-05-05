@@ -537,6 +537,7 @@ const ClosedTradeChart = ({ trade }: TradeChartProps) => {
     trailingAt: null,
     peakLockAt: null,
   });
+  const [tsDiagnostic, setTsDiagnostic] = useState<TsHistoryDiagnostic | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
