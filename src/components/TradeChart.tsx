@@ -799,7 +799,7 @@ const ChartShell = ({
     const range = Math.max(max - min, entryPrice * 0.005);
     const padding = Math.max(range * 0.1, entryPrice * 0.003);
     return { yMin: min - padding, yMax: max + padding };
-  }, [chartData, trade, triggers, isClosed]);
+  }, [chartData, exitStopSeries, trade, triggers, isClosed]);
 
   // ---- Vis-flag for triggers (skal være kendt før priceLabels-memo) -------
   const showBeTrigger =
