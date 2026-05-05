@@ -1955,6 +1955,45 @@ serve(async (req) => {
         // @ts-ignore - gem audit på position context så vi kan inkludere det i result payload
         position._exitAudit = exitAudit;
 
+        // 🔵 EXIT STOP HISTORY - log snapshot af aktive exit-stops pr. evaluering
+        // Bruges af Price Chart til at tegne en faktisk tidslinje for "Exit Stop"
+        try {
+          const ruleMap: Record<string, string> = {
+            HARD_STOP_LOSS_HIT: 'SL',
+            MAX_SL_AFTER_MFE_HIT: 'SL',
+            BREAK_EVEN_HIT: 'BE',
+            PEAK_LOCK_HIT: 'PEAK_LOCK',
+            TRAILING_STOP_HIT: 'TS',
+          };
+          const sourceMap: Record<string, string> = {
+            HARD_STOP_LOSS_HIT: 'initial_sl',
+            MAX_SL_AFTER_MFE_HIT: 'max_sl_after_mfe',
+            BREAK_EVEN_HIT: 'break_even',
+            PEAK_LOCK_HIT: 'peak_lock',
+            TRAILING_STOP_HIT: 'trailing',
+          };
+          const activeRule = effectiveStopType ? (ruleMap[effectiveStopType] ?? 'NONE') : 'NONE';
+          const sourceLabel = effectiveStopType ? (sourceMap[effectiveStopType] ?? null) : null;
+
+          await supabaseClient.from('exit_stop_history').insert({
+            user_id: position.user_id,
+            position_id: position.id,
+            symbol: position.symbol,
+            side: position.side,
+            price: currentPrice,
+            peak_price: newPeakPrice,
+            active_stop: effectiveStop,
+            trailing_stop: (trailingStopActive && trailingValidThisCycle) ? trailingStop : null,
+            stop_loss: hardStopLoss,
+            break_even_price: breakEvenActivatedState ? breakEvenStop : null,
+            peak_lock_stop: peakLockStop,
+            active_exit_rule: activeRule,
+            source: sourceLabel,
+          });
+        } catch (histErr) {
+          console.error(`⚠️ Failed to insert exit_stop_history for ${position.symbol}:`, histErr);
+        }
+
         if (slHit || beHit || tsHit || peakLockHit || maxSlAfterMfeHit) {
           shouldClose = true;
 
