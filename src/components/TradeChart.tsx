@@ -73,6 +73,17 @@ interface TsHistoryDiagnostic {
   activationTs: number | null;
   isReconstructed: boolean;
   ruleDistribution: Record<string, number>;
+  mappedExitStopPoints: number;
+  renderExitStop: boolean;
+  renderMode: string;
+  renderReason: string;
+}
+
+// Egen tidsserie til Exit Stop (uafhængig af candle-rækker)
+interface ExitStopPoint {
+  timestamp: number;
+  exitStop: number;
+  activeExitRule: string;
 }
 
 interface ExitStopHistoryRow {
