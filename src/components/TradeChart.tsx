@@ -561,7 +561,7 @@ const ClosedTradeChart = ({ trade }: TradeChartProps) => {
         if (!res.ok) throw new Error("Failed to fetch klines");
         const klines = await res.json();
 
-        const { data, triggers, markers } = buildSeries(trade, klines, openTime);
+        const { data, triggers, markers, tsDiagnostic } = buildSeries(trade, klines, openTime);
 
         // Entry marker
         const entryIdx = data.reduce(
@@ -588,6 +588,7 @@ const ClosedTradeChart = ({ trade }: TradeChartProps) => {
         setChartData(data);
         setTriggers(triggers);
         setMarkers(markers);
+        setTsDiagnostic(tsDiagnostic);
       } catch (e) {
         console.error("ClosedTradeChart fetch error:", e);
       } finally {
@@ -604,6 +605,7 @@ const ClosedTradeChart = ({ trade }: TradeChartProps) => {
       trade={trade}
       triggers={triggers}
       markers={markers}
+      tsDiagnostic={tsDiagnostic}
       mode="closed"
     />
   );
