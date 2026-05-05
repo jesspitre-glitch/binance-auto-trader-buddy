@@ -1427,7 +1427,11 @@ const ChartDebugPanel = ({
                       .join(", ")
                   : "-"}
               </span>
-            </div>
+            <div>mapped_exit_stop_points: {fmt(tsDiagnostic?.mappedExitStopPoints ?? 0)}</div>
+            <div>render_exit_stop: {fmt(tsDiagnostic?.renderExitStop ?? false)}</div>
+            <div>render_mode: <span className="font-mono">{tsDiagnostic?.renderMode ?? "-"}</span></div>
+            <div className="sm:col-span-2">render_reason: <span className="font-mono">{tsDiagnostic?.renderReason ?? "-"}</span></div>
+          </div>
           </div>
           <div className="text-muted-foreground mt-1">
             {tsDiagnostic?.hasHistorical
