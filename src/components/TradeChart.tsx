@@ -1208,11 +1208,8 @@ const ChartDebugPanel = ({
     return invalid;
   };
 
-  const tsLooksFlat = (() => {
-    const nn = tsVals.filter((v): v is number => v != null);
-    if (nn.length < 2) return false;
-    return Math.min(...nn) === Math.max(...nn);
-  })();
+  const tsPointCount = tsVals.filter((v): v is number => v != null).length;
+  const activePointCount = effVals.filter((v): v is number => v != null).length;
   const effEqualsExit =
     derived.exitPrice != null &&
     effVals.some((v) => v != null && Math.abs(v - (derived.exitPrice as number)) < 1e-12);
@@ -1228,16 +1225,16 @@ const ChartDebugPanel = ({
 
   return (
     <details
-      className="mt-3 border border-amber-500/40 bg-amber-500/5 rounded-md text-[11px]"
+      className="mt-3 w-full max-w-full min-w-0 overflow-hidden rounded-md border border-amber-500/40 bg-amber-500/5 text-[11px]"
       open
     >
       <summary className="cursor-pointer px-3 py-2 font-semibold text-amber-600 dark:text-amber-400">
         🐞 Chart Debug Panel (midlertidig)
       </summary>
-      <div className="p-3 space-y-4">
-        <section>
+      <div className="min-w-0 max-w-full space-y-4 overflow-hidden p-3">
+        <section className="min-w-0">
           <div className="font-semibold mb-1">1. Trade raw values</div>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+          <div className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-0.5 sm:grid-cols-2 [&>div]:min-w-0 [&>div]:break-all">
             <div>side: {fmt(trade.side)}</div>
             <div>status: {fmt(trade.status)}</div>
             <div>entry_price: {fmt(trade.entry_price)}</div>
@@ -1264,10 +1261,10 @@ const ChartDebugPanel = ({
           )}
         </section>
 
-        <section>
+        <section className="min-w-0">
           <div className="font-semibold mb-1">2. Series summary</div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[10px] border-collapse">
+          <div className="w-full max-w-full overflow-x-auto">
+            <table className="min-w-[760px] text-[10px] border-collapse">
               <thead>
                 <tr className="text-left border-b border-border/50">
                   <th className="pr-2 py-1">Serie</th>
@@ -1285,7 +1282,7 @@ const ChartDebugPanel = ({
                 {series.map((s) => (
                   <tr key={s.name} className="border-b border-border/20 align-top">
                     <td className="pr-2 py-0.5 whitespace-nowrap">{s.name}</td>
-                    <td className="pr-2 text-muted-foreground">{s.sourceField}</td>
+                    <td className="pr-2 text-muted-foreground max-w-[220px] whitespace-normal">{s.sourceField}</td>
                     <td className="pr-2 font-mono">{s.count}</td>
                     <td className="pr-2 font-mono">
                       {s.first != null ? formatPriceAdaptive(s.first) : "-"}
@@ -1302,7 +1299,7 @@ const ChartDebugPanel = ({
                     <td className={s.rendered ? "text-emerald-500" : "text-rose-500"}>
                       {String(s.rendered)}
                     </td>
-                    <td className="text-muted-foreground">{s.reason}</td>
+                    <td className="text-muted-foreground max-w-[220px] whitespace-normal">{s.reason}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1310,7 +1307,7 @@ const ChartDebugPanel = ({
           </div>
         </section>
 
-        <section>
+        <section className="min-w-0">
           <div className="font-semibold mb-1">3. Candle merge</div>
           <div>antal candles: <span className="font-mono">{chartData.length}</span></div>
           <div>første ts: {firstC ? new Date(firstC.timestamp).toISOString() : "-"}</div>
@@ -1321,8 +1318,7 @@ const ChartDebugPanel = ({
             {derived.closeTime ? new Date(derived.closeTime).toISOString() : "(åben)"}
           </div>
           <div className="text-muted-foreground mt-1">
-            BE/TS/PL/Effective beregnes pr. candle i buildSeries(). TS reconciliation
-            overskriver kun SIDSTE in-trade candle med trade.trailing_stop hvis side-valid.
+            BE/TS/PL/Aktiv Stop læses kun fra trade-felter. Aktuelle stop-niveauer vises kun på seneste in-trade candle.
           </div>
         </section>
 
@@ -1342,25 +1338,15 @@ const ChartDebugPanel = ({
         <section>
           <div className="font-semibold mb-1">5. Mistanke</div>
           <ul className="space-y-0.5">
-            <li>TS-linje fuldstændig flad: {fmt(tsLooksFlat)}</li>
+            <li>Trailing Stop N: <span className="font-mono">{tsPointCount}</span></li>
+            <li>Aktiv Stop N: <span className="font-mono">{activePointCount}</span></li>
             <li>Aktiv Stop = exit_price (exit-leak): {fmt(effEqualsExit)}</li>
             <li>
               ⚠️ BE vises men break_even_triggered=false: {fmt(beShownButNotTriggered)}
-              {beShownButNotTriggered && (
-                <div className="text-rose-500 ml-3">
-                  → buildSeries() rekonstruerer BE lokalt fra
-                  indicators_snapshot.break_even_atr, IKKE fra DB-flag.
-                </div>
-              )}
             </li>
             <li>
               ⚠️ TS vises men trailing_stop_initial_price=null & trailing_stop=null:{" "}
               {fmt(tsShownButNoInit)}
-              {tsShownButNoInit && (
-                <div className="text-rose-500 ml-3">
-                  → TS rekonstrueret fra ATR + activation-tærskel, ikke fra DB-state.
-                </div>
-              )}
             </li>
           </ul>
         </section>
@@ -1368,13 +1354,7 @@ const ChartDebugPanel = ({
         <section>
           <div className="font-semibold mb-1">6. Konklusion</div>
           <div className="text-muted-foreground">
-            <code>buildSeries()</code> rekonstruerer BE/TS/Peak-Lock pr. candle ud fra{" "}
-            <code>indicators_snapshot</code> (atr, break_even_atr,
-            trailing_stop_atr_multiplier, peak_lock_*) — IKKE ud fra DB-flagene{" "}
-            <code>break_even_triggered</code>, <code>trailing_stop_initial_price</code>{" "}
-            eller <code>peak_lock_activated</code>. Derfor kan chartet vise BE/TS/PL
-            selvom de aldrig blev aktiveret i den faktiske trade. Dette er
-            sandsynligvis rod-årsagen.
+            Chartet bruger kun faktiske trade-felter til stop-linjer. Trailing Stop source: <code>trade.trailing_stop</code>. Aktiv Stop source: <code>trade.trailing_stop</code> hvis den findes, ellers <code>trade.stop_loss</code>. Break-Even shown: {String(flags.hasBreakEven)}. Peak-Lock shown: {String(flags.hasPeakLock)}.
           </div>
         </section>
       </div>
