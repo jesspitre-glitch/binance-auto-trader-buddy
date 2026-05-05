@@ -753,12 +753,12 @@ const ChartShell = ({
     let pool: number[] = [...priceValues];
     if (entryPrice > 0) pool.push(entryPrice);
 
-    // EffectiveStop kun hvis tæt på prisen (max 3x rangen)
+    // Stop-linjer skal ALTID indgå i y-domain så de ikke ryger udenfor grafen.
     if (priceValues.length > 0) {
       const pMin = Math.min(...priceValues);
       const pMax = Math.max(...priceValues);
       const range = Math.max(pMax - pMin, entryPrice * 0.005);
-      const maxDist = range * 3;
+      const maxDist = range * 5; // mere generøs for at undgå at klippe TS
 
       chartData.forEach((d) => {
         if (d.effectiveStop != null && Math.abs(d.effectiveStop - entryPrice) <= maxDist) {
@@ -767,8 +767,16 @@ const ChartShell = ({
         if (d.trailingStop != null && Math.abs(d.trailingStop - entryPrice) <= maxDist) {
           pool.push(d.trailingStop);
         }
+        if (d.breakEven != null) pool.push(d.breakEven);
+        if (d.peakLockStop != null) pool.push(d.peakLockStop);
       });
     }
+
+    // TS / peak fra DB (single value) — sikrer at en aktiv TS altid er i view
+    const tsDb = trade.trailing_stop != null ? Number(trade.trailing_stop) : null;
+    if (tsDb != null && isFinite(tsDb) && tsDb > 0) pool.push(tsDb);
+    const pkDb = trade.peak_price != null ? Number(trade.peak_price) : null;
+    if (pkDb != null && isFinite(pkDb) && pkDb > 0) pool.push(pkDb);
 
     // Stop loss og exit hvis inden for 10%
     const stopLoss = Number(trade.stop_loss);
