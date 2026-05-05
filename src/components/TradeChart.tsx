@@ -762,28 +762,48 @@ const ChartShell = ({
     chartSvgWidth: number;
     bodyScrollWidth: number;
     hasHorizontalOverflow: boolean;
+    plotAreaLeft: number;
+    plotAreaRight: number;
+    yAxisWidth: number;
+    clippedRight: boolean;
   } | null>(null);
 
   useEffect(() => {
     const update = () => {
       const vw = window.innerWidth;
       const cardW = wrapperRef.current?.getBoundingClientRect().width ?? 0;
-      const svg = wrapperRef.current?.querySelector("svg.recharts-surface");
-      const svgW = (svg as SVGElement | null)?.getBoundingClientRect().width ?? 0;
+      const svg = wrapperRef.current?.querySelector("svg.recharts-surface") as SVGElement | null;
+      const svgRect = svg?.getBoundingClientRect();
+      const svgW = svgRect?.width ?? 0;
       const bodyW = document.documentElement.scrollWidth;
+      // Plot area = first cartesian grid rect
+      const gridRect = wrapperRef.current
+        ?.querySelector(".recharts-cartesian-grid rect")
+        ?.getBoundingClientRect();
+      const plotLeft = gridRect && svgRect ? Math.round(gridRect.left - svgRect.left) : 0;
+      const plotRight = gridRect && svgRect ? Math.round(svgRect.right - gridRect.right) : 0;
+      const yAxisEl = wrapperRef.current?.querySelector(".recharts-yAxis");
+      const yAxisW = yAxisEl ? Math.round((yAxisEl as SVGGraphicsElement).getBoundingClientRect().width) : 0;
+      const clippedRight = svgRect ? svgRect.right > (wrapperRef.current?.getBoundingClientRect().right ?? 0) + 1 : false;
       setLayoutDebug({
         viewportWidth: vw,
         chartCardWidth: Math.round(cardW),
         chartSvgWidth: Math.round(svgW),
         bodyScrollWidth: bodyW,
         hasHorizontalOverflow: bodyW > vw,
+        plotAreaLeft: plotLeft,
+        plotAreaRight: plotRight,
+        yAxisWidth: yAxisW,
+        clippedRight,
       });
     };
     update();
     const t = setTimeout(update, 250);
+    const t2 = setTimeout(update, 800);
     window.addEventListener("resize", update);
     return () => {
       clearTimeout(t);
+      clearTimeout(t2);
       window.removeEventListener("resize", update);
     };
   });
@@ -989,6 +1009,23 @@ const ChartShell = ({
       minute: "2-digit",
       timeZone: "UTC",
     });
+  // Mobil: kun dag.måned (fx "05.05") for at spare bredde
+  const fmtDateShort = (ts: number) => {
+    const d = new Date(ts);
+    return `${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  };
+  // Mobil: kompakt prisformat — max ~6 tegn
+  const formatPriceCompact = (v: number | null | undefined): string => {
+    if (v == null || !isFinite(Number(v))) return "-";
+    const p = Number(v);
+    const abs = Math.abs(p);
+    if (abs >= 1000) return p.toFixed(0);
+    if (abs >= 100) return p.toFixed(1);
+    if (abs >= 1) return p.toFixed(2);
+    if (abs >= 0.01) return p.toFixed(4);
+    if (abs >= 0.0001) return p.toFixed(5);
+    return p.toPrecision(3);
+  };
 
   // ---- Custom tooltip ---------------------------------------------------
   const renderTooltip = ({ active, payload, label }: any) => {
@@ -1053,8 +1090,8 @@ const ChartShell = ({
       {/* Mobil-venligt: fuld bredde, aldrig vandret scroll */}
       <div
         ref={wrapperRef}
-        className="h-[360px] w-full max-w-full min-w-0 overflow-hidden sm:h-[380px]"
-        style={{ maxWidth: "100vw" }}
+        className="h-[340px] w-full max-w-full min-w-0 overflow-hidden sm:h-[380px]"
+        style={{ maxWidth: "100%", paddingLeft: isMobile ? 4 : 0, paddingRight: isMobile ? 4 : 0 }}
       >
         <ResponsiveContainer width="100%" height="100%" debounce={1}>
 
@@ -1062,7 +1099,7 @@ const ChartShell = ({
               data={chartData}
               margin={
                 isMobile
-                  ? { top: 12, right: 6, left: 0, bottom: 20 }
+                  ? { top: 12, right: 8, left: 0, bottom: 24 }
                   : { top: 16, right: 12, left: 4, bottom: 24 }
               }
             >
@@ -1073,20 +1110,24 @@ const ChartShell = ({
                 scale="time"
                 domain={["dataMin", "dataMax"]}
                 ticks={isMobile ? (xTicks?.length ? [xTicks[0], xTicks[xTicks.length - 1]] : undefined) : xTicks}
-                tick={{ fontSize: 9 }}
-                tickFormatter={fmtTimeShort}
-                minTickGap={isMobile ? 80 : 40}
+                tick={{ fontSize: isMobile ? 9 : 10 }}
+                tickFormatter={isMobile ? fmtDateShort : fmtTimeShort}
+                minTickGap={isMobile ? 100 : 40}
                 interval="preserveStartEnd"
+                height={isMobile ? 18 : 24}
               />
               <YAxis
                 domain={[yMin, yMax]}
-                tick={{ fontSize: 9 }}
-                tickFormatter={(v) => formatPriceAdaptive(v)}
-                width={isMobile ? 40 : 64}
+                tick={{ fontSize: isMobile ? 9 : 10 }}
+                tickFormatter={(v) => (isMobile ? formatPriceCompact(v) : formatPriceAdaptive(v))}
+                width={isMobile ? 36 : 64}
+                tickCount={isMobile ? 4 : 6}
               />
               <Tooltip
                 content={renderTooltip}
-                wrapperStyle={{ maxWidth: "calc(100vw - 24px)", zIndex: 50 }}
+                wrapperStyle={{ maxWidth: isMobile ? 220 : 320, zIndex: 50, pointerEvents: "none" }}
+                allowEscapeViewBox={{ x: false, y: false }}
+                position={isMobile ? undefined : undefined}
               />
               <Legend
                 wrapperStyle={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}
@@ -1225,9 +1266,12 @@ const ChartShell = ({
       </div>
 
       {layoutDebug && (
-        <div className="rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground">
-          📐 Layout: vw={layoutDebug.viewportWidth}px · card={layoutDebug.chartCardWidth}px · svg=
-          {layoutDebug.chartSvgWidth}px · bodyScrollW={layoutDebug.bodyScrollWidth}px ·{" "}
+        <div className="rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground break-all">
+          📐 Layout: vw={layoutDebug.viewportWidth} · card={layoutDebug.chartCardWidth} · svg={layoutDebug.chartSvgWidth} · bodyW={layoutDebug.bodyScrollWidth} · plotL={layoutDebug.plotAreaLeft} · plotR={layoutDebug.plotAreaRight} · yAxisW={layoutDebug.yAxisWidth} ·{" "}
+          <span className={layoutDebug.clippedRight ? "text-destructive font-semibold" : "text-profit"}>
+            clippedRight={String(layoutDebug.clippedRight)}
+          </span>{" "}
+          ·{" "}
           <span className={layoutDebug.hasHorizontalOverflow ? "text-destructive font-semibold" : "text-profit"}>
             overflow={String(layoutDebug.hasHorizontalOverflow)}
           </span>
