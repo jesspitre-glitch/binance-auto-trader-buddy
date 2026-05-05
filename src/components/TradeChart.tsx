@@ -1379,20 +1379,31 @@ const ChartDebugPanel = ({
         </section>
 
         <section className="min-w-0">
-          <div className="font-semibold mb-1">1b. TS-historik diagnose</div>
+          <div className="font-semibold mb-1">1b. Exit Stop historik diagnose</div>
           <div className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-0.5 sm:grid-cols-2 [&>div]:min-w-0 [&>div]:break-all">
-            <div>Har historisk TS-data: {fmt(tsDiagnostic?.hasHistorical ?? false)}</div>
-            <div>Source for TS timeline: <span className="font-mono">{tsDiagnostic?.source ?? "-"}</span></div>
-            <div>Antal TS-punkter: {fmt(tsDiagnostic?.pointCount ?? 0)}</div>
-            <div>TS rekonstrueret: {fmt(tsDiagnostic?.isReconstructed ?? false)}</div>
-            <div>Første TS timestamp: <span className="font-mono">{tsDiagnostic?.firstTs ? new Date(tsDiagnostic.firstTs).toISOString() : "-"}</span></div>
-            <div>Første TS value: {fmt(tsDiagnostic?.firstValue ?? null)}</div>
-            <div>Sidste TS timestamp: <span className="font-mono">{tsDiagnostic?.lastTs ? new Date(tsDiagnostic.lastTs).toISOString() : "-"}</span></div>
-            <div>Sidste TS value: {fmt(tsDiagnostic?.lastValue ?? null)}</div>
-            <div>TS activation timestamp: <span className="font-mono">{tsDiagnostic?.activationTs ? new Date(tsDiagnostic.activationTs).toISOString() : "(ikke logget i DB)"}</span></div>
+            <div>Har historik: {fmt(tsDiagnostic?.hasHistorical ?? false)}</div>
+            <div>Source: <span className="font-mono">{tsDiagnostic?.source ?? "-"}</span></div>
+            <div>Antal datapunkter: {fmt(tsDiagnostic?.pointCount ?? 0)}</div>
+            <div>Rekonstrueret: {fmt(tsDiagnostic?.isReconstructed ?? false)}</div>
+            <div>Første timestamp: <span className="font-mono">{tsDiagnostic?.firstTs ? new Date(tsDiagnostic.firstTs).toISOString() : "-"}</span></div>
+            <div>Første active_stop: {fmt(tsDiagnostic?.firstValue ?? null)}</div>
+            <div>Sidste timestamp: <span className="font-mono">{tsDiagnostic?.lastTs ? new Date(tsDiagnostic.lastTs).toISOString() : "-"}</span></div>
+            <div>Sidste active_stop: {fmt(tsDiagnostic?.lastValue ?? null)}</div>
+            <div className="sm:col-span-2">
+              active_exit_rule fordeling:{" "}
+              <span className="font-mono">
+                {tsDiagnostic?.ruleDistribution && Object.keys(tsDiagnostic.ruleDistribution).length > 0
+                  ? Object.entries(tsDiagnostic.ruleDistribution)
+                      .map(([k, v]) => `${k}=${v}`)
+                      .join(", ")
+                  : "-"}
+              </span>
+            </div>
           </div>
           <div className="text-muted-foreground mt-1">
-            Der findes ingen TS-historik tabel (trailing_stop_history / exit_model_audit / position_snapshots). Kun current trade.trailing_stop. Exit Stop tegnes derfor som flad linje over in-trade vinduet.
+            {tsDiagnostic?.hasHistorical
+              ? "Exit Stop tegnes som step-funktion baseret på exit_stop_history (faktisk logget pr. evaluering)."
+              : "Ingen historik fundet — Exit Stop tegnes som flad linje med aktuel værdi (kun nye trades får historik)."}
           </div>
         </section>
         <section className="min-w-0">
