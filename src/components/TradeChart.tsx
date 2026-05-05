@@ -129,6 +129,7 @@ const buildSeries = (
   trade: any,
   klines: any[],
   openTime: number,
+  history: ExitStopHistoryRow[] = [],
 ): {
   data: ChartRow[];
   triggers: TriggerLevels;
@@ -142,32 +143,37 @@ const buildSeries = (
     return value != null && isFinite(n) && n > 0 ? n : null;
   };
 
-  // ---- KUN FAKTISKE TRADE-VÆRDIER ----------------------------------------
-  const stopLossDb = toPositiveNumber(trade.stop_loss);
+  // ---- Sortér historik efter tid (UTC) -----------------------------------
+  const sortedHistory = [...(history || [])]
+    .filter((h) => h && h.recorded_at)
+    .map((h) => ({ ...h, _ts: new Date(h.recorded_at).getTime() }))
+    .sort((a, b) => a._ts - b._ts);
 
+  const hasHistorical = sortedHistory.length > 0;
+
+  // Fallback: aktuelle DB-værdier (kun hvis historik mangler)
+  const stopLossDb = toPositiveNumber(trade.stop_loss);
+  const trailingStopDb = toPositiveNumber(trade.trailing_stop);
   const breakEvenTriggered = trade.break_even_triggered === true;
   const breakEvenAtPrice =
     breakEvenTriggered ? toPositiveNumber(trade.break_even_at_price) : null;
-
-  const trailingStopDb = toPositiveNumber(trade.trailing_stop);
-
   const peakLockActivated = trade.peak_lock_activated === true;
   const peakLockStopPrice =
     peakLockActivated ? toPositiveNumber(trade.peak_lock_stop_price) : null;
 
-  // Aktiv Stop = mest beskyttende DB-værdi (LONG: max, SHORT: min)
-  const stopCandidates = [
+  const fallbackStopCandidates = [
     stopLossDb,
     breakEvenAtPrice,
     trailingStopDb,
     peakLockStopPrice,
   ].filter((v): v is number => v != null);
 
-  let effectiveStopDb: number | null = null;
-  if (stopCandidates.length > 0) {
-    effectiveStopDb =
-      side === "LONG" ? Math.max(...stopCandidates) : Math.min(...stopCandidates);
-  }
+  const fallbackEffectiveStop: number | null =
+    fallbackStopCandidates.length > 0
+      ? side === "LONG"
+        ? Math.max(...fallbackStopCandidates)
+        : Math.min(...fallbackStopCandidates)
+      : null;
 
   const closeTime = trade.closed_at
     ? new Date(trade.closed_at).getTime()
@@ -201,6 +207,51 @@ const buildSeries = (
     };
   });
 
+  const ruleDistribution: Record<string, number> = {};
+
+  if (hasHistorical) {
+    // Step-funktion: for hver candle, find seneste snapshot der er ≤ candle-tidspunkt
+    let hIdx = 0;
+    let activeStop: number | null = null;
+    let activeRule: string | null = null;
+
+    data.forEach((row) => {
+      if (row.timestamp < openTime || row.isPostExit) return;
+
+      while (
+        hIdx < sortedHistory.length &&
+        sortedHistory[hIdx]._ts <= row.timestamp
+      ) {
+        const s = sortedHistory[hIdx];
+        if (s.active_stop != null && isFinite(Number(s.active_stop))) {
+          activeStop = Number(s.active_stop);
+          activeRule = s.active_exit_rule || "NONE";
+        }
+        hIdx++;
+      }
+
+      if (activeStop != null) {
+        const valid =
+          side === "LONG" ? activeStop <= row.high * 1.5 : activeStop >= row.low * 0.5;
+        if (valid) row.exitStop = activeStop;
+        if (activeRule) {
+          ruleDistribution[activeRule] = (ruleDistribution[activeRule] || 0) + 1;
+        }
+      }
+    });
+  } else if (fallbackEffectiveStop != null) {
+    // Ingen historik → vis kun ÉN flad linje med aktuel værdi
+    data.forEach((row) => {
+      if (row.timestamp >= openTime && !row.isPostExit) {
+        const valid =
+          side === "LONG"
+            ? fallbackEffectiveStop <= row.high * 1.5
+            : fallbackEffectiveStop >= row.low * 0.5;
+        if (valid) row.exitStop = fallbackEffectiveStop;
+      }
+    });
+  }
+
   const validForSide = (v: number | null, row: ChartRow): number | null => {
     if (v == null || !isFinite(v) || v <= 0) return null;
     if (side === "LONG" && v > row.high) return null;
@@ -208,48 +259,41 @@ const buildSeries = (
     return v;
   };
 
-  // Tegn exitStop som FLAD linje over hele in-trade-vinduet (ingen rekonstruktion).
-  // Dette repræsenterer "hvad ville lukke handlen lige nu" — den eneste sandhed vi har.
-  if (effectiveStopDb != null) {
-    data.forEach((row) => {
-      if (row.timestamp >= openTime && !row.isPostExit) {
-        // Side-validering: stop må ikke ligge på "forkert side" af candle
-        // (LONG: stop > high → ugyldig; SHORT: stop < low → ugyldig).
-        // Vi tillader stadig at vise den hvis den er korrekt placeret ift. close.
-        const valid =
-          side === "LONG" ? effectiveStopDb <= row.high * 1.5 : effectiveStopDb >= row.low * 0.5;
-        if (valid) row.exitStop = effectiveStopDb;
-      }
-    });
-  }
-
   const latestInTradeIndex = data.reduce((latest, row, idx) => {
     if (row.timestamp < openTime || row.isPostExit) return latest;
     return idx;
   }, -1);
 
-  if (latestInTradeIndex >= 0) {
+  if (latestInTradeIndex >= 0 && !hasHistorical) {
     const row = data[latestInTradeIndex];
     row.trailingStop = validForSide(trailingStopDb, row);
-    row.effectiveStop = validForSide(effectiveStopDb, row);
+    row.effectiveStop = validForSide(fallbackEffectiveStop, row);
     row.breakEven = validForSide(breakEvenAtPrice, row);
     row.peakLockStop = validForSide(peakLockStopPrice, row);
   }
 
-  // ---- TS-historik diagnose ---------------------------------------------
-  // Vi har INGEN historisk TS-tabel i DB. Kun current value på trade.trailing_stop.
+  const firstHist = sortedHistory[0];
+  const lastHist = sortedHistory[sortedHistory.length - 1];
+
   const tsDiagnostic: TsHistoryDiagnostic = {
-    hasHistorical: false,
-    source: trailingStopDb != null
-      ? "trade.trailing_stop (kun current value — ingen historik i DB)"
-      : "ingen TS-data tilgængelig",
-    pointCount: trailingStopDb != null ? 1 : 0,
-    firstTs: trailingStopDb != null && latestInTradeIndex >= 0 ? data[latestInTradeIndex].timestamp : null,
-    firstValue: trailingStopDb,
-    lastTs: trailingStopDb != null && latestInTradeIndex >= 0 ? data[latestInTradeIndex].timestamp : null,
-    lastValue: trailingStopDb,
-    activationTs: null, // ikke logget i DB
-    isReconstructed: false, // vi rekonstruerer IKKE — vi viser kun current
+    hasHistorical,
+    source: hasHistorical
+      ? "exit_stop_history (faktisk logget pr. evaluering)"
+      : trailingStopDb != null || stopLossDb != null
+        ? "fallback: trade current values (ingen historik fundet)"
+        : "ingen exit-stop data tilgængelig",
+    pointCount: hasHistorical
+      ? sortedHistory.length
+      : fallbackEffectiveStop != null
+        ? 1
+        : 0,
+    firstTs: firstHist?._ts ?? null,
+    firstValue: firstHist?.active_stop != null ? Number(firstHist.active_stop) : null,
+    lastTs: lastHist?._ts ?? null,
+    lastValue: lastHist?.active_stop != null ? Number(lastHist.active_stop) : null,
+    activationTs: null,
+    isReconstructed: false,
+    ruleDistribution,
   };
 
   return {
