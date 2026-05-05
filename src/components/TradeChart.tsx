@@ -1199,6 +1199,7 @@ const ChartShell = ({
 const ChartDebugPanel = ({
   trade,
   chartData,
+  exitStopSeries,
   triggers,
   markers,
   tsDiagnostic,
@@ -1207,6 +1208,7 @@ const ChartDebugPanel = ({
 }: {
   trade: any;
   chartData: ChartRow[];
+  exitStopSeries: ExitStopPoint[];
   triggers: TriggerLevels;
   markers: ActivationMarkers;
   tsDiagnostic: TsHistoryDiagnostic | null;
