@@ -754,6 +754,39 @@ const ChartShell = ({
   mode,
 }: ChartShellProps) => {
   const isClosed = mode === "closed";
+  const isMobile = useIsMobile();
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [layoutDebug, setLayoutDebug] = useState<{
+    viewportWidth: number;
+    chartCardWidth: number;
+    chartSvgWidth: number;
+    bodyScrollWidth: number;
+    hasHorizontalOverflow: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    const update = () => {
+      const vw = window.innerWidth;
+      const cardW = wrapperRef.current?.getBoundingClientRect().width ?? 0;
+      const svg = wrapperRef.current?.querySelector("svg.recharts-surface");
+      const svgW = (svg as SVGElement | null)?.getBoundingClientRect().width ?? 0;
+      const bodyW = document.documentElement.scrollWidth;
+      setLayoutDebug({
+        viewportWidth: vw,
+        chartCardWidth: Math.round(cardW),
+        chartSvgWidth: Math.round(svgW),
+        bodyScrollWidth: bodyW,
+        hasHorizontalOverflow: bodyW > vw,
+      });
+    };
+    update();
+    const t = setTimeout(update, 250);
+    window.addEventListener("resize", update);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("resize", update);
+    };
+  });
 
   // ---- Y-akse range -------------------------------------------------------
   const { yMin, yMax } = useMemo(() => {
