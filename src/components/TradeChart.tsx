@@ -282,6 +282,16 @@ const buildSeries = (
       }
     }
 
+    // Side-validering: stop-linjer må aldrig vises på den forkerte side af
+    // candlen. LONG-stop skal ligge ≤ high; SHORT-stop skal ligge ≥ low.
+    // Hvis værdien er ugyldig, springes den over for netop denne candle.
+    const validForSide = (v: number | null): number | null => {
+      if (v == null || !isFinite(v) || v <= 0) return null;
+      if (side === "LONG" && v > high) return null;
+      if (side === "SHORT" && v < low) return null;
+      return v;
+    };
+
     return {
       timestamp,
       time: new Date(timestamp).toLocaleTimeString("da-DK", {
@@ -291,10 +301,12 @@ const buildSeries = (
       price,
       high,
       low,
-      effectiveStop,
-      trailingStop,
-      breakEven: !isPostExit && breakEvenActivated ? entryPrice : null,
-      peakLockStop: !isPostExit && peakLockActivated ? peakLockStopValue : null,
+      effectiveStop: validForSide(effectiveStop),
+      trailingStop: validForSide(trailingStop),
+      breakEven:
+        !isPostExit && breakEvenActivated ? validForSide(entryPrice) : null,
+      peakLockStop:
+        !isPostExit && peakLockActivated ? validForSide(peakLockStopValue) : null,
       entryMarker: null,
       exitMarker: null,
       isPostExit,
@@ -314,12 +326,20 @@ const buildSeries = (
   if (lastInTradeIdx >= 0) {
     const last = data[lastInTradeIdx];
     if (trailingStopDb != null && isFinite(trailingStopDb) && trailingStopDb > 0) {
-      last.trailingStop = trailingStopDb;
-      const initSl = isFinite(stopLoss) && stopLoss > 0 ? stopLoss : entryPrice;
-      last.effectiveStop =
-        side === "LONG"
-          ? Math.max(initSl, trailingStopDb)
-          : Math.min(initSl, trailingStopDb);
+      // Side-validering også på reconciliation: LONG-stop må ikke ligge over high,
+      // SHORT-stop må ikke ligge under low på samme candle.
+      const sideOk =
+        side === "LONG" ? trailingStopDb <= last.high : trailingStopDb >= last.low;
+      if (sideOk) {
+        last.trailingStop = trailingStopDb;
+        const initSl = isFinite(stopLoss) && stopLoss > 0 ? stopLoss : entryPrice;
+        const eff =
+          side === "LONG"
+            ? Math.max(initSl, trailingStopDb)
+            : Math.min(initSl, trailingStopDb);
+        const effOk = side === "LONG" ? eff <= last.high : eff >= last.low;
+        if (effOk) last.effectiveStop = eff;
+      }
     }
   }
 
