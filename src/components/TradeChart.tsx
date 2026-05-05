@@ -1075,11 +1075,13 @@ const ChartShell = ({
               {hasExitStop && (
                 <Line
                   type="stepAfter"
+                  data={exitStopSeries}
                   dataKey="exitStop"
+                  xAxisId={0}
                   stroke="#f97316"
                   strokeWidth={2.5}
                   strokeDasharray="8 4"
-                  dot={false}
+                  dot={{ r: 2, fill: "#f97316" }}
                   name="🛑 Exit Stop"
                   connectNulls={false}
                   isAnimationActive={false}
