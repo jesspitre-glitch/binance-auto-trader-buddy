@@ -920,14 +920,14 @@ const ChartShell = ({
   const closeTime = isClosed && trade.closed_at ? new Date(trade.closed_at).getTime() : null;
 
   // ---- Hvilke serier har vi reelt data for? -----------------------------
-  const hasExitStop = chartData.some((d) => d.exitStop != null);
+  const hasExitStop = exitStopSeries.length > 0;
   const hasTrailing = chartData.some((d) => d.trailingStop != null);
   const hasBreakEven = chartData.some((d) => d.breakEven != null);
   const hasPeakLock = chartData.some((d) => d.peakLockStop != null);
   const hasEffective = chartData.some((d) => d.effectiveStop != null);
   const hasInitialSl = isFinite(initialSlPrice) && initialSlPrice > 0;
   const hasPeak = peakPrice != null && isFinite(peakPrice) && peakPrice > 0;
-  const currentExitStop = [...chartData].reverse().find((d) => d.exitStop != null)?.exitStop ?? null;
+  const currentExitStop = exitStopSeries[exitStopSeries.length - 1]?.exitStop ?? null;
   const tsMissingHistory =
     trade.trailing_stop != null &&
     Number(trade.trailing_stop) > 0 &&
