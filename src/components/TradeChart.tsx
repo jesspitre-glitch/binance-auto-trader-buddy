@@ -121,6 +121,7 @@ const buildSeries = (
   data: ChartRow[];
   triggers: TriggerLevels;
   markers: ActivationMarkers;
+  tsDiagnostic: TsHistoryDiagnostic;
 } => {
   const side = trade.side as "LONG" | "SHORT";
 
@@ -130,22 +131,31 @@ const buildSeries = (
   };
 
   // ---- KUN FAKTISKE TRADE-VÆRDIER ----------------------------------------
-  const stopLossDb =
-    toPositiveNumber(trade.stop_loss);
+  const stopLossDb = toPositiveNumber(trade.stop_loss);
 
   const breakEvenTriggered = trade.break_even_triggered === true;
   const breakEvenAtPrice =
     breakEvenTriggered ? toPositiveNumber(trade.break_even_at_price) : null;
 
-  const trailingStopDb =
-    toPositiveNumber(trade.trailing_stop);
+  const trailingStopDb = toPositiveNumber(trade.trailing_stop);
 
   const peakLockActivated = trade.peak_lock_activated === true;
   const peakLockStopPrice =
     peakLockActivated ? toPositiveNumber(trade.peak_lock_stop_price) : null;
 
-  // Aktiv Stop er kun den aktuelle trade-værdi: TS hvis den findes, ellers SL.
-  const effectiveStopDb = trailingStopDb ?? stopLossDb;
+  // Aktiv Stop = mest beskyttende DB-værdi (LONG: max, SHORT: min)
+  const stopCandidates = [
+    stopLossDb,
+    breakEvenAtPrice,
+    trailingStopDb,
+    peakLockStopPrice,
+  ].filter((v): v is number => v != null);
+
+  let effectiveStopDb: number | null = null;
+  if (stopCandidates.length > 0) {
+    effectiveStopDb =
+      side === "LONG" ? Math.max(...stopCandidates) : Math.min(...stopCandidates);
+  }
 
   const closeTime = trade.closed_at
     ? new Date(trade.closed_at).getTime()
@@ -168,7 +178,7 @@ const buildSeries = (
       price,
       high,
       low,
-      // Aktuelle stop-niveauer sættes kun på seneste candle i trade-vinduet nedenfor.
+      exitStop: null,
       effectiveStop: null,
       trailingStop: null,
       breakEven: null,
@@ -186,6 +196,21 @@ const buildSeries = (
     return v;
   };
 
+  // Tegn exitStop som FLAD linje over hele in-trade-vinduet (ingen rekonstruktion).
+  // Dette repræsenterer "hvad ville lukke handlen lige nu" — den eneste sandhed vi har.
+  if (effectiveStopDb != null) {
+    data.forEach((row) => {
+      if (row.timestamp >= openTime && !row.isPostExit) {
+        // Side-validering: stop må ikke ligge på "forkert side" af candle
+        // (LONG: stop > high → ugyldig; SHORT: stop < low → ugyldig).
+        // Vi tillader stadig at vise den hvis den er korrekt placeret ift. close.
+        const valid =
+          side === "LONG" ? effectiveStopDb <= row.high * 1.5 : effectiveStopDb >= row.low * 0.5;
+        if (valid) row.exitStop = effectiveStopDb;
+      }
+    });
+  }
+
   const latestInTradeIndex = data.reduce((latest, row, idx) => {
     if (row.timestamp < openTime || row.isPostExit) return latest;
     return idx;
@@ -199,7 +224,22 @@ const buildSeries = (
     row.peakLockStop = validForSide(peakLockStopPrice, row);
   }
 
-  // Ingen triggere/markers fra chart-logik — chart visualiserer kun trade-data.
+  // ---- TS-historik diagnose ---------------------------------------------
+  // Vi har INGEN historisk TS-tabel i DB. Kun current value på trade.trailing_stop.
+  const tsDiagnostic: TsHistoryDiagnostic = {
+    hasHistorical: false,
+    source: trailingStopDb != null
+      ? "trade.trailing_stop (kun current value — ingen historik i DB)"
+      : "ingen TS-data tilgængelig",
+    pointCount: trailingStopDb != null ? 1 : 0,
+    firstTs: trailingStopDb != null && latestInTradeIndex >= 0 ? data[latestInTradeIndex].timestamp : null,
+    firstValue: trailingStopDb,
+    lastTs: trailingStopDb != null && latestInTradeIndex >= 0 ? data[latestInTradeIndex].timestamp : null,
+    lastValue: trailingStopDb,
+    activationTs: null, // ikke logget i DB
+    isReconstructed: false, // vi rekonstruerer IKKE — vi viser kun current
+  };
+
   return {
     data,
     triggers: {
@@ -212,6 +252,7 @@ const buildSeries = (
       trailingAt: null,
       peakLockAt: null,
     },
+    tsDiagnostic,
   };
 };
 
