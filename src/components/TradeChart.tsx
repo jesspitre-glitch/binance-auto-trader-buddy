@@ -1063,7 +1063,8 @@ const ChartShell = ({
         chartData={chartData}
         triggers={triggers}
         markers={markers}
-        flags={{ hasTrailing, hasEffective, hasBreakEven, hasPeakLock, hasInitialSl, hasPeak }}
+        tsDiagnostic={tsDiagnostic}
+        flags={{ hasTrailing, hasEffective, hasBreakEven, hasPeakLock, hasInitialSl, hasPeak, hasExitStop }}
         derived={{ entryPrice, exitPrice, initialSlPrice, peakPrice, openTime, closeTime }}
       />
     </div>
