@@ -1224,6 +1224,16 @@ const ChartShell = ({
           </ResponsiveContainer>
       </div>
 
+      {layoutDebug && (
+        <div className="rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground">
+          📐 Layout: vw={layoutDebug.viewportWidth}px · card={layoutDebug.chartCardWidth}px · svg=
+          {layoutDebug.chartSvgWidth}px · bodyScrollW={layoutDebug.bodyScrollWidth}px ·{" "}
+          <span className={layoutDebug.hasHorizontalOverflow ? "text-destructive font-semibold" : "text-profit"}>
+            overflow={String(layoutDebug.hasHorizontalOverflow)}
+          </span>
+        </div>
+      )}
+
       {/* ===================== DEBUG PANEL (midlertidig) ===================== */}
       <ChartDebugPanel
         trade={trade}
