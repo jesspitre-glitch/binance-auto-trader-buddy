@@ -874,24 +874,9 @@ const ChartShell = ({
               🚪 Exit ${formatPriceAdaptive(row.exitMarker)}
             </div>
           )}
-          {row.effectiveStop != null && (
+          {row.exitStop != null && (
             <div className="text-orange-500">
-              🛑 Aktiv Stop ${formatPriceAdaptive(row.effectiveStop)}
-            </div>
-          )}
-          {row.trailingStop != null && (
-            <div className="text-pink-500">
-              🎯 TS ${formatPriceAdaptive(row.trailingStop)}
-            </div>
-          )}
-          {row.breakEven != null && (
-            <div className="text-purple-500">
-              ⚖️ BE ${formatPriceAdaptive(row.breakEven)}
-            </div>
-          )}
-          {row.peakLockStop != null && (
-            <div className="text-cyan-500">
-              🔒 Peak-Lock ${formatPriceAdaptive(row.peakLockStop)}
+              🛑 Exit Stop ${formatPriceAdaptive(row.exitStop)}
             </div>
           )}
         </div>
