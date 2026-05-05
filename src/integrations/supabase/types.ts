@@ -119,6 +119,63 @@ export type Database = {
         }
         Relationships: []
       }
+      exit_stop_history: {
+        Row: {
+          active_exit_rule: string
+          active_stop: number | null
+          break_even_price: number | null
+          created_at: string
+          id: string
+          peak_lock_stop: number | null
+          peak_price: number | null
+          position_id: string
+          price: number | null
+          recorded_at: string
+          side: string
+          source: string | null
+          stop_loss: number | null
+          symbol: string
+          trailing_stop: number | null
+          user_id: string
+        }
+        Insert: {
+          active_exit_rule?: string
+          active_stop?: number | null
+          break_even_price?: number | null
+          created_at?: string
+          id?: string
+          peak_lock_stop?: number | null
+          peak_price?: number | null
+          position_id: string
+          price?: number | null
+          recorded_at?: string
+          side: string
+          source?: string | null
+          stop_loss?: number | null
+          symbol: string
+          trailing_stop?: number | null
+          user_id: string
+        }
+        Update: {
+          active_exit_rule?: string
+          active_stop?: number | null
+          break_even_price?: number | null
+          created_at?: string
+          id?: string
+          peak_lock_stop?: number | null
+          peak_price?: number | null
+          position_id?: string
+          price?: number | null
+          recorded_at?: string
+          side?: string
+          source?: string | null
+          stop_loss?: number | null
+          symbol?: string
+          trailing_stop?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       funding_fees: {
         Row: {
           asset: string

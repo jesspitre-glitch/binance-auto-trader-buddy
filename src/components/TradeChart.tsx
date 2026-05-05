@@ -13,6 +13,7 @@ import {
   Customized,
 } from "recharts";
 import { Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface TradeChartProps {
   trade: any;
@@ -60,7 +61,7 @@ interface ChartRow {
   isPostExit: boolean;
 }
 
-// Diagnose af TS-historik (vises i debug + UI banner)
+// Diagnose af exit-stop-historik (vises i debug + UI banner)
 interface TsHistoryDiagnostic {
   hasHistorical: boolean;
   source: string;
@@ -71,6 +72,18 @@ interface TsHistoryDiagnostic {
   lastValue: number | null;
   activationTs: number | null;
   isReconstructed: boolean;
+  ruleDistribution: Record<string, number>;
+}
+
+interface ExitStopHistoryRow {
+  recorded_at: string;
+  active_stop: number | null;
+  active_exit_rule: string | null;
+  source: string | null;
+  trailing_stop: number | null;
+  stop_loss: number | null;
+  break_even_price: number | null;
+  peak_lock_stop: number | null;
 }
 
 interface TriggerLevels {
@@ -111,12 +124,54 @@ export const TradeChart = ({ trade }: TradeChartProps) => {
 };
 
 // =============================================================================
+// Hent exit_stop_history rækker for en specifik trade (UTC vindue)
+// =============================================================================
+const fetchExitStopHistory = async (
+  trade: any,
+  openTime: number,
+  endTime: number,
+): Promise<ExitStopHistoryRow[]> => {
+  try {
+    // Padding så vi får snapshot lige før entry og lidt efter exit
+    const fromIso = new Date(openTime - 60_000).toISOString();
+    const toIso = new Date(endTime + 60_000).toISOString();
+
+    let query = (supabase as any)
+      .from("exit_stop_history")
+      .select(
+        "recorded_at, active_stop, active_exit_rule, source, trailing_stop, stop_loss, break_even_price, peak_lock_stop, position_id, symbol",
+      )
+      .eq("symbol", trade.symbol)
+      .gte("recorded_at", fromIso)
+      .lte("recorded_at", toIso)
+      .order("recorded_at", { ascending: true })
+      .limit(5000);
+
+    // Hvis trade har et position_id (åben handel), filtrér yderligere
+    if (trade.id && trade.status && trade.status !== "CLOSED") {
+      query = query.eq("position_id", trade.id);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.warn("[TradeChart] exit_stop_history fetch error:", error.message);
+      return [];
+    }
+    return (data as ExitStopHistoryRow[]) || [];
+  } catch (e) {
+    console.warn("[TradeChart] exit_stop_history fetch exception:", e);
+    return [];
+  }
+};
+
+// =============================================================================
 // Fælles chart-serie — læser kun faktiske trade-værdier, ingen lokal beregning
 // =============================================================================
 const buildSeries = (
   trade: any,
   klines: any[],
   openTime: number,
+  history: ExitStopHistoryRow[] = [],
 ): {
   data: ChartRow[];
   triggers: TriggerLevels;
@@ -130,32 +185,37 @@ const buildSeries = (
     return value != null && isFinite(n) && n > 0 ? n : null;
   };
 
-  // ---- KUN FAKTISKE TRADE-VÆRDIER ----------------------------------------
-  const stopLossDb = toPositiveNumber(trade.stop_loss);
+  // ---- Sortér historik efter tid (UTC) -----------------------------------
+  const sortedHistory = [...(history || [])]
+    .filter((h) => h && h.recorded_at)
+    .map((h) => ({ ...h, _ts: new Date(h.recorded_at).getTime() }))
+    .sort((a, b) => a._ts - b._ts);
 
+  const hasHistorical = sortedHistory.length > 0;
+
+  // Fallback: aktuelle DB-værdier (kun hvis historik mangler)
+  const stopLossDb = toPositiveNumber(trade.stop_loss);
+  const trailingStopDb = toPositiveNumber(trade.trailing_stop);
   const breakEvenTriggered = trade.break_even_triggered === true;
   const breakEvenAtPrice =
     breakEvenTriggered ? toPositiveNumber(trade.break_even_at_price) : null;
-
-  const trailingStopDb = toPositiveNumber(trade.trailing_stop);
-
   const peakLockActivated = trade.peak_lock_activated === true;
   const peakLockStopPrice =
     peakLockActivated ? toPositiveNumber(trade.peak_lock_stop_price) : null;
 
-  // Aktiv Stop = mest beskyttende DB-værdi (LONG: max, SHORT: min)
-  const stopCandidates = [
+  const fallbackStopCandidates = [
     stopLossDb,
     breakEvenAtPrice,
     trailingStopDb,
     peakLockStopPrice,
   ].filter((v): v is number => v != null);
 
-  let effectiveStopDb: number | null = null;
-  if (stopCandidates.length > 0) {
-    effectiveStopDb =
-      side === "LONG" ? Math.max(...stopCandidates) : Math.min(...stopCandidates);
-  }
+  const fallbackEffectiveStop: number | null =
+    fallbackStopCandidates.length > 0
+      ? side === "LONG"
+        ? Math.max(...fallbackStopCandidates)
+        : Math.min(...fallbackStopCandidates)
+      : null;
 
   const closeTime = trade.closed_at
     ? new Date(trade.closed_at).getTime()
@@ -189,6 +249,51 @@ const buildSeries = (
     };
   });
 
+  const ruleDistribution: Record<string, number> = {};
+
+  if (hasHistorical) {
+    // Step-funktion: for hver candle, find seneste snapshot der er ≤ candle-tidspunkt
+    let hIdx = 0;
+    let activeStop: number | null = null;
+    let activeRule: string | null = null;
+
+    data.forEach((row) => {
+      if (row.timestamp < openTime || row.isPostExit) return;
+
+      while (
+        hIdx < sortedHistory.length &&
+        sortedHistory[hIdx]._ts <= row.timestamp
+      ) {
+        const s = sortedHistory[hIdx];
+        if (s.active_stop != null && isFinite(Number(s.active_stop))) {
+          activeStop = Number(s.active_stop);
+          activeRule = s.active_exit_rule || "NONE";
+        }
+        hIdx++;
+      }
+
+      if (activeStop != null) {
+        const valid =
+          side === "LONG" ? activeStop <= row.high * 1.5 : activeStop >= row.low * 0.5;
+        if (valid) row.exitStop = activeStop;
+        if (activeRule) {
+          ruleDistribution[activeRule] = (ruleDistribution[activeRule] || 0) + 1;
+        }
+      }
+    });
+  } else if (fallbackEffectiveStop != null) {
+    // Ingen historik → vis kun ÉN flad linje med aktuel værdi
+    data.forEach((row) => {
+      if (row.timestamp >= openTime && !row.isPostExit) {
+        const valid =
+          side === "LONG"
+            ? fallbackEffectiveStop <= row.high * 1.5
+            : fallbackEffectiveStop >= row.low * 0.5;
+        if (valid) row.exitStop = fallbackEffectiveStop;
+      }
+    });
+  }
+
   const validForSide = (v: number | null, row: ChartRow): number | null => {
     if (v == null || !isFinite(v) || v <= 0) return null;
     if (side === "LONG" && v > row.high) return null;
@@ -196,48 +301,41 @@ const buildSeries = (
     return v;
   };
 
-  // Tegn exitStop som FLAD linje over hele in-trade-vinduet (ingen rekonstruktion).
-  // Dette repræsenterer "hvad ville lukke handlen lige nu" — den eneste sandhed vi har.
-  if (effectiveStopDb != null) {
-    data.forEach((row) => {
-      if (row.timestamp >= openTime && !row.isPostExit) {
-        // Side-validering: stop må ikke ligge på "forkert side" af candle
-        // (LONG: stop > high → ugyldig; SHORT: stop < low → ugyldig).
-        // Vi tillader stadig at vise den hvis den er korrekt placeret ift. close.
-        const valid =
-          side === "LONG" ? effectiveStopDb <= row.high * 1.5 : effectiveStopDb >= row.low * 0.5;
-        if (valid) row.exitStop = effectiveStopDb;
-      }
-    });
-  }
-
   const latestInTradeIndex = data.reduce((latest, row, idx) => {
     if (row.timestamp < openTime || row.isPostExit) return latest;
     return idx;
   }, -1);
 
-  if (latestInTradeIndex >= 0) {
+  if (latestInTradeIndex >= 0 && !hasHistorical) {
     const row = data[latestInTradeIndex];
     row.trailingStop = validForSide(trailingStopDb, row);
-    row.effectiveStop = validForSide(effectiveStopDb, row);
+    row.effectiveStop = validForSide(fallbackEffectiveStop, row);
     row.breakEven = validForSide(breakEvenAtPrice, row);
     row.peakLockStop = validForSide(peakLockStopPrice, row);
   }
 
-  // ---- TS-historik diagnose ---------------------------------------------
-  // Vi har INGEN historisk TS-tabel i DB. Kun current value på trade.trailing_stop.
+  const firstHist = sortedHistory[0];
+  const lastHist = sortedHistory[sortedHistory.length - 1];
+
   const tsDiagnostic: TsHistoryDiagnostic = {
-    hasHistorical: false,
-    source: trailingStopDb != null
-      ? "trade.trailing_stop (kun current value — ingen historik i DB)"
-      : "ingen TS-data tilgængelig",
-    pointCount: trailingStopDb != null ? 1 : 0,
-    firstTs: trailingStopDb != null && latestInTradeIndex >= 0 ? data[latestInTradeIndex].timestamp : null,
-    firstValue: trailingStopDb,
-    lastTs: trailingStopDb != null && latestInTradeIndex >= 0 ? data[latestInTradeIndex].timestamp : null,
-    lastValue: trailingStopDb,
-    activationTs: null, // ikke logget i DB
-    isReconstructed: false, // vi rekonstruerer IKKE — vi viser kun current
+    hasHistorical,
+    source: hasHistorical
+      ? "exit_stop_history (faktisk logget pr. evaluering)"
+      : trailingStopDb != null || stopLossDb != null
+        ? "fallback: trade current values (ingen historik fundet)"
+        : "ingen exit-stop data tilgængelig",
+    pointCount: hasHistorical
+      ? sortedHistory.length
+      : fallbackEffectiveStop != null
+        ? 1
+        : 0,
+    firstTs: firstHist?._ts ?? null,
+    firstValue: firstHist?.active_stop != null ? Number(firstHist.active_stop) : null,
+    lastTs: lastHist?._ts ?? null,
+    lastValue: lastHist?.active_stop != null ? Number(lastHist.active_stop) : null,
+    activationTs: null,
+    isReconstructed: false,
+    ruleDistribution,
   };
 
   return {
@@ -477,11 +575,14 @@ const OpenTradeChart = ({ trade }: TradeChartProps) => {
         const endTime = now;
 
         const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${trade.symbol}&interval=${interval}&startTime=${startTime}&endTime=${endTime}&limit=1500`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Failed to fetch klines");
-        const klines = await res.json();
+        const [klinesRes, historyRes] = await Promise.all([
+          fetch(url),
+          fetchExitStopHistory(trade, openTime, now),
+        ]);
+        if (!klinesRes.ok) throw new Error("Failed to fetch klines");
+        const klines = await klinesRes.json();
 
-        const { data, triggers, markers, tsDiagnostic } = buildSeries(trade, klines, openTime);
+        const { data, triggers, markers, tsDiagnostic } = buildSeries(trade, klines, openTime, historyRes);
 
         // Find entry-punkt
         const entryIdx = data.reduce(
@@ -557,11 +658,14 @@ const ClosedTradeChart = ({ trade }: TradeChartProps) => {
         );
 
         const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${trade.symbol}&interval=${interval}&startTime=${startTime}&endTime=${endTime}&limit=1500`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Failed to fetch klines");
-        const klines = await res.json();
+        const [klinesRes, historyRes] = await Promise.all([
+          fetch(url),
+          fetchExitStopHistory(trade, openTime, closeTime),
+        ]);
+        if (!klinesRes.ok) throw new Error("Failed to fetch klines");
+        const klines = await klinesRes.json();
 
-        const { data, triggers, markers, tsDiagnostic } = buildSeries(trade, klines, openTime);
+        const { data, triggers, markers, tsDiagnostic } = buildSeries(trade, klines, openTime, historyRes);
 
         // Entry marker
         const entryIdx = data.reduce(
@@ -1275,20 +1379,31 @@ const ChartDebugPanel = ({
         </section>
 
         <section className="min-w-0">
-          <div className="font-semibold mb-1">1b. TS-historik diagnose</div>
+          <div className="font-semibold mb-1">1b. Exit Stop historik diagnose</div>
           <div className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-0.5 sm:grid-cols-2 [&>div]:min-w-0 [&>div]:break-all">
-            <div>Har historisk TS-data: {fmt(tsDiagnostic?.hasHistorical ?? false)}</div>
-            <div>Source for TS timeline: <span className="font-mono">{tsDiagnostic?.source ?? "-"}</span></div>
-            <div>Antal TS-punkter: {fmt(tsDiagnostic?.pointCount ?? 0)}</div>
-            <div>TS rekonstrueret: {fmt(tsDiagnostic?.isReconstructed ?? false)}</div>
-            <div>Første TS timestamp: <span className="font-mono">{tsDiagnostic?.firstTs ? new Date(tsDiagnostic.firstTs).toISOString() : "-"}</span></div>
-            <div>Første TS value: {fmt(tsDiagnostic?.firstValue ?? null)}</div>
-            <div>Sidste TS timestamp: <span className="font-mono">{tsDiagnostic?.lastTs ? new Date(tsDiagnostic.lastTs).toISOString() : "-"}</span></div>
-            <div>Sidste TS value: {fmt(tsDiagnostic?.lastValue ?? null)}</div>
-            <div>TS activation timestamp: <span className="font-mono">{tsDiagnostic?.activationTs ? new Date(tsDiagnostic.activationTs).toISOString() : "(ikke logget i DB)"}</span></div>
+            <div>Har historik: {fmt(tsDiagnostic?.hasHistorical ?? false)}</div>
+            <div>Source: <span className="font-mono">{tsDiagnostic?.source ?? "-"}</span></div>
+            <div>Antal datapunkter: {fmt(tsDiagnostic?.pointCount ?? 0)}</div>
+            <div>Rekonstrueret: {fmt(tsDiagnostic?.isReconstructed ?? false)}</div>
+            <div>Første timestamp: <span className="font-mono">{tsDiagnostic?.firstTs ? new Date(tsDiagnostic.firstTs).toISOString() : "-"}</span></div>
+            <div>Første active_stop: {fmt(tsDiagnostic?.firstValue ?? null)}</div>
+            <div>Sidste timestamp: <span className="font-mono">{tsDiagnostic?.lastTs ? new Date(tsDiagnostic.lastTs).toISOString() : "-"}</span></div>
+            <div>Sidste active_stop: {fmt(tsDiagnostic?.lastValue ?? null)}</div>
+            <div className="sm:col-span-2">
+              active_exit_rule fordeling:{" "}
+              <span className="font-mono">
+                {tsDiagnostic?.ruleDistribution && Object.keys(tsDiagnostic.ruleDistribution).length > 0
+                  ? Object.entries(tsDiagnostic.ruleDistribution)
+                      .map(([k, v]) => `${k}=${v}`)
+                      .join(", ")
+                  : "-"}
+              </span>
+            </div>
           </div>
           <div className="text-muted-foreground mt-1">
-            Der findes ingen TS-historik tabel (trailing_stop_history / exit_model_audit / position_snapshots). Kun current trade.trailing_stop. Exit Stop tegnes derfor som flad linje over in-trade vinduet.
+            {tsDiagnostic?.hasHistorical
+              ? "Exit Stop tegnes som step-funktion baseret på exit_stop_history (faktisk logget pr. evaluering)."
+              : "Ingen historik fundet — Exit Stop tegnes som flad linje med aktuel værdi (kun nye trades får historik)."}
           </div>
         </section>
         <section className="min-w-0">
