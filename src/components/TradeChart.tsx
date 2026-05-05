@@ -1273,6 +1273,15 @@ const ChartDebugPanel = ({
   const series = [
     summarize("Pris", "klines[].close", chartData.map((d) => d.price), true, "altid"),
     summarize(
+      "Exit Stop",
+      "exit_stop_history.active_stop",
+      exitStopSeries.map((p) => p.exitStop),
+      flags.hasExitStop,
+      flags.hasExitStop
+        ? `step-linje fra exit_stop_history (N=${exitStopSeries.length})`
+        : "ingen exit_stop_history rækker fundet",
+    ),
+    summarize(
       "Entry",
       "trade.entry_price",
       [derived.entryPrice],
