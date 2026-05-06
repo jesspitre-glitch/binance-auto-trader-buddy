@@ -3468,6 +3468,7 @@ serve(async (req) => {
             .select('id')
             .single();
           const slotEvalId: string | null = insertedEval?.id ?? null;
+          if (slotEvalId) slotEvalIdBySymbol.set(symbol, slotEvalId);
 
           // Helper to update this evaluation when downstream block/open happens
           const updateSlotEval = async (action: string, reason: string | null) => {
