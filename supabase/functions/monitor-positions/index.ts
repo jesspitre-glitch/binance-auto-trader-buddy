@@ -2946,12 +2946,25 @@ serve(async (req) => {
               tradeHistoryInsert.slot_id = position.slot_id;
             }
 
-            const { error: historyError } = await supabaseClient.from('trade_history').insert(tradeHistoryInsert);
-
-            if (historyError) {
-              console.error(`Failed to insert trade history for ${position.symbol}:`, historyError);
+            // 🛡️ DUPLICATE GUARD: same slot+symbol+side+opened_at+qty already in history?
+            const { data: existingHist } = await supabaseClient
+              .from('trade_history')
+              .select('id')
+              .eq('user_id', position.user_id)
+              .eq('symbol', position.symbol)
+              .eq('side', position.side)
+              .eq('opened_at', position.opened_at)
+              .eq('slot_id', position.slot_id ?? null)
+              .limit(1);
+            if (existingHist && existingHist.length > 0) {
+              console.log(`⚠️ DUPLICATE_TRADE_HISTORY_SKIPPED | ${position.symbol} ${position.side} | slot=${position.slot_id} opened_at=${position.opened_at}`);
             } else {
-              console.log(`Trade history saved for ${position.symbol}`);
+              const { error: historyError } = await supabaseClient.from('trade_history').insert(tradeHistoryInsert);
+              if (historyError) {
+                console.error(`Failed to insert trade history for ${position.symbol}:`, historyError);
+              } else {
+                console.log(`Trade history saved for ${position.symbol}`);
+              }
             }
             
             // Immediately sync with Binance to ensure DB matches reality
