@@ -327,10 +327,18 @@ async function closePositionOnBinance(symbol: string, side: string, quantity: nu
   }
 
   const closeSide = side === 'LONG' ? 'SELL' : 'BUY';
-  
+
+  // Round quantity down to Binance LOT_SIZE stepSize to avoid -1111 precision errors
+  const stepSize = await getStepSize(symbol);
+  const closeQuantityStr = roundDownToStep(closeQuantity, stepSize);
+  if (parseFloat(closeQuantityStr) <= 0) {
+    console.log(`Close quantity rounded to 0 for ${symbol} (qty=${closeQuantity}, step=${stepSize}) - skipping`);
+    return null;
+  }
+
   // Place the closing order
   const timestamp = Date.now();
-  const queryString = `symbol=${symbol}&side=${closeSide}&type=MARKET&quantity=${closeQuantity}&reduceOnly=true&timestamp=${timestamp}&recvWindow=10000`;
+  const queryString = `symbol=${symbol}&side=${closeSide}&type=MARKET&quantity=${closeQuantityStr}&reduceOnly=true&timestamp=${timestamp}&recvWindow=10000`;
   const signature = await createSignature(queryString, apiSecret);
 
   const response = await fetch(
