@@ -3088,12 +3088,95 @@ serve(async (req) => {
       });
     }
 
-    // 🧹 Clean up stale PENDING positions (older than 60s) — these are leftover from crashed runs
-    await supabaseClient
-      .from('positions')
-      .delete()
-      .eq('status', 'PENDING')
-      .lt('opened_at', new Date(Date.now() - 60000).toISOString());
+    // 🧹 Hardened cleanup of stale PENDING positions (older than 60s).
+    // ⚠️ NEVER blindly delete — must first verify Binance order status to avoid
+    // losing FILLED orders that just couldn't be promoted in the previous run.
+    {
+      const staleCutoff = new Date(Date.now() - 60000).toISOString();
+      const { data: stalePendings } = await supabaseClient
+        .from('positions')
+        .select('id, user_id, symbol, side, slot_id, quantity, entry_price, stop_loss, binance_order_id, binance_client_order_id, promotion_failed')
+        .eq('status', 'PENDING')
+        .lt('opened_at', staleCutoff);
+
+      for (const p of (stalePendings || [])) {
+        const hasOrderRef = !!(p.binance_order_id || p.binance_client_order_id);
+
+        // Case A: No Binance order id at all → it's safe to delete; the order was
+        // never sent (we always persist the id BEFORE placing the order from now on,
+        // so any row without an id is from a pre-Phase-1 crash or an aborted intent).
+        if (!hasOrderRef) {
+          await supabaseClient.from('positions').delete().eq('id', p.id);
+          console.log(`🧹 PENDING_DELETED_SAFE_NO_ORDER_SENT: ${p.symbol} (id=${p.id})`);
+          continue;
+        }
+
+        // Case B: We have an order ref → ask Binance what really happened
+        const ord = await queryBinanceOrder(p.symbol, {
+          orderId: p.binance_order_id,
+          clientOrderId: p.binance_client_order_id,
+        });
+
+        if (!ord) {
+          // Transport / auth failure — keep the row, do NOT delete
+          console.warn(`⏸️ PENDING_CLEANUP_DEFERRED (Binance lookup failed): ${p.symbol} id=${p.id}`);
+          continue;
+        }
+
+        if (ord._missing) {
+          // Order does not exist on Binance — never reached the exchange or was purged
+          await supabaseClient.from('positions').delete().eq('id', p.id);
+          console.log(`🧹 PENDING_DELETED_SAFE_NO_ORDER_SENT (Binance returned -2013): ${p.symbol} id=${p.id}`);
+          continue;
+        }
+
+        const status = String(ord.status || '').toUpperCase();
+        const executedQty = Math.abs(parseFloat(ord.executedQty || '0'));
+        const avgPrice = parseFloat(ord.avgPrice || ord.price || '0') || Number(p.entry_price) || 0;
+
+        if (status === 'FILLED' || (status === 'PARTIALLY_FILLED' && executedQty > 0)) {
+          // 🚨 Critical: Binance has a fill — must NOT delete. Promote to OPEN.
+          const promoteQty = executedQty > 0 ? executedQty : Number(p.quantity);
+          const { error: promErr } = await supabaseClient
+            .from('positions')
+            .update({
+              status: 'OPEN',
+              quantity: promoteQty,
+              entry_price: avgPrice,
+              current_price: avgPrice,
+              peak_price: avgPrice,
+              binance_order_id: p.binance_order_id || (ord.orderId ? String(ord.orderId) : null),
+              binance_client_order_id: p.binance_client_order_id || ord.clientOrderId || null,
+              order_status: status,
+              promotion_failed: false,
+              promotion_error: null,
+            })
+            .eq('id', p.id);
+          if (promErr) {
+            console.error(`❌ PENDING_PROMOTION_FAILED_BUT_PRESERVED (cleanup-promote): ${p.symbol} id=${p.id} err=${promErr.message}`);
+            await supabaseClient.from('positions').update({
+              promotion_failed: true,
+              promotion_error: `cleanup-promote: ${promErr.message}`,
+              order_status: status,
+            }).eq('id', p.id);
+          } else {
+            console.log(`✅ PENDING_PROMOTED_FROM_BINANCE_STATUS: ${p.symbol} id=${p.id} qty=${promoteQty} avg=${avgPrice} status=${status}`);
+          }
+          continue;
+        }
+
+        if (status === 'CANCELED' || status === 'EXPIRED' || status === 'REJECTED') {
+          await supabaseClient.from('positions').delete().eq('id', p.id);
+          console.log(`🧹 PENDING_DELETED_BINANCE_${status}: ${p.symbol} id=${p.id}`);
+          continue;
+        }
+
+        // status === NEW or anything else → leave it alone, decision deferred
+        await supabaseClient.from('positions').update({ order_status: status }).eq('id', p.id);
+        console.log(`⏸️ PENDING_CLEANUP_SKIPPED_PENDING_BINANCE: ${p.symbol} id=${p.id} status=${status}`);
+      }
+    }
+
 
     // Get active trading sessions
     const { data: sessions, error: sessionsError } = await supabaseClient
