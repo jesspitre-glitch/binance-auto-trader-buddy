@@ -2795,6 +2795,22 @@ async function setLeverage(symbol: string, leverage: number) {
   }
 }
 
+// 🔖 Build a slot-owning Binance clientOrderId.
+// Format (<=36 chars, allowed pattern ^[A-Za-z0-9_:.-]+$):
+//   sl{slotShort}_{sym}_{B|S}_{ts10}_{rnd4}
+// Example: slab12cd34_ETHUSDC_B_8473625190_a1b2
+function buildClientOrderId(slotId: string | null, symbol: string, side: 'BUY' | 'SELL'): string {
+  const slotShort = slotId ? slotId.replace(/-/g, '').slice(0, 8) : 'legacy00';
+  // Strip any non-allowed chars from symbol (Binance symbols are already safe)
+  const sym = symbol.replace(/[^A-Za-z0-9]/g, '').slice(0, 10);
+  const sideChar = side === 'BUY' ? 'B' : 'S';
+  const ts10 = Date.now().toString().slice(-10);
+  const rnd4 = Math.random().toString(36).slice(2, 6);
+  let id = `sl${slotShort}_${sym}_${sideChar}_${ts10}_${rnd4}`;
+  if (id.length > 36) id = id.slice(0, 36);
+  return id;
+}
+
 async function placeOrder(
   symbol: string,
   side: 'BUY' | 'SELL',
@@ -2803,7 +2819,8 @@ async function placeOrder(
   takeProfit: number | null,
   quantityPrecision: number,
   pricePrecision: number,
-  leverage: number
+  leverage: number,
+  clientOrderId?: string,
 ) {
   const apiKey = Deno.env.get('BINANCE_API_KEY');
   const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
@@ -2816,13 +2833,15 @@ async function placeOrder(
   await setLeverage(symbol, leverage);
 
   const timestamp = Date.now();
-  const params = new URLSearchParams({
+  const paramObj: Record<string, string> = {
     symbol,
     side,
     type: 'MARKET',
     quantity: quantity.toFixed(quantityPrecision),
     timestamp: timestamp.toString(),
-  });
+  };
+  if (clientOrderId) paramObj.newClientOrderId = clientOrderId;
+  const params = new URLSearchParams(paramObj);
 
   // Create signature
   const signature = await crypto.subtle.importKey(
