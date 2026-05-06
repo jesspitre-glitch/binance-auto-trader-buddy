@@ -2903,15 +2903,36 @@ serve(async (req) => {
               if (fills.avgEntry > 0) finalEntryPrice = fills.avgEntry;
               if (fills.avgExit > 0) finalExitPrice = fills.avgExit;
               
-              // Fetch ALL income types → Binance ground truth P&L
+              // Fetch ALL income types → Binance ground truth P&L (AGGREGATED across all slots for symbol)
               const income = await getPositionIncome(position.symbol, apiKey, apiSecret, openedAtTime, closedAtTime);
-              totalFee = Math.abs(income.commission);
-              fundingFee = income.fundingFee;
-              // Use Binance REALIZED_PNL as gross P&L (ground truth, not calculated)
-              if (income.realizedPnl !== 0) finalGrossPnl = income.realizedPnl;
-              binanceNetPnl = income.binanceNetPnl;
-              pnlAfterFees = income.realizedPnl + income.commission;
-              netPnl = binanceNetPnl; // REALIZED_PNL + COMMISSION + FUNDING_FEE
+
+              // 🔴 SLOT-ISOLATION: Binance income is aggregated across ALL slots holding this symbol.
+              // We must NEVER assign the full aggregate to a single slot — prorate by this slot's qty share.
+              // Sum qty of all positions (open or just-closed) for this symbol+user in the income window.
+              let symbolTotalQty = actualQuantity;
+              try {
+                const { data: siblingRows } = await supabaseClient
+                  .from('positions')
+                  .select('quantity')
+                  .eq('user_id', position.user_id)
+                  .eq('symbol', position.symbol);
+                const openQty = (siblingRows || []).reduce((s: number, r: any) => s + Math.abs(Number(r.quantity) || 0), 0);
+                // include this slot's own qty (already closed/removed from positions table by now in some paths)
+                symbolTotalQty = Math.max(actualQuantity, openQty + actualQuantity);
+              } catch (e) {
+                console.warn(`⚠️ slot-share lookup failed for ${position.symbol}, falling back to local qty only`);
+              }
+              const slotShare = symbolTotalQty > 0 ? actualQuantity / symbolTotalQty : 1;
+
+              totalFee = Math.abs(income.commission) * slotShare;
+              fundingFee = income.fundingFee * slotShare;
+              // KEEP slot-local gross PnL (actualPnl based on slot qty × price diff). Do NOT overwrite with aggregated realizedPnl.
+              // finalGrossPnl already = actualPnl from earlier.
+              const proratedRealized = income.realizedPnl * slotShare;
+              binanceNetPnl = proratedRealized + (income.commission * slotShare) + (income.fundingFee * slotShare);
+              pnlAfterFees = finalGrossPnl + (income.commission * slotShare);
+              netPnl = binanceNetPnl;
+              console.log(`🔢 SLOT-SHARE | ${position.symbol} | actualQty=${actualQuantity} totalQty=${symbolTotalQty} share=${(slotShare*100).toFixed(2)}% | aggRealized=${income.realizedPnl.toFixed(4)} → slotRealized=${proratedRealized.toFixed(4)}`);
               
               notional = finalEntryPrice * actualQuantity;
               feesPctOfNotional = notional > 0 ? (totalFee / notional) * 100 : 0;
