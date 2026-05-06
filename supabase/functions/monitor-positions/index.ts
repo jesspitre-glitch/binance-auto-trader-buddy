@@ -263,6 +263,35 @@ async function getPositionIncome(
   } catch (e) { console.error('Error fetching income:', e); return result; }
 }
 
+// Cache exchangeInfo step sizes per cold start
+let _stepSizeCache: Record<string, string> | null = null;
+async function getStepSize(symbol: string): Promise<string> {
+  if (!_stepSizeCache) {
+    try {
+      const r = await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo');
+      const data = await r.json();
+      const map: Record<string, string> = {};
+      for (const s of (data.symbols || [])) {
+        const f = (s.filters || []).find((x: any) => x.filterType === 'LOT_SIZE');
+        if (f && f.stepSize) map[s.symbol] = f.stepSize;
+      }
+      _stepSizeCache = map;
+    } catch (e) {
+      console.error('Failed to load exchangeInfo:', e);
+      _stepSizeCache = {};
+    }
+  }
+  return _stepSizeCache![symbol] || '0.001';
+}
+
+function roundDownToStep(qty: number, stepSize: string): string {
+  const step = parseFloat(stepSize);
+  if (!step || !isFinite(step)) return qty.toString();
+  const decimals = stepSize.includes('.') ? stepSize.split('.')[1].replace(/0+$/, '').length : 0;
+  const rounded = Math.floor(qty / step) * step;
+  return rounded.toFixed(decimals);
+}
+
 async function closePositionOnBinance(symbol: string, side: string, quantity: number) {
   const apiKey = Deno.env.get('BINANCE_API_KEY');
   const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
