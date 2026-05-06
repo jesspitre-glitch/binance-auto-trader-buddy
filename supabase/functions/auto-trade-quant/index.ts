@@ -2795,6 +2795,22 @@ async function setLeverage(symbol: string, leverage: number) {
   }
 }
 
+// 🔖 Build a slot-owning Binance clientOrderId.
+// Format (<=36 chars, allowed pattern ^[A-Za-z0-9_:.-]+$):
+//   sl{slotShort}_{sym}_{B|S}_{ts10}_{rnd4}
+// Example: slab12cd34_ETHUSDC_B_8473625190_a1b2
+function buildClientOrderId(slotId: string | null, symbol: string, side: 'BUY' | 'SELL'): string {
+  const slotShort = slotId ? slotId.replace(/-/g, '').slice(0, 8) : 'legacy00';
+  // Strip any non-allowed chars from symbol (Binance symbols are already safe)
+  const sym = symbol.replace(/[^A-Za-z0-9]/g, '').slice(0, 10);
+  const sideChar = side === 'BUY' ? 'B' : 'S';
+  const ts10 = Date.now().toString().slice(-10);
+  const rnd4 = Math.random().toString(36).slice(2, 6);
+  let id = `sl${slotShort}_${sym}_${sideChar}_${ts10}_${rnd4}`;
+  if (id.length > 36) id = id.slice(0, 36);
+  return id;
+}
+
 async function placeOrder(
   symbol: string,
   side: 'BUY' | 'SELL',
@@ -2803,7 +2819,8 @@ async function placeOrder(
   takeProfit: number | null,
   quantityPrecision: number,
   pricePrecision: number,
-  leverage: number
+  leverage: number,
+  clientOrderId?: string,
 ) {
   const apiKey = Deno.env.get('BINANCE_API_KEY');
   const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
@@ -2816,13 +2833,15 @@ async function placeOrder(
   await setLeverage(symbol, leverage);
 
   const timestamp = Date.now();
-  const params = new URLSearchParams({
+  const paramObj: Record<string, string> = {
     symbol,
     side,
     type: 'MARKET',
     quantity: quantity.toFixed(quantityPrecision),
     timestamp: timestamp.toString(),
-  });
+  };
+  if (clientOrderId) paramObj.newClientOrderId = clientOrderId;
+  const params = new URLSearchParams(paramObj);
 
   // Create signature
   const signature = await crypto.subtle.importKey(
@@ -2864,6 +2883,47 @@ async function placeOrder(
   console.log(`Market order placed - all SL/TP logic handled by software`);
 
   return orderData;
+}
+
+// 🔍 Look up an order on Binance by orderId or origClientOrderId.
+// Returns the raw order object, { _missing: true } if not found (-2013), or null on transport error.
+async function queryBinanceOrder(
+  symbol: string,
+  opts: { orderId?: string | number | null; clientOrderId?: string | null },
+): Promise<any | null> {
+  const apiKey = Deno.env.get('BINANCE_API_KEY');
+  const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
+  if (!apiKey || !apiSecret) return null;
+  const paramObj: Record<string, string> = {
+    symbol,
+    timestamp: Date.now().toString(),
+    recvWindow: '10000',
+  };
+  if (opts.orderId) paramObj.orderId = String(opts.orderId);
+  else if (opts.clientOrderId) paramObj.origClientOrderId = String(opts.clientOrderId);
+  else return null;
+  const params = new URLSearchParams(paramObj);
+  const sig = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(apiSecret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  ).then(k => crypto.subtle.sign('HMAC', k, new TextEncoder().encode(params.toString())))
+   .then(s => Array.from(new Uint8Array(s)).map(b => b.toString(16).padStart(2, '0')).join(''));
+  params.append('signature', sig);
+  try {
+    const r = await fetch(`https://fapi.binance.com/fapi/v1/order?${params.toString()}`, {
+      headers: { 'X-MBX-APIKEY': apiKey },
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      if (txt.includes('-2013')) return { _missing: true };
+      console.warn(`queryBinanceOrder ${symbol} failed: ${txt}`);
+      return null;
+    }
+    return await r.json();
+  } catch (e) {
+    console.warn(`queryBinanceOrder ${symbol} threw:`, e);
+    return null;
+  }
 }
 
 async function verifyPositionOnBinance(symbol: string): Promise<any | null> {
@@ -3028,12 +3088,95 @@ serve(async (req) => {
       });
     }
 
-    // 🧹 Clean up stale PENDING positions (older than 60s) — these are leftover from crashed runs
-    await supabaseClient
-      .from('positions')
-      .delete()
-      .eq('status', 'PENDING')
-      .lt('opened_at', new Date(Date.now() - 60000).toISOString());
+    // 🧹 Hardened cleanup of stale PENDING positions (older than 60s).
+    // ⚠️ NEVER blindly delete — must first verify Binance order status to avoid
+    // losing FILLED orders that just couldn't be promoted in the previous run.
+    {
+      const staleCutoff = new Date(Date.now() - 60000).toISOString();
+      const { data: stalePendings } = await supabaseClient
+        .from('positions')
+        .select('id, user_id, symbol, side, slot_id, quantity, entry_price, stop_loss, binance_order_id, binance_client_order_id, promotion_failed')
+        .eq('status', 'PENDING')
+        .lt('opened_at', staleCutoff);
+
+      for (const p of (stalePendings || [])) {
+        const hasOrderRef = !!(p.binance_order_id || p.binance_client_order_id);
+
+        // Case A: No Binance order id at all → it's safe to delete; the order was
+        // never sent (we always persist the id BEFORE placing the order from now on,
+        // so any row without an id is from a pre-Phase-1 crash or an aborted intent).
+        if (!hasOrderRef) {
+          await supabaseClient.from('positions').delete().eq('id', p.id);
+          console.log(`🧹 PENDING_DELETED_SAFE_NO_ORDER_SENT: ${p.symbol} (id=${p.id})`);
+          continue;
+        }
+
+        // Case B: We have an order ref → ask Binance what really happened
+        const ord = await queryBinanceOrder(p.symbol, {
+          orderId: p.binance_order_id,
+          clientOrderId: p.binance_client_order_id,
+        });
+
+        if (!ord) {
+          // Transport / auth failure — keep the row, do NOT delete
+          console.warn(`⏸️ PENDING_CLEANUP_DEFERRED (Binance lookup failed): ${p.symbol} id=${p.id}`);
+          continue;
+        }
+
+        if (ord._missing) {
+          // Order does not exist on Binance — never reached the exchange or was purged
+          await supabaseClient.from('positions').delete().eq('id', p.id);
+          console.log(`🧹 PENDING_DELETED_SAFE_NO_ORDER_SENT (Binance returned -2013): ${p.symbol} id=${p.id}`);
+          continue;
+        }
+
+        const status = String(ord.status || '').toUpperCase();
+        const executedQty = Math.abs(parseFloat(ord.executedQty || '0'));
+        const avgPrice = parseFloat(ord.avgPrice || ord.price || '0') || Number(p.entry_price) || 0;
+
+        if (status === 'FILLED' || (status === 'PARTIALLY_FILLED' && executedQty > 0)) {
+          // 🚨 Critical: Binance has a fill — must NOT delete. Promote to OPEN.
+          const promoteQty = executedQty > 0 ? executedQty : Number(p.quantity);
+          const { error: promErr } = await supabaseClient
+            .from('positions')
+            .update({
+              status: 'OPEN',
+              quantity: promoteQty,
+              entry_price: avgPrice,
+              current_price: avgPrice,
+              peak_price: avgPrice,
+              binance_order_id: p.binance_order_id || (ord.orderId ? String(ord.orderId) : null),
+              binance_client_order_id: p.binance_client_order_id || ord.clientOrderId || null,
+              order_status: status,
+              promotion_failed: false,
+              promotion_error: null,
+            })
+            .eq('id', p.id);
+          if (promErr) {
+            console.error(`❌ PENDING_PROMOTION_FAILED_BUT_PRESERVED (cleanup-promote): ${p.symbol} id=${p.id} err=${promErr.message}`);
+            await supabaseClient.from('positions').update({
+              promotion_failed: true,
+              promotion_error: `cleanup-promote: ${promErr.message}`,
+              order_status: status,
+            }).eq('id', p.id);
+          } else {
+            console.log(`✅ PENDING_PROMOTED_FROM_BINANCE_STATUS: ${p.symbol} id=${p.id} qty=${promoteQty} avg=${avgPrice} status=${status}`);
+          }
+          continue;
+        }
+
+        if (status === 'CANCELED' || status === 'EXPIRED' || status === 'REJECTED') {
+          await supabaseClient.from('positions').delete().eq('id', p.id);
+          console.log(`🧹 PENDING_DELETED_BINANCE_${status}: ${p.symbol} id=${p.id}`);
+          continue;
+        }
+
+        // status === NEW or anything else → leave it alone, decision deferred
+        await supabaseClient.from('positions').update({ order_status: status }).eq('id', p.id);
+        console.log(`⏸️ PENDING_CLEANUP_SKIPPED_PENDING_BINANCE: ${p.symbol} id=${p.id} status=${status}`);
+      }
+    }
+
 
     // Get active trading sessions
     const { data: sessions, error: sessionsError } = await supabaseClient
@@ -4369,12 +4512,26 @@ serve(async (req) => {
 
           // Place order
           const side = signal === 'LONG' ? 'BUY' : 'SELL';
+
+          // 🔖 Build slot-owning clientOrderId BEFORE sending the order, and persist it on
+          // the PENDING row so the cleanup pass can always look the order up on Binance.
+          const clientOrderId = buildClientOrderId(slotId, symbol, side);
+          await supabaseClient
+            .from('positions')
+            .update({
+              binance_client_order_id: clientOrderId,
+              order_created_at: new Date().toISOString(),
+              order_status: 'SENDING',
+            })
+            .eq('id', pendingPositionId);
+
           console.log(`\n🚀 PLACING ORDER on ${symbol}:`);
           console.log(`   Side: ${side}`);
           console.log(`   Quantity: ${quantityRounded}`);
           console.log(`   Price: ${analysis.indicators.price}`);
           console.log(`   Stop Loss: ${analysis.stopLoss}`);
-          
+          console.log(`   ClientOrderId: ${clientOrderId}`);
+
           let orderData;
           try {
             orderData = await placeOrder(
@@ -4385,23 +4542,57 @@ serve(async (req) => {
               analysis.takeProfit,
               qtyPrecision,
               pricePrecision,
-              config.leverage
+              config.leverage,
+              clientOrderId,
             );
             console.log(`✅ ORDER PLACED SUCCESSFULLY: ${symbol} ${side} ${quantityRounded}`);
             console.log(`   Order ID: ${orderData.orderId}`);
             console.log(`   Status: ${orderData.status}`);
+
+            // 🛡️ Persist the Binance order id IMMEDIATELY so any crash from here on
+            // is recoverable by the hardened cleanup (it can look up by orderId or clientOrderId).
+            await supabaseClient
+              .from('positions')
+              .update({
+                binance_order_id: orderData.orderId ? String(orderData.orderId) : null,
+                binance_client_order_id: orderData.clientOrderId || clientOrderId,
+                order_status: String(orderData.status || 'NEW').toUpperCase(),
+              })
+              .eq('id', pendingPositionId);
           } catch (orderError: any) {
             console.error(`❌ ORDER PLACEMENT FAILED for ${symbol}:`, orderError.message);
             console.error(`   Full error:`, orderError);
-            // Release the intent lock
+
+            // Before deleting, double-check Binance didn't actually accept the order
+            // (network failed AFTER the exchange processed it). If it did → keep PENDING.
+            const ord = await queryBinanceOrder(symbol, { clientOrderId });
+            if (ord && !ord._missing) {
+              const status = String(ord.status || '').toUpperCase();
+              const exec = Math.abs(parseFloat(ord.executedQty || '0'));
+              if (status === 'FILLED' || (status === 'PARTIALLY_FILLED' && exec > 0) || status === 'NEW') {
+                await supabaseClient.from('positions').update({
+                  binance_order_id: ord.orderId ? String(ord.orderId) : null,
+                  binance_client_order_id: ord.clientOrderId || clientOrderId,
+                  order_status: status,
+                  promotion_failed: true,
+                  promotion_error: `placeOrder threw but Binance has order in status=${status}: ${orderError.message}`,
+                }).eq('id', pendingPositionId);
+                console.warn(`⚠️ PENDING_PROMOTION_FAILED_BUT_PRESERVED: ${symbol} — Binance accepted order despite throw (status=${status}); cleanup will reconcile`);
+                await updateSlotEvalForSymbol(symbol, 'BLOCKED_BINANCE_ORDER_FAILED', `placeOrder threw but order present on Binance (status=${status})`);
+                continue;
+              }
+            }
+
+            // Safe to release: order never reached Binance (or was rejected/cancelled)
             await supabaseClient
               .from('positions')
               .delete()
               .eq('id', pendingPositionId);
-            console.log(`🔓 INTENT LOCK RELEASED: ${symbol} (order failed)`);
+            console.log(`🔓 INTENT LOCK RELEASED: ${symbol} (order failed, Binance has no record)`);
             await updateSlotEvalForSymbol(symbol, 'BLOCKED_BINANCE_ORDER_FAILED', `placeOrder threw: ${orderError.message}`);
             continue;
           }
+
           
           // Wait a moment for Binance to process the order
           console.log(`⏳ Waiting 1s for Binance to process...`);
@@ -5410,28 +5601,52 @@ serve(async (req) => {
               current_price: actualEntryPrice,
               peak_price: actualEntryPrice,
               trailing_stop_percent: parseFloat(trailingStopPercent.toFixed(2)),
-              binance_order_id: orderData.orderId,
+              binance_order_id: orderData.orderId ? String(orderData.orderId) : null,
+              binance_client_order_id: orderData.clientOrderId || clientOrderId,
+              order_status: String(orderData.status || 'FILLED').toUpperCase(),
               status: 'OPEN',
+              promotion_failed: false,
+              promotion_error: null,
               strategy_hash: strategyHash,
               open_reason: openReason,
               opened_at: openedAtNow.toISOString(),
               indicators_snapshot: { ...comprehensiveSnapshot, slot_id: slotId, slot_name: slotName },
           };
 
-          const { data: insertedPosition, error: insertError } = await supabaseClient
-            .from('positions')
-            .update(positionUpdateData)
-            .eq('id', pendingPositionId)
-            .select()
-            .single();
+          // 🔁 Retry promotion up to 3x with short backoff. NEVER delete the PENDING row
+          // on failure — Binance has the position; losing the DB row creates drift.
+          let insertedPosition: any = null;
+          let lastInsertError: any = null;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            const { data, error } = await supabaseClient
+              .from('positions')
+              .update(positionUpdateData)
+              .eq('id', pendingPositionId)
+              .select()
+              .single();
+            if (!error) { insertedPosition = data; lastInsertError = null; break; }
+            lastInsertError = error;
+            console.warn(`🔁 PENDING_PROMOTION_RETRY (attempt ${attempt}/3) for ${symbol}: ${error.message}`);
+            await new Promise(r => setTimeout(r, 200 * attempt));
+          }
 
-          if (insertError) {
-            console.error(`❌ DATABASE UPDATE FAILED for ${symbol}:`, insertError);
+          if (lastInsertError) {
+            console.error(`❌ PENDING_PROMOTION_FAILED_BUT_PRESERVED for ${symbol}:`, lastInsertError);
             console.error(`   Pending position ID: ${pendingPositionId}`);
-            console.error(`   Position exists on Binance but not properly in DB!`);
-            console.error(`   Order ID: ${orderData.orderId}`);
-            console.error(`   Manual sync required`);
-            await updateSlotEvalForSymbol(symbol, 'POSITION_OPEN_FAILED', `DB update error: ${insertError.message}`);
+            console.error(`   Position exists on Binance but DB promotion failed after 3 retries.`);
+            console.error(`   Order ID: ${orderData.orderId} ClientOrderId: ${clientOrderId}`);
+            // Mark the PENDING row as failed so the next cleanup can recover via Binance lookup.
+            await supabaseClient
+              .from('positions')
+              .update({
+                promotion_failed: true,
+                promotion_error: `DB update error after 3 retries: ${lastInsertError.message}`,
+                binance_order_id: orderData.orderId ? String(orderData.orderId) : null,
+                binance_client_order_id: orderData.clientOrderId || clientOrderId,
+                order_status: String(orderData.status || 'FILLED').toUpperCase(),
+              })
+              .eq('id', pendingPositionId);
+            await updateSlotEvalForSymbol(symbol, 'POSITION_OPEN_FAILED', `DB update error: ${lastInsertError.message}`);
             continue;
           }
 
