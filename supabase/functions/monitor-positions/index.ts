@@ -263,35 +263,6 @@ async function getPositionIncome(
   } catch (e) { console.error('Error fetching income:', e); return result; }
 }
 
-// Cache exchangeInfo step sizes per cold start
-let _stepSizeCache: Record<string, string> | null = null;
-async function getStepSize(symbol: string): Promise<string> {
-  if (!_stepSizeCache) {
-    try {
-      const r = await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo');
-      const data = await r.json();
-      const map: Record<string, string> = {};
-      for (const s of (data.symbols || [])) {
-        const f = (s.filters || []).find((x: any) => x.filterType === 'LOT_SIZE');
-        if (f && f.stepSize) map[s.symbol] = f.stepSize;
-      }
-      _stepSizeCache = map;
-    } catch (e) {
-      console.error('Failed to load exchangeInfo:', e);
-      _stepSizeCache = {};
-    }
-  }
-  return _stepSizeCache![symbol] || '0.001';
-}
-
-function roundDownToStep(qty: number, stepSize: string): string {
-  const step = parseFloat(stepSize);
-  if (!step || !isFinite(step)) return qty.toString();
-  const decimals = stepSize.includes('.') ? stepSize.split('.')[1].replace(/0+$/, '').length : 0;
-  const rounded = Math.floor(qty / step) * step;
-  return rounded.toFixed(decimals);
-}
-
 async function closePositionOnBinance(symbol: string, side: string, quantity: number) {
   const apiKey = Deno.env.get('BINANCE_API_KEY');
   const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
@@ -327,18 +298,10 @@ async function closePositionOnBinance(symbol: string, side: string, quantity: nu
   }
 
   const closeSide = side === 'LONG' ? 'SELL' : 'BUY';
-
-  // Round quantity down to Binance LOT_SIZE stepSize to avoid -1111 precision errors
-  const stepSize = await getStepSize(symbol);
-  const closeQuantityStr = roundDownToStep(closeQuantity, stepSize);
-  if (parseFloat(closeQuantityStr) <= 0) {
-    console.log(`Close quantity rounded to 0 for ${symbol} (qty=${closeQuantity}, step=${stepSize}) - skipping`);
-    return null;
-  }
-
+  
   // Place the closing order
   const timestamp = Date.now();
-  const queryString = `symbol=${symbol}&side=${closeSide}&type=MARKET&quantity=${closeQuantityStr}&reduceOnly=true&timestamp=${timestamp}&recvWindow=10000`;
+  const queryString = `symbol=${symbol}&side=${closeSide}&type=MARKET&quantity=${closeQuantity}&reduceOnly=true&timestamp=${timestamp}&recvWindow=10000`;
   const signature = await createSignature(queryString, apiSecret);
 
   const response = await fetch(
@@ -2102,18 +2065,11 @@ serve(async (req) => {
             // Tjek om positionen er i profit OG break-even er aktiveret
             const positionIsInProfit = profitDistance > 0;
             const isAboveBreakEven = breakEvenActivatedState; // BE aktiveret = positionen har været i tilstrækkelig profit
-
-            // 🟢 ANTI-SOUR EXIT (Betinget Tids-Exit): når n_enabled=true må timeout
-            // ALDRIG lukke en position der er i profit. Trailing/peak-lock skal styre exit.
-            const antiSourBlocksTimeout = nEnabled === true && positionIsInProfit;
-
-            if (positionIsInProfit && (isAboveBreakEven || antiSourBlocksTimeout)) {
-              // Position er i profit -> INGEN timeout, lad trailing stop styre
-              const reason = antiSourBlocksTimeout && !isAboveBreakEven
-                ? 'Anti-Sour Exit aktiv (n_enabled=true) + i profit'
-                : 'I PROFIT + BE aktiveret';
+            
+            if (positionIsInProfit && isAboveBreakEven) {
+              // Position er i profit over break-even -> INGEN timeout, lad trailing stop styre
               console.log(
-                `⏱️ TIMEOUT SKIPPED | ${position.symbol} | ${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min | profit=${profitPercent.toFixed(2)}% | ${reason} -> fortsætter med trailing stop`
+                `⏱️ TIMEOUT SKIPPED | ${position.symbol} | ${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min | I PROFIT (${profitPercent.toFixed(2)}%) + BE aktiveret -> fortsætter med trailing stop`
               );
               
               // Hvis BE ikke allerede er sat, sæt det nu som sikkerhedsnet
@@ -2134,17 +2090,17 @@ serve(async (req) => {
                       break_even_at_price: position.entry_price,
                       break_even_trigger_price: currentPrice,
                       break_even_triggered_at: new Date().toISOString(),
-                      break_even_mode: antiSourBlocksTimeout ? 'ANTI_SOUR_SAFETY_NET' : 'TIMEOUT_SAFETY_NET',
+                      break_even_mode: 'TIMEOUT_SAFETY_NET',
                     },
                   })
                   .eq('id', position.id);
               }
             } else {
-              // Position er IKKE i profit (eller Anti-Sour er slået fra og BE ikke aktiveret) -> timeout luk
+              // Position er IKKE i profit ELLER break-even er ikke aktiveret -> timeout luk
               shouldClose = true;
               closeReason = 'TIMEOUT';
               console.log(
-                `⏱️ TIMEOUT | ${position.symbol} overskred max varighed (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min) | profit=${profitPercent.toFixed(2)}% | BE_active=${isAboveBreakEven} | nEnabled=${nEnabled} -> LUKKES`
+                `⏱️ TIMEOUT | ${position.symbol} overskred max varighed (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min) | profit=${profitPercent.toFixed(2)}% | BE_active=${isAboveBreakEven} -> LUKKES`
               );
             }
           }
@@ -2910,36 +2866,15 @@ serve(async (req) => {
               if (fills.avgEntry > 0) finalEntryPrice = fills.avgEntry;
               if (fills.avgExit > 0) finalExitPrice = fills.avgExit;
               
-              // Fetch ALL income types → Binance ground truth P&L (AGGREGATED across all slots for symbol)
+              // Fetch ALL income types → Binance ground truth P&L
               const income = await getPositionIncome(position.symbol, apiKey, apiSecret, openedAtTime, closedAtTime);
-
-              // 🔴 SLOT-ISOLATION: Binance income is aggregated across ALL slots holding this symbol.
-              // We must NEVER assign the full aggregate to a single slot — prorate by this slot's qty share.
-              // Sum qty of all positions (open or just-closed) for this symbol+user in the income window.
-              let symbolTotalQty = actualQuantity;
-              try {
-                const { data: siblingRows } = await supabaseClient
-                  .from('positions')
-                  .select('quantity')
-                  .eq('user_id', position.user_id)
-                  .eq('symbol', position.symbol);
-                const openQty = (siblingRows || []).reduce((s: number, r: any) => s + Math.abs(Number(r.quantity) || 0), 0);
-                // include this slot's own qty (already closed/removed from positions table by now in some paths)
-                symbolTotalQty = Math.max(actualQuantity, openQty + actualQuantity);
-              } catch (e) {
-                console.warn(`⚠️ slot-share lookup failed for ${position.symbol}, falling back to local qty only`);
-              }
-              const slotShare = symbolTotalQty > 0 ? actualQuantity / symbolTotalQty : 1;
-
-              totalFee = Math.abs(income.commission) * slotShare;
-              fundingFee = income.fundingFee * slotShare;
-              // KEEP slot-local gross PnL (actualPnl based on slot qty × price diff). Do NOT overwrite with aggregated realizedPnl.
-              // finalGrossPnl already = actualPnl from earlier.
-              const proratedRealized = income.realizedPnl * slotShare;
-              binanceNetPnl = proratedRealized + (income.commission * slotShare) + (income.fundingFee * slotShare);
-              pnlAfterFees = finalGrossPnl + (income.commission * slotShare);
-              netPnl = binanceNetPnl;
-              console.log(`🔢 SLOT-SHARE | ${position.symbol} | actualQty=${actualQuantity} totalQty=${symbolTotalQty} share=${(slotShare*100).toFixed(2)}% | aggRealized=${income.realizedPnl.toFixed(4)} → slotRealized=${proratedRealized.toFixed(4)}`);
+              totalFee = Math.abs(income.commission);
+              fundingFee = income.fundingFee;
+              // Use Binance REALIZED_PNL as gross P&L (ground truth, not calculated)
+              if (income.realizedPnl !== 0) finalGrossPnl = income.realizedPnl;
+              binanceNetPnl = income.binanceNetPnl;
+              pnlAfterFees = income.realizedPnl + income.commission;
+              netPnl = binanceNetPnl; // REALIZED_PNL + COMMISSION + FUNDING_FEE
               
               notional = finalEntryPrice * actualQuantity;
               feesPctOfNotional = notional > 0 ? (totalFee / notional) * 100 : 0;
