@@ -4512,12 +4512,26 @@ serve(async (req) => {
 
           // Place order
           const side = signal === 'LONG' ? 'BUY' : 'SELL';
+
+          // 🔖 Build slot-owning clientOrderId BEFORE sending the order, and persist it on
+          // the PENDING row so the cleanup pass can always look the order up on Binance.
+          const clientOrderId = buildClientOrderId(slotId, symbol, side);
+          await supabaseClient
+            .from('positions')
+            .update({
+              binance_client_order_id: clientOrderId,
+              order_created_at: new Date().toISOString(),
+              order_status: 'SENDING',
+            })
+            .eq('id', pendingPositionId);
+
           console.log(`\n🚀 PLACING ORDER on ${symbol}:`);
           console.log(`   Side: ${side}`);
           console.log(`   Quantity: ${quantityRounded}`);
           console.log(`   Price: ${analysis.indicators.price}`);
           console.log(`   Stop Loss: ${analysis.stopLoss}`);
-          
+          console.log(`   ClientOrderId: ${clientOrderId}`);
+
           let orderData;
           try {
             orderData = await placeOrder(
@@ -4528,23 +4542,57 @@ serve(async (req) => {
               analysis.takeProfit,
               qtyPrecision,
               pricePrecision,
-              config.leverage
+              config.leverage,
+              clientOrderId,
             );
             console.log(`✅ ORDER PLACED SUCCESSFULLY: ${symbol} ${side} ${quantityRounded}`);
             console.log(`   Order ID: ${orderData.orderId}`);
             console.log(`   Status: ${orderData.status}`);
+
+            // 🛡️ Persist the Binance order id IMMEDIATELY so any crash from here on
+            // is recoverable by the hardened cleanup (it can look up by orderId or clientOrderId).
+            await supabaseClient
+              .from('positions')
+              .update({
+                binance_order_id: orderData.orderId ? String(orderData.orderId) : null,
+                binance_client_order_id: orderData.clientOrderId || clientOrderId,
+                order_status: String(orderData.status || 'NEW').toUpperCase(),
+              })
+              .eq('id', pendingPositionId);
           } catch (orderError: any) {
             console.error(`❌ ORDER PLACEMENT FAILED for ${symbol}:`, orderError.message);
             console.error(`   Full error:`, orderError);
-            // Release the intent lock
+
+            // Before deleting, double-check Binance didn't actually accept the order
+            // (network failed AFTER the exchange processed it). If it did → keep PENDING.
+            const ord = await queryBinanceOrder(symbol, { clientOrderId });
+            if (ord && !ord._missing) {
+              const status = String(ord.status || '').toUpperCase();
+              const exec = Math.abs(parseFloat(ord.executedQty || '0'));
+              if (status === 'FILLED' || (status === 'PARTIALLY_FILLED' && exec > 0) || status === 'NEW') {
+                await supabaseClient.from('positions').update({
+                  binance_order_id: ord.orderId ? String(ord.orderId) : null,
+                  binance_client_order_id: ord.clientOrderId || clientOrderId,
+                  order_status: status,
+                  promotion_failed: true,
+                  promotion_error: `placeOrder threw but Binance has order in status=${status}: ${orderError.message}`,
+                }).eq('id', pendingPositionId);
+                console.warn(`⚠️ PENDING_PROMOTION_FAILED_BUT_PRESERVED: ${symbol} — Binance accepted order despite throw (status=${status}); cleanup will reconcile`);
+                await updateSlotEvalForSymbol(symbol, 'BLOCKED_BINANCE_ORDER_FAILED', `placeOrder threw but order present on Binance (status=${status})`);
+                continue;
+              }
+            }
+
+            // Safe to release: order never reached Binance (or was rejected/cancelled)
             await supabaseClient
               .from('positions')
               .delete()
               .eq('id', pendingPositionId);
-            console.log(`🔓 INTENT LOCK RELEASED: ${symbol} (order failed)`);
+            console.log(`🔓 INTENT LOCK RELEASED: ${symbol} (order failed, Binance has no record)`);
             await updateSlotEvalForSymbol(symbol, 'BLOCKED_BINANCE_ORDER_FAILED', `placeOrder threw: ${orderError.message}`);
             continue;
           }
+
           
           // Wait a moment for Binance to process the order
           console.log(`⏳ Waiting 1s for Binance to process...`);
