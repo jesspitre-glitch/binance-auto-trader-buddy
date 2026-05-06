@@ -733,6 +733,7 @@ export type Database = {
       }
       positions: {
         Row: {
+          binance_client_order_id: string | null
           binance_order_id: string | null
           break_even_activated: boolean | null
           close_reason: string | null
@@ -745,7 +746,11 @@ export type Database = {
           low_price: number | null
           open_reason: string | null
           opened_at: string | null
+          order_created_at: string | null
+          order_status: string | null
           peak_price: number | null
+          promotion_error: string | null
+          promotion_failed: boolean | null
           quantity: number
           side: string
           slot_id: string | null
@@ -761,6 +766,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          binance_client_order_id?: string | null
           binance_order_id?: string | null
           break_even_activated?: boolean | null
           close_reason?: string | null
@@ -773,7 +779,11 @@ export type Database = {
           low_price?: number | null
           open_reason?: string | null
           opened_at?: string | null
+          order_created_at?: string | null
+          order_status?: string | null
           peak_price?: number | null
+          promotion_error?: string | null
+          promotion_failed?: boolean | null
           quantity: number
           side: string
           slot_id?: string | null
@@ -789,6 +799,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          binance_client_order_id?: string | null
           binance_order_id?: string | null
           break_even_activated?: boolean | null
           close_reason?: string | null
@@ -801,7 +812,11 @@ export type Database = {
           low_price?: number | null
           open_reason?: string | null
           opened_at?: string | null
+          order_created_at?: string | null
+          order_status?: string | null
           peak_price?: number | null
+          promotion_error?: string | null
+          promotion_failed?: boolean | null
           quantity?: number
           side?: string
           slot_id?: string | null
