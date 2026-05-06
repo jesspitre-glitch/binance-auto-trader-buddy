@@ -2102,11 +2102,18 @@ serve(async (req) => {
             // Tjek om positionen er i profit OG break-even er aktiveret
             const positionIsInProfit = profitDistance > 0;
             const isAboveBreakEven = breakEvenActivatedState; // BE aktiveret = positionen har været i tilstrækkelig profit
-            
-            if (positionIsInProfit && isAboveBreakEven) {
-              // Position er i profit over break-even -> INGEN timeout, lad trailing stop styre
+
+            // 🟢 ANTI-SOUR EXIT (Betinget Tids-Exit): når n_enabled=true må timeout
+            // ALDRIG lukke en position der er i profit. Trailing/peak-lock skal styre exit.
+            const antiSourBlocksTimeout = nEnabled === true && positionIsInProfit;
+
+            if (positionIsInProfit && (isAboveBreakEven || antiSourBlocksTimeout)) {
+              // Position er i profit -> INGEN timeout, lad trailing stop styre
+              const reason = antiSourBlocksTimeout && !isAboveBreakEven
+                ? 'Anti-Sour Exit aktiv (n_enabled=true) + i profit'
+                : 'I PROFIT + BE aktiveret';
               console.log(
-                `⏱️ TIMEOUT SKIPPED | ${position.symbol} | ${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min | I PROFIT (${profitPercent.toFixed(2)}%) + BE aktiveret -> fortsætter med trailing stop`
+                `⏱️ TIMEOUT SKIPPED | ${position.symbol} | ${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min | profit=${profitPercent.toFixed(2)}% | ${reason} -> fortsætter med trailing stop`
               );
               
               // Hvis BE ikke allerede er sat, sæt det nu som sikkerhedsnet
@@ -2127,17 +2134,17 @@ serve(async (req) => {
                       break_even_at_price: position.entry_price,
                       break_even_trigger_price: currentPrice,
                       break_even_triggered_at: new Date().toISOString(),
-                      break_even_mode: 'TIMEOUT_SAFETY_NET',
+                      break_even_mode: antiSourBlocksTimeout ? 'ANTI_SOUR_SAFETY_NET' : 'TIMEOUT_SAFETY_NET',
                     },
                   })
                   .eq('id', position.id);
               }
             } else {
-              // Position er IKKE i profit ELLER break-even er ikke aktiveret -> timeout luk
+              // Position er IKKE i profit (eller Anti-Sour er slået fra og BE ikke aktiveret) -> timeout luk
               shouldClose = true;
               closeReason = 'TIMEOUT';
               console.log(
-                `⏱️ TIMEOUT | ${position.symbol} overskred max varighed (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min) | profit=${profitPercent.toFixed(2)}% | BE_active=${isAboveBreakEven} -> LUKKES`
+                `⏱️ TIMEOUT | ${position.symbol} overskred max varighed (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min) | profit=${profitPercent.toFixed(2)}% | BE_active=${isAboveBreakEven} | nEnabled=${nEnabled} -> LUKKES`
               );
             }
           }
