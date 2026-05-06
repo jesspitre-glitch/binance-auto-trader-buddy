@@ -3977,6 +3977,7 @@ serve(async (req) => {
             console.log(`   Symbol: ${symbol}, Signal: ${signal}`);
             console.log(`   ATR_value: ${atrForTrade}`);
             console.log(`   ❌ Reason: ATR er PÅKRÆVET for exit-logik (SL, BE, Trailing). Ingen trade uden gyldig ATR.`);
+            await updateSlotEval('BLOCKED_HARD_GATE', `ATR_DATA_MISSING_FOR_EXITS (atr=${atrForTrade})`);
             continue;
           }
           console.log(`✅ ATR valideret for ${symbol}: ${atrForTrade.toFixed(6)} (${((atrForTrade / analysis.indicators.price) * 100).toFixed(2)}%)`);
@@ -4070,21 +4071,25 @@ serve(async (req) => {
             console.error(`🚫 BLOKERET: user_portfolio.futures_capital mangler/er ugyldig for user ${session.user_id}`);
             console.error(`   Binance available balance ($${availableBalance.toFixed(2)}) må IKKE bruges som sizing-baseline for slot trades`);
             console.error(`   ❌ Trade AFVIST: størrelsen kan ikke valideres mod slot-UI uden en gyldig futures_capital`);
+            await updateSlotEval('BLOCKED_INVALID_PORTFOLIO_BALANCE', `futures_capital missing/invalid (=${configuredBalance})`);
             continue;
           }
 
           if (!Number.isFinite(capitalPercent) || capitalPercent <= 0 || capitalPercent > 100) {
             console.error(`🚫 BLOKERET: ugyldig capital_percent for slot ${slotName}: ${capitalPercent}`);
+            await updateSlotEval('BLOCKED_INVALID_CAPITAL_PERCENT', `capital_percent=${capitalPercent}`);
             continue;
           }
 
           if (!Number.isFinite(config.position_size_percent) || config.position_size_percent <= 0 || config.position_size_percent > 100) {
             console.error(`🚫 BLOKERET: ugyldig position_size_percent for slot ${slotName}: ${config.position_size_percent}`);
+            await updateSlotEval('BLOCKED_INVALID_POSITION_SIZE', `position_size_percent=${config.position_size_percent}`);
             continue;
           }
 
           if (!Number.isFinite(config.leverage) || config.leverage <= 0) {
             console.error(`🚫 BLOKERET: ugyldig leverage for slot ${slotName}: ${config.leverage}`);
+            await updateSlotEval('BLOCKED_INVALID_LEVERAGE', `leverage=${config.leverage}`);
             continue;
           }
 
@@ -4094,6 +4099,7 @@ serve(async (req) => {
 
           if (!Number.isFinite(slotTradableBalance) || slotTradableBalance <= 0) {
             console.log(`🚫 Skip ${symbol}: no tradable balance available (configured=${slotConfiguredBalance}, available=${availableBalance})`);
+            await updateSlotEval('BLOCKED_NO_TRADABLE_BALANCE', `slot configured=$${slotConfiguredBalance.toFixed(2)}, binance available=$${availableBalance.toFixed(2)}`);
             continue;
           }
 
@@ -4110,6 +4116,7 @@ serve(async (req) => {
             console.log(`🚨 BLOKERET: ${symbol} - ATR mangler eller ugyldig (${atrFromAnalysis})`);
             console.log(`   ❌ Trade AFVIST: Uden gyldig ATR kan exit-logik ikke fungere korrekt`);
             console.log(`   ❌ Stop Loss, Break-Even og Trailing Stop ville bruge faste procenter istedet for ATR`);
+            await updateSlotEval('BLOCKED_HARD_GATE', `ATR_INVALID_FOR_SIZING (atr=${atrFromAnalysis})`);
             continue;
           }
           console.log(`✅ ATR valideret: ${atrFromAnalysis.toFixed(6)} (${((atrFromAnalysis / analysis.indicators.price) * 100).toFixed(2)}%)`);
@@ -4118,6 +4125,7 @@ serve(async (req) => {
           if (!analysis.stopLoss || !isFinite(analysis.stopLoss) || analysis.stopLoss <= 0) {
             console.log(`🚨 BLOKERET: ${symbol} - Stop Loss beregning fejlet (${analysis.stopLoss})`);
             console.log(`   ❌ Trade AFVIST: Stop Loss er påkrævet for alle trades`);
+            await updateSlotEval('BLOCKED_HARD_GATE', `STOP_LOSS_INVALID (sl=${analysis.stopLoss})`);
             continue;
           }
           
@@ -4163,6 +4171,7 @@ serve(async (req) => {
           const filters = symbolFilters[symbol];
           if (!filters) {
             console.log(`❌ Missing filters for ${symbol}, skipping.`);
+            await updateSlotEval('BLOCKED_MISSING_SYMBOL_FILTERS', `No Binance lot/price filters for ${symbol}`);
             continue;
           }
           const qtyPrecision = getPrecisionFromStep(filters.stepSize);
@@ -4180,6 +4189,7 @@ serve(async (req) => {
             console.error(`   Configured balance: $${planningBalance.toFixed(2)}`);
             console.error(`   capitalPercent=${capitalPercent}%, position_size=${config.position_size_percent}%, leverage=${config.leverage}x`);
             console.error(`   ❌ Trade AFVIST før Binance-kald`);
+            await updateSlotEval('BLOCKED_SLOT_SIZE_CAP', `qty ${quantityRounded.toFixed(qtyPrecision)} > slot max ${maxSlotQuantityRounded.toFixed(qtyPrecision)} (cap=${capitalPercent}%, pos=${config.position_size_percent}%, lev=${config.leverage}x)`);
             continue;
           }
 
@@ -4197,6 +4207,7 @@ serve(async (req) => {
 
           if (!isFinite(quantityRounded) || quantityRounded <= 0 || quantityRounded < filters.minQty) {
             console.log(`❌ Skip ${symbol}: qty ${quantityRounded} below min ${filters.minQty}`);
+            await updateSlotEval('BLOCKED_MIN_QTY', `qty ${quantityRounded} < Binance minQty ${filters.minQty}`);
             continue;
           }
 
@@ -4205,11 +4216,13 @@ serve(async (req) => {
 
           if (!Number.isFinite(requiredMarginEstimate) || requiredMarginEstimate <= 0) {
             console.log(`❌ Skip ${symbol}: invalid required margin estimate (${requiredMarginEstimate})`);
+            await updateSlotEval('BLOCKED_INVALID_MARGIN', `requiredMarginEstimate=${requiredMarginEstimate}`);
             continue;
           }
 
           if (requiredMarginEstimate > availableBalance) {
             console.log(`❌ Skip ${symbol}: required margin $${requiredMarginEstimate.toFixed(4)} exceeds Binance available balance $${availableBalance.toFixed(4)}`);
+            await updateSlotEval('BLOCKED_INSUFFICIENT_MARGIN', `required $${requiredMarginEstimate.toFixed(2)} > available $${availableBalance.toFixed(2)}`);
             continue;
           }
 
@@ -4222,6 +4235,7 @@ serve(async (req) => {
             console.error(`🚨 SAFETY GUARD BLOCKED: ${symbol} notional $${actualNotional.toFixed(2)} exceeds slot max $${maxSlotNotional.toFixed(2)} (+epsilon $${hardNotionalEpsilon.toFixed(2)}) = $${maxAllowedNotional.toFixed(2)}`);
             console.error(`   planningBalance=$${planningBalance.toFixed(2)}, capitalPercent=${capitalPercent}%, position_size=${config.position_size_percent}%, leverage=${config.leverage}x`);
             console.error(`   ❌ Trade AFVIST før Binance-kald for at beskytte mod oversized positioner`);
+            await updateSlotEval('BLOCKED_SAFETY_GUARD', `notional $${actualNotional.toFixed(2)} > slot max $${maxAllowedNotional.toFixed(2)}`);
             continue;
           }
           console.log(`🛡️ Safety guard OK: notional $${actualNotional.toFixed(2)} <= max $${maxAllowedNotional.toFixed(2)}`);
@@ -4240,6 +4254,7 @@ serve(async (req) => {
 
           if (trackedSymbolPositionsError) {
             console.error(`❌ Could not validate tracked symbol exposure for ${symbol}:`, trackedSymbolPositionsError.message);
+            await updateSlotEval('BLOCKED_RECONCILIATION_ERROR', `tracked exposure query failed: ${trackedSymbolPositionsError.message}`);
             continue;
           }
 
@@ -4256,6 +4271,7 @@ serve(async (req) => {
             console.error(`   Tracked DB qty: ${trackedQtyBeforeOrder.toFixed(qtyPrecision)}`);
             console.error(`   Drift: ${exposureDrift.toFixed(qtyPrecision)} > tolerance ${reconciliationTolerance.toFixed(qtyPrecision)}`);
             console.error(`   ❌ Trade AFVIST indtil sync/data igen matcher Binance 1:1`);
+            await updateSlotEval('BLOCKED_RECONCILIATION_DRIFT', `Binance qty ${liveBinanceQtyBeforeOrder} vs DB ${trackedQtyBeforeOrder}, drift ${exposureDrift.toFixed(qtyPrecision)}`);
             continue;
           }
 
@@ -4281,6 +4297,7 @@ serve(async (req) => {
               `   formel: $${configuredBalance.toFixed(2)} × ${capitalPercent}% × ${config.position_size_percent}% × ${leverageMult}x × ${ABSOLUTE_TOLERANCE_MULTIPLIER}`
             );
             console.error(`   ❌ Trade AFVIST — dette burde ALDRIG ske`);
+            await updateSlotEval('BLOCKED_ABSOLUTE_HARD_CAP', `notional $${actualNotional.toFixed(2)} > absolute max $${absoluteMaxNotional.toFixed(2)}`);
             continue;
           }
           
@@ -4300,6 +4317,7 @@ serve(async (req) => {
 
           if (sameSlotExisting && sameSlotExisting.length > 0) {
             console.log(`🛡️ SLOT SYMBOL LOCK: ${symbol} already OPEN/PENDING in this slot ${slotName} — skipping`);
+            await updateSlotEval('BLOCKED_DUPLICATE_SLOT_SYMBOL', `already OPEN/PENDING in this slot`);
             continue;
           }
 
@@ -4330,6 +4348,7 @@ serve(async (req) => {
             // Unique constraint violation = another scan already claimed this symbol
             console.log(`🛡️ INTENT LOCK BLOCKED: ${symbol} for slot ${slotName} — already OPEN or PENDING`);
             console.log(`   DB error: ${pendingError.message}`);
+            await updateSlotEval('BLOCKED_INTENT_LOCK', `pending insert rejected: ${pendingError.message}`);
             continue;
           }
 
@@ -4368,6 +4387,7 @@ serve(async (req) => {
               .delete()
               .eq('id', pendingPositionId);
             console.log(`🔓 INTENT LOCK RELEASED: ${symbol} (order failed)`);
+            await updateSlotEval('BLOCKED_BINANCE_ORDER_FAILED', `placeOrder threw: ${orderError.message}`);
             continue;
           }
           
@@ -4383,6 +4403,7 @@ serve(async (req) => {
             console.error(`❌ VERIFICATION FAILED: Position ${symbol} not found on Binance after order placement`);
             console.error(`   Order ID: ${orderData.orderId}`);
             console.error(`   This order may need manual intervention`);
+            await updateSlotEval('BLOCKED_BINANCE_VERIFICATION_FAILED', `Order ${orderData.orderId} not found on Binance after placement`);
             continue;
           }
           
