@@ -3945,6 +3945,7 @@ serve(async (req) => {
             console.log(`\n🚨 TRADE_BLOCKED:${blockReason.split(' ')[0]}`);
             console.log(`   Symbol: ${symbol}, Signal: ${signal}, Strength: ${selectedSignal.strength.toFixed(1)}`);
             console.log(`   Full Reason: ${blockReason}`);
+            await updateSlotEval('BLOCKED_HARD_GATE', blockReason);
             continue;
           }
           
