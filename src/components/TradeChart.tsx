@@ -806,7 +806,7 @@ const ChartShell = ({
       clearTimeout(t2);
       window.removeEventListener("resize", update);
     };
-  });
+  }, [chartData.length, exitStopSeries.length, isMobile]);
 
   // ---- Y-akse range -------------------------------------------------------
   const { yMin, yMax } = useMemo(() => {
