@@ -3252,7 +3252,18 @@ serve(async (req) => {
       }
       
       const validSignals: SignalCandidate[] = [];
-      
+      // Map symbol -> latest slot_signal_evaluations.id (per slot, per cycle) so the
+      // downstream signalsToTrade loop can update the row when a gate blocks the trade.
+      const slotEvalIdBySymbol = new Map<string, string>();
+      const updateSlotEvalForSymbol = async (sym: string, action: string, reason: string | null) => {
+        const id = slotEvalIdBySymbol.get(sym);
+        if (!id) return;
+        await supabaseClient
+          .from('slot_signal_evaluations')
+          .update({ action_taken: action, block_reason: reason })
+          .eq('id', id);
+      };
+
       for (const symbol of symbols) {
         try {
           // Add 100ms delay between symbols to avoid Binance rate limits (418 errors)
