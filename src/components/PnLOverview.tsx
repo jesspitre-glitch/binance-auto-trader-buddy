@@ -283,9 +283,24 @@ export const PnLOverview = ({ slotId, includeLegacyData = false, onSelectSlot }:
       console.log(`[PnL] Trades: ${allTradesData.length}, Funding fees: ${fundingFees.length} (total: ${totalFundingFees.toFixed(2)} USDT)`);
       
       // Sort trades ascending for cumulative chart
-      const trades = allTradesData.sort((a, b) => 
+      const sortedTrades = allTradesData.sort((a, b) => 
         new Date(a.closed_at).getTime() - new Date(b.closed_at).getTime()
       );
+
+      // 🛡️ UI fallback dedup: drop rows that share (symbol, side, entry_price, opened-minute, net_pnl)
+      // This catches legacy duplicates that were not yet flagged with close_reason='DUPLICATE'.
+      const seenDupKey = new Set<string>();
+      const trades = sortedTrades.filter((t: any) => {
+        const minute = t.opened_at ? new Date(t.opened_at).toISOString().slice(0, 16) : '';
+        const npnl = Number(t.net_pnl ?? t.pnl ?? 0).toFixed(6);
+        const key = `${t.symbol}|${t.side}|${Number(t.entry_price).toFixed(8)}|${minute}|${npnl}`;
+        if (seenDupKey.has(key)) {
+          console.warn('[PnL] dedup-fallback dropped duplicate row', t.id, key);
+          return false;
+        }
+        seenDupKey.add(key);
+        return true;
+      });
       
       const currentBalance = Number(portfolioResult?.data?.futures_capital || 0);
       const portfolioBalance = currentBalance;
