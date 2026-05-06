@@ -2885,6 +2885,47 @@ async function placeOrder(
   return orderData;
 }
 
+// 🔍 Look up an order on Binance by orderId or origClientOrderId.
+// Returns the raw order object, { _missing: true } if not found (-2013), or null on transport error.
+async function queryBinanceOrder(
+  symbol: string,
+  opts: { orderId?: string | number | null; clientOrderId?: string | null },
+): Promise<any | null> {
+  const apiKey = Deno.env.get('BINANCE_API_KEY');
+  const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
+  if (!apiKey || !apiSecret) return null;
+  const paramObj: Record<string, string> = {
+    symbol,
+    timestamp: Date.now().toString(),
+    recvWindow: '10000',
+  };
+  if (opts.orderId) paramObj.orderId = String(opts.orderId);
+  else if (opts.clientOrderId) paramObj.origClientOrderId = String(opts.clientOrderId);
+  else return null;
+  const params = new URLSearchParams(paramObj);
+  const sig = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(apiSecret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  ).then(k => crypto.subtle.sign('HMAC', k, new TextEncoder().encode(params.toString())))
+   .then(s => Array.from(new Uint8Array(s)).map(b => b.toString(16).padStart(2, '0')).join(''));
+  params.append('signature', sig);
+  try {
+    const r = await fetch(`https://fapi.binance.com/fapi/v1/order?${params.toString()}`, {
+      headers: { 'X-MBX-APIKEY': apiKey },
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      if (txt.includes('-2013')) return { _missing: true };
+      console.warn(`queryBinanceOrder ${symbol} failed: ${txt}`);
+      return null;
+    }
+    return await r.json();
+  } catch (e) {
+    console.warn(`queryBinanceOrder ${symbol} threw:`, e);
+    return null;
+  }
+}
+
 async function verifyPositionOnBinance(symbol: string): Promise<any | null> {
   const apiKey = Deno.env.get('BINANCE_API_KEY');
   const apiSecret = Deno.env.get('BINANCE_SECRET_KEY');
