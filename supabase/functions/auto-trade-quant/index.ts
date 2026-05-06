@@ -5601,28 +5601,52 @@ serve(async (req) => {
               current_price: actualEntryPrice,
               peak_price: actualEntryPrice,
               trailing_stop_percent: parseFloat(trailingStopPercent.toFixed(2)),
-              binance_order_id: orderData.orderId,
+              binance_order_id: orderData.orderId ? String(orderData.orderId) : null,
+              binance_client_order_id: orderData.clientOrderId || clientOrderId,
+              order_status: String(orderData.status || 'FILLED').toUpperCase(),
               status: 'OPEN',
+              promotion_failed: false,
+              promotion_error: null,
               strategy_hash: strategyHash,
               open_reason: openReason,
               opened_at: openedAtNow.toISOString(),
               indicators_snapshot: { ...comprehensiveSnapshot, slot_id: slotId, slot_name: slotName },
           };
 
-          const { data: insertedPosition, error: insertError } = await supabaseClient
-            .from('positions')
-            .update(positionUpdateData)
-            .eq('id', pendingPositionId)
-            .select()
-            .single();
+          // 🔁 Retry promotion up to 3x with short backoff. NEVER delete the PENDING row
+          // on failure — Binance has the position; losing the DB row creates drift.
+          let insertedPosition: any = null;
+          let lastInsertError: any = null;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            const { data, error } = await supabaseClient
+              .from('positions')
+              .update(positionUpdateData)
+              .eq('id', pendingPositionId)
+              .select()
+              .single();
+            if (!error) { insertedPosition = data; lastInsertError = null; break; }
+            lastInsertError = error;
+            console.warn(`🔁 PENDING_PROMOTION_RETRY (attempt ${attempt}/3) for ${symbol}: ${error.message}`);
+            await new Promise(r => setTimeout(r, 200 * attempt));
+          }
 
-          if (insertError) {
-            console.error(`❌ DATABASE UPDATE FAILED for ${symbol}:`, insertError);
+          if (lastInsertError) {
+            console.error(`❌ PENDING_PROMOTION_FAILED_BUT_PRESERVED for ${symbol}:`, lastInsertError);
             console.error(`   Pending position ID: ${pendingPositionId}`);
-            console.error(`   Position exists on Binance but not properly in DB!`);
-            console.error(`   Order ID: ${orderData.orderId}`);
-            console.error(`   Manual sync required`);
-            await updateSlotEvalForSymbol(symbol, 'POSITION_OPEN_FAILED', `DB update error: ${insertError.message}`);
+            console.error(`   Position exists on Binance but DB promotion failed after 3 retries.`);
+            console.error(`   Order ID: ${orderData.orderId} ClientOrderId: ${clientOrderId}`);
+            // Mark the PENDING row as failed so the next cleanup can recover via Binance lookup.
+            await supabaseClient
+              .from('positions')
+              .update({
+                promotion_failed: true,
+                promotion_error: `DB update error after 3 retries: ${lastInsertError.message}`,
+                binance_order_id: orderData.orderId ? String(orderData.orderId) : null,
+                binance_client_order_id: orderData.clientOrderId || clientOrderId,
+                order_status: String(orderData.status || 'FILLED').toUpperCase(),
+              })
+              .eq('id', pendingPositionId);
+            await updateSlotEvalForSymbol(symbol, 'POSITION_OPEN_FAILED', `DB update error: ${lastInsertError.message}`);
             continue;
           }
 
