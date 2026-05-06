@@ -1047,6 +1047,7 @@ export type Database = {
           close_reason: string | null
           closed_at: string | null
           created_at: string | null
+          duplicate_of_trade_id: string | null
           duration_minutes: number | null
           entry_fee: number | null
           entry_price: number
@@ -1082,6 +1083,7 @@ export type Database = {
           close_reason?: string | null
           closed_at?: string | null
           created_at?: string | null
+          duplicate_of_trade_id?: string | null
           duration_minutes?: number | null
           entry_fee?: number | null
           entry_price: number
@@ -1117,6 +1119,7 @@ export type Database = {
           close_reason?: string | null
           closed_at?: string | null
           created_at?: string | null
+          duplicate_of_trade_id?: string | null
           duration_minutes?: number | null
           entry_fee?: number | null
           entry_price?: number

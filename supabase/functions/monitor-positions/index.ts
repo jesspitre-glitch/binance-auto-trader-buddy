@@ -2868,19 +2868,46 @@ serve(async (req) => {
               
               // Fetch ALL income types → Binance ground truth P&L
               const income = await getPositionIncome(position.symbol, apiKey, apiSecret, openedAtTime, closedAtTime);
-              totalFee = Math.abs(income.commission);
-              fundingFee = income.fundingFee;
-              // Use Binance REALIZED_PNL as gross P&L (ground truth, not calculated)
-              if (income.realizedPnl !== 0) finalGrossPnl = income.realizedPnl;
-              binanceNetPnl = income.binanceNetPnl;
-              pnlAfterFees = income.realizedPnl + income.commission;
-              netPnl = binanceNetPnl; // REALIZED_PNL + COMMISSION + FUNDING_FEE
-              
+
+              // 🟢 MULTI-SLOT PnL ALLOCATION
+              // Binance income/fills covers the WHOLE symbol in the window. If multiple slots
+              // hold the same symbol/side, splitting must be proportional to slot qty.
+              const { data: siblingRows } = await supabaseClient
+                .from('positions')
+                .select('id, quantity')
+                .eq('user_id', position.user_id)
+                .eq('symbol', position.symbol)
+                .eq('side', position.side)
+                .in('status', ['OPEN', 'CLOSED'])
+                .gte('opened_at', new Date(openedAtTime - 60_000).toISOString());
+              const siblingQtySum = (siblingRows || [])
+                .filter((r: any) => r.id !== position.id)
+                .reduce((s: number, r: any) => s + Math.abs(Number(r.quantity) || 0), 0);
+              const totalCloseQty = Math.abs(actualQuantity) + siblingQtySum;
+              const slotShare = totalCloseQty > 0 ? Math.abs(actualQuantity) / totalCloseQty : 1;
+              if (siblingQtySum > 0) {
+                console.log(`🟢 MULTI_SLOT_PNL_ALLOCATED | ${position.symbol} ${position.side} | slotQty=${actualQuantity} totalQty=${totalCloseQty} share=${slotShare.toFixed(4)}`);
+                console.log(`🟢 PNL_ALLOCATION_SHARE | realized=${income.realizedPnl.toFixed(4)} → ${(income.realizedPnl*slotShare).toFixed(4)} | commission=${income.commission.toFixed(4)} → ${(income.commission*slotShare).toFixed(4)} | funding=${income.fundingFee.toFixed(4)} → ${(income.fundingFee*slotShare).toFixed(4)}`);
+              }
+
+              const allocRealized = income.realizedPnl * slotShare;
+              const allocCommission = income.commission * slotShare;
+              const allocFunding = income.fundingFee * slotShare;
+              const allocOther = income.otherIncome * slotShare;
+              const allocBinanceNet = allocRealized + allocCommission + allocFunding + allocOther;
+
+              totalFee = Math.abs(allocCommission);
+              fundingFee = allocFunding;
+              if (allocRealized !== 0) finalGrossPnl = allocRealized;
+              binanceNetPnl = allocBinanceNet;
+              pnlAfterFees = allocRealized + allocCommission;
+              netPnl = binanceNetPnl;
+
               notional = finalEntryPrice * actualQuantity;
               feesPctOfNotional = notional > 0 ? (totalFee / notional) * 100 : 0;
               leverageUsed = (position.indicators_snapshot as any)?.leverage ?? null;
-              
-              console.log(`📊 BINANCE-MATCH | ${position.symbol} ${position.side} | grossPnl=${finalGrossPnl.toFixed(4)} | binanceNetPnl=${binanceNetPnl.toFixed(4)} | realized=${income.realizedPnl.toFixed(4)} commission=${income.commission.toFixed(4)} funding=${income.fundingFee.toFixed(4)}`);
+
+              console.log(`📊 BINANCE-MATCH | ${position.symbol} ${position.side} | grossPnl=${finalGrossPnl.toFixed(4)} | binanceNetPnl=${binanceNetPnl.toFixed(4)} | share=${slotShare.toFixed(4)}`);
             }
 
             const tradeHistoryInsert: any = {
@@ -2919,12 +2946,25 @@ serve(async (req) => {
               tradeHistoryInsert.slot_id = position.slot_id;
             }
 
-            const { error: historyError } = await supabaseClient.from('trade_history').insert(tradeHistoryInsert);
-
-            if (historyError) {
-              console.error(`Failed to insert trade history for ${position.symbol}:`, historyError);
+            // 🛡️ DUPLICATE GUARD: same slot+symbol+side+opened_at+qty already in history?
+            const { data: existingHist } = await supabaseClient
+              .from('trade_history')
+              .select('id')
+              .eq('user_id', position.user_id)
+              .eq('symbol', position.symbol)
+              .eq('side', position.side)
+              .eq('opened_at', position.opened_at)
+              .eq('slot_id', position.slot_id ?? null)
+              .limit(1);
+            if (existingHist && existingHist.length > 0) {
+              console.log(`⚠️ DUPLICATE_TRADE_HISTORY_SKIPPED | ${position.symbol} ${position.side} | slot=${position.slot_id} opened_at=${position.opened_at}`);
             } else {
-              console.log(`Trade history saved for ${position.symbol}`);
+              const { error: historyError } = await supabaseClient.from('trade_history').insert(tradeHistoryInsert);
+              if (historyError) {
+                console.error(`Failed to insert trade history for ${position.symbol}:`, historyError);
+              } else {
+                console.log(`Trade history saved for ${position.symbol}`);
+              }
             }
             
             // Immediately sync with Binance to ensure DB matches reality

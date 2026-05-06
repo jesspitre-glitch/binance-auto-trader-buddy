@@ -37,7 +37,17 @@ export const TradeHistoryTable = ({ slotId, includeLegacyData = false, slots = [
 
       const { data, error } = await query;
       if (error) throw error;
-      setTrades(data || []);
+      // 🛡️ UI fallback dedup
+      const seen = new Set<string>();
+      const deduped = (data || []).filter((t: any) => {
+        const minute = t.opened_at ? new Date(t.opened_at).toISOString().slice(0, 16) : '';
+        const npnl = Number(t.net_pnl ?? t.pnl ?? 0).toFixed(6);
+        const key = `${t.symbol}|${t.side}|${Number(t.entry_price).toFixed(8)}|${minute}|${npnl}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      setTrades(deduped);
     } catch (error: any) {
       toast({
         title: "Fejl",

@@ -306,24 +306,46 @@ serve(async (req) => {
       const fills = await getPositionFills(resolvedSymbol, side, apiKey, apiSecret, openedAtTime, closedAtTime);
       const income = await getPositionIncome(resolvedSymbol, apiKey, apiSecret, openedAtTime, closedAtTime);
 
-      // Use fill-based avg prices for display, but Binance REALIZED_PNL as ground truth
+      // Use fill-based avg prices for display
       const finalAvgEntry = fills.avgEntry > 0 ? fills.avgEntry : entry;
       const finalAvgExit = fills.avgExit > 0 ? fills.avgExit : exitPrice;
-      // Use Binance REALIZED_PNL as gross P&L (ground truth, not calculated from prices)
-      const grossPnl = income.realizedPnl !== 0 ? income.realizedPnl
+
+      // 🟢 MULTI-SLOT PnL ALLOCATION
+      const { data: siblingRows } = await supabaseClient
+        .from('positions')
+        .select('id, quantity')
+        .eq('user_id', position.user_id)
+        .eq('symbol', resolvedSymbol)
+        .eq('side', side)
+        .in('status', ['OPEN', 'CLOSED'])
+        .gte('opened_at', new Date(openedAtTime - 60_000).toISOString());
+      const siblingQtySum = (siblingRows || [])
+        .filter((r: any) => r.id !== position.id)
+        .reduce((s: number, r: any) => s + Math.abs(Number(r.quantity) || 0), 0);
+      const totalCloseQty = qty + siblingQtySum;
+      const slotShare = totalCloseQty > 0 ? qty / totalCloseQty : 1;
+      if (siblingQtySum > 0) {
+        console.log(`🟢 MULTI_SLOT_PNL_ALLOCATED | ${resolvedSymbol} ${side} | slotQty=${qty} totalQty=${totalCloseQty} share=${slotShare.toFixed(4)}`);
+      }
+
+      const allocRealized = income.realizedPnl * slotShare;
+      const allocCommission = income.commission * slotShare;
+      const allocFunding = income.fundingFee * slotShare;
+      const allocOther = income.otherIncome * slotShare;
+      const allocBinanceNet = allocRealized + allocCommission + allocFunding + allocOther;
+
+      const grossPnl = allocRealized !== 0 ? allocRealized
         : (side === 'LONG' ? (finalAvgExit - finalAvgEntry) * qty : (finalAvgEntry - finalAvgExit) * qty);
 
       const pnlPercent = ((finalAvgExit - finalAvgEntry) / (finalAvgEntry || 1)) * 100 * (side === 'LONG' ? 1 : -1);
+      const binanceNetPnl = allocBinanceNet;
 
-      // Binance-matched net P&L: REALIZED_PNL + COMMISSION + FUNDING_FEE
-      const binanceNetPnl = income.binanceNetPnl;
-
-      const totalFee = Math.abs(income.commission);
+      const totalFee = Math.abs(allocCommission);
       const notional = finalAvgEntry * qty;
       const feesPctOfNotional = notional > 0 ? (totalFee / notional) * 100 : 0;
       const leverageUsed = position.indicators_snapshot?.leverage ?? null;
 
-      console.log(`📊 BINANCE-MATCH | ${resolvedSymbol} ${side} | realized_pnl=${income.realizedPnl.toFixed(4)} | binanceNetPnl=${binanceNetPnl.toFixed(4)} | commission=${income.commission.toFixed(4)} funding=${income.fundingFee.toFixed(4)}`);
+      console.log(`📊 BINANCE-MATCH | ${resolvedSymbol} ${side} | allocRealized=${allocRealized.toFixed(4)} | binanceNetPnl=${binanceNetPnl.toFixed(4)} | share=${slotShare.toFixed(4)}`);
 
       await supabaseClient
         .from('positions')
@@ -336,7 +358,22 @@ serve(async (req) => {
         })
         .eq('id', position.id);
 
-      const { error: histError } = await supabaseClient.from('trade_history').insert({
+      // 🛡️ DUPLICATE GUARD
+      const { data: existingHist } = await supabaseClient
+        .from('trade_history')
+        .select('id')
+        .eq('user_id', position.user_id)
+        .eq('symbol', position.symbol)
+        .eq('side', position.side)
+        .eq('opened_at', position.opened_at)
+        .eq('slot_id', position.slot_id ?? null)
+        .limit(1);
+      let histError: any = null;
+      if (existingHist && existingHist.length > 0) {
+        console.log(`⚠️ DUPLICATE_TRADE_HISTORY_SKIPPED | ${resolvedSymbol} ${side} | slot=${position.slot_id} opened_at=${position.opened_at}`);
+        historyInserted = true;
+      } else {
+        const { error } = await supabaseClient.from('trade_history').insert({
         user_id: position.user_id,
         symbol: position.symbol,
         side: position.side,
@@ -356,18 +393,19 @@ serve(async (req) => {
         entry_fee: 0,
         exit_fee: 0,
         total_fee: totalFee,
-        funding_fee: income.fundingFee,
+        funding_fee: allocFunding,
         net_pnl: binanceNetPnl,
-        pnl_after_fees: grossPnl + income.commission,
+        pnl_after_fees: allocRealized + allocCommission,
         notional: notional,
         leverage_used: leverageUsed,
         fees_pct_of_notional: feesPctOfNotional,
         fees_pending: true,
         fees_reconciled_at: null,
-      });
-
-      historyInserted = !histError;
-      if (histError) console.error('trade_history insert error:', histError);
+        });
+        histError = error;
+        historyInserted = !error;
+        if (error) console.error('trade_history insert error:', error);
+      }
     }
 
     // 5) Sync to refresh portfolio
