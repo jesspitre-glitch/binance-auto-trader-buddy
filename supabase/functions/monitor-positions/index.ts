@@ -2055,24 +2055,21 @@ serve(async (req) => {
         const openedAt = new Date(position.opened_at);
         const now = new Date();
 
-        // Check timeout (SIKKERHEDSNET - kun luk hvis IKKE i profit over break-even)
-        // KRAV: Timeout må kun lukke handler der ikke har udviklet sig positivt.
-        // Handler i profit over break-even skal blive åbne og styres af trailing stop.
+        // Check timeout (SIKKERHEDSNET)
+        // KRAV: Timeout må ALDRIG lukke en position der er i profit, uanset
+        // conditional_time_exit_enabled eller break_even-status. Profitable runners
+        // skal styres af trailing stop / peak-lock / BE — ikke af et hårdt tids-cut.
+        // Timeout må kun lukke trades der IKKE er i profit (sour trades).
         if (!shouldClose && maxPositionDurationMinutes && maxPositionDurationMinutes > 0) {
           const minutesSinceOpen = (now.getTime() - openedAt.getTime()) / (1000 * 60);
 
           if (minutesSinceOpen >= maxPositionDurationMinutes) {
-            // Anti-Sour Exit: Profitable trades skal IKKE lukkes på timeout, hvis conditional_time_exit_enabled=true.
-            // BE aktivering er IKKE et krav (BE kan være helt OFF i strategien).
             const positionIsInProfit = profitDistance > 0;
-            const skipTimeout =
-              positionIsInProfit &&
-              (conditionalTimeExitEnabled === true || breakEvenActivatedState === true);
 
-            if (skipTimeout) {
-              const skipReason = conditionalTimeExitEnabled === true ? 'ANTI_SOUR_IN_PROFIT' : 'BE_ACTIVATED_IN_PROFIT';
+            if (positionIsInProfit) {
+              // Profitable -> spring timeout over uanset Anti-Sour toggle.
               console.log(
-                `⏱️ TIMEOUT_SKIPPED_ANTI_SOUR | ${position.symbol} | ${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min | profit=${profitPercent.toFixed(2)}% | reason=${skipReason}`,
+                `⏱️ TIMEOUT_SKIPPED_IN_PROFIT | ${position.symbol} | ${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min | profit=${profitPercent.toFixed(2)}% | reason=IN_PROFIT`,
                 JSON.stringify({
                   position_id: position.id,
                   slot_id: position.slot_id,
@@ -2084,18 +2081,20 @@ serve(async (req) => {
                   conditional_time_exit_enabled: conditionalTimeExitEnabled,
                   break_even_enabled: breakEvenMasterEnabled,
                   break_even_activated: breakEvenActivatedState,
+                  trailing_stop_active: trailingStopActive,
+                  trailing_valid_this_cycle: trailingValidThisCycle,
+                  peak_lock_active: peakLockActive,
                   minutesSinceOpen,
                   max_position_duration_minutes: maxPositionDurationMinutes,
-                  skip_reason: skipReason,
+                  skip_reason: 'IN_PROFIT',
                 })
               );
             } else {
-              // Anti-Sour blokerer ikke -> luk på timeout
+              // Ikke i profit -> luk på timeout (sour exit).
               shouldClose = true;
               closeReason = 'TIMEOUT';
-              const allowReason = !positionIsInProfit ? 'NOT_IN_PROFIT' : 'ANTI_SOUR_DISABLED';
               console.log(
-                `⏱️ TIMEOUT_CLOSE_ALLOWED | ${position.symbol} overskred max varighed (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min) | profit=${profitPercent.toFixed(2)}% | reason=${allowReason}`,
+                `⏱️ TIMEOUT_CLOSE_ALLOWED | ${position.symbol} overskred max varighed (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min) | profit=${profitPercent.toFixed(2)}% | reason=NOT_IN_PROFIT`,
                 JSON.stringify({
                   position_id: position.id,
                   slot_id: position.slot_id,
@@ -2107,9 +2106,12 @@ serve(async (req) => {
                   conditional_time_exit_enabled: conditionalTimeExitEnabled,
                   break_even_enabled: breakEvenMasterEnabled,
                   break_even_activated: breakEvenActivatedState,
+                  trailing_stop_active: trailingStopActive,
+                  trailing_valid_this_cycle: trailingValidThisCycle,
+                  peak_lock_active: peakLockActive,
                   minutesSinceOpen,
                   max_position_duration_minutes: maxPositionDurationMinutes,
-                  reason: allowReason,
+                  reason: 'NOT_IN_PROFIT',
                 })
               );
             }
@@ -2179,16 +2181,19 @@ serve(async (req) => {
             const peakInactiveMin = (nowMs - peakUpdatedMs) / 60000;
             const peakInactiveOk = peakInactiveMin >= peakWindowMin;
 
-            // Krav 3: Trailing er IKKE reelt aktiveret.
-            // VIGTIGT: position.trailing_stop > 0 betyder kun at et initial-stop er forberedt
-            // (svarer til "STANDBY (afventer BE)" i UI). Trailing er først REELT aktiv når enten:
-            //   (a) Break-Even er aktiveret (breakEvenActivatedState = true), ELLER
-            //   (b) Profit har overskredet trailing-aktiveringstærsklen (trailingProfitThresholdPassed)
-            //       — gælder kun hvis trailingActivationEnabled er true.
-            // Dette matcher UI-definitionen: "STANDBY" = ikke aktiv, "AKTIV" = aktiv.
+            // Krav 3: Trailing/Peak-lock/BE er IKKE reelt aktiveret.
+            // VIGTIGT: position.trailing_stop > 0 alene betyder kun at et initial-stop er forberedt
+            // ("STANDBY" i UI). Profit over en activation-threshold alene er heller ikke nok —
+            // trailing skal faktisk være beregnet og valid i denne cycle for at beskytte positionen.
+            // Trailing/peak-lock/BE regnes som REELT aktiv når MINST ÉN af følgende holder:
+            //   (a) Break-Even er aktiveret (breakEvenActivatedState === true)
+            //   (b) ATR trailing er aktiv OG valid i denne cycle med en konkret stop-værdi
+            //   (c) Peak-Lock er aktiv med en konkret stop-værdi
+            // Bemærk: BE kan være helt OFF i strategien — trailing/peak-lock må aktivere uden BE.
             const trailingReallyActive =
               breakEvenActivatedState === true ||
-              (trailingActivationEnabled === true && trailingProfitThresholdPassed === true);
+              (trailingStopActive === true && trailingValidThisCycle === true && trailingStop !== null) ||
+              (peakLockActive === true && trailingStop !== null);
             const trailingInactiveOk = !trailingReallyActive;
 
             // Krav 4: Prisbevægelse < Z × ATR i samme periode.
@@ -2228,7 +2233,7 @@ serve(async (req) => {
               `🟢 STALE EXIT CHECK | ${position.symbol} | tf=${sx_scanInterval}(${tfMinutes}m) | ` +
               `age=${ageMin.toFixed(1)}/${requiredAgeMin.toFixed(1)}min(${ageOk}) | ` +
               `peakInact=${peakInactiveMin.toFixed(1)}/${peakWindowMin.toFixed(1)}min(${peakInactiveOk}) | ` +
-              `trailingReallyActive=${trailingReallyActive}(BE=${breakEvenActivatedState},trailThrPassed=${trailingProfitThresholdPassed},trailActEn=${trailingActivationEnabled})(blockIfActive=${!trailingInactiveOk ? 'YES' : 'no'}) | ` +
+              `trailingReallyActive=${trailingReallyActive}(BE=${breakEvenActivatedState},trailActive=${trailingStopActive},trailValid=${trailingValidThisCycle},peakLock=${peakLockActive})(blockIfActive=${!trailingInactiveOk ? 'YES' : 'no'}) | ` +
               `move=${priceSpan?.toFixed(8) ?? 'n/a'}<${atrThreshold?.toFixed(8) ?? 'n/a'}(${moveOk}) | ` +
               `momentum=${momentumOk}(filter=${sx_useMomentumFilter})`
             );
