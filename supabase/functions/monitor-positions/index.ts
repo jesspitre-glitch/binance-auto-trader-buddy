@@ -2127,7 +2127,6 @@ serve(async (req) => {
           const sx_enabled = (configData as any).stale_exit_enabled;
           const sx_maxDurMult = (configData as any).stale_exit_max_duration_tf_mult;
           const sx_peakInactMult = (configData as any).stale_exit_peak_inactivity_tf_mult;
-          const sx_trailInactMult = (configData as any).stale_exit_trailing_inactivity_tf_mult;
           const sx_minMoveAtrMult = (configData as any).stale_exit_min_move_atr_mult;
           const sx_useMomentumFilter = (configData as any).stale_exit_use_momentum_filter;
           const sx_scanInterval: string | null = (configData as any).scan_interval ?? null;
@@ -2152,8 +2151,8 @@ serve(async (req) => {
           const tfMinutes = parseTfToMinutes(sx_scanInterval);
 
           // Strikt: ALLE nødvendige felter skal være sat. Toggle skal være true. Multipliers > 0.
-          // BEMÆRK: stale_exit_trailing_inactivity_tf_mult bruges IKKE længere som krav.
-          // I stedet kræver vi at trailing IKKE er aktiv (position.trailing_stop er tom/0).
+          // Trailing-aktivitet vurderes via runtime-state (BE eller reel trailing-threshold),
+          // IKKE via en separat config-multiplier.
           const allFieldsSet =
             sx_enabled === true &&
             typeof sx_maxDurMult === 'number' && Number.isFinite(sx_maxDurMult) && sx_maxDurMult > 0 &&
