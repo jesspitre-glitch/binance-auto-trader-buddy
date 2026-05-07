@@ -3285,6 +3285,11 @@ serve(async (req) => {
         topBlockers: Record<string, number>;
       }> = [];
 
+      // 🌐 HYBRID GLOBAL CANDIDATE: Første slot med eligible signaler vælger ÉT globalt
+      // kandidat-symbol+side. Alle øvrige slots må kun handle på samme symbol+side, men
+      // skal stadig have signalet i deres EGEN eligibleSignals (egne filtre respekteres).
+      let globalCandidate: { symbol: string; side: string; chosenBySlot: string } | null = null;
+
       for (const { config, slotId, capitalPercent, slotName } of slotIterations) {
         console.log(`\n🎰 === SLOT: "${slotName}" | ID: ${slotId ?? 'legacy'} | Capital: ${capitalPercent}% ===`);
         
