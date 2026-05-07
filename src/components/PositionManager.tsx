@@ -9,6 +9,7 @@ import { useBinanceFuturesPrices } from "@/hooks/useBinanceFuturesPrices";
 import { getBinanceTimeAgo } from "@/lib/timeUtils";
 import { TradeDetailsDialog } from "./TradeDetailsDialog";
 import { RegimeIndicator } from "./RegimeIndicator";
+import { ExportTradesDialog } from "./ExportTradesDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -218,7 +219,10 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Åbne Positioner ({positions.length})</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Åbne Positioner ({positions.length})</CardTitle>
+            <ExportTradesDialog slotId={slotId} includeLegacyData={includeLegacyData} />
+          </div>
         </CardHeader>
         <CardContent className="min-h-[120px]">
           {positions.length === 0 ? (
