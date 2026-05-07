@@ -3842,7 +3842,8 @@ serve(async (req) => {
         globalCandidate = { symbol: top.symbol, side: top.signal, chosenBySlot: slotName };
         console.log(`🌐 GLOBAL_CANDIDATE_SELECTED | symbol=${top.symbol} | side=${top.signal} | chosen_by=${slotName} | strength=${top.strength.toFixed(1)} | total_active_slots=${slotIterations.length}`);
         console.log(`✅ SLOT_ACCEPTED_GLOBAL_SIGNAL | slot=${slotName} | symbol=${top.symbol} | side=${top.signal}`);
-        // signalsToTrade bevares som eligibleSignals (top er allerede først pga. tidligere sort)
+        // Restrict signalsToTrade to ONLY the chosen global candidate so this slot can't fall back to a different symbol
+        signalsToTrade = eligibleSignals.filter(s => s.symbol === top.symbol && s.signal === top.signal);
       } else {
         console.log(`🚫 SLOT_REJECTED_GLOBAL_SIGNAL | slot=${slotName} | reason=no eligible signals (no global candidate set)`);
       }
