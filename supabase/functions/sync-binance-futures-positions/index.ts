@@ -764,9 +764,9 @@ serve(async (req) => {
                   duration_minutes: durationMin,
                   strategy_hash: dbPos.strategy_hash,
                   open_reason: dbPos.open_reason,
-                  close_reason: inferredReason,
+                  close_reason: finalCloseReason,
                   leverage_used: leverageUsed,
-                  indicators_snapshot: dbPos.indicators_snapshot,
+                  indicators_snapshot: enrichedSnapshot,
                   slot_id: dbPos.slot_id,
                   low_price: dbPos.low_price,
                   mae: dbPos.low_price && sideDb === 'LONG' ? entry - Number(dbPos.low_price) : 
