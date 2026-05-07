@@ -2055,24 +2055,21 @@ serve(async (req) => {
         const openedAt = new Date(position.opened_at);
         const now = new Date();
 
-        // Check timeout (SIKKERHEDSNET - kun luk hvis IKKE i profit over break-even)
-        // KRAV: Timeout må kun lukke handler der ikke har udviklet sig positivt.
-        // Handler i profit over break-even skal blive åbne og styres af trailing stop.
+        // Check timeout (SIKKERHEDSNET)
+        // KRAV: Timeout må ALDRIG lukke en position der er i profit, uanset
+        // conditional_time_exit_enabled eller break_even-status. Profitable runners
+        // skal styres af trailing stop / peak-lock / BE — ikke af et hårdt tids-cut.
+        // Timeout må kun lukke trades der IKKE er i profit (sour trades).
         if (!shouldClose && maxPositionDurationMinutes && maxPositionDurationMinutes > 0) {
           const minutesSinceOpen = (now.getTime() - openedAt.getTime()) / (1000 * 60);
 
           if (minutesSinceOpen >= maxPositionDurationMinutes) {
-            // Anti-Sour Exit: Profitable trades skal IKKE lukkes på timeout, hvis conditional_time_exit_enabled=true.
-            // BE aktivering er IKKE et krav (BE kan være helt OFF i strategien).
             const positionIsInProfit = profitDistance > 0;
-            const skipTimeout =
-              positionIsInProfit &&
-              (conditionalTimeExitEnabled === true || breakEvenActivatedState === true);
 
-            if (skipTimeout) {
-              const skipReason = conditionalTimeExitEnabled === true ? 'ANTI_SOUR_IN_PROFIT' : 'BE_ACTIVATED_IN_PROFIT';
+            if (positionIsInProfit) {
+              // Profitable -> spring timeout over uanset Anti-Sour toggle.
               console.log(
-                `⏱️ TIMEOUT_SKIPPED_ANTI_SOUR | ${position.symbol} | ${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min | profit=${profitPercent.toFixed(2)}% | reason=${skipReason}`,
+                `⏱️ TIMEOUT_SKIPPED_IN_PROFIT | ${position.symbol} | ${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min | profit=${profitPercent.toFixed(2)}% | reason=IN_PROFIT`,
                 JSON.stringify({
                   position_id: position.id,
                   slot_id: position.slot_id,
@@ -2084,18 +2081,20 @@ serve(async (req) => {
                   conditional_time_exit_enabled: conditionalTimeExitEnabled,
                   break_even_enabled: breakEvenMasterEnabled,
                   break_even_activated: breakEvenActivatedState,
+                  trailing_stop_active: trailingStopActive,
+                  trailing_valid_this_cycle: trailingValidThisCycle,
+                  peak_lock_active: peakLockActive,
                   minutesSinceOpen,
                   max_position_duration_minutes: maxPositionDurationMinutes,
-                  skip_reason: skipReason,
+                  skip_reason: 'IN_PROFIT',
                 })
               );
             } else {
-              // Anti-Sour blokerer ikke -> luk på timeout
+              // Ikke i profit -> luk på timeout (sour exit).
               shouldClose = true;
               closeReason = 'TIMEOUT';
-              const allowReason = !positionIsInProfit ? 'NOT_IN_PROFIT' : 'ANTI_SOUR_DISABLED';
               console.log(
-                `⏱️ TIMEOUT_CLOSE_ALLOWED | ${position.symbol} overskred max varighed (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min) | profit=${profitPercent.toFixed(2)}% | reason=${allowReason}`,
+                `⏱️ TIMEOUT_CLOSE_ALLOWED | ${position.symbol} overskred max varighed (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min) | profit=${profitPercent.toFixed(2)}% | reason=NOT_IN_PROFIT`,
                 JSON.stringify({
                   position_id: position.id,
                   slot_id: position.slot_id,
@@ -2107,9 +2106,12 @@ serve(async (req) => {
                   conditional_time_exit_enabled: conditionalTimeExitEnabled,
                   break_even_enabled: breakEvenMasterEnabled,
                   break_even_activated: breakEvenActivatedState,
+                  trailing_stop_active: trailingStopActive,
+                  trailing_valid_this_cycle: trailingValidThisCycle,
+                  peak_lock_active: peakLockActive,
                   minutesSinceOpen,
                   max_position_duration_minutes: maxPositionDurationMinutes,
-                  reason: allowReason,
+                  reason: 'NOT_IN_PROFIT',
                 })
               );
             }
