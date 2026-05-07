@@ -3285,6 +3285,11 @@ serve(async (req) => {
         topBlockers: Record<string, number>;
       }> = [];
 
+      // 🌐 HYBRID GLOBAL CANDIDATE: Første slot med eligible signaler vælger ÉT globalt
+      // kandidat-symbol+side. Alle øvrige slots må kun handle på samme symbol+side, men
+      // skal stadig have signalet i deres EGEN eligibleSignals (egne filtre respekteres).
+      let globalCandidate: { symbol: string; side: string; chosenBySlot: string } | null = null;
+
       for (const { config, slotId, capitalPercent, slotName } of slotIterations) {
         console.log(`\n🎰 === SLOT: "${slotName}" | ID: ${slotId ?? 'legacy'} | Capital: ${capitalPercent}% ===`);
         
@@ -3816,8 +3821,33 @@ serve(async (req) => {
         }
       }
 
-      // Master gating disabled — every slot trades from its own eligibleSignals pool
-      const signalsToTrade = eligibleSignals;
+      // 🌐 HYBRID GLOBAL CANDIDATE GATING
+      // Hvis et tidligere slot allerede har valgt et globalt kandidat-symbol+side i denne cycle,
+      // må dette slot KUN handle på samme symbol+side (men skal stadig have det i egen eligible-pool).
+      // Hvis intet globalt kandidat endnu, vælger DETTE slots top-eligible signal det globale kandidat.
+      let signalsToTrade = eligibleSignals;
+      if (globalCandidate) {
+        const before = signalsToTrade.length;
+        signalsToTrade = eligibleSignals.filter(
+          s => s.symbol === globalCandidate!.symbol && s.signal === globalCandidate!.side
+        );
+        if (signalsToTrade.length > 0) {
+          console.log(`✅ SLOT_ACCEPTED_GLOBAL_SIGNAL | slot=${slotName} | symbol=${globalCandidate.symbol} | side=${globalCandidate.side}`);
+        } else {
+          const ownTopSymbols = eligibleSignals.slice(0, 3).map(s => `${s.symbol}(${s.signal})`).join(',') || 'none';
+          console.log(`🚫 SLOT_REJECTED_GLOBAL_SIGNAL | slot=${slotName} | global=${globalCandidate.symbol}/${globalCandidate.side} | reason=symbol+side not in slot's own eligibleSignals (own top: ${ownTopSymbols})`);
+        }
+      } else if (eligibleSignals.length > 0) {
+        const top = eligibleSignals[0];
+        globalCandidate = { symbol: top.symbol, side: top.signal, chosenBySlot: slotName };
+        console.log(`🌐 GLOBAL_CANDIDATE_SELECTED | symbol=${top.symbol} | side=${top.signal} | chosen_by=${slotName} | strength=${top.strength.toFixed(1)} | total_active_slots=${slotIterations.length}`);
+        console.log(`✅ SLOT_ACCEPTED_GLOBAL_SIGNAL | slot=${slotName} | symbol=${top.symbol} | side=${top.signal}`);
+        // Restrict signalsToTrade to ONLY the chosen global candidate so this slot can't fall back to a different symbol
+        signalsToTrade = eligibleSignals.filter(s => s.symbol === top.symbol && s.signal === top.signal);
+      } else {
+        console.log(`🚫 SLOT_REJECTED_GLOBAL_SIGNAL | slot=${slotName} | reason=no eligible signals (no global candidate set)`);
+      }
+
       
       // 📊 Populate slot summary with scan results
       slotSummary.symbolsScanned = validSignals.length;
