@@ -1,16 +1,22 @@
 ---
-name: Slot-uafhængig master scan (ingen gating)
-description: Hver strategy slot evaluerer ALLE USDC-symboler uafhængigt mod sine egne filtre. Markedsdata deles via klinesCache, men ingen master slot gater hvilke symboler andre slots må se.
-type: constraint
+name: Hybrid global candidate + per-slot filters
+description: Scanner producerer pr. slot egne eligibleSignals. Første slot med eligible vælger ÉT globalt kandidat-symbol+side. Øvrige slots må kun handle samme symbol+side hvis det også er i deres egen eligible-pool (egne filtre respekteres).
+type: feature
 ---
-**DO NOT re-introduce master scan pool gating.**
+**Hybridmodel for fair exit-test:**
 
-Tidligere arkitektur lod én "master slot" producere top-N kvalificerede kandidater, og alle andre slots måtte kun evaluere disse symboler. Det betød at hvis master slot havde meget restriktive filtre (fx S2's StochRSI hard filter blokerede 97%), så fik ingen andre slots nogensinde lov til at handle.
+1. Scanner kører normalt pr. slot (hver slot evaluerer alle USDC-symboler mod egne filtre).
+2. Slots itereres sekventielt. Første slot med ≥1 eligible signal vælger sit top-signal som `globalCandidate` (symbol+side).
+3. Det vælgende slot `signalsToTrade` indsnævres til KUN det valgte symbol+side (kan ikke fall back til andet symbol).
+4. Alle efterfølgende slots filtrerer deres egne `eligibleSignals` til kun det globale symbol+side. Hvis tomt → SLOT_REJECTED_GLOBAL_SIGNAL (egne filtre afviste).
+5. Hvert slot bruger fortsat egne entry filters (hard/soft), egne exit settings, capital_percent, leverage, position_size_percent, slot_id.
+6. Hvis ingen slot har eligible signaler → ingen position åbnes.
 
-**Nuværende arkitektur (auto-trade-quant):**
-- Markedsdata (klines) hentes ÉN gang pr. cyklus via shared `klinesCache`
-- HVER aktiv slot itererer over hele USDC-symbol-poolen og evaluerer mod sine egne filtre
-- Ingen `master_scan_slot_id` gating, ingen `masterCandidateSymbols` filter
-- `trading_session.master_scan_slot_id` ignoreres af scanner-koden (kolonnen findes stadig men bruges ikke)
+**Logs:**
+- `GLOBAL_CANDIDATE_SELECTED | symbol=X | side=LONG/SHORT | chosen_by=SlotName | strength=N | total_active_slots=N`
+- `SLOT_ACCEPTED_GLOBAL_SIGNAL | slot=SlotName | symbol=X | side=...`
+- `SLOT_REJECTED_GLOBAL_SIGNAL | slot=SlotName | global=X/side | reason=...`
 
-**Hvorfor:** Brugeren vil have at alle slots får fuld eksponering for markedet, så strategier kan sammenlignes ærligt på deres EGNE filtre — ikke filtreret gennem en enkelt master slot.
+**Per-slot duplicate protection bevares:** unique partial index `(user_id, slot_id, symbol) WHERE status IN ('OPEN','PENDING')` forhindrer samme slot i at åbne samme symbol to gange.
+
+**Cross-slot parallelism bevares:** to slots må stadig holde samme symbol parallelt (hvis begge accepterer det globale signal).
