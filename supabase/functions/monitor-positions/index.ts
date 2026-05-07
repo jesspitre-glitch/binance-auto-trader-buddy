@@ -2055,74 +2055,11 @@ serve(async (req) => {
         const openedAt = new Date(position.opened_at);
         const now = new Date();
 
-        // Check timeout (SIKKERHEDSNET)
-        // KRAV: Timeout må ALDRIG lukke en position der er i profit, uanset
-        // conditional_time_exit_enabled eller break_even-status. Profitable runners
-        // skal styres af trailing stop / peak-lock / BE — ikke af et hårdt tids-cut.
-        // Timeout må kun lukke trades der IKKE er i profit (sour trades).
-        if (!shouldClose && maxPositionDurationMinutes && maxPositionDurationMinutes > 0) {
-          const minutesSinceOpen = (now.getTime() - openedAt.getTime()) / (1000 * 60);
-
-          if (minutesSinceOpen >= maxPositionDurationMinutes) {
-            const positionIsInProfit = profitDistance > 0;
-
-            if (positionIsInProfit) {
-              // Profitable -> spring timeout over uanset Anti-Sour toggle.
-              console.log(
-                `⏱️ TIMEOUT_SKIPPED_IN_PROFIT | ${position.symbol} | ${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min | profit=${profitPercent.toFixed(2)}% | reason=IN_PROFIT`,
-                JSON.stringify({
-                  position_id: position.id,
-                  slot_id: position.slot_id,
-                  symbol: position.symbol,
-                  side: position.side,
-                  currentPrice,
-                  entryPrice: position.entry_price,
-                  positionIsInProfit,
-                  conditional_time_exit_enabled: conditionalTimeExitEnabled,
-                  break_even_enabled: breakEvenMasterEnabled,
-                  break_even_activated: breakEvenActivatedState,
-                  trailing_stop_active: trailingStopActive,
-                  trailing_valid_this_cycle: trailingValidThisCycle,
-                  peak_lock_active: peakLockActive,
-                  minutesSinceOpen,
-                  max_position_duration_minutes: maxPositionDurationMinutes,
-                  skip_reason: 'IN_PROFIT',
-                })
-              );
-            } else {
-              // Ikke i profit -> luk på timeout (sour exit).
-              shouldClose = true;
-              closeReason = 'TIMEOUT';
-              console.log(
-                `⏱️ TIMEOUT_CLOSE_ALLOWED | ${position.symbol} overskred max varighed (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min) | profit=${profitPercent.toFixed(2)}% | reason=NOT_IN_PROFIT`,
-                JSON.stringify({
-                  position_id: position.id,
-                  slot_id: position.slot_id,
-                  symbol: position.symbol,
-                  side: position.side,
-                  currentPrice,
-                  entryPrice: position.entry_price,
-                  positionIsInProfit,
-                  conditional_time_exit_enabled: conditionalTimeExitEnabled,
-                  break_even_enabled: breakEvenMasterEnabled,
-                  break_even_activated: breakEvenActivatedState,
-                  trailing_stop_active: trailingStopActive,
-                  trailing_valid_this_cycle: trailingValidThisCycle,
-                  peak_lock_active: peakLockActive,
-                  minutesSinceOpen,
-                  max_position_duration_minutes: maxPositionDurationMinutes,
-                  reason: 'NOT_IN_PROFIT',
-                })
-              );
-            }
-          }
-        } else if (!shouldClose && (!maxPositionDurationMinutes || maxPositionDurationMinutes === 0)) {
-          console.log(`⏱️ Position ${position.symbol} - max duration disabled (set to ${maxPositionDurationMinutes}), will only close on stop loss or trailing stop`);
-        }
-
         // ═══════════════════════════════════════════════════════════════════
         // 🟢 STALE POSITION EXIT (isoleret tilføjelse — påvirker INTET andet)
-        // Kører som ALLERSIDSTE check. Hvis feature er slukket eller blot ÉT felt
+        // Kører EFTER de mekaniske exit-checks (Hard SL, Max SL after MFE,
+        // Break-even, Peak-lock, Trailing stop) men FØR den almindelige
+        // TIMEOUT-fallback. Hvis feature er slukket eller blot ÉT felt
         // mangler i UI, springes hele blokken over (ingen defaults, ingen fallback).
         // ═══════════════════════════════════════════════════════════════════
         if (!shouldClose && autoExitEnabled && configData) {
@@ -2248,6 +2185,71 @@ serve(async (req) => {
               console.log(`🟢 STALE_EXIT TRIGGER | ${position.symbol} | alle betingelser opfyldt -> LUKKES`);
             }
           }
+        }
+
+        // Check timeout (SIKKERHEDSNET)
+        // KRAV: Timeout må ALDRIG lukke en position der er i profit, uanset
+        // conditional_time_exit_enabled eller break_even-status. Profitable runners
+        // skal styres af trailing stop / peak-lock / BE — ikke af et hårdt tids-cut.
+        // Timeout må kun lukke trades der IKKE er i profit (sour trades).
+        if (!shouldClose && maxPositionDurationMinutes && maxPositionDurationMinutes > 0) {
+          const minutesSinceOpen = (now.getTime() - openedAt.getTime()) / (1000 * 60);
+
+          if (minutesSinceOpen >= maxPositionDurationMinutes) {
+            const positionIsInProfit = profitDistance > 0;
+
+            if (positionIsInProfit) {
+              // Profitable -> spring timeout over uanset Anti-Sour toggle.
+              console.log(
+                `⏱️ TIMEOUT_SKIPPED_IN_PROFIT | ${position.symbol} | ${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min | profit=${profitPercent.toFixed(2)}% | reason=IN_PROFIT`,
+                JSON.stringify({
+                  position_id: position.id,
+                  slot_id: position.slot_id,
+                  symbol: position.symbol,
+                  side: position.side,
+                  currentPrice,
+                  entryPrice: position.entry_price,
+                  positionIsInProfit,
+                  conditional_time_exit_enabled: conditionalTimeExitEnabled,
+                  break_even_enabled: breakEvenMasterEnabled,
+                  break_even_activated: breakEvenActivatedState,
+                  trailing_stop_active: trailingStopActive,
+                  trailing_valid_this_cycle: trailingValidThisCycle,
+                  peak_lock_active: peakLockActive,
+                  minutesSinceOpen,
+                  max_position_duration_minutes: maxPositionDurationMinutes,
+                  skip_reason: 'IN_PROFIT',
+                })
+              );
+            } else {
+              // Ikke i profit -> luk på timeout (sour exit).
+              shouldClose = true;
+              closeReason = 'TIMEOUT';
+              console.log(
+                `⏱️ TIMEOUT_CLOSE_ALLOWED | ${position.symbol} overskred max varighed (${minutesSinceOpen.toFixed(0)}/${maxPositionDurationMinutes} min) | profit=${profitPercent.toFixed(2)}% | reason=NOT_IN_PROFIT`,
+                JSON.stringify({
+                  position_id: position.id,
+                  slot_id: position.slot_id,
+                  symbol: position.symbol,
+                  side: position.side,
+                  currentPrice,
+                  entryPrice: position.entry_price,
+                  positionIsInProfit,
+                  conditional_time_exit_enabled: conditionalTimeExitEnabled,
+                  break_even_enabled: breakEvenMasterEnabled,
+                  break_even_activated: breakEvenActivatedState,
+                  trailing_stop_active: trailingStopActive,
+                  trailing_valid_this_cycle: trailingValidThisCycle,
+                  peak_lock_active: peakLockActive,
+                  minutesSinceOpen,
+                  max_position_duration_minutes: maxPositionDurationMinutes,
+                  reason: 'NOT_IN_PROFIT',
+                })
+              );
+            }
+          }
+        } else if (!shouldClose && (!maxPositionDurationMinutes || maxPositionDurationMinutes === 0)) {
+          console.log(`⏱️ Position ${position.symbol} - max duration disabled (set to ${maxPositionDurationMinutes}), will only close on stop loss or trailing stop`);
         }
 
 
