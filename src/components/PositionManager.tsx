@@ -9,6 +9,7 @@ import { useBinanceFuturesPrices } from "@/hooks/useBinanceFuturesPrices";
 import { getBinanceTimeAgo } from "@/lib/timeUtils";
 import { TradeDetailsDialog } from "./TradeDetailsDialog";
 import { RegimeIndicator } from "./RegimeIndicator";
+import { ExportTradesDialog } from "./ExportTradesDialog";
 import {
   AlertDialog,
   AlertDialogAction,
