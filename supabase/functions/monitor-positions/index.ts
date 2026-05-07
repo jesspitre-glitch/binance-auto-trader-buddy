@@ -6,6 +6,81 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// 🛡️ CLOSE REASON NORMALIZER — single source of truth for trade_history.close_reason
+const MECHANICAL_REASONS = new Set([
+  'HARD_STOP_LOSS_HIT','MAX_SL_AFTER_MFE_HIT','BREAK_EVEN_HIT','PEAK_LOCK_HIT',
+  'TRAILING_STOP_HIT','LEGACY_TRAILING_STOP_HIT','STALE_EXIT','TIMEOUT','TAKE_PROFIT_HIT','MANUAL'
+]);
+function normalizeCloseReason(args: {
+  rawReason?: string | null;
+  side: 'LONG' | 'SHORT';
+  entryPrice: number;
+  exitPrice: number;
+  pnl: number;
+  pnlPercent?: number | null;
+  stopLoss?: number | null;
+  symbol?: string;
+}): { finalReason: string; inferred: boolean; audit: any } {
+  const { rawReason, side, entryPrice, exitPrice, pnl, pnlPercent, stopLoss, symbol } = args;
+  const raw = (rawReason ?? '').toString().trim().toUpperCase();
+  const validInputs = isFinite(entryPrice) && isFinite(exitPrice) && entryPrice > 0 && exitPrice > 0;
+
+  // Safeguard: BE/TRAILING with negative PnL → reclassify
+  if ((raw === 'BREAK_EVEN_HIT' || raw === 'TRAILING_STOP_HIT' || raw === 'LEGACY_TRAILING_STOP_HIT') && pnl < 0) {
+    const final = 'STOP_LOSS_HIT';
+    console.log(`🛡️ CLOSE_REASON_NORMALIZED | symbol=${symbol} | raw=${raw} | final=${final} | pnl=${pnl.toFixed(4)} | side=${side} | reason=negative_pnl_safeguard`);
+    return { finalReason: final, inferred: true, audit: {
+      inferred_close_reason: true, inferred_close_reason_from: 'negative_pnl_safeguard',
+      raw_close_reason: rawReason ?? null, normalized_close_reason: final,
+      entry_price: entryPrice, exit_price: exitPrice, side, pnl, pnl_percent: pnlPercent ?? null,
+    }};
+  }
+
+  // Preserve explicit mechanical reasons
+  if (MECHANICAL_REASONS.has(raw)) {
+    return { finalReason: raw, inferred: false, audit: null };
+  }
+
+  // Need to infer
+  if (!validInputs) {
+    return { finalReason: raw || 'UNKNOWN', inferred: false, audit: null };
+  }
+
+  let final: string;
+  let from = 'pnl_only';
+  const slNum = stopLoss != null ? Number(stopLoss) : null;
+  const slHit = slNum != null && isFinite(slNum) && slNum > 0 && (
+    (side === 'LONG' && exitPrice <= slNum) || (side === 'SHORT' && exitPrice >= slNum)
+  );
+
+  if (slHit) {
+    final = 'HARD_STOP_LOSS_HIT';
+    from = 'stop_loss_price_crossed';
+  } else if (pnl < 0) {
+    final = 'STOP_LOSS_HIT';
+    from = 'pnl_negative';
+  } else {
+    const notional = entryPrice * Math.max(0, (args as any).qty || 0) || (entryPrice || 1);
+    const pctAbs = Math.abs(pnlPercent ?? ((exitPrice - entryPrice) / (entryPrice || 1)) * 100);
+    if (pctAbs < 0.05) {
+      final = 'BREAK_EVEN_HIT';
+      from = 'pnl_near_zero';
+    } else {
+      final = 'MANUAL_OR_EXTERNAL_CLOSE';
+      from = 'pnl_positive';
+    }
+  }
+
+  console.log(`🛡️ CLOSE_REASON_NORMALIZED | symbol=${symbol} | raw=${rawReason ?? 'null'} | final=${final} | pnl=${pnl.toFixed(4)} | side=${side} | from=${from}`);
+  return { finalReason: final, inferred: true, audit: {
+    inferred_close_reason: true, inferred_close_reason_from: from,
+    raw_close_reason: rawReason ?? null, normalized_close_reason: final,
+    entry_price: entryPrice, exit_price: exitPrice, side, pnl, pnl_percent: pnlPercent ?? null,
+    stop_loss_used: slNum, stop_loss_hit: slHit,
+  }};
+}
+
+
 async function getCurrentPrice(symbol: string, supabaseClient: any): Promise<number> {
   // 🔴 KRITISK FIX: For monitor-positions skal vi ALTID have live priser
   // Stale prices kan betyde at SL ikke rammes, selvom prisen reelt er under SL
