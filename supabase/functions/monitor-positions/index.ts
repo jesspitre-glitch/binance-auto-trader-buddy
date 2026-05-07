@@ -557,7 +557,7 @@ serve(async (req) => {
             } else {
               const { data: slotConfig } = await supabaseClient
                 .from('indicator_config')
-                .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max, position_size_percent, leverage, scan_interval, stale_exit_enabled, stale_exit_max_duration_tf_mult, stale_exit_peak_inactivity_tf_mult, stale_exit_trailing_inactivity_tf_mult, stale_exit_min_move_atr_mult, stale_exit_use_momentum_filter')
+                .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max, position_size_percent, leverage, scan_interval, stale_exit_enabled, stale_exit_max_duration_tf_mult, stale_exit_peak_inactivity_tf_mult, stale_exit_min_move_atr_mult, stale_exit_use_momentum_filter')
                 .eq('id', slotData.config_id)
                 .single();
               configData = slotConfig;
@@ -580,7 +580,7 @@ serve(async (req) => {
           if (sessionData?.active_config_id) {
             const { data: activeConfig } = await supabaseClient
               .from('indicator_config')
-              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max, position_size_percent, leverage, scan_interval, stale_exit_enabled, stale_exit_max_duration_tf_mult, stale_exit_peak_inactivity_tf_mult, stale_exit_trailing_inactivity_tf_mult, stale_exit_min_move_atr_mult, stale_exit_use_momentum_filter')
+              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max, position_size_percent, leverage, scan_interval, stale_exit_enabled, stale_exit_max_duration_tf_mult, stale_exit_peak_inactivity_tf_mult, stale_exit_min_move_atr_mult, stale_exit_use_momentum_filter')
               .eq('id', sessionData.active_config_id)
               .single();
             configData = activeConfig;
@@ -589,7 +589,7 @@ serve(async (req) => {
             // Fallback til første config hvis ingen session
             const { data: fallbackConfig } = await supabaseClient
               .from('indicator_config')
-              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max, position_size_percent, leverage, scan_interval, stale_exit_enabled, stale_exit_max_duration_tf_mult, stale_exit_peak_inactivity_tf_mult, stale_exit_trailing_inactivity_tf_mult, stale_exit_min_move_atr_mult, stale_exit_use_momentum_filter')
+              .select('trailing_stop_activation_enabled, trailing_stop_activation_atr, atr_trailing_stop_multiplier, auto_exit_enabled, max_position_duration_minutes, conditional_time_exit_enabled, adx_floor, break_even_enabled, break_even_ratchet_only, break_even_atr_enabled, break_even_atr, break_even_atr_stop_offset, break_even_profit_pct_enabled, break_even_profit_pct_trigger, break_even_profit_pct_stop_over_entry, peak_lock_enabled, peak_lock_activate_profit_pct, peak_lock_distance_pct, peak_lock_min_profit_floor_pct, peak_lock_ratchet_only, max_sl_after_mfe_enabled, max_sl_after_mfe_activate_pct, max_sl_after_mfe_max_dist_pct, hard_sl_pct_enabled, hard_sl_pct, psar_trailing_enabled, psar_af_start, psar_af_increment, psar_af_max, position_size_percent, leverage, scan_interval, stale_exit_enabled, stale_exit_max_duration_tf_mult, stale_exit_peak_inactivity_tf_mult, stale_exit_min_move_atr_mult, stale_exit_use_momentum_filter')
               .eq('user_id', position.user_id)
               .order('created_at', { ascending: false })
               .limit(1)
@@ -2127,7 +2127,6 @@ serve(async (req) => {
           const sx_enabled = (configData as any).stale_exit_enabled;
           const sx_maxDurMult = (configData as any).stale_exit_max_duration_tf_mult;
           const sx_peakInactMult = (configData as any).stale_exit_peak_inactivity_tf_mult;
-          const sx_trailInactMult = (configData as any).stale_exit_trailing_inactivity_tf_mult;
           const sx_minMoveAtrMult = (configData as any).stale_exit_min_move_atr_mult;
           const sx_useMomentumFilter = (configData as any).stale_exit_use_momentum_filter;
           const sx_scanInterval: string | null = (configData as any).scan_interval ?? null;
@@ -2152,8 +2151,8 @@ serve(async (req) => {
           const tfMinutes = parseTfToMinutes(sx_scanInterval);
 
           // Strikt: ALLE nødvendige felter skal være sat. Toggle skal være true. Multipliers > 0.
-          // BEMÆRK: stale_exit_trailing_inactivity_tf_mult bruges IKKE længere som krav.
-          // I stedet kræver vi at trailing IKKE er aktiv (position.trailing_stop er tom/0).
+          // Trailing-aktivitet vurderes via runtime-state (BE eller reel trailing-threshold),
+          // IKKE via en separat config-multiplier.
           const allFieldsSet =
             sx_enabled === true &&
             typeof sx_maxDurMult === 'number' && Number.isFinite(sx_maxDurMult) && sx_maxDurMult > 0 &&
