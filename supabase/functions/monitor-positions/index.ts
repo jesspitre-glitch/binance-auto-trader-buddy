@@ -2105,7 +2105,7 @@ serve(async (req) => {
                   entryPrice: position.entry_price,
                   positionIsInProfit,
                   conditional_time_exit_enabled: conditionalTimeExitEnabled,
-                  break_even_enabled: !!(configData?.break_even_atr_enabled || configData?.break_even_profit_pct_enabled),
+                  break_even_enabled: breakEvenMasterEnabled,
                   break_even_activated: breakEvenActivatedState,
                   minutesSinceOpen,
                   max_position_duration_minutes: maxPositionDurationMinutes,
