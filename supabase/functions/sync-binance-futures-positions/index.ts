@@ -8,6 +8,43 @@ const corsHeaders = {
 
 // Binance er master — alle handler styres af appen, ingen manuelle handler.
 
+// 🛡️ CLOSE REASON NORMALIZER (mirror of monitor-positions)
+const MECHANICAL_REASONS = new Set([
+  'HARD_STOP_LOSS_HIT','MAX_SL_AFTER_MFE_HIT','BREAK_EVEN_HIT','PEAK_LOCK_HIT',
+  'TRAILING_STOP_HIT','LEGACY_TRAILING_STOP_HIT','STALE_EXIT','TIMEOUT','TAKE_PROFIT_HIT','MANUAL'
+]);
+function normalizeCloseReason(args: {
+  rawReason?: string | null; side: 'LONG' | 'SHORT';
+  entryPrice: number; exitPrice: number; pnl: number; pnlPercent?: number | null;
+  stopLoss?: number | null; symbol?: string;
+}): { finalReason: string; inferred: boolean; audit: any } {
+  const { rawReason, side, entryPrice, exitPrice, pnl, pnlPercent, stopLoss, symbol } = args;
+  const raw = (rawReason ?? '').toString().trim().toUpperCase();
+  const valid = isFinite(entryPrice) && isFinite(exitPrice) && entryPrice > 0 && exitPrice > 0;
+  if ((raw === 'BREAK_EVEN_HIT' || raw === 'TRAILING_STOP_HIT' || raw === 'LEGACY_TRAILING_STOP_HIT') && pnl < 0) {
+    const final = 'STOP_LOSS_HIT';
+    console.log(`🛡️ CLOSE_REASON_NORMALIZED | symbol=${symbol} | raw=${raw} | final=${final} | pnl=${pnl.toFixed(4)} | side=${side} | reason=negative_pnl_safeguard`);
+    return { finalReason: final, inferred: true, audit: { inferred_close_reason: true, inferred_close_reason_from: 'negative_pnl_safeguard', raw_close_reason: rawReason ?? null, normalized_close_reason: final, entry_price: entryPrice, exit_price: exitPrice, side, pnl, pnl_percent: pnlPercent ?? null }};
+  }
+  if (MECHANICAL_REASONS.has(raw)) return { finalReason: raw, inferred: false, audit: null };
+  if (!valid) return { finalReason: raw || 'UNKNOWN', inferred: false, audit: null };
+  const slNum = stopLoss != null ? Number(stopLoss) : null;
+  const slHit = slNum != null && isFinite(slNum) && slNum > 0 && (
+    (side === 'LONG' && exitPrice <= slNum) || (side === 'SHORT' && exitPrice >= slNum)
+  );
+  let final: string; let from = 'pnl_only';
+  if (slHit) { final = 'HARD_STOP_LOSS_HIT'; from = 'stop_loss_price_crossed'; }
+  else if (pnl < 0) { final = 'STOP_LOSS_HIT'; from = 'pnl_negative'; }
+  else {
+    const pctAbs = Math.abs(pnlPercent ?? ((exitPrice - entryPrice) / (entryPrice || 1)) * 100);
+    if (pctAbs < 0.05) { final = 'BREAK_EVEN_HIT'; from = 'pnl_near_zero'; }
+    else { final = 'MANUAL_OR_EXTERNAL_CLOSE'; from = 'pnl_positive'; }
+  }
+  console.log(`🛡️ CLOSE_REASON_NORMALIZED | symbol=${symbol} | raw=${rawReason ?? 'null'} | final=${final} | pnl=${pnl.toFixed(4)} | side=${side} | from=${from}`);
+  return { finalReason: final, inferred: true, audit: { inferred_close_reason: true, inferred_close_reason_from: from, raw_close_reason: rawReason ?? null, normalized_close_reason: final, entry_price: entryPrice, exit_price: exitPrice, side, pnl, pnl_percent: pnlPercent ?? null, stop_loss_used: slNum, stop_loss_hit: slHit }};
+}
+
+
 // Slot quantity tolerance (10% headroom over expected slot quantity to absorb rounding)
 const SLOT_QUANTITY_TOLERANCE_MULTIPLIER = 1.10;
 
@@ -661,17 +698,36 @@ serve(async (req) => {
             const positionValue = entry * qty || 1;
             const pnlPct = (pnlRaw / positionValue) * 100;
             const durationMin = dbPos.opened_at ? Math.floor((Date.now() - new Date(dbPos.opened_at).getTime()) / (1000 * 60)) : null;
-            
+
+            // 🛡️ NORMALIZE close_reason
+            const _norm = normalizeCloseReason({
+              rawReason: inferredReason,
+              side: sideDb,
+              entryPrice: entry,
+              exitPrice: exitPrice,
+              pnl: pnlRaw,
+              pnlPercent: pnlPct,
+              stopLoss: dbPos.stop_loss ?? null,
+              symbol: dbPos.symbol,
+            });
+            const finalCloseReason = _norm.finalReason;
+            const enrichedSnapshot: any = { ...(dbPos.indicators_snapshot || {}) };
+            if (_norm.inferred && _norm.audit) {
+              enrichedSnapshot.close_reason_audit = _norm.audit;
+              enrichedSnapshot.exit_reason = finalCloseReason;
+            }
+
             const { data: updatedRows } = await supabaseClient
               .from('positions')
               .update({
                 status: 'CLOSED',
                 closed_at: nowIso,
-                close_reason: inferredReason,
+                close_reason: finalCloseReason,
               })
               .eq('id', dbPos.id)
               .eq('status', 'OPEN')
               .select('id'); // Only update if still OPEN
+
             
             // Insert trade history only if we actually changed the row (avoids duplicates)
             if (updatedRows && updatedRows.length > 0) {
@@ -708,9 +764,9 @@ serve(async (req) => {
                   duration_minutes: durationMin,
                   strategy_hash: dbPos.strategy_hash,
                   open_reason: dbPos.open_reason,
-                  close_reason: inferredReason,
+                  close_reason: finalCloseReason,
                   leverage_used: leverageUsed,
-                  indicators_snapshot: dbPos.indicators_snapshot,
+                  indicators_snapshot: enrichedSnapshot,
                   slot_id: dbPos.slot_id,
                   low_price: dbPos.low_price,
                   mae: dbPos.low_price && sideDb === 'LONG' ? entry - Number(dbPos.low_price) : 
