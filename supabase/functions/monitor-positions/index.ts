@@ -2233,7 +2233,7 @@ serve(async (req) => {
               `🟢 STALE EXIT CHECK | ${position.symbol} | tf=${sx_scanInterval}(${tfMinutes}m) | ` +
               `age=${ageMin.toFixed(1)}/${requiredAgeMin.toFixed(1)}min(${ageOk}) | ` +
               `peakInact=${peakInactiveMin.toFixed(1)}/${peakWindowMin.toFixed(1)}min(${peakInactiveOk}) | ` +
-              `trailingReallyActive=${trailingReallyActive}(BE=${breakEvenActivatedState},trailThrPassed=${trailingProfitThresholdPassed},trailActEn=${trailingActivationEnabled})(blockIfActive=${!trailingInactiveOk ? 'YES' : 'no'}) | ` +
+              `trailingReallyActive=${trailingReallyActive}(BE=${breakEvenActivatedState},trailActive=${trailingStopActive},trailValid=${trailingValidThisCycle},peakLock=${peakLockActive})(blockIfActive=${!trailingInactiveOk ? 'YES' : 'no'}) | ` +
               `move=${priceSpan?.toFixed(8) ?? 'n/a'}<${atrThreshold?.toFixed(8) ?? 'n/a'}(${moveOk}) | ` +
               `momentum=${momentumOk}(filter=${sx_useMomentumFilter})`
             );
