@@ -3005,6 +3005,28 @@ serve(async (req) => {
               console.log(`📊 BINANCE-MATCH | ${position.symbol} ${position.side} | grossPnl=${finalGrossPnl.toFixed(4)} | binanceNetPnl=${binanceNetPnl.toFixed(4)} | share=${slotShare.toFixed(4)}`);
             }
 
+            // 🛡️ FINAL CLOSE-REASON NORMALIZER (single source of truth)
+            const _pnlPctForNorm = finalEntryPrice > 0 ? ((finalExitPrice - finalEntryPrice) / finalEntryPrice) * 100 * (position.side === 'LONG' ? 1 : -1) : actualPnlPercent;
+            const _norm = normalizeCloseReason({
+              rawReason: finalCloseReason,
+              side: position.side as any,
+              entryPrice: finalEntryPrice,
+              exitPrice: finalExitPrice,
+              pnl: (netPnl ?? finalGrossPnl ?? 0),
+              pnlPercent: _pnlPctForNorm,
+              stopLoss: position.stop_loss ?? null,
+              symbol: position.symbol,
+            });
+            const normalizedCloseReason = _norm.finalReason;
+            if (_norm.inferred && _norm.audit) {
+              (enhancedSnapshot as any).close_reason_audit = _norm.audit;
+              (enhancedSnapshot as any).exit_reason = normalizedCloseReason;
+            }
+            // Update positions row with normalized reason if it changed
+            if (normalizedCloseReason !== finalCloseReason) {
+              await supabaseClient.from('positions').update({ close_reason: normalizedCloseReason }).eq('id', position.id);
+            }
+
             const tradeHistoryInsert: any = {
               user_id: position.user_id,
               symbol: position.symbol,
@@ -3013,13 +3035,13 @@ serve(async (req) => {
               exit_price: finalExitPrice,
               quantity: actualQuantity,
               pnl: finalGrossPnl,
-              pnl_percent: finalEntryPrice > 0 ? ((finalExitPrice - finalEntryPrice) / finalEntryPrice) * 100 * (position.side === 'LONG' ? 1 : -1) : actualPnlPercent,
+              pnl_percent: _pnlPctForNorm,
               opened_at: position.opened_at,
               closed_at: new Date().toISOString(),
               duration_minutes: Math.floor((now.getTime() - openedAt.getTime()) / (1000 * 60)),
               strategy_hash: position.strategy_hash,
               open_reason: position.open_reason,
-              close_reason: finalCloseReason,
+              close_reason: normalizedCloseReason,
               indicators_snapshot: enhancedSnapshot,
               mae: maeValue,
               mae_percent: maePercent,
@@ -3040,6 +3062,7 @@ serve(async (req) => {
             if (position.slot_id) {
               tradeHistoryInsert.slot_id = position.slot_id;
             }
+
 
             // 🛡️ DUPLICATE GUARD: same slot+symbol+side+opened_at+qty already in history?
             const { data: existingHist } = await supabaseClient
