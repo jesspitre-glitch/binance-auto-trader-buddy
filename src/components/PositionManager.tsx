@@ -219,7 +219,7 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
     <>
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle>Åbne Positioner ({positions.length})</CardTitle>
             <ExportTradesDialog slotId={slotId} includeLegacyData={includeLegacyData} />
           </div>
