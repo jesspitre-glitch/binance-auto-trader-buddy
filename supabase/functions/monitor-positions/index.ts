@@ -2174,10 +2174,13 @@ serve(async (req) => {
             const ageOk = ageMin > requiredAgeMin;
 
             // Krav 2: Ingen ny peak i Y × TF.
-            // Kilde: stale_exit_peak_updated_at i indicators_snapshot.
-            // Hvis aldrig opdateret -> brug opened_at (positionens start) som baseline.
+            // Hvis peak blev opdateret i denne cycle (peakWasUpdated=true), regnes peak'en som
+            // opdateret NU — Stale Exit må aldrig lukke i samme cycle hvor en frisk peak lige er sket.
+            // Ellers brug stale_exit_peak_updated_at fra snapshot. Mangler den, fallback til opened_at.
             const peakUpdatedRaw = position.indicators_snapshot?.stale_exit_peak_updated_at ?? null;
-            const peakUpdatedMs = peakUpdatedRaw ? new Date(peakUpdatedRaw).getTime() : openedMs;
+            const peakUpdatedMs = peakWasUpdated
+              ? nowMs
+              : (peakUpdatedRaw ? new Date(peakUpdatedRaw).getTime() : openedMs);
             const peakInactiveMin = (nowMs - peakUpdatedMs) / 60000;
             const peakInactiveOk = peakInactiveMin >= peakWindowMin;
 
@@ -2197,17 +2200,18 @@ serve(async (req) => {
             const trailingInactiveOk = !trailingReallyActive;
 
             // Krav 4: Prisbevægelse < Z × ATR i samme periode.
-            // Måles som spændet mellem peak_price og low_price (samlet excursion).
-            // Falder tilbage til |current - entry| hvis peak/low ikke findes.
+            // Brug RUNTIME peak/low (newPeakPrice/newLowPrice) — ikke de persisterede position.peak_price/low_price —
+            // så en frisk peak/low i denne cycle indgår med det samme.
+            // Falder kun tilbage til |current - entry| hvis runtime peak/low er invalide.
             const snapshotAtr = typeof position.indicators_snapshot?.atr === 'number'
               ? position.indicators_snapshot.atr
               : null;
             let priceSpan: number | null = null;
             if (
-              typeof position.peak_price === 'number' && position.peak_price > 0 &&
-              typeof position.low_price === 'number' && position.low_price > 0
+              typeof newPeakPrice === 'number' && newPeakPrice > 0 &&
+              typeof newLowPrice === 'number' && newLowPrice > 0
             ) {
-              priceSpan = Math.abs(position.peak_price - position.low_price);
+              priceSpan = Math.abs(newPeakPrice - newLowPrice);
             } else if (typeof currentPrice === 'number') {
               priceSpan = Math.abs(currentPrice - position.entry_price);
             }
