@@ -2065,7 +2065,6 @@ serve(async (req) => {
             // Anti-Sour Exit: Profitable trades skal IKKE lukkes på timeout, hvis conditional_time_exit_enabled=true.
             // BE aktivering er IKKE et krav (BE kan være helt OFF i strategien).
             const positionIsInProfit = profitDistance > 0;
-            const isAboveBreakEven = breakEvenActivatedState;
             const skipTimeout =
               positionIsInProfit &&
               (conditionalTimeExitEnabled === true || breakEvenActivatedState === true);
@@ -2083,38 +2082,13 @@ serve(async (req) => {
                   entryPrice: position.entry_price,
                   positionIsInProfit,
                   conditional_time_exit_enabled: conditionalTimeExitEnabled,
-                  break_even_enabled: !!(configData?.break_even_atr_enabled || configData?.break_even_profit_pct_enabled),
+                  break_even_enabled: breakEvenMasterEnabled,
                   break_even_activated: breakEvenActivatedState,
                   minutesSinceOpen,
                   max_position_duration_minutes: maxPositionDurationMinutes,
                   skip_reason: skipReason,
                 })
               );
-
-              // Sæt BE som sikkerhedsnet KUN hvis BE allerede var aktiveret-pathen (legacy adfærd).
-              // Med Anti-Sour må vi IKKE tvinge BE på, da BE kan være bevidst slået fra.
-              if (isAboveBreakEven && !breakEvenActivatedState && !position.break_even_activated) {
-                console.log(`   🔧 Aktiverer break-even som sikkerhedsnet for timeout-overskridelse`);
-                breakEvenActivatedState = true;
-                breakEvenAtPrice = position.entry_price;
-                newStopLoss = position.entry_price;
-                
-                await supabaseClient
-                  .from('positions')
-                  .update({
-                    stop_loss: position.entry_price,
-                    break_even_activated: true,
-                    indicators_snapshot: {
-                      ...position.indicators_snapshot,
-                      original_stop_loss: position.indicators_snapshot?.original_stop_loss ?? position.stop_loss,
-                      break_even_at_price: position.entry_price,
-                      break_even_trigger_price: currentPrice,
-                      break_even_triggered_at: new Date().toISOString(),
-                      break_even_mode: 'TIMEOUT_SAFETY_NET',
-                    },
-                  })
-                  .eq('id', position.id);
-              }
             } else {
               // Anti-Sour blokerer ikke -> luk på timeout
               shouldClose = true;
