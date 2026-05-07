@@ -698,17 +698,36 @@ serve(async (req) => {
             const positionValue = entry * qty || 1;
             const pnlPct = (pnlRaw / positionValue) * 100;
             const durationMin = dbPos.opened_at ? Math.floor((Date.now() - new Date(dbPos.opened_at).getTime()) / (1000 * 60)) : null;
-            
+
+            // 🛡️ NORMALIZE close_reason
+            const _norm = normalizeCloseReason({
+              rawReason: inferredReason,
+              side: sideDb,
+              entryPrice: entry,
+              exitPrice: exitPrice,
+              pnl: pnlRaw,
+              pnlPercent: pnlPct,
+              stopLoss: dbPos.stop_loss ?? null,
+              symbol: dbPos.symbol,
+            });
+            const finalCloseReason = _norm.finalReason;
+            const enrichedSnapshot: any = { ...(dbPos.indicators_snapshot || {}) };
+            if (_norm.inferred && _norm.audit) {
+              enrichedSnapshot.close_reason_audit = _norm.audit;
+              enrichedSnapshot.exit_reason = finalCloseReason;
+            }
+
             const { data: updatedRows } = await supabaseClient
               .from('positions')
               .update({
                 status: 'CLOSED',
                 closed_at: nowIso,
-                close_reason: inferredReason,
+                close_reason: finalCloseReason,
               })
               .eq('id', dbPos.id)
               .eq('status', 'OPEN')
               .select('id'); // Only update if still OPEN
+
             
             // Insert trade history only if we actually changed the row (avoids duplicates)
             if (updatedRows && updatedRows.length > 0) {
