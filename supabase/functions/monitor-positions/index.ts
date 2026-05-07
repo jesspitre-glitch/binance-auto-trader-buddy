@@ -2181,16 +2181,19 @@ serve(async (req) => {
             const peakInactiveMin = (nowMs - peakUpdatedMs) / 60000;
             const peakInactiveOk = peakInactiveMin >= peakWindowMin;
 
-            // Krav 3: Trailing er IKKE reelt aktiveret.
-            // VIGTIGT: position.trailing_stop > 0 betyder kun at et initial-stop er forberedt
-            // (svarer til "STANDBY (afventer BE)" i UI). Trailing er først REELT aktiv når enten:
-            //   (a) Break-Even er aktiveret (breakEvenActivatedState = true), ELLER
-            //   (b) Profit har overskredet trailing-aktiveringstærsklen (trailingProfitThresholdPassed)
-            //       — gælder kun hvis trailingActivationEnabled er true.
-            // Dette matcher UI-definitionen: "STANDBY" = ikke aktiv, "AKTIV" = aktiv.
+            // Krav 3: Trailing/Peak-lock/BE er IKKE reelt aktiveret.
+            // VIGTIGT: position.trailing_stop > 0 alene betyder kun at et initial-stop er forberedt
+            // ("STANDBY" i UI). Profit over en activation-threshold alene er heller ikke nok —
+            // trailing skal faktisk være beregnet og valid i denne cycle for at beskytte positionen.
+            // Trailing/peak-lock/BE regnes som REELT aktiv når MINST ÉN af følgende holder:
+            //   (a) Break-Even er aktiveret (breakEvenActivatedState === true)
+            //   (b) ATR trailing er aktiv OG valid i denne cycle med en konkret stop-værdi
+            //   (c) Peak-Lock er aktiv med en konkret stop-værdi
+            // Bemærk: BE kan være helt OFF i strategien — trailing/peak-lock må aktivere uden BE.
             const trailingReallyActive =
               breakEvenActivatedState === true ||
-              (trailingActivationEnabled === true && trailingProfitThresholdPassed === true);
+              (trailingStopActive === true && trailingValidThisCycle === true && trailingStop !== null) ||
+              (peakLockActive === true && trailingStop !== null);
             const trailingInactiveOk = !trailingReallyActive;
 
             // Krav 4: Prisbevægelse < Z × ATR i samme periode.
