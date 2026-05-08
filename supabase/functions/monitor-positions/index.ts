@@ -2445,8 +2445,7 @@ serve(async (req) => {
             const closeResult = await closePositionOnBinance(position.symbol, position.side, position.quantity);
             
             if (!closeResult) {
-              console.log(`Position ${position.symbol} already closed on Binance`);
-              continue;
+              throw new Error(`No open position found on Binance while DB position is OPEN`);
             }
 
             // Use actual exit price from Binance order
@@ -2506,6 +2505,11 @@ serve(async (req) => {
                 current_price: actualExitPrice,
                 unrealized_pnl: actualPnl,
                 close_reason: finalCloseReason,
+                close_failed: false,
+                close_failed_reason: null,
+                close_failed_price: null,
+                close_failed_stop_level: null,
+                close_failed_at: null,
               })
               .eq('id', position.id);
 
