@@ -2,9 +2,18 @@
 
 export const formatTradeForExport = (t: any) => {
   const snap = t.indicators_snapshot || {};
+  const isOpen = t.status === 'OPEN';
+  if (isOpen && (t.exit_price != null || t.close_reason != null || t.exit_reason != null || t.closed_at != null || t.timestamp_close != null)) {
+    console.warn('OPEN_TRADE_HAS_EXIT_FIELDS_DATA_BUG', {
+      symbol: t.symbol,
+      side: t.side,
+      position_id: t.id,
+      values: { exit_price: t.exit_price, exit_reason: t.exit_reason ?? t.close_reason, closed_at: t.closed_at, timestamp_close: t.timestamp_close },
+    });
+  }
   const openedAt = new Date(t.opened_at);
-  const closedAt = new Date(t.closed_at);
-  const durationSec = Math.round((closedAt.getTime() - openedAt.getTime()) / 1000);
+  const closedAt = !isOpen && t.closed_at ? new Date(t.closed_at) : null;
+  const durationSec = closedAt ? Math.round((closedAt.getTime() - openedAt.getTime()) / 1000) : null;
 
   // 🔴 SCHEMA VERSION CHECK - Determines which fields to use
   // v2+ = guaranteed fields, NO fallbacks
@@ -125,7 +134,7 @@ export const formatTradeForExport = (t: any) => {
     'TAKE_PROFIT': 'TAKE_PROFIT',
     'take_profit': 'TAKE_PROFIT'
   };
-  const exitReason = exitReasonMap[t.close_reason] || t.close_reason?.toUpperCase() || 'UNKNOWN';
+  const exitReason = isOpen ? null : (exitReasonMap[t.close_reason] || t.close_reason?.toUpperCase() || 'UNKNOWN');
 
   // 🔴 V2 SCHEMA: Direct field access - NO FALLBACKS
   // 🔴 V1 LEGACY: Fallback to old field names
@@ -349,7 +358,7 @@ export const formatTradeForExport = (t: any) => {
     symbol: t.symbol,
     side: t.side,
     entry_price: +t.entry_price,
-    exit_price: +t.exit_price,
+    exit_price: isOpen ? null : +t.exit_price,
     duration_seconds: durationSec,
     exit_reason: exitReason,
 
@@ -700,7 +709,7 @@ export const formatTradeForExport = (t: any) => {
 
     // Timestamps
     timestamp_open: openedAt.toISOString(),
-    timestamp_close: closedAt.toISOString()
+    timestamp_close: closedAt ? closedAt.toISOString() : null
   };
 };
 
