@@ -3169,7 +3169,7 @@ serve(async (req) => {
             results.push({
               symbol: position.symbol,
               action: 'CLOSED',
-              reason: finalCloseReason,
+              reason: normalizedCloseReason,
               pnl: actualPnl,
               pnlPercent: actualPnlPercent,
               entryPrice: position.entry_price,
@@ -3177,11 +3177,42 @@ serve(async (req) => {
               exitAudit,
             });
           } catch (error) {
+            const closeErrorMessage = error instanceof Error ? error.message : String(error);
+            const effectiveStopFromAudit = (position as any)._exitAudit?.effective_stop ?? (position as any)._exitAudit?.stop_level_hit ?? null;
+            const effectiveStopTypeFromAudit = (position as any)._exitAudit?.effective_stop_type ?? (position as any)._exitAudit?.stop_type_hit ?? null;
+            console.error(`🚨 SL_CLOSE_FAILED_CRITICAL | ${position.symbol} ${position.side}`, {
+              symbol: position.symbol,
+              side: position.side,
+              currentPrice,
+              effectiveStop: effectiveStopFromAudit,
+              stopType: effectiveStopTypeFromAudit,
+              positionId: position.id,
+              slotId: position.slot_id,
+              quantity: position.quantity,
+              binanceError: closeErrorMessage,
+              shouldClose,
+              closeReason,
+            });
+            await supabaseClient
+              .from('positions')
+              .update({
+                close_failed: true,
+                close_failed_reason: closeErrorMessage,
+                close_failed_price: currentPrice,
+                close_failed_stop_level: effectiveStopFromAudit,
+                close_failed_at: new Date().toISOString(),
+              })
+              .eq('id', position.id);
             console.error(`Failed to close position ${position.symbol}:`, error);
             results.push({
               symbol: position.symbol,
               action: 'CLOSE_FAILED',
-              error: error instanceof Error ? error.message : String(error),
+              error: closeErrorMessage,
+              shouldClose,
+              closeReason,
+              currentPrice,
+              effectiveStop: effectiveStopFromAudit,
+              stopType: effectiveStopTypeFromAudit,
             });
           }
         } else {
