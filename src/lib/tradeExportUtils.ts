@@ -719,9 +719,18 @@ export const formatTradeForExport = (t: any) => {
 
 export const formatTradeForCompactExport = (t: any) => {
   const snap = t.indicators_snapshot || {};
+  const isOpen = t.status === 'OPEN';
+  if (isOpen && (t.exit_price != null || t.close_reason != null || t.exit_reason != null || t.closed_at != null || t.timestamp_close != null)) {
+    console.warn('OPEN_TRADE_HAS_EXIT_FIELDS_DATA_BUG', {
+      symbol: t.symbol,
+      side: t.side,
+      position_id: t.id,
+      values: { exit_price: t.exit_price, exit_reason: t.exit_reason ?? t.close_reason, closed_at: t.closed_at, timestamp_close: t.timestamp_close },
+    });
+  }
   const openedAt = new Date(t.opened_at);
-  const closedAt = new Date(t.closed_at);
-  const durationSec = Math.round((closedAt.getTime() - openedAt.getTime()) / 1000);
+  const closedAt = !isOpen && t.closed_at ? new Date(t.closed_at) : null;
+  const durationSec = closedAt ? Math.round((closedAt.getTime() - openedAt.getTime()) / 1000) : null;
   const side = t.side?.toLowerCase() || 'long';
 
   // Standardize exit_reason
@@ -746,7 +755,7 @@ export const formatTradeForCompactExport = (t: any) => {
     'TAKE_PROFIT': 'TAKE_PROFIT',
     'take_profit': 'TAKE_PROFIT'
   };
-  const exitReason = exitReasonMap[t.close_reason] || t.close_reason?.toUpperCase() || 'UNKNOWN';
+  const exitReason = isOpen ? null : (exitReasonMap[t.close_reason] || t.close_reason?.toUpperCase() || 'UNKNOWN');
 
   // Build compact object
   const compact: Record<string, any> = {};
@@ -755,7 +764,7 @@ export const formatTradeForCompactExport = (t: any) => {
   compact.symbol = t.symbol;
   compact.side = t.side;
   compact.entry_price = +t.entry_price;
-  compact.exit_price = +t.exit_price;
+  compact.exit_price = isOpen ? null : +t.exit_price;
   // 🔴 BINANCE GROUND TRUTH P&L
   compact.pnl_gross = t.pnl != null ? +Number(t.pnl).toFixed(4) : 0;
   compact.commission_total = t.total_fee != null ? +Number(-Math.abs(t.total_fee)).toFixed(4) : null;
@@ -767,7 +776,7 @@ export const formatTradeForCompactExport = (t: any) => {
   compact.duration_seconds = durationSec;
   compact.exit_reason = exitReason;
   compact.timestamp_open = openedAt.toISOString();
-  compact.timestamp_close = closedAt.toISOString();
+  compact.timestamp_close = closedAt ? closedAt.toISOString() : null;
 
   // === POSITION SIZING & RISK ===
   const positionSizePct = snap.position_size_percent ?? snap.position_size_pct;
