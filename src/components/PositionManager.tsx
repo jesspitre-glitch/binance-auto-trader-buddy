@@ -477,12 +477,28 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                           className="h-10 w-10 md:h-9 md:w-9"
                           onClick={() => {
                           // Convert position to trade-like format for dialog
+                          const livePriceForDialog = livePrices[position.symbol] ?? position.current_price;
+                          if (position.status === 'OPEN' && (position.close_reason || position.closed_at || (position as any).exit_price || (position as any).exit_reason || (position as any).timestamp_close)) {
+                            console.warn('OPEN_TRADE_HAS_EXIT_FIELDS_DATA_BUG', {
+                              symbol: position.symbol,
+                              side: position.side,
+                              position_id: position.id,
+                              values: {
+                                exit_price: (position as any).exit_price,
+                                exit_reason: (position as any).exit_reason ?? position.close_reason,
+                                closed_at: position.closed_at,
+                                timestamp_close: (position as any).timestamp_close,
+                              },
+                            });
+                          }
                           const tradeView = {
                             ...position,
-                            exit_price: livePrices[position.symbol] ?? position.current_price,
+                            current_price: livePriceForDialog,
+                            exit_price: null,
                              pnl: pnl,
                             pnl_percent: ((pnl / (position.entry_price * position.quantity)) * 100),
-                            closed_at: new Date().toISOString(),
+                            closed_at: null,
+                            timestamp_close: null,
                             duration_minutes: Math.floor((Date.now() - openedTime) / (1000 * 60)),
                             indicators_snapshot: null,
                             open_reason: position.open_reason,

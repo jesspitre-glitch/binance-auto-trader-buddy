@@ -9,7 +9,8 @@ const corsHeaders = {
 // 🛡️ CLOSE REASON NORMALIZER — single source of truth for trade_history.close_reason
 const MECHANICAL_REASONS = new Set([
   'HARD_STOP_LOSS_HIT','MAX_SL_AFTER_MFE_HIT','BREAK_EVEN_HIT','PEAK_LOCK_HIT',
-  'TRAILING_STOP_HIT','LEGACY_TRAILING_STOP_HIT','STALE_EXIT','TIMEOUT','TAKE_PROFIT_HIT','MANUAL'
+  'TRAILING_STOP_HIT','LEGACY_TRAILING_STOP_HIT','STALE_EXIT','TIMEOUT','TAKE_PROFIT_HIT','MANUAL',
+  'MANUAL_OR_EXTERNAL_CLOSE','SLOT_UI_MISMATCH','STOP_LOSS_HIT'
 ]);
 function normalizeCloseReason(args: {
   rawReason?: string | null;
@@ -43,7 +44,7 @@ function normalizeCloseReason(args: {
 
   // Need to infer
   if (!validInputs) {
-    return { finalReason: raw || 'UNKNOWN', inferred: false, audit: null };
+    return { finalReason: raw && raw !== 'UNKNOWN' ? raw : 'MANUAL_OR_EXTERNAL_CLOSE', inferred: raw === 'UNKNOWN' || !raw, audit: null };
   }
 
   let final: string;
@@ -78,6 +79,34 @@ function normalizeCloseReason(args: {
     entry_price: entryPrice, exit_price: exitPrice, side, pnl, pnl_percent: pnlPercent ?? null,
     stop_loss_used: slNum, stop_loss_hit: slHit,
   }};
+}
+
+let stepSizeCache: Record<string, string> | null = null;
+async function getStepSize(symbol: string): Promise<string> {
+  if (!stepSizeCache) {
+    try {
+      const res = await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo');
+      const data = await res.json();
+      const map: Record<string, string> = {};
+      for (const s of (data.symbols || [])) {
+        const lot = (s.filters || []).find((f: any) => f.filterType === 'LOT_SIZE');
+        if (lot?.stepSize) map[s.symbol] = lot.stepSize;
+      }
+      stepSizeCache = map;
+    } catch (error) {
+      console.error('Failed to load exchangeInfo step sizes:', error);
+      stepSizeCache = {};
+    }
+  }
+  return stepSizeCache[symbol] || '0.001';
+}
+
+function roundDownToStep(qty: number, stepSize: string): string {
+  const step = Number(stepSize);
+  if (!step || !Number.isFinite(step)) return qty.toString();
+  const decimals = stepSize.includes('.') ? stepSize.split('.')[1].replace(/0+$/, '').length : 0;
+  const rounded = Math.floor(qty / step) * step;
+  return rounded.toFixed(decimals);
 }
 
 
@@ -361,11 +390,19 @@ async function closePositionOnBinance(symbol: string, side: string, quantity: nu
     throw new Error(`Invalid requested close quantity for ${symbol}: ${quantity}`);
   }
 
-  const closeQuantity = Math.min(requestedQty, livePositionQty);
+  const rawCloseQuantity = Math.min(requestedQty, livePositionQty);
 
-  if (!Number.isFinite(closeQuantity) || closeQuantity <= 0) {
+  if (!Number.isFinite(rawCloseQuantity) || rawCloseQuantity <= 0) {
     console.log(`No closable quantity found for ${symbol} (requested=${requestedQty}, live=${livePositionQty})`);
     return null;
+  }
+
+  const stepSize = await getStepSize(symbol);
+  const quantityStr = roundDownToStep(rawCloseQuantity, stepSize);
+  const closeQuantity = Number(quantityStr);
+
+  if (!Number.isFinite(closeQuantity) || closeQuantity <= 0) {
+    throw new Error(`Close quantity rounds to zero for ${symbol}: raw=${rawCloseQuantity}, stepSize=${stepSize}`);
   }
 
   if (requestedQty > livePositionQty) {
@@ -376,7 +413,7 @@ async function closePositionOnBinance(symbol: string, side: string, quantity: nu
   
   // Place the closing order
   const timestamp = Date.now();
-  const queryString = `symbol=${symbol}&side=${closeSide}&type=MARKET&quantity=${closeQuantity}&reduceOnly=true&timestamp=${timestamp}&recvWindow=10000`;
+  const queryString = `symbol=${symbol}&side=${closeSide}&type=MARKET&quantity=${quantityStr}&reduceOnly=true&timestamp=${timestamp}&recvWindow=10000`;
   const signature = await createSignature(queryString, apiSecret);
 
   const response = await fetch(
@@ -2408,8 +2445,7 @@ serve(async (req) => {
             const closeResult = await closePositionOnBinance(position.symbol, position.side, position.quantity);
             
             if (!closeResult) {
-              console.log(`Position ${position.symbol} already closed on Binance`);
-              continue;
+              throw new Error(`No open position found on Binance while DB position is OPEN`);
             }
 
             // Use actual exit price from Binance order
@@ -2469,6 +2505,11 @@ serve(async (req) => {
                 current_price: actualExitPrice,
                 unrealized_pnl: actualPnl,
                 close_reason: finalCloseReason,
+                close_failed: false,
+                close_failed_reason: null,
+                close_failed_price: null,
+                close_failed_stop_level: null,
+                close_failed_at: null,
               })
               .eq('id', position.id);
 
@@ -3132,7 +3173,7 @@ serve(async (req) => {
             results.push({
               symbol: position.symbol,
               action: 'CLOSED',
-              reason: finalCloseReason,
+              reason: normalizedCloseReason,
               pnl: actualPnl,
               pnlPercent: actualPnlPercent,
               entryPrice: position.entry_price,
@@ -3140,11 +3181,42 @@ serve(async (req) => {
               exitAudit,
             });
           } catch (error) {
+            const closeErrorMessage = error instanceof Error ? error.message : String(error);
+            const effectiveStopFromAudit = (position as any)._exitAudit?.effective_stop ?? (position as any)._exitAudit?.stop_level_hit ?? null;
+            const effectiveStopTypeFromAudit = (position as any)._exitAudit?.effective_stop_type ?? (position as any)._exitAudit?.stop_type_hit ?? null;
+            console.error(`🚨 SL_CLOSE_FAILED_CRITICAL | ${position.symbol} ${position.side}`, {
+              symbol: position.symbol,
+              side: position.side,
+              currentPrice,
+              effectiveStop: effectiveStopFromAudit,
+              stopType: effectiveStopTypeFromAudit,
+              positionId: position.id,
+              slotId: position.slot_id,
+              quantity: position.quantity,
+              binanceError: closeErrorMessage,
+              shouldClose,
+              closeReason,
+            });
+            await supabaseClient
+              .from('positions')
+              .update({
+                close_failed: true,
+                close_failed_reason: closeErrorMessage,
+                close_failed_price: currentPrice,
+                close_failed_stop_level: effectiveStopFromAudit,
+                close_failed_at: new Date().toISOString(),
+              })
+              .eq('id', position.id);
             console.error(`Failed to close position ${position.symbol}:`, error);
             results.push({
               symbol: position.symbol,
               action: 'CLOSE_FAILED',
-              error: error instanceof Error ? error.message : String(error),
+              error: closeErrorMessage,
+              shouldClose,
+              closeReason,
+              currentPrice,
+              effectiveStop: effectiveStopFromAudit,
+              stopType: effectiveStopTypeFromAudit,
             });
           }
         } else {

@@ -736,6 +736,11 @@ export type Database = {
           binance_client_order_id: string | null
           binance_order_id: string | null
           break_even_activated: boolean | null
+          close_failed: boolean
+          close_failed_at: string | null
+          close_failed_price: number | null
+          close_failed_reason: string | null
+          close_failed_stop_level: number | null
           close_reason: string | null
           closed_at: string | null
           created_at: string | null
@@ -769,6 +774,11 @@ export type Database = {
           binance_client_order_id?: string | null
           binance_order_id?: string | null
           break_even_activated?: boolean | null
+          close_failed?: boolean
+          close_failed_at?: string | null
+          close_failed_price?: number | null
+          close_failed_reason?: string | null
+          close_failed_stop_level?: number | null
           close_reason?: string | null
           closed_at?: string | null
           created_at?: string | null
@@ -802,6 +812,11 @@ export type Database = {
           binance_client_order_id?: string | null
           binance_order_id?: string | null
           break_even_activated?: boolean | null
+          close_failed?: boolean
+          close_failed_at?: string | null
+          close_failed_price?: number | null
+          close_failed_reason?: string | null
+          close_failed_stop_level?: number | null
           close_reason?: string | null
           closed_at?: string | null
           created_at?: string | null

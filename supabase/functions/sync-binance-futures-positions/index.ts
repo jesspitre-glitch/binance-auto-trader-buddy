@@ -11,7 +11,8 @@ const corsHeaders = {
 // 🛡️ CLOSE REASON NORMALIZER (mirror of monitor-positions)
 const MECHANICAL_REASONS = new Set([
   'HARD_STOP_LOSS_HIT','MAX_SL_AFTER_MFE_HIT','BREAK_EVEN_HIT','PEAK_LOCK_HIT',
-  'TRAILING_STOP_HIT','LEGACY_TRAILING_STOP_HIT','STALE_EXIT','TIMEOUT','TAKE_PROFIT_HIT','MANUAL'
+  'TRAILING_STOP_HIT','LEGACY_TRAILING_STOP_HIT','STALE_EXIT','TIMEOUT','TAKE_PROFIT_HIT','MANUAL',
+  'MANUAL_OR_EXTERNAL_CLOSE','SLOT_UI_MISMATCH','STOP_LOSS_HIT'
 ]);
 function normalizeCloseReason(args: {
   rawReason?: string | null; side: 'LONG' | 'SHORT';
@@ -27,7 +28,7 @@ function normalizeCloseReason(args: {
     return { finalReason: final, inferred: true, audit: { inferred_close_reason: true, inferred_close_reason_from: 'negative_pnl_safeguard', raw_close_reason: rawReason ?? null, normalized_close_reason: final, entry_price: entryPrice, exit_price: exitPrice, side, pnl, pnl_percent: pnlPercent ?? null }};
   }
   if (MECHANICAL_REASONS.has(raw)) return { finalReason: raw, inferred: false, audit: null };
-  if (!valid) return { finalReason: raw || 'UNKNOWN', inferred: false, audit: null };
+  if (!valid) return { finalReason: raw && raw !== 'UNKNOWN' ? raw : 'MANUAL_OR_EXTERNAL_CLOSE', inferred: raw === 'UNKNOWN' || !raw, audit: null };
   const slNum = stopLoss != null ? Number(stopLoss) : null;
   const slHit = slNum != null && isFinite(slNum) && slNum > 0 && (
     (side === 'LONG' && exitPrice <= slNum) || (side === 'SHORT' && exitPrice >= slNum)
@@ -710,11 +711,11 @@ serve(async (req) => {
               stopLoss: dbPos.stop_loss ?? null,
               symbol: dbPos.symbol,
             });
-            const finalCloseReason = _norm.finalReason;
+            const normalizedCloseReason = _norm.finalReason;
             const enrichedSnapshot: any = { ...(dbPos.indicators_snapshot || {}) };
             if (_norm.inferred && _norm.audit) {
               enrichedSnapshot.close_reason_audit = _norm.audit;
-              enrichedSnapshot.exit_reason = finalCloseReason;
+              enrichedSnapshot.exit_reason = normalizedCloseReason;
             }
 
             const { data: updatedRows } = await supabaseClient
@@ -722,7 +723,7 @@ serve(async (req) => {
               .update({
                 status: 'CLOSED',
                 closed_at: nowIso,
-                close_reason: finalCloseReason,
+                close_reason: normalizedCloseReason,
               })
               .eq('id', dbPos.id)
               .eq('status', 'OPEN')
@@ -764,7 +765,7 @@ serve(async (req) => {
                   duration_minutes: durationMin,
                   strategy_hash: dbPos.strategy_hash,
                   open_reason: dbPos.open_reason,
-                  close_reason: finalCloseReason,
+                  close_reason: normalizedCloseReason,
                   leverage_used: leverageUsed,
                   indicators_snapshot: enrichedSnapshot,
                   slot_id: dbPos.slot_id,
