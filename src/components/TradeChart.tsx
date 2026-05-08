@@ -128,8 +128,21 @@ const pickInterval = (durationMs: number): { interval: string; ms: number } => {
 export const TradeChart = ({ trade }: TradeChartProps) => {
   const isClosed =
     trade?.status === "CLOSED" ||
-    trade?.closed_at != null ||
-    trade?.exit_price != null;
+    (trade?.status !== "OPEN" && (trade?.closed_at != null || trade?.exit_price != null));
+
+  if (trade?.status === "OPEN" && (trade?.exit_price != null || trade?.close_reason != null || trade?.exit_reason != null || trade?.closed_at != null || trade?.timestamp_close != null)) {
+    console.warn('OPEN_TRADE_HAS_EXIT_FIELDS_DATA_BUG', {
+      symbol: trade.symbol,
+      side: trade.side,
+      position_id: trade.id,
+      values: {
+        exit_price: trade.exit_price,
+        exit_reason: trade.exit_reason ?? trade.close_reason,
+        closed_at: trade.closed_at,
+        timestamp_close: trade.timestamp_close,
+      },
+    });
+  }
 
   if (isClosed) return <ClosedTradeChart trade={trade} />;
   return <OpenTradeChart trade={trade} />;
