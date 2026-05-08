@@ -390,11 +390,19 @@ async function closePositionOnBinance(symbol: string, side: string, quantity: nu
     throw new Error(`Invalid requested close quantity for ${symbol}: ${quantity}`);
   }
 
-  const closeQuantity = Math.min(requestedQty, livePositionQty);
+  const rawCloseQuantity = Math.min(requestedQty, livePositionQty);
 
-  if (!Number.isFinite(closeQuantity) || closeQuantity <= 0) {
+  if (!Number.isFinite(rawCloseQuantity) || rawCloseQuantity <= 0) {
     console.log(`No closable quantity found for ${symbol} (requested=${requestedQty}, live=${livePositionQty})`);
     return null;
+  }
+
+  const stepSize = await getStepSize(symbol);
+  const quantityStr = roundDownToStep(rawCloseQuantity, stepSize);
+  const closeQuantity = Number(quantityStr);
+
+  if (!Number.isFinite(closeQuantity) || closeQuantity <= 0) {
+    throw new Error(`Close quantity rounds to zero for ${symbol}: raw=${rawCloseQuantity}, stepSize=${stepSize}`);
   }
 
   if (requestedQty > livePositionQty) {
@@ -405,7 +413,7 @@ async function closePositionOnBinance(symbol: string, side: string, quantity: nu
   
   // Place the closing order
   const timestamp = Date.now();
-  const queryString = `symbol=${symbol}&side=${closeSide}&type=MARKET&quantity=${closeQuantity}&reduceOnly=true&timestamp=${timestamp}&recvWindow=10000`;
+  const queryString = `symbol=${symbol}&side=${closeSide}&type=MARKET&quantity=${quantityStr}&reduceOnly=true&timestamp=${timestamp}&recvWindow=10000`;
   const signature = await createSignature(queryString, apiSecret);
 
   const response = await fetch(
