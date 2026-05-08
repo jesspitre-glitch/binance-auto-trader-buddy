@@ -9,7 +9,8 @@ const corsHeaders = {
 // 🛡️ CLOSE REASON NORMALIZER — single source of truth for trade_history.close_reason
 const MECHANICAL_REASONS = new Set([
   'HARD_STOP_LOSS_HIT','MAX_SL_AFTER_MFE_HIT','BREAK_EVEN_HIT','PEAK_LOCK_HIT',
-  'TRAILING_STOP_HIT','LEGACY_TRAILING_STOP_HIT','STALE_EXIT','TIMEOUT','TAKE_PROFIT_HIT','MANUAL'
+  'TRAILING_STOP_HIT','LEGACY_TRAILING_STOP_HIT','STALE_EXIT','TIMEOUT','TAKE_PROFIT_HIT','MANUAL',
+  'MANUAL_OR_EXTERNAL_CLOSE','SLOT_UI_MISMATCH','STOP_LOSS_HIT'
 ]);
 function normalizeCloseReason(args: {
   rawReason?: string | null;
@@ -43,7 +44,7 @@ function normalizeCloseReason(args: {
 
   // Need to infer
   if (!validInputs) {
-    return { finalReason: raw || 'UNKNOWN', inferred: false, audit: null };
+    return { finalReason: raw && raw !== 'UNKNOWN' ? raw : 'MANUAL_OR_EXTERNAL_CLOSE', inferred: raw === 'UNKNOWN' || !raw, audit: null };
   }
 
   let final: string;
@@ -78,6 +79,34 @@ function normalizeCloseReason(args: {
     entry_price: entryPrice, exit_price: exitPrice, side, pnl, pnl_percent: pnlPercent ?? null,
     stop_loss_used: slNum, stop_loss_hit: slHit,
   }};
+}
+
+let stepSizeCache: Record<string, string> | null = null;
+async function getStepSize(symbol: string): Promise<string> {
+  if (!stepSizeCache) {
+    try {
+      const res = await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo');
+      const data = await res.json();
+      const map: Record<string, string> = {};
+      for (const s of (data.symbols || [])) {
+        const lot = (s.filters || []).find((f: any) => f.filterType === 'LOT_SIZE');
+        if (lot?.stepSize) map[s.symbol] = lot.stepSize;
+      }
+      stepSizeCache = map;
+    } catch (error) {
+      console.error('Failed to load exchangeInfo step sizes:', error);
+      stepSizeCache = {};
+    }
+  }
+  return stepSizeCache[symbol] || '0.001';
+}
+
+function roundDownToStep(qty: number, stepSize: string): string {
+  const step = Number(stepSize);
+  if (!step || !Number.isFinite(step)) return qty.toString();
+  const decimals = stepSize.includes('.') ? stepSize.split('.')[1].replace(/0+$/, '').length : 0;
+  const rounded = Math.floor(qty / step) * step;
+  return rounded.toFixed(decimals);
 }
 
 
