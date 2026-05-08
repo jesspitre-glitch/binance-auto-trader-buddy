@@ -711,11 +711,11 @@ serve(async (req) => {
               stopLoss: dbPos.stop_loss ?? null,
               symbol: dbPos.symbol,
             });
-            const finalCloseReason = _norm.finalReason;
+            const normalizedCloseReason = _norm.finalReason;
             const enrichedSnapshot: any = { ...(dbPos.indicators_snapshot || {}) };
             if (_norm.inferred && _norm.audit) {
               enrichedSnapshot.close_reason_audit = _norm.audit;
-              enrichedSnapshot.exit_reason = finalCloseReason;
+              enrichedSnapshot.exit_reason = normalizedCloseReason;
             }
 
             const { data: updatedRows } = await supabaseClient
@@ -723,7 +723,7 @@ serve(async (req) => {
               .update({
                 status: 'CLOSED',
                 closed_at: nowIso,
-                close_reason: finalCloseReason,
+                close_reason: normalizedCloseReason,
               })
               .eq('id', dbPos.id)
               .eq('status', 'OPEN')
@@ -765,7 +765,7 @@ serve(async (req) => {
                   duration_minutes: durationMin,
                   strategy_hash: dbPos.strategy_hash,
                   open_reason: dbPos.open_reason,
-                  close_reason: finalCloseReason,
+                  close_reason: normalizedCloseReason,
                   leverage_used: leverageUsed,
                   indicators_snapshot: enrichedSnapshot,
                   slot_id: dbPos.slot_id,
