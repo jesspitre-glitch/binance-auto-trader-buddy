@@ -105,15 +105,23 @@ export const PnLOverview = ({ slotId, includeLegacyData = false, onSelectSlot }:
             strategyUpdatedAt = (configData as any)?.strategy_params_changed_at ?? configData?.updated_at ?? null;
           }
         } else {
-          const { data: configData } = await supabase
+          // Aggregate view: use EARLIEST config change across all slots so each slot's
+          // per-slot "since strategy change" PnL still has its own trades available.
+          // Using the latest change would cut off all earlier slots' trades.
+          const { data: configRows } = await supabase
             .from("indicator_config")
             .select("strategy_params_changed_at, updated_at")
-            .eq("user_id", user.id)
-            .order("updated_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
+            .eq("user_id", user.id);
 
-          strategyUpdatedAt = (configData as any)?.strategy_params_changed_at ?? configData?.updated_at ?? null;
+          if (configRows && configRows.length > 0) {
+            const timestamps = configRows
+              .map((c: any) => c.strategy_params_changed_at ?? c.updated_at)
+              .filter(Boolean)
+              .map((t: string) => new Date(t).getTime());
+            if (timestamps.length > 0) {
+              strategyUpdatedAt = new Date(Math.min(...timestamps)).toISOString();
+            }
+          }
         }
 
         startMs = strategyUpdatedAt
