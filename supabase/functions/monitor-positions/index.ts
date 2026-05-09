@@ -632,6 +632,25 @@ serve(async (req) => {
           .update({ current_price: currentPrice })
           .eq('id', position.id);
 
+        // 🟡 ORPHAN SAFE EXIT: Orphan recovery rows have no slot/strategy config.
+        // We do NOT run trailing/BE/timeout logic on them — only enforce a hard SL fallback.
+        // Sync function will auto-close them with ORPHAN_RECONCILED when residual disappears.
+        if (position.is_orphan_recovery === true) {
+          const hardSl = Number(position.stop_loss);
+          if (Number.isFinite(hardSl) && hardSl > 0) {
+            const slHit = position.side === 'LONG'
+              ? currentPrice <= hardSl
+              : currentPrice >= hardSl;
+            if (slHit) {
+              console.warn(`🟡 ORPHAN_HARD_SL_HIT ${position.symbol} ${position.side} price=${currentPrice} sl=${hardSl} — manual close needed (no strategy config)`);
+              // Note: we don't auto-close orphan rows here — sync owns their lifecycle.
+              // Logging only so user can see in reconciliation panel.
+            }
+          }
+          results.push({ position_id: position.id, symbol: position.symbol, action: 'ORPHAN_SAFE_EXIT_MONITORED' });
+          continue;
+        }
+
         let shouldClose = false;
         let closeReason = '';
 
