@@ -637,17 +637,72 @@ serve(async (req) => {
         // Sync function will auto-close them with ORPHAN_RECONCILED when residual disappears.
         if (position.is_orphan_recovery === true) {
           const hardSl = Number(position.stop_loss);
+          let orphanAction = 'ORPHAN_SAFE_EXIT_MONITORED';
           if (Number.isFinite(hardSl) && hardSl > 0) {
             const slHit = position.side === 'LONG'
               ? currentPrice <= hardSl
               : currentPrice >= hardSl;
             if (slHit) {
-              console.warn(`🟡 ORPHAN_HARD_SL_HIT ${position.symbol} ${position.side} price=${currentPrice} sl=${hardSl} — manual close needed (no strategy config)`);
-              // Note: we don't auto-close orphan rows here — sync owns their lifecycle.
-              // Logging only so user can see in reconciliation panel.
+              console.warn(`🟡 ORPHAN_HARD_SL_HIT ${position.symbol} ${position.side} price=${currentPrice} sl=${hardSl} qty=${position.quantity} — closing orphan via reduceOnly market`);
+              try {
+                const closeResult = await closePositionOnBinance(position.symbol, position.side, Number(position.quantity));
+                const exitPrice = closeResult?.avgPrice && Number.isFinite(closeResult.avgPrice) && closeResult.avgPrice > 0
+                  ? closeResult.avgPrice
+                  : currentPrice;
+                const executedQty = closeResult?.executedQty && Number.isFinite(closeResult.executedQty) && closeResult.executedQty > 0
+                  ? closeResult.executedQty
+                  : Number(position.quantity);
+                const orphanPnl = position.side === 'LONG'
+                  ? (exitPrice - Number(position.entry_price)) * executedQty
+                  : (Number(position.entry_price) - exitPrice) * executedQty;
+
+                await supabaseClient
+                  .from('positions')
+                  .update({
+                    status: 'CLOSED',
+                    closed_at: new Date().toISOString(),
+                    close_reason: 'ORPHAN_HARD_SL_HIT',
+                    source: 'binance_reconciliation',
+                    is_orphan_recovery: true,
+                    current_price: exitPrice,
+                    unrealized_pnl: orphanPnl,
+                  })
+                  .eq('id', position.id);
+
+                await supabaseClient.from('reconciliation_log').insert({
+                  user_id: position.user_id,
+                  event_type: 'ORPHAN_HARD_SL_CLOSED',
+                  symbol: position.symbol,
+                  side: position.side,
+                  binance_qty: executedQty,
+                  position_id: position.id,
+                  details: {
+                    exit_price: exitPrice,
+                    stop_loss: hardSl,
+                    pnl: orphanPnl,
+                    order_id: closeResult?.orderId ?? null,
+                    source: 'binance_reconciliation',
+                  },
+                });
+
+                orphanAction = 'ORPHAN_HARD_SL_CLOSED';
+                console.log(`✅ ORPHAN_HARD_SL_CLOSED ${position.symbol} ${position.side} exit=${exitPrice} pnl=${orphanPnl.toFixed(4)}`);
+              } catch (err: any) {
+                console.error(`❌ ORPHAN_HARD_SL_CLOSE_FAILED ${position.symbol}: ${err?.message ?? err}`);
+                await supabaseClient.from('reconciliation_log').insert({
+                  user_id: position.user_id,
+                  event_type: 'ORPHAN_HARD_SL_CLOSE_FAILED',
+                  symbol: position.symbol,
+                  side: position.side,
+                  binance_qty: Number(position.quantity),
+                  position_id: position.id,
+                  details: { error: String(err?.message ?? err), stop_loss: hardSl, current_price: currentPrice },
+                });
+                orphanAction = 'ORPHAN_HARD_SL_CLOSE_FAILED';
+              }
             }
           }
-          results.push({ position_id: position.id, symbol: position.symbol, action: 'ORPHAN_SAFE_EXIT_MONITORED' });
+          results.push({ position_id: position.id, symbol: position.symbol, action: orphanAction });
           continue;
         }
 
