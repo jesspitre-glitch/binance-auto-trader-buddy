@@ -48,6 +48,7 @@ interface SlotPnlBreakdown {
   trades: number;
   winRate: number;
   chartData: { cumulative: number }[];
+  chartDataSinceChange: { cumulative: number }[];
   lastConfigChange: string | null;
   pnlSinceChange: number;
   pnlSinceChangePct: number;
