@@ -372,6 +372,26 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                       </div>
                       
                        <div className="text-sm space-y-1 flex-shrink-0">
+                         {(position as any).is_orphan_recovery ? (
+                           <div className="space-y-1 p-2 rounded border border-yellow-500/40 bg-yellow-500/5">
+                             <div className="text-xs font-semibold text-yellow-500">Orphan safe exit</div>
+                             <div className="flex items-center gap-2">
+                               <span className="text-xs font-semibold">Hard SL:</span>
+                               <span className="font-mono">${Number.isFinite(originalStopLoss) ? formatPrice(originalStopLoss) : '-'}</span>
+                               <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-yellow-500/10 text-yellow-500 border-yellow-500/40">
+                                 FALLBACK 3%
+                               </Badge>
+                             </div>
+                             <div className="flex items-center gap-2">
+                               <span className="text-xs font-semibold">Trailing:</span>
+                               <span className="text-[10px] text-muted-foreground italic">ikke aktiv for orphan</span>
+                             </div>
+                             <div className="text-[10px] text-muted-foreground">
+                               Ingen strategi-slot — lukkes automatisk når Binance qty matcher DB qty.
+                             </div>
+                           </div>
+                         ) : (
+                         <>
                          <div className="space-y-1">
                            <div className="flex items-center gap-2">
                              <span className="text-xs font-semibold">SL (max tab):</span>
@@ -459,8 +479,9 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                                </div>
                              )}
                           </div>
+                         </>
+                         )}
                        </div>
-                    </div>
                     
                     <div className="flex items-center justify-between md:justify-end gap-3 md:gap-4 w-full md:w-auto">
                       <div className="text-left md:text-right flex-1 md:flex-none">
