@@ -324,6 +324,11 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                             <Badge variant={position.side === "LONG" ? "default" : "secondary"} className="text-xs">
                               {position.side}
                             </Badge>
+                            {(position as any).is_orphan_recovery && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-yellow-500/10 text-yellow-500 border-yellow-500/40">
+                                ⚠ Recovered Binance position
+                              </Badge>
+                            )}
                             {position.slot_id && slots.length > 0 && (
                               <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
                                 {slots.find(s => s.id === position.slot_id)?.name || 'Ukendt slot'}
