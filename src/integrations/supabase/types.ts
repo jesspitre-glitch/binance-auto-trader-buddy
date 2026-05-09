@@ -748,6 +748,7 @@ export type Database = {
           entry_price: number
           id: string
           indicators_snapshot: Json | null
+          is_orphan_recovery: boolean
           low_price: number | null
           open_reason: string | null
           opened_at: string | null
@@ -757,8 +758,11 @@ export type Database = {
           promotion_error: string | null
           promotion_failed: boolean | null
           quantity: number
+          recovered_at: string | null
+          recovery_reason: string | null
           side: string
           slot_id: string | null
+          source: string | null
           status: string | null
           stop_loss: number | null
           strategy_hash: string | null
@@ -786,6 +790,7 @@ export type Database = {
           entry_price: number
           id?: string
           indicators_snapshot?: Json | null
+          is_orphan_recovery?: boolean
           low_price?: number | null
           open_reason?: string | null
           opened_at?: string | null
@@ -795,8 +800,11 @@ export type Database = {
           promotion_error?: string | null
           promotion_failed?: boolean | null
           quantity: number
+          recovered_at?: string | null
+          recovery_reason?: string | null
           side: string
           slot_id?: string | null
+          source?: string | null
           status?: string | null
           stop_loss?: number | null
           strategy_hash?: string | null
@@ -824,6 +832,7 @@ export type Database = {
           entry_price?: number
           id?: string
           indicators_snapshot?: Json | null
+          is_orphan_recovery?: boolean
           low_price?: number | null
           open_reason?: string | null
           opened_at?: string | null
@@ -833,8 +842,11 @@ export type Database = {
           promotion_error?: string | null
           promotion_failed?: boolean | null
           quantity?: number
+          recovered_at?: string | null
+          recovery_reason?: string | null
           side?: string
           slot_id?: string | null
+          source?: string | null
           status?: string | null
           stop_loss?: number | null
           strategy_hash?: string | null
@@ -877,6 +889,54 @@ export type Database = {
           symbol?: string
           updated_at?: string
           volume?: number | null
+        }
+        Relationships: []
+      }
+      reconciliation_log: {
+        Row: {
+          binance_entry: number | null
+          binance_qty: number | null
+          binance_unrealized_profit: number | null
+          created_at: string
+          db_qty_sum: number | null
+          details: Json | null
+          diff: number | null
+          event_type: string
+          id: string
+          position_id: string | null
+          side: string | null
+          symbol: string
+          user_id: string
+        }
+        Insert: {
+          binance_entry?: number | null
+          binance_qty?: number | null
+          binance_unrealized_profit?: number | null
+          created_at?: string
+          db_qty_sum?: number | null
+          details?: Json | null
+          diff?: number | null
+          event_type: string
+          id?: string
+          position_id?: string | null
+          side?: string | null
+          symbol: string
+          user_id: string
+        }
+        Update: {
+          binance_entry?: number | null
+          binance_qty?: number | null
+          binance_unrealized_profit?: number | null
+          created_at?: string
+          db_qty_sum?: number | null
+          details?: Json | null
+          diff?: number | null
+          event_type?: string
+          id?: string
+          position_id?: string | null
+          side?: string | null
+          symbol?: string
+          user_id?: string
         }
         Relationships: []
       }
