@@ -416,7 +416,10 @@ serve(async (req) => {
         binanceSymbols.add(binancePos.symbol);
         
         // Find ALL matching positions in DB for this symbol
-        const matchingPositions = dbPositions?.filter(p => p.symbol === binancePos.symbol) || [];
+        const allMatchingPositions = dbPositions?.filter(p => p.symbol === binancePos.symbol) || [];
+        // Orphan recovery rows MUST NOT participate in slot distribution — they absorb leftover Binance qty
+        const matchingPositions = allMatchingPositions.filter(p => !p.is_orphan_recovery);
+        const orphanMatching = allMatchingPositions.filter(p => p.is_orphan_recovery && p.side === side);
         
         if (matchingPositions.length > 0) {
           const totalDbQty = matchingPositions.reduce((sum, p) => sum + Math.abs(Number(p.quantity) || 0), 0);
