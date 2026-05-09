@@ -366,6 +366,7 @@ export const TradingDashboard = () => {
 
       <BnbFeeWarning />
       <PortfolioBalance key={selectedSlotId ?? "all-slots"} slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} slots={slots.map(s => ({ id: s.id, name: s.name }))} />
+      <ReconciliationPanel />
       <ContinuousSyncControl />
       <PositionManager slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} slots={slots} />
 
