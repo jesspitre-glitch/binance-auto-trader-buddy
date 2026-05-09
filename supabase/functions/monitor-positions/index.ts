@@ -633,8 +633,8 @@ serve(async (req) => {
           .eq('id', position.id);
 
         // 🟡 ORPHAN SAFE EXIT: Orphan recovery rows have no slot/strategy config.
-        // We do NOT run trailing/BE/timeout logic on them — only enforce a hard SL fallback.
-        // Sync function will auto-close them with ORPHAN_RECONCILED when residual disappears.
+        // We skip trailing/BE/timeout logic, but DO auto-close via reduceOnly market
+        // when the hard SL fallback is breached. Sync owns ORPHAN_RECONCILED on qty match.
         if (position.is_orphan_recovery === true) {
           const hardSl = Number(position.stop_loss);
           let orphanAction = 'ORPHAN_SAFE_EXIT_MONITORED';
