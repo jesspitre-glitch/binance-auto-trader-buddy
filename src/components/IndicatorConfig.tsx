@@ -3608,13 +3608,45 @@ export const IndicatorConfig = ({ config, onSave }: IndicatorConfigProps) => {
               "═══════════════════════════════════════════════════════════════════",
             ];
             
-            navigator.clipboard.writeText(lines.join("\n"));
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-            toast({
-              title: "Kopieret!",
-              description: "Strategi konfiguration er kopieret til udklipsholderen",
-            });
+            const text = lines.join("\n");
+            const fallbackCopy = () => {
+              try {
+                const ta = document.createElement("textarea");
+                ta.value = text;
+                ta.style.position = "fixed";
+                ta.style.opacity = "0";
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                const ok = document.execCommand("copy");
+                document.body.removeChild(ta);
+                return ok;
+              } catch {
+                return false;
+              }
+            };
+            const done = () => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+              toast({
+                title: "Kopieret!",
+                description: "Strategi konfiguration er kopieret til udklipsholderen",
+              });
+            };
+            const failed = () => {
+              toast({
+                title: "Kunne ikke kopiere automatisk",
+                description: "Åbn appen i ny fane eller kopier manuelt.",
+                variant: "destructive",
+              });
+            };
+            if (navigator.clipboard && window.isSecureContext) {
+              navigator.clipboard.writeText(text).then(done).catch(() => {
+                if (fallbackCopy()) done(); else failed();
+              });
+            } else {
+              if (fallbackCopy()) done(); else failed();
+            }
           }}
           variant="secondary"
           className="w-full"
