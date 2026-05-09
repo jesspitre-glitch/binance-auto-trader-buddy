@@ -509,6 +509,109 @@ serve(async (req) => {
               });
             }
           }
+
+          // 🔧 ORPHAN RECONCILIATION: detect Binance qty exceeding what slot-rows could absorb
+          const ORPHAN_TOLERANCE = 1e-6;
+          const distributedSum = distributedQuantities.reduce((s: number, q: number) => s + (Number(q) || 0), 0);
+          const orphanResidual = absQuantity - distributedSum;
+          const existingOrphan = orphanMatching[0] || null;
+          const reconcilDetails = {
+            type: 'ORPHAN_BINANCE_EXPOSURE',
+            binance_qty: absQuantity,
+            db_qty_sum: distributedSum,
+            orphan_qty: orphanResidual,
+            binance_entry: binanceEntryPrice,
+            binance_unrealized_profit: unrealizedPnl,
+            detected_at: new Date().toISOString(),
+          };
+
+          if (orphanResidual > ORPHAN_TOLERANCE) {
+            const orphanPnl = calculatePositionPnl(side, currentPrice, binanceEntryPrice, orphanResidual);
+            const slFallback = side === 'LONG' ? binanceEntryPrice * 0.97 : binanceEntryPrice * 1.03;
+
+            if (existingOrphan) {
+              const mergedSnapshot = { ...((existingOrphan.indicators_snapshot as any) || {}), reconciliation: reconcilDetails, is_orphan_recovery: true };
+              const { error: orphUpdErr } = await supabaseClient
+                .from('positions')
+                .update({
+                  quantity: orphanResidual,
+                  entry_price: binanceEntryPrice,
+                  current_price: currentPrice,
+                  unrealized_pnl: orphanPnl,
+                  recovered_at: new Date().toISOString(),
+                  indicators_snapshot: mergedSnapshot,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', existingOrphan.id);
+              if (orphUpdErr) console.error('Orphan update error:', orphUpdErr);
+              await supabaseClient.from('reconciliation_log').insert({
+                user_id: userId, event_type: 'ORPHAN_EXPOSURE_UPDATED',
+                symbol: binancePos.symbol, side, binance_qty: absQuantity, db_qty_sum: distributedSum, diff: orphanResidual,
+                binance_entry: binanceEntryPrice, binance_unrealized_profit: unrealizedPnl,
+                position_id: existingOrphan.id, details: reconcilDetails,
+              });
+              updates.push({ symbol: binancePos.symbol, action: 'orphan_updated', id: existingOrphan.id, quantity: orphanResidual, pnl: orphanPnl });
+              console.warn(`🔧 ORPHAN_UPDATED ${binancePos.symbol} ${side} qty=${orphanResidual.toFixed(8)} pnl=${orphanPnl.toFixed(4)}`);
+            } else {
+              const { data: inserted, error: orphInsErr } = await supabaseClient
+                .from('positions')
+                .insert({
+                  user_id: userId,
+                  symbol: binancePos.symbol,
+                  side,
+                  entry_price: binanceEntryPrice,
+                  quantity: orphanResidual,
+                  current_price: currentPrice,
+                  peak_price: currentPrice,
+                  stop_loss: slFallback,
+                  trailing_stop: slFallback,
+                  trailing_stop_percent: 2.0,
+                  unrealized_pnl: orphanPnl,
+                  status: 'OPEN',
+                  open_reason: `ORPHAN_RECOVERY: Binance had ${absQuantity} ${binancePos.symbol} but slot-rows only absorbed ${distributedSum.toFixed(8)}`,
+                  source: 'binance_reconciliation',
+                  is_orphan_recovery: true,
+                  recovery_reason: 'BINANCE_QTY_GREATER_THAN_DB_QTY',
+                  recovered_at: new Date().toISOString(),
+                  indicators_snapshot: { is_orphan_recovery: true, exit_type: 'FALLBACK_SL', reconciliation: reconcilDetails },
+                })
+                .select('id')
+                .single();
+              if (orphInsErr) console.error('Orphan insert error:', orphInsErr);
+              await supabaseClient.from('reconciliation_log').insert({
+                user_id: userId, event_type: 'ORPHAN_EXPOSURE_DETECTED',
+                symbol: binancePos.symbol, side, binance_qty: absQuantity, db_qty_sum: distributedSum, diff: orphanResidual,
+                binance_entry: binanceEntryPrice, binance_unrealized_profit: unrealizedPnl,
+                position_id: inserted?.id ?? null, details: reconcilDetails,
+              });
+              updates.push({ symbol: binancePos.symbol, action: 'orphan_created', id: inserted?.id, quantity: orphanResidual, pnl: orphanPnl });
+              console.warn(`🔧 ORPHAN_CREATED ${binancePos.symbol} ${side} qty=${orphanResidual.toFixed(8)} pnl=${orphanPnl.toFixed(4)}`);
+            }
+          } else if (existingOrphan) {
+            // No more residual exposure → close orphan row
+            const nowIso = new Date().toISOString();
+            await supabaseClient.from('positions').update({
+              status: 'CLOSED', closed_at: nowIso, close_reason: 'ORPHAN_RECONCILED',
+            }).eq('id', existingOrphan.id).eq('status', 'OPEN');
+            await supabaseClient.from('reconciliation_log').insert({
+              user_id: userId, event_type: 'ORPHAN_EXPOSURE_RECOVERED',
+              symbol: binancePos.symbol, side, binance_qty: absQuantity, db_qty_sum: distributedSum, diff: 0,
+              position_id: existingOrphan.id, details: { type: 'ORPHAN_RECONCILED', closed_at: nowIso },
+            });
+            updates.push({ symbol: binancePos.symbol, action: 'orphan_closed', id: existingOrphan.id });
+            console.log(`✅ ORPHAN_RECONCILED ${binancePos.symbol} ${side} - residual gone`);
+          }
+
+          // CRITICAL: distributed sum > Binance qty → DB believes it owns more than Binance has
+          if (distributedSum > absQuantity + ORPHAN_TOLERANCE) {
+            await supabaseClient.from('reconciliation_log').insert({
+              user_id: userId, event_type: 'DB_BINANCE_QTY_MISMATCH_CRITICAL',
+              symbol: binancePos.symbol, side, binance_qty: absQuantity, db_qty_sum: distributedSum,
+              diff: distributedSum - absQuantity,
+              details: { type: 'DB_QTY_GREATER_THAN_BINANCE_QTY', affected_rows: matchingPositions.map(p => p.id) },
+            });
+            console.error(`🚨 CRITICAL_MISMATCH ${binancePos.symbol}: DB=${distributedSum} > Binance=${absQuantity}`);
+          }
         } else {
           // 🟢 BINANCE ER MASTER: Alle Binance-positioner SKAL trackes i DB
           console.log(`Fandt ny Binance position: ${binancePos.symbol} - søger efter bot-signal for slot-tildeling...`);
