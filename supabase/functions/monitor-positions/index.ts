@@ -633,8 +633,8 @@ serve(async (req) => {
           .eq('id', position.id);
 
         // 🟡 ORPHAN SAFE EXIT: Orphan recovery rows have no slot/strategy config.
-        // We do NOT run trailing/BE/timeout logic on them — only enforce a hard SL fallback.
-        // Sync function will auto-close them with ORPHAN_RECONCILED when residual disappears.
+        // We skip trailing/BE/timeout logic, but DO auto-close via reduceOnly market
+        // when the hard SL fallback is breached. Sync owns ORPHAN_RECONCILED on qty match.
         if (position.is_orphan_recovery === true) {
           const hardSl = Number(position.stop_loss);
           let orphanAction = 'ORPHAN_SAFE_EXIT_MONITORED';
@@ -688,7 +688,27 @@ serve(async (req) => {
                 orphanAction = 'ORPHAN_HARD_SL_CLOSED';
                 console.log(`✅ ORPHAN_HARD_SL_CLOSED ${position.symbol} ${position.side} exit=${exitPrice} pnl=${orphanPnl.toFixed(4)}`);
               } catch (err: any) {
-                console.error(`❌ ORPHAN_HARD_SL_CLOSE_FAILED ${position.symbol}: ${err?.message ?? err}`);
+                const errMsg = String(err?.message ?? err);
+                console.error(`❌ ORPHAN_HARD_SL_CLOSE_FAILED ${position.symbol}: ${errMsg}`);
+                const mergedSnapshot = {
+                  ...((position.indicators_snapshot as any) || {}),
+                  reconciliation: {
+                    ...(((position.indicators_snapshot as any) || {}).reconciliation || {}),
+                    last_close_error: errMsg,
+                    last_close_attempt_at: new Date().toISOString(),
+                  },
+                };
+                await supabaseClient
+                  .from('positions')
+                  .update({
+                    close_failed: true,
+                    close_failed_reason: `ORPHAN_HARD_SL_CLOSE_FAILED: ${errMsg}`,
+                    close_failed_price: currentPrice,
+                    close_failed_stop_level: hardSl,
+                    close_failed_at: new Date().toISOString(),
+                    indicators_snapshot: mergedSnapshot,
+                  })
+                  .eq('id', position.id);
                 await supabaseClient.from('reconciliation_log').insert({
                   user_id: position.user_id,
                   event_type: 'ORPHAN_HARD_SL_CLOSE_FAILED',
@@ -696,7 +716,7 @@ serve(async (req) => {
                   side: position.side,
                   binance_qty: Number(position.quantity),
                   position_id: position.id,
-                  details: { error: String(err?.message ?? err), stop_loss: hardSl, current_price: currentPrice },
+                  details: { error: errMsg, stop_loss: hardSl, current_price: currentPrice },
                 });
                 orphanAction = 'ORPHAN_HARD_SL_CLOSE_FAILED';
               }
