@@ -367,6 +367,12 @@ export const PnLOverview = ({ slotId, includeLegacyData = false, onSelectSlot }:
             const winsSinceChange = tradesSinceChange.filter((t: any) => getTradeNetPnl(t) > 0).length;
             const winRateSinceChange = tradesSinceChange.length > 0 ? (winsSinceChange / tradesSinceChange.length) * 100 : 0;
 
+            let cumSC = 0;
+            const chartDataSinceChange = (tradesSinceChange as any[]).map((t: any) => {
+              cumSC += getTradeNetPnl(t);
+              return { cumulative: Number(cumSC.toFixed(2)) };
+            });
+
             return {
               slotId: slot.id,
               slotName: slot.name,
@@ -375,6 +381,7 @@ export const PnLOverview = ({ slotId, includeLegacyData = false, onSelectSlot }:
               trades: slotTrades.length,
               winRate,
               chartData,
+              chartDataSinceChange,
               lastConfigChange,
               pnlSinceChange,
               pnlSinceChangePct,
