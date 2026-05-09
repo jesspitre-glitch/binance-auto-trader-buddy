@@ -48,6 +48,7 @@ interface SlotPnlBreakdown {
   trades: number;
   winRate: number;
   chartData: { cumulative: number }[];
+  chartDataSinceChange: { cumulative: number }[];
   lastConfigChange: string | null;
   pnlSinceChange: number;
   pnlSinceChangePct: number;
@@ -366,6 +367,12 @@ export const PnLOverview = ({ slotId, includeLegacyData = false, onSelectSlot }:
             const winsSinceChange = tradesSinceChange.filter((t: any) => getTradeNetPnl(t) > 0).length;
             const winRateSinceChange = tradesSinceChange.length > 0 ? (winsSinceChange / tradesSinceChange.length) * 100 : 0;
 
+            let cumSC = 0;
+            const chartDataSinceChange = (tradesSinceChange as any[]).map((t: any) => {
+              cumSC += getTradeNetPnl(t);
+              return { cumulative: Number(cumSC.toFixed(2)) };
+            });
+
             return {
               slotId: slot.id,
               slotName: slot.name,
@@ -374,6 +381,7 @@ export const PnLOverview = ({ slotId, includeLegacyData = false, onSelectSlot }:
               trades: slotTrades.length,
               winRate,
               chartData,
+              chartDataSinceChange,
               lastConfigChange,
               pnlSinceChange,
               pnlSinceChangePct,
@@ -1040,7 +1048,13 @@ export const PnLOverview = ({ slotId, includeLegacyData = false, onSelectSlot }:
                 <h3 className="text-sm font-medium">P&L pr. Slot (net)</h3>
                 <div className="grid gap-3 md:grid-cols-2">
                   {stats.slotBreakdown.map((slot: SlotPnlBreakdown) => {
-                    const slotProfitable = slot.totalNetPnl >= 0;
+                    const strategyView = timeRange === "since_change";
+                    const displayPnl = strategyView ? slot.pnlSinceChange : slot.totalNetPnl;
+                    const displayPnlPct = strategyView ? slot.pnlSinceChangePct : slot.totalNetPnlPct;
+                    const displayTrades = strategyView ? slot.tradesSinceChange : slot.trades;
+                    const displayWinRate = strategyView ? slot.winRateSinceChange : slot.winRate;
+                    const displayChart = strategyView ? slot.chartDataSinceChange : slot.chartData;
+                    const slotProfitable = displayPnl >= 0;
                     return (
                       <div
                         key={slot.slotId}
@@ -1053,24 +1067,19 @@ export const PnLOverview = ({ slotId, includeLegacyData = false, onSelectSlot }:
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-sm font-medium">{slot.slotName}</span>
                           <span className={`text-sm font-bold ${slotProfitable ? "text-profit" : "text-loss"}`}>
-                            {slotProfitable ? "+" : ""}{slot.totalNetPnl.toFixed(2)} USD ({slotProfitable ? "+" : ""}{slot.totalNetPnlPct.toFixed(2)}%)
+                            {slotProfitable ? "+" : ""}{displayPnl.toFixed(2)} USD ({slotProfitable ? "+" : ""}{displayPnlPct.toFixed(2)}%)
                           </span>
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          Trades: {slot.trades} · Win rate: {slot.winRate.toFixed(1)}%
+                          Trades: {displayTrades} · Win rate: {displayWinRate.toFixed(1)}%
+                          {strategyView && <span className="ml-1 opacity-70">(siden strategi-ændring)</span>}
                         </div>
-                        {/* Last config change + P&L since – only when "Strategi" tab is active */}
-                        {slot.lastConfigChange && timeRange === "since_change" && (
+                        {/* Last config change info – only when "Strategi" tab is active */}
+                        {slot.lastConfigChange && strategyView && (
                           <div className="border-t pt-2 mt-1 space-y-1">
                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                               <Clock className="h-3 w-3" />
                               <span>Strategi ændret: {format(new Date(slot.lastConfigChange), "dd/MM/yyyy HH:mm")}</span>
-                            </div>
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-muted-foreground">Siden ændring:</span>
-                              <span className={slot.pnlSinceChange >= 0 ? "text-profit font-medium" : "text-loss font-medium"}>
-                                {slot.pnlSinceChange >= 0 ? "+" : ""}{slot.pnlSinceChange.toFixed(2)} USD ({slot.pnlSinceChangePct >= 0 ? "+" : ""}{slot.pnlSinceChangePct.toFixed(2)}%) · {slot.tradesSinceChange} trades, {slot.winRateSinceChange.toFixed(0)}% WR
-                              </span>
                             </div>
                             <ExportTradesDialog
                               slotId={slot.slotId}
@@ -1080,9 +1089,9 @@ export const PnLOverview = ({ slotId, includeLegacyData = false, onSelectSlot }:
                             />
                           </div>
                         )}
-                        {slot.chartData.length > 1 && (
+                        {displayChart.length > 1 && (
                           <ResponsiveContainer width="100%" height={60}>
-                            <LineChart data={slot.chartData}>
+                            <LineChart data={displayChart}>
                               <Line
                                 type="monotone"
                                 dataKey="cumulative"
