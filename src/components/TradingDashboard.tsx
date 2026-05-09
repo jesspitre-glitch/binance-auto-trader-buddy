@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./ThemeToggle";
 import { PositionManager } from "./PositionManager";
 import { PortfolioBalance } from "./PortfolioBalance";
+import { ReconciliationPanel } from "./ReconciliationPanel";
 import { IndicatorConfig } from "./IndicatorConfig";
 import { PnLOverview } from "./PnLOverview";
 import { ScanResults } from "./ScanResults";
