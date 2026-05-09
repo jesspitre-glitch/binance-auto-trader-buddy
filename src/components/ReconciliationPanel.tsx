@@ -36,10 +36,11 @@ export const ReconciliationPanel = () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    const sb = supabase as any;
     const [{ data: logRows }, { data: orphanRows }, { data: portfolio }] = await Promise.all([
-      supabase.from("reconciliation_log" as any).select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
-      supabase.from("positions").select("id, symbol, side, quantity, entry_price, current_price, unrealized_pnl, recovery_reason").eq("user_id", user.id).eq("status", "OPEN").eq("is_orphan_recovery" as any, true),
-      supabase.from("user_portfolio").select("binance_unrealized_pnl").eq("user_id", user.id).maybeSingle(),
+      sb.from("reconciliation_log").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
+      sb.from("positions").select("id, symbol, side, quantity, entry_price, current_price, unrealized_pnl, recovery_reason").eq("user_id", user.id).eq("status", "OPEN").eq("is_orphan_recovery", true),
+      sb.from("user_portfolio").select("binance_unrealized_pnl").eq("user_id", user.id).maybeSingle(),
     ]);
 
     setLogs((logRows as any) || []);
