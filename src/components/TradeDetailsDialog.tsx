@@ -342,6 +342,16 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeD
             {(() => {
               const liveExit = resolveLiveExitStopState(trade);
               const trailingIsActive = liveExit.trailingActive;
+
+              // TEMP runtime debug — verify resolver parity across components
+              console.log("TRAILING_RUNTIME", {
+                componentName: "TradeDetailsDialog",
+                symbol: trade.symbol,
+                side: trade.side,
+                trailingActive: liveExit.trailingActive,
+                effectiveExitStop: liveExit.effectiveExitStop,
+                sourceUsed: liveExit.sourceUsed,
+              });
               const trailingStopValue = liveExit.computedTrailingStop;
               const peakPrice = Number(trade.peak_price || trade.indicators_snapshot?.peak_price);
               const distanceFromPeak =
