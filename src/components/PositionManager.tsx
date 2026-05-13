@@ -294,8 +294,9 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                   ? (position.side === 'LONG' ? trailingStopDb >= position.entry_price : trailingStopDb <= position.entry_price)
                   : false;
 
-                // Strict trigger-gated trailing activation:
-                // Trailing må KUN være aktiv hvis tsTrigger findes OG er ramt.
+                // PRIMARY: hvis trade.trailing_stop er gemt i DB, er trailing aktiveret
+                // af backend uanset om trigger-prisen kendes lokalt. Ellers bruges trigger-gate.
+                const dbTrailingValid = trailingStopDb != null && Number.isFinite(trailingStopDb);
                 const trailingTriggerValid = trailingTriggerPrice != null && Number.isFinite(trailingTriggerPrice);
                 const trailingTriggerHit = trailingTriggerValid
                   ? (position.side === 'LONG'
@@ -303,12 +304,14 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                       : livePrice <= (trailingTriggerPrice as number))
                   : false;
                 const trailingAllowedByTrigger = trailingTriggerValid && trailingTriggerHit;
-                const trailingIsActive = trailingAllowedByTrigger;
-                const reasonIfTrailingInactive = !trailingTriggerValid
-                  ? 'NO_TS_TRIGGER'
-                  : !trailingTriggerHit
-                    ? 'TRIGGER_NOT_HIT'
-                    : null;
+                const trailingIsActive = dbTrailingValid || trailingAllowedByTrigger;
+                const reasonIfTrailingInactive = dbTrailingValid
+                  ? null
+                  : !trailingTriggerValid
+                    ? 'NO_TS_TRIGGER'
+                    : !trailingTriggerHit
+                      ? 'TRIGGER_NOT_HIT'
+                      : null;
 
                 // Audit-log når trailing skifter status (standby/venter -> aktiv osv.)
                 if (!(position as any).is_orphan_recovery) {
