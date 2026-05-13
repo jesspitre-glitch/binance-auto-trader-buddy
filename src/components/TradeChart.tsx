@@ -318,8 +318,8 @@ const buildSeries = (
     const startTs = openTime;
     const endTs = isFinite(closeTime) ? closeTime : data[data.length - 1]?.timestamp ?? openTime;
     if (endTs > startTs) {
-      exitStopSeries.push({ timestamp: startTs, exitStop: fallbackEffectiveStop, activeExitRule: "FALLBACK" });
-      exitStopSeries.push({ timestamp: endTs, exitStop: fallbackEffectiveStop, activeExitRule: "FALLBACK" });
+      exitStopSeries.push({ timestamp: startTs, exitStop: fallbackEffectiveStop, activeExitRule: `FALLBACK_${fallbackSource}` });
+      exitStopSeries.push({ timestamp: endTs, exitStop: fallbackEffectiveStop, activeExitRule: `FALLBACK_${fallbackSource}` });
     }
   }
 
