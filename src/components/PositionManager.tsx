@@ -294,22 +294,27 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                   ? (position.side === 'LONG' ? trailingStopDb >= position.entry_price : trailingStopDb <= position.entry_price)
                   : false;
 
-                // tsTrigger hit: LONG når pris ≥ trigger, SHORT når pris ≤ trigger
-                const tsTriggerHit = trailingTriggerPrice != null && Number.isFinite(trailingTriggerPrice)
+                // Strict trigger-gated trailing activation:
+                // Trailing må KUN være aktiv hvis tsTrigger findes OG er ramt.
+                const trailingTriggerValid = trailingTriggerPrice != null && Number.isFinite(trailingTriggerPrice);
+                const trailingTriggerHit = trailingTriggerValid
                   ? (position.side === 'LONG'
-                      ? livePrice >= trailingTriggerPrice
-                      : livePrice <= trailingTriggerPrice)
+                      ? livePrice >= (trailingTriggerPrice as number)
+                      : livePrice <= (trailingTriggerPrice as number))
                   : false;
-
-                // Trailing er AKTIV når backend har sat en trailing_stop i profit-zonen
-                // ELLER prisen har krydset tsTrigger (UI viser aktivt selvom DB endnu ikke er opdateret)
-                const trailingIsActive = (trailingStopDb != null && trailingInProfitZone) || tsTriggerHit;
+                const trailingAllowedByTrigger = trailingTriggerValid && trailingTriggerHit;
+                const trailingIsActive = trailingAllowedByTrigger;
+                const reasonIfTrailingInactive = !trailingTriggerValid
+                  ? 'NO_TS_TRIGGER'
+                  : !trailingTriggerHit
+                    ? 'TRIGGER_NOT_HIT'
+                    : null;
 
                 // Audit-log når trailing skifter status (standby/venter -> aktiv osv.)
                 if (!(position as any).is_orphan_recovery) {
                   const newStatus = trailingIsActive
                     ? 'ACTIVE'
-                    : (trailingTriggerPrice != null ? 'WAITING_FOR_TRIGGER' : 'STANDBY');
+                    : (trailingTriggerValid ? 'WAITING_FOR_TRIGGER' : 'STANDBY');
                   const prevStatus = trailingStatusRef.current.get(position.id);
                   if (prevStatus && prevStatus !== newStatus) {
                     console.log('[Trailing] status change', {
@@ -318,6 +323,10 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                       entryPrice: Number(position.entry_price),
                       currentPrice: livePrice,
                       tsTrigger: trailingTriggerPrice,
+                      trailingTriggerValid,
+                      trailingTriggerHit,
+                      trailingAllowedByTrigger,
+                      reasonIfTrailingInactive,
                       previousStatus: prevStatus,
                       newStatus,
                     });
@@ -325,7 +334,7 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                   trailingStatusRef.current.set(position.id, newStatus);
                 }
 
-                // Aktivt stop (til visning): TS (når aktiv) → BE → SL(max tab)
+                // Aktivt stop (til visning): TS (KUN når trigger-gated aktiv) → BE → SL(max tab)
                 const activeStopLevel = trailingIsActive && trailingStopDb != null
                   ? trailingStopDb
                   : isBreakEvenActivated

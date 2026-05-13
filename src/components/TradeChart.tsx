@@ -120,6 +120,10 @@ interface LiveExitStopState {
   effectiveExitStop: number | null;
   sourceUsed: string;
   exitStopHistoryCount?: number;
+  trailingTriggerValid: boolean;
+  trailingTriggerHit: boolean;
+  trailingAllowedByTrigger: boolean;
+  reasonIfTrailingInactive: string | null;
 }
 
 const toPositiveNumber = (value: any): number | null => {
@@ -225,19 +229,33 @@ const resolveLiveExitStopState = (
     : stopInProfitZone(computedFromPeak)
       ? computedFromPeak
       : null;
-  const currentHitTrigger =
-    currentPrice != null && tsTrigger != null
+  const trailingTriggerValid = tsTrigger != null && Number.isFinite(tsTrigger);
+  const trailingTriggerHit =
+    trailingTriggerValid && currentPrice != null
       ? side === "LONG"
-        ? currentPrice >= tsTrigger
-        : currentPrice <= tsTrigger
+        ? currentPrice >= (tsTrigger as number)
+        : currentPrice <= (tsTrigger as number)
       : false;
-  const trailingActive =
-    rawTrailingActive ||
-    (computedTrailingStop != null && (currentHitTrigger || tsTrigger == null));
+  const trailingAllowedByTrigger = trailingTriggerValid && trailingTriggerHit;
+  const trailingActive = trailingAllowedByTrigger && computedTrailingStop != null;
+  const reasonIfTrailingInactive = !trailingTriggerValid
+    ? "NO_TS_TRIGGER"
+    : !trailingTriggerHit
+      ? "TRIGGER_NOT_HIT"
+      : computedTrailingStop == null
+        ? "NO_COMPUTED_STOP"
+        : null;
   const beActivated = trade.break_even_activated === true || trade.break_even_triggered === true;
   const beStop = beActivated
     ? firstPositive(trade.break_even_at_price, snapshot.break_even_at_price, trade.stop_loss)
     : null;
+
+  const debugFields = {
+    trailingTriggerValid,
+    trailingTriggerHit,
+    trailingAllowedByTrigger,
+    reasonIfTrailingInactive,
+  };
 
   if (trailingActive && computedTrailingStop != null) {
     return {
@@ -255,14 +273,15 @@ const resolveLiveExitStopState = (
       beStop,
       effectiveExitStop: computedTrailingStop,
       sourceUsed: rawTrailingActive ? "TRAILING_DB" : "TRAILING_LIVE_FALLBACK",
+      ...debugFields,
     };
   }
 
   if (beStop != null) {
-    return { side, entryPrice, currentPrice, highestPrice, lowestPrice, tsTrigger, trailingDistance, trailingActive, rawTrailingStop, computedTrailingStop, hardStop, beStop, effectiveExitStop: beStop, sourceUsed: "BREAK_EVEN" };
+    return { side, entryPrice, currentPrice, highestPrice, lowestPrice, tsTrigger, trailingDistance, trailingActive, rawTrailingStop, computedTrailingStop, hardStop, beStop, effectiveExitStop: beStop, sourceUsed: "BREAK_EVEN", ...debugFields };
   }
 
-  return { side, entryPrice, currentPrice, highestPrice, lowestPrice, tsTrigger, trailingDistance, trailingActive, rawTrailingStop, computedTrailingStop, hardStop, beStop, effectiveExitStop: hardStop, sourceUsed: hardStop != null ? "STOP_LOSS" : "NONE" };
+  return { side, entryPrice, currentPrice, highestPrice, lowestPrice, tsTrigger, trailingDistance, trailingActive, rawTrailingStop, computedTrailingStop, hardStop, beStop, effectiveExitStop: hardStop, sourceUsed: hardStop != null ? "STOP_LOSS" : "NONE", ...debugFields };
 };
 
 interface ActivationMarkers {
@@ -1685,6 +1704,10 @@ const ChartDebugPanel = ({
                 <div>tsTrigger: {fmt(liveExit.tsTrigger)}</div>
                 <div>trailingDistance: {fmt(liveExit.trailingDistance)}</div>
                 <div>trailingActive: {fmt(liveExit.trailingActive)}</div>
+                <div>trailingTriggerValid: {fmt(liveExit.trailingTriggerValid)}</div>
+                <div>trailingTriggerHit: {fmt(liveExit.trailingTriggerHit)}</div>
+                <div>trailingAllowedByTrigger: {fmt(liveExit.trailingAllowedByTrigger)}</div>
+                <div>reasonIfTrailingInactive: {fmt(liveExit.reasonIfTrailingInactive)}</div>
                 <div>rawTrailingStop: {fmt(liveExit.rawTrailingStop)}</div>
                 <div>computedTrailingStop: {fmt(liveExit.computedTrailingStop)}</div>
                 <div>hardStop: {fmt(liveExit.hardStop)}</div>
