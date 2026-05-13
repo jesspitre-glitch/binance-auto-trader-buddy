@@ -229,19 +229,32 @@ const buildSeries = (
   const peakLockStopPrice =
     peakLockActivated ? toPositiveNumber(trade.peak_lock_stop_price) : null;
 
-  const fallbackStopCandidates = [
-    stopLossDb,
-    breakEvenAtPrice,
-    trailingStopDb,
-    peakLockStopPrice,
-  ].filter((v): v is number => v != null);
+  // Side-aware effective stop selection — mirror the rules used in PositionManager
+  // Priority: active trailing > active break-even > hard stop loss
+  // Validity per side:
+  //   LONG  → protective stop must be BELOW entry (trailing/BE only counted when in profit zone)
+  //   SHORT → protective stop must be ABOVE entry
+  const entryPriceNum = toPositiveNumber(trade.entry_price);
+  const isProfitZone = (v: number | null): boolean => {
+    if (v == null || entryPriceNum == null) return false;
+    return side === "LONG" ? v > entryPriceNum : v < entryPriceNum;
+  };
 
-  const fallbackEffectiveStop: number | null =
-    fallbackStopCandidates.length > 0
-      ? side === "LONG"
-        ? Math.max(...fallbackStopCandidates)
-        : Math.min(...fallbackStopCandidates)
-      : null;
+  let fallbackSource: string = "NONE";
+  let fallbackEffectiveStop: number | null = null;
+  if (trailingStopDb != null && isProfitZone(trailingStopDb)) {
+    fallbackEffectiveStop = trailingStopDb;
+    fallbackSource = "TRAILING";
+  } else if (breakEvenAtPrice != null && isProfitZone(breakEvenAtPrice)) {
+    fallbackEffectiveStop = breakEvenAtPrice;
+    fallbackSource = "BREAK_EVEN";
+  } else if (peakLockStopPrice != null && isProfitZone(peakLockStopPrice)) {
+    fallbackEffectiveStop = peakLockStopPrice;
+    fallbackSource = "PEAK_LOCK";
+  } else if (stopLossDb != null) {
+    fallbackEffectiveStop = stopLossDb;
+    fallbackSource = "STOP_LOSS";
+  }
 
   const closeTime = trade.closed_at
     ? new Date(trade.closed_at).getTime()
@@ -305,8 +318,8 @@ const buildSeries = (
     const startTs = openTime;
     const endTs = isFinite(closeTime) ? closeTime : data[data.length - 1]?.timestamp ?? openTime;
     if (endTs > startTs) {
-      exitStopSeries.push({ timestamp: startTs, exitStop: fallbackEffectiveStop, activeExitRule: "FALLBACK" });
-      exitStopSeries.push({ timestamp: endTs, exitStop: fallbackEffectiveStop, activeExitRule: "FALLBACK" });
+      exitStopSeries.push({ timestamp: startTs, exitStop: fallbackEffectiveStop, activeExitRule: `FALLBACK_${fallbackSource}` });
+      exitStopSeries.push({ timestamp: endTs, exitStop: fallbackEffectiveStop, activeExitRule: `FALLBACK_${fallbackSource}` });
     }
   }
 
@@ -1004,12 +1017,18 @@ const ChartShell = ({
     });
 
   // ---- Custom tooltip ---------------------------------------------------
+  const tradeSide = trade.side as "LONG" | "SHORT";
   const renderTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || payload.length === 0) return null;
     const row = payload[0]?.payload as ChartRow | undefined;
     if (!row) return null;
-    const pctFromEntry =
-      entryPrice > 0 ? ((row.price - entryPrice) / entryPrice) * 100 : null;
+    const rawPct =
+      entryPrice > 0 && isFinite(row.price)
+        ? tradeSide === "SHORT"
+          ? ((entryPrice - row.price) / entryPrice) * 100
+          : ((row.price - entryPrice) / entryPrice) * 100
+        : null;
+    const pctFromEntry = rawPct != null && isFinite(rawPct) ? rawPct : null;
     return (
       <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-xl">
         <div className="font-semibold mb-1 text-popover-foreground">
@@ -1447,6 +1466,39 @@ const ChartDebugPanel = ({
         🐞 Chart Debug Panel (midlertidig)
       </summary>
       <div className="min-w-0 max-w-full space-y-4 overflow-hidden p-3">
+        {(() => {
+          const entry = derived.entryPrice;
+          const currentPrice = chartData[chartData.length - 1]?.price ?? null;
+          const hardStop = derived.initialSlPrice > 0 ? derived.initialSlPrice : null;
+          const beStop = trade.break_even_triggered === true && trade.break_even_at_price != null
+            ? Number(trade.break_even_at_price) : null;
+          const trailingStopVal = trade.trailing_stop != null && Number(trade.trailing_stop) > 0
+            ? Number(trade.trailing_stop) : null;
+          const lastExit = exitStopSeries[exitStopSeries.length - 1];
+          const effectiveExitStop = lastExit?.exitStop ?? null;
+          const sourceUsed = lastExit?.activeExitRule ?? "NONE";
+          const inProfit = (v: number | null) =>
+            v != null && entry > 0 && (side === "LONG" ? v > entry : v < entry);
+          const trailingActive = inProfit(trailingStopVal);
+          return (
+            <section className="min-w-0 rounded border border-orange-500/40 bg-orange-500/5 p-2">
+              <div className="font-semibold mb-1 text-orange-600 dark:text-orange-400">
+                0. Effective Exit Stop (side-aware)
+              </div>
+              <div className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-0.5 sm:grid-cols-2 [&>div]:min-w-0 [&>div]:break-all">
+                <div>side: {fmt(side)}</div>
+                <div>entryPrice: {fmt(entry)}</div>
+                <div>currentPrice: {fmt(currentPrice)}</div>
+                <div>hardStop: {fmt(hardStop)}</div>
+                <div>beStop: {fmt(beStop)}</div>
+                <div>trailingStop: {fmt(trailingStopVal)}</div>
+                <div>effectiveExitStop: {fmt(effectiveExitStop)}</div>
+                <div>trailingActive: {fmt(trailingActive)}</div>
+                <div>sourceUsed: {fmt(sourceUsed)}</div>
+              </div>
+            </section>
+          );
+        })()}
         <section className="min-w-0">
           <div className="font-semibold mb-1">1. Trade raw values</div>
           <div className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-0.5 sm:grid-cols-2 [&>div]:min-w-0 [&>div]:break-all">
