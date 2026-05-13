@@ -307,14 +307,28 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                 const trailingAllowedByTrigger = liveExit.trailingAllowedByTrigger;
 
                 // TEMP runtime debug — verify resolver parity across components
-                console.log("TRAILING_RUNTIME", {
+                console.group("TRAILING_RUNTIME");
+                console.log({
                   componentName: "PositionManager",
                   symbol: position.symbol,
                   side: position.side,
                   trailingActive: liveExit.trailingActive,
                   effectiveExitStop: liveExit.effectiveExitStop,
                   sourceUsed: liveExit.sourceUsed,
+                  trailingTriggerValid: liveExit.trailingTriggerValid,
+                  trailingTriggerHit: liveExit.trailingTriggerHit,
+                  reasonIfTrailingInactive: liveExit.reasonIfTrailingInactive,
+                  rawTrailingStop: liveExit.rawTrailingStop,
+                  computedTrailingStop: liveExit.computedTrailingStop,
+                  rawInput: {
+                    trailing_stop: position.trailing_stop,
+                    stop_loss: position.stop_loss,
+                    peak_price: (position as any).peak_price,
+                    trailing_stop_initial_price: (position as any).trailing_stop_initial_price,
+                    current_price: livePrice,
+                  },
                 });
+                console.groupEnd();
 
                 // Audit-log når trailing skifter status (standby/venter -> aktiv osv.)
                 if (!(position as any).is_orphan_recovery) {
