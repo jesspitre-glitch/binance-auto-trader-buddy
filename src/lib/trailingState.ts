@@ -187,12 +187,9 @@ export const resolveLiveExitStopState = (
   };
 
   if (trailingActive) {
-    const effective = dbTrailingValid ? (rawTrailingStop as number) : (computedTrailingStop as number);
-    const sourceUsed = dbTrailingValid
-      ? "TRADE_TRAILING_STOP"
-      : rawTrailingActive
-        ? "TRAILING_DB"
-        : "TRAILING_LIVE_FALLBACK";
+    const effectiveExitStop = dbTrailingValid
+      ? (rawTrailingStop as number)
+      : (computedTrailingStop as number);
     return {
       side,
       entryPrice,
@@ -206,8 +203,8 @@ export const resolveLiveExitStopState = (
       computedTrailingStop,
       hardStop,
       beStop,
-      effectiveExitStop: effective,
-      sourceUsed,
+      effectiveExitStop,
+      sourceUsed: dbTrailingValid ? "TRADE_TRAILING_STOP" : "TRAILING_LIVE_FALLBACK",
       ...debugFields,
     };
   }
