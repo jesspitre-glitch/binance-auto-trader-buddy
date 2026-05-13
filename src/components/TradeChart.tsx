@@ -531,6 +531,11 @@ const buildSeries = (
         lastRendered.timestamp = endTs;
         lastRendered.exitStop = liveEffectiveExitStop;
         lastRendered.activeExitRule = liveRule;
+        const previousRendered = exitStopSeries[exitStopSeries.length - 2];
+        if (previousRendered && hasHistorical) {
+          previousRendered.exitStop = liveEffectiveExitStop;
+          previousRendered.activeExitRule = liveRule;
+        }
       } else {
         exitStopSeries.push({ timestamp: endTs, exitStop: liveEffectiveExitStop, activeExitRule: liveRule });
         exitStopSeries.sort((a, b) => a.timestamp - b.timestamp);
