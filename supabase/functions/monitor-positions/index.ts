@@ -2334,7 +2334,7 @@ serve(async (req) => {
             price: currentPrice,
             peak_price: newPeakPrice,
             active_stop: effectiveStop,
-            trailing_stop: (trailingStopActive && trailingValidThisCycle) ? trailingStop : null,
+            trailing_stop: ((trailingStopActive && trailingValidThisCycle) || liveFallbackTrailingStop !== null) ? effectiveTrailingStopForAudit : null,
             stop_loss: hardStopLoss,
             break_even_price: breakEvenActivatedState ? breakEvenStop : null,
             peak_lock_stop: peakLockStop,
@@ -2350,7 +2350,7 @@ serve(async (req) => {
 
           // KRAV 4: Beregn om PnL vil være negativ ved denne exit
           // Bruges til at overstyre BREAK_EVEN_HIT -> STOP_LOSS_HIT hvis PnL er negativ
-          const exitAtPrice = slHit ? hardStopLoss : maxSlAfterMfeHit ? maxSlAfterMfeCap : beHit ? breakEvenStop : trailingStop;
+          const exitAtPrice = slHit ? hardStopLoss : maxSlAfterMfeHit ? maxSlAfterMfeCap : beHit ? breakEvenStop : effectiveTrailingStopForAudit;
           const estimatedPnl = position.side === 'LONG'
             ? (exitAtPrice! - position.entry_price) * position.quantity
             : (position.entry_price - exitAtPrice!) * position.quantity;
@@ -2380,16 +2380,16 @@ serve(async (req) => {
               console.log(`PEAK_LOCK_HIT → REKLASSIFICERET TIL STOP_LOSS_HIT (negativ PnL) | ${position.symbol} | price=${currentPrice} | stop_level_hit=${trailingStop} | estimatedPnl=${estimatedPnl.toFixed(2)}`);
             } else {
               closeReason = 'PEAK_LOCK_HIT';
-              console.log(`PEAK_LOCK_HIT | ${position.symbol} | price=${currentPrice} | stop_level_hit=${trailingStop} | stop_type_hit=PEAK_LOCK_HIT`);
+              console.log(`PEAK_LOCK_HIT | ${position.symbol} | price=${currentPrice} | stop_level_hit=${effectiveTrailingStopForAudit} | stop_type_hit=PEAK_LOCK_HIT`);
             }
           } else {
             // ATR Trailing stop hit
             if (pnlIsNegative) {
               closeReason = 'STOP_LOSS_HIT';
-              console.log(`TRAILING_STOP_HIT → REKLASSIFICERET TIL STOP_LOSS_HIT (negativ PnL) | ${position.symbol} | price=${currentPrice} | stop_level_hit=${trailingStop} | estimatedPnl=${estimatedPnl.toFixed(2)}`);
+                console.log(`TRAILING_STOP_HIT → REKLASSIFICERET TIL STOP_LOSS_HIT (negativ PnL) | ${position.symbol} | price=${currentPrice} | stop_level_hit=${effectiveTrailingStopForAudit} | estimatedPnl=${estimatedPnl.toFixed(2)}`);
             } else {
               closeReason = isLegacyPosition ? 'LEGACY_TRAILING_STOP_HIT' : 'TRAILING_STOP_HIT';
-              console.log(`TRAILING_STOP_HIT | ${position.symbol} | price=${currentPrice} | stop_level_hit=${trailingStop} | stop_type_hit=TRAILING_STOP_HIT`);
+              console.log(`TRAILING_STOP_HIT | ${position.symbol} | price=${currentPrice} | stop_level_hit=${effectiveTrailingStopForAudit} | stop_type_hit=TRAILING_STOP_HIT`);
             }
           }
 
