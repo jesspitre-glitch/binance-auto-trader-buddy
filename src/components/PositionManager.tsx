@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,7 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
   const [positionToClose, setPositionToClose] = useState<any>(null);
   const [config, setConfig] = useState<any>(null);
   const { toast } = useToast();
+  const trailingStatusRef = useRef<Map<string, string>>(new Map());
 
   const fetchConfig = async () => {
     try {
@@ -293,13 +294,40 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                   ? (position.side === 'LONG' ? trailingStopDb >= position.entry_price : trailingStopDb <= position.entry_price)
                   : false;
 
-                // Trailing er AKTIV når backend har sat en trailing_stop og den er i profit-zonen
-                // Dette er den korrekte source-of-truth fra backend
-                const trailingIsActive = trailingStopDb != null && trailingInProfitZone;
+                // tsTrigger hit: LONG når pris ≥ trigger, SHORT når pris ≤ trigger
+                const tsTriggerHit = trailingTriggerPrice != null && Number.isFinite(trailingTriggerPrice)
+                  ? (position.side === 'LONG'
+                      ? livePrice >= trailingTriggerPrice
+                      : livePrice <= trailingTriggerPrice)
+                  : false;
+
+                // Trailing er AKTIV når backend har sat en trailing_stop i profit-zonen
+                // ELLER prisen har krydset tsTrigger (UI viser aktivt selvom DB endnu ikke er opdateret)
+                const trailingIsActive = (trailingStopDb != null && trailingInProfitZone) || tsTriggerHit;
+
+                // Audit-log når trailing skifter status (standby/venter -> aktiv osv.)
+                if (!(position as any).is_orphan_recovery) {
+                  const newStatus = trailingIsActive
+                    ? 'ACTIVE'
+                    : (trailingTriggerPrice != null ? 'WAITING_FOR_TRIGGER' : 'STANDBY');
+                  const prevStatus = trailingStatusRef.current.get(position.id);
+                  if (prevStatus && prevStatus !== newStatus) {
+                    console.log('[Trailing] status change', {
+                      symbol: position.symbol,
+                      side: position.side,
+                      entryPrice: Number(position.entry_price),
+                      currentPrice: livePrice,
+                      tsTrigger: trailingTriggerPrice,
+                      previousStatus: prevStatus,
+                      newStatus,
+                    });
+                  }
+                  trailingStatusRef.current.set(position.id, newStatus);
+                }
 
                 // Aktivt stop (til visning): TS (når aktiv) → BE → SL(max tab)
-                const activeStopLevel = trailingIsActive
-                  ? trailingStopDb!
+                const activeStopLevel = trailingIsActive && trailingStopDb != null
+                  ? trailingStopDb
                   : isBreakEvenActivated
                     ? breakEvenLevel
                     : originalStopLoss;
@@ -437,29 +465,27 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                           <div className="border-t pt-2 mt-2 space-y-1">
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-semibold">Trailing:</span>
-                               {/* Trailing er AKTIV når backend har sat en trailing_stop i DB og den er i profit-zonen */}
-                               {trailingStopDb != null && trailingInProfitZone ? (
+                               {/* AKTIV når DB stop er i profit-zonen ELLER prisen har krydset tsTrigger */}
+                               {trailingIsActive ? (
                                  <>
                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-profit/10 text-profit border-profit/20">
                                      AKTIV
                                    </Badge>
-                                   <span className="text-xs text-muted-foreground">({profitInAtr.toFixed(1)} ATR)</span>
+                                   {atr > 0 && (
+                                     <span className="text-xs text-muted-foreground">({profitInAtr.toFixed(1)} ATR)</span>
+                                   )}
                                  </>
-                               ) : !isBreakEvenActivated ? (
-                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground">
-                                   STANDBY (afventer BE)
-                                 </Badge>
                                ) : profitDistance <= 0 ? (
                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground">
                                    BLOKERET (ikke i profit)
                                  </Badge>
-                               ) : trailingStopDb == null ? (
+                               ) : trailingTriggerPrice != null ? (
                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
                                    VENTER ({profitInAtr.toFixed(1)}/{trailingActivationAtr} ATR)
                                  </Badge>
                                ) : (
-                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-profit/10 text-profit border-profit/20">
-                                   AKTIV
+                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground">
+                                   STANDBY
                                  </Badge>
                                )}
                              </div>
