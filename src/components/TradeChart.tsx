@@ -1707,6 +1707,14 @@ const ChartDebugPanel = ({
             derived.closeTime ?? undefined,
           );
           const chartExit = exitStopSeries[exitStopSeries.length - 1] ?? null;
+          const liveEffectiveExitStop = liveExit.effectiveExitStop;
+          const lastHistoryExitStop = tsDiagnostic?.lastHistoryExitStop ?? tsDiagnostic?.lastValue ?? null;
+          const finalRenderedExitStop = chartExit?.exitStop ?? tsDiagnostic?.finalRenderedExitStop ?? null;
+          const historyOverridesLive = tsDiagnostic?.historyOverridesLive ?? (
+            liveEffectiveExitStop != null &&
+            lastHistoryExitStop != null &&
+            Math.abs(lastHistoryExitStop - liveEffectiveExitStop) > 1e-9
+          );
           return (
             <section className="min-w-0 rounded border border-orange-500/40 bg-orange-500/5 p-2">
               <div className="font-semibold mb-1 text-orange-600 dark:text-orange-400">
@@ -1730,6 +1738,10 @@ const ChartDebugPanel = ({
                 <div>hardStop: {fmt(liveExit.hardStop)}</div>
                 <div>effectiveExitStop: {fmt(chartExit?.exitStop ?? liveExit.effectiveExitStop)}</div>
                 <div>sourceUsed: {fmt(chartExit?.activeExitRule ?? liveExit.sourceUsed)}</div>
+                <div>liveEffectiveExitStop: {fmt(liveEffectiveExitStop)}</div>
+                <div>lastHistoryExitStop: {fmt(lastHistoryExitStop)}</div>
+                <div>finalRenderedExitStop: {fmt(finalRenderedExitStop)}</div>
+                <div>historyOverridesLive: {fmt(historyOverridesLive)}</div>
                 <div>exitStopHistoryCount: {fmt(tsDiagnostic?.pointCount ?? exitStopSeries.length)}</div>
               </div>
             </section>
@@ -1775,6 +1787,11 @@ const ChartDebugPanel = ({
             <div>Første active_stop: {fmt(tsDiagnostic?.firstValue ?? null)}</div>
             <div>Sidste timestamp: <span className="font-mono">{tsDiagnostic?.lastTs ? new Date(tsDiagnostic.lastTs).toISOString() : "-"}</span></div>
             <div>Sidste active_stop: {fmt(tsDiagnostic?.lastValue ?? null)}</div>
+            <div>liveEffectiveExitStop: {fmt(tsDiagnostic?.liveEffectiveExitStop ?? null)}</div>
+            <div>lastHistoryExitStop: {fmt(tsDiagnostic?.lastHistoryExitStop ?? null)}</div>
+            <div>finalRenderedExitStop: {fmt(tsDiagnostic?.finalRenderedExitStop ?? null)}</div>
+            <div>historyOverridesLive: {fmt(tsDiagnostic?.historyOverridesLive ?? false)}</div>
+            <div>sourceUsed: <span className="font-mono">{tsDiagnostic?.sourceUsed ?? "-"}</span></div>
             <div className="sm:col-span-2">
               active_exit_rule fordeling:{" "}
               <span className="font-mono">
