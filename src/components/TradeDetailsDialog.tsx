@@ -8,6 +8,7 @@ import { TradeChart } from "./TradeChart";
 import { formatTradeForExport } from "@/lib/tradeExportUtils";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveLiveExitStopState } from "@/lib/trailingState";
 
 /**
  * Adaptiv pris-formattering: vælg antal decimaler ud fra prisens størrelse,
