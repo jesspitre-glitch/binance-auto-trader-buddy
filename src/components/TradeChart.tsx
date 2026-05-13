@@ -602,9 +602,14 @@ const buildSeries = (
     mappedExitStopPoints: exitStopSeries.length,
     renderExitStop,
     renderMode,
-    renderReason: side === "SHORT" && liveExitState.trailingActive && exitStopSeries.some((p) => p.activeExitRule === "TRAILING_LIVE_FALLBACK")
-      ? `${renderReason}; SHORT live trailing fallback active=${liveExitState.computedTrailingStop}`
+    renderReason: historyOverridesLive
+      ? `${renderReason}; live current stop overrides stale history (${lastHistoryExitStop} → ${liveEffectiveExitStop})`
       : renderReason,
+    liveEffectiveExitStop,
+    lastHistoryExitStop,
+    finalRenderedExitStop,
+    historyOverridesLive,
+    sourceUsed: exitStopSeries[exitStopSeries.length - 1]?.activeExitRule ?? liveExitState.sourceUsed,
   };
 
   return {
