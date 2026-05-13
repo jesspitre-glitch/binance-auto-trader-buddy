@@ -302,6 +302,16 @@ const buildSeries = (
   fallbackEffectiveStop = liveExitState.effectiveExitStop;
   fallbackSource = liveExitState.sourceUsed;
 
+  // TEMP runtime debug — verify resolver parity across components
+  console.log("TRAILING_RUNTIME", {
+    componentName: "TradeChart",
+    symbol: trade.symbol,
+    side: trade.side,
+    trailingActive: liveExitState.trailingActive,
+    effectiveExitStop: liveExitState.effectiveExitStop,
+    sourceUsed: liveExitState.sourceUsed,
+  });
+
   const ruleDistribution: Record<string, number> = {};
   const exitStopSeries: ExitStopPoint[] = [];
   const liveEffectiveExitStop = liveExitState.effectiveExitStop;

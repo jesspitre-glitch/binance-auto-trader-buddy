@@ -10,6 +10,7 @@ import { getBinanceTimeAgo } from "@/lib/timeUtils";
 import { TradeDetailsDialog } from "./TradeDetailsDialog";
 import { RegimeIndicator } from "./RegimeIndicator";
 import { ExportTradesDialog } from "./ExportTradesDialog";
+import { resolveLiveExitStopState } from "@/lib/trailingState";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -294,24 +295,26 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                   ? (position.side === 'LONG' ? trailingStopDb >= position.entry_price : trailingStopDb <= position.entry_price)
                   : false;
 
-                // PRIMARY: hvis trade.trailing_stop er gemt i DB, er trailing aktiveret
-                // af backend uanset om trigger-prisen kendes lokalt. Ellers bruges trigger-gate.
-                const dbTrailingValid = trailingStopDb != null && Number.isFinite(trailingStopDb);
-                const trailingTriggerValid = trailingTriggerPrice != null && Number.isFinite(trailingTriggerPrice);
-                const trailingTriggerHit = trailingTriggerValid
-                  ? (position.side === 'LONG'
-                      ? livePrice >= (trailingTriggerPrice as number)
-                      : livePrice <= (trailingTriggerPrice as number))
-                  : false;
-                const trailingAllowedByTrigger = trailingTriggerValid && trailingTriggerHit;
-                const trailingIsActive = dbTrailingValid || trailingAllowedByTrigger;
-                const reasonIfTrailingInactive = dbTrailingValid
-                  ? null
-                  : !trailingTriggerValid
-                    ? 'NO_TS_TRIGGER'
-                    : !trailingTriggerHit
-                      ? 'TRIGGER_NOT_HIT'
-                      : null;
+                // SHARED SOURCE OF TRUTH — same resolver as TradeChart + TradeDetailsDialog.
+                const liveExit = resolveLiveExitStopState({
+                  ...position,
+                  current_price: livePrice,
+                });
+                const trailingIsActive = liveExit.trailingActive;
+                const reasonIfTrailingInactive = liveExit.reasonIfTrailingInactive;
+                const trailingTriggerValid = liveExit.trailingTriggerValid;
+                const trailingTriggerHit = liveExit.trailingTriggerHit;
+                const trailingAllowedByTrigger = liveExit.trailingAllowedByTrigger;
+
+                // TEMP runtime debug — verify resolver parity across components
+                console.log("TRAILING_RUNTIME", {
+                  componentName: "PositionManager",
+                  symbol: position.symbol,
+                  side: position.side,
+                  trailingActive: liveExit.trailingActive,
+                  effectiveExitStop: liveExit.effectiveExitStop,
+                  sourceUsed: liveExit.sourceUsed,
+                });
 
                 // Audit-log når trailing skifter status (standby/venter -> aktiv osv.)
                 if (!(position as any).is_orphan_recovery) {
@@ -337,12 +340,10 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                   trailingStatusRef.current.set(position.id, newStatus);
                 }
 
-                // Aktivt stop (til visning): TS (KUN når trigger-gated aktiv) → BE → SL(max tab)
-                const activeStopLevel = trailingIsActive && trailingStopDb != null
-                  ? trailingStopDb
-                  : isBreakEvenActivated
-                    ? breakEvenLevel
-                    : originalStopLoss;
+                // Aktivt stop (til visning) — kommer direkte fra shared resolver
+                const activeStopLevel = liveExit.effectiveExitStop != null
+                  ? liveExit.effectiveExitStop
+                  : (isBreakEvenActivated ? breakEvenLevel : originalStopLoss);
 
                 const openedTime = new Date(position.opened_at).getTime();
                 
