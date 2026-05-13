@@ -1017,12 +1017,18 @@ const ChartShell = ({
     });
 
   // ---- Custom tooltip ---------------------------------------------------
+  const tradeSide = trade.side as "LONG" | "SHORT";
   const renderTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || payload.length === 0) return null;
     const row = payload[0]?.payload as ChartRow | undefined;
     if (!row) return null;
-    const pctFromEntry =
-      entryPrice > 0 ? ((row.price - entryPrice) / entryPrice) * 100 : null;
+    const rawPct =
+      entryPrice > 0 && isFinite(row.price)
+        ? tradeSide === "SHORT"
+          ? ((entryPrice - row.price) / entryPrice) * 100
+          : ((row.price - entryPrice) / entryPrice) * 100
+        : null;
+    const pctFromEntry = rawPct != null && isFinite(rawPct) ? rawPct : null;
     return (
       <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-xl">
         <div className="font-semibold mb-1 text-popover-foreground">
