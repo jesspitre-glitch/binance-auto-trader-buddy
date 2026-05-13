@@ -484,11 +484,14 @@ const buildSeries = (
       const source = String(s.source || "").toLowerCase();
       return rule === "TS" || rule === "TRAILING" || source === "trailing" || toPositiveNumber(s.trailing_stop) != null;
     });
+    const lastHistoryRule = String(sortedHistory[sortedHistory.length - 1]?.active_exit_rule || "").toUpperCase();
+    const lastHistorySource = String(sortedHistory[sortedHistory.length - 1]?.source || "").toLowerCase();
+    const latestHistoryUsesTrailing = lastHistoryRule === "TS" || lastHistoryRule === "TRAILING" || lastHistorySource === "trailing";
     const needsShortLiveTrailingFallback =
       side === "SHORT" &&
       liveExitState.trailingActive &&
       liveExitState.computedTrailingStop != null &&
-      !hasTrailingHistory;
+      (!hasTrailingHistory || !latestHistoryUsesTrailing);
     if (needsShortLiveTrailingFallback) {
       exitStopSeries.length = 0;
       const startTs = openTime;
@@ -568,7 +571,7 @@ const buildSeries = (
     mappedExitStopPoints: exitStopSeries.length,
     renderExitStop,
     renderMode,
-    renderReason: side === "SHORT" && liveExitState.trailingActive && liveExitState.sourceUsed === "TRAILING_LIVE_FALLBACK"
+    renderReason: side === "SHORT" && liveExitState.trailingActive && exitStopSeries.some((p) => p.activeExitRule === "TRAILING_LIVE_FALLBACK")
       ? `${renderReason}; SHORT live trailing fallback active=${liveExitState.computedTrailingStop}`
       : renderReason,
   };
