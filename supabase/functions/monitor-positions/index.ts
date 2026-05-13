@@ -2034,9 +2034,9 @@ serve(async (req) => {
           (position.side === 'SHORT' && currentPrice >= breakEvenStop)
         );
 
-        const tsTriggered = trailingStop !== null && (
-          (position.side === 'LONG' && currentPrice <= trailingStop) ||
-          (position.side === 'SHORT' && currentPrice >= trailingStop)
+        const tsTriggered = effectiveTrailingStopForAudit !== null && (
+          (position.side === 'LONG' && currentPrice <= effectiveTrailingStopForAudit) ||
+          (position.side === 'SHORT' && currentPrice >= effectiveTrailingStopForAudit)
         );
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -2109,20 +2109,20 @@ serve(async (req) => {
         }
         
         // Peak-Lock trailing - kun aktiv hvis peak-lock er aktiveret
-        if (peakLockActive && trailingStop !== null) {
+        if (peakLockActive && effectiveTrailingStopForAudit !== null) {
           candidateStops.push({ 
             type: 'PEAK_LOCK_HIT', 
-            level: trailingStop, 
+            level: effectiveTrailingStopForAudit, 
             active: true, 
             triggered: tsTriggered 
           });
         }
         
         // ATR Trailing - kun aktiv hvis trailing er aktivt (og ikke peak-lock)
-        if (trailingValidThisCycle && !peakLockActive && trailingStop !== null) {
+        if (!peakLockActive && effectiveTrailingStopForAudit !== null && (trailingValidThisCycle || liveFallbackTrailingStop !== null)) {
           candidateStops.push({ 
             type: 'TRAILING_STOP_HIT', 
-            level: trailingStop, 
+            level: effectiveTrailingStopForAudit, 
             active: true, 
             triggered: tsTriggered 
           });
@@ -2196,6 +2196,10 @@ serve(async (req) => {
         console.log(`   📐 selection_method: ${position.side === 'LONG' ? 'MAX' : 'MIN'}(triggered_levels)`);
         console.log(`🎯 ═══════════════════════════════════════════════════════════════════\n`);
 
+        if (effectiveStop !== null && triggeredLevels.length === 0) {
+          console.log(`🔍 STOP_NOT_HIT ${position.symbol} ${position.side} | currentPrice=${currentPrice} | effectiveExitStop=${effectiveStop} | trailingActive=${trailingStopActive || liveFallbackTrailingStop !== null} | hardStop=${hardStopLoss} | trailingStop=${effectiveTrailingStopForAudit} | sourceUsed=${liveFallbackTrailingStop !== null ? 'TRAILING_LIVE_FALLBACK' : effectiveStopType ?? 'NONE'} | stopHit=false`);
+        }
+
         // 🔴 COMPREHENSIVE EXIT AUDIT - expected vs effective values
         const snapshotAtrForAudit = position.indicators_snapshot?.atr ?? 0;
         const snapshotExpectedSL = position.indicators_snapshot?.expected_stop_loss ?? null;
@@ -2219,7 +2223,7 @@ serve(async (req) => {
           
           original_stop_loss: hardStopLoss,
           break_even_active: breakEvenActivatedState,
-          trailing_active: trailingStopActive && trailingValidThisCycle,
+          trailing_active: (trailingStopActive && trailingValidThisCycle) || liveFallbackTrailingStop !== null,
           peak_lock_active: peakLockActive,
           exit_reason: slHit
             ? 'HARD_STOP_LOSS_HIT'
@@ -2238,7 +2242,7 @@ serve(async (req) => {
           expected_stop_loss_price: snapshotExpectedSL,
           expected_trailing_stop_price: expectedTrailingAtExit,
           effective_stop_loss_at_exit: slHit ? hardStopLoss : null,
-          effective_trailing_at_exit: tsHit || peakLockHit ? trailingStop : null,
+          effective_trailing_at_exit: tsHit || peakLockHit ? effectiveTrailingStopForAudit : null,
           effective_max_sl_after_mfe_cap: maxSlAfterMfeHit ? maxSlAfterMfeCap : null,
           effective_exit_level: effectiveStopAtExit,
           exit_price: currentPrice,
