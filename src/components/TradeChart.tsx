@@ -78,6 +78,11 @@ interface TsHistoryDiagnostic {
   renderExitStop: boolean;
   renderMode: string;
   renderReason: string;
+  liveEffectiveExitStop: number | null;
+  lastHistoryExitStop: number | null;
+  finalRenderedExitStop: number | null;
+  historyOverridesLive: boolean;
+  sourceUsed: string;
 }
 
 // Egen tidsserie til Exit Stop (uafhængig af candle-rækker)
