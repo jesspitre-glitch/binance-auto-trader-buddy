@@ -111,6 +111,11 @@ interface TriggerLevels {
 
 import { resolveLiveExitStopState, type LiveExitStopState } from "@/lib/trailingState";
 
+const toPositiveNumber = (value: any): number | null => {
+  const n = Number(value);
+  return value != null && isFinite(n) && n > 0 ? n : null;
+};
+
 interface ActivationMarkers {
   breakEvenAt: number | null;
   trailingAt: number | null;
