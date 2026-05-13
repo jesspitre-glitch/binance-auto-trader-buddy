@@ -303,14 +303,28 @@ const buildSeries = (
   fallbackSource = liveExitState.sourceUsed;
 
   // TEMP runtime debug — verify resolver parity across components
-  console.log("TRAILING_RUNTIME", {
+  console.group("TRAILING_RUNTIME");
+  console.log({
     componentName: "TradeChart",
     symbol: trade.symbol,
     side: trade.side,
     trailingActive: liveExitState.trailingActive,
     effectiveExitStop: liveExitState.effectiveExitStop,
     sourceUsed: liveExitState.sourceUsed,
+    trailingTriggerValid: liveExitState.trailingTriggerValid,
+    trailingTriggerHit: liveExitState.trailingTriggerHit,
+    reasonIfTrailingInactive: liveExitState.reasonIfTrailingInactive,
+    rawTrailingStop: liveExitState.rawTrailingStop,
+    computedTrailingStop: liveExitState.computedTrailingStop,
+    rawInput: {
+      trailing_stop: (trade as any).trailing_stop,
+      stop_loss: (trade as any).stop_loss,
+      peak_price: (trade as any).peak_price,
+      trailing_stop_initial_price: (trade as any).trailing_stop_initial_price,
+      current_price: (trade as any).current_price,
+    },
   });
+  console.groupEnd();
 
   const ruleDistribution: Record<string, number> = {};
   const exitStopSeries: ExitStopPoint[] = [];
