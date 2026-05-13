@@ -554,7 +554,7 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                             closed_at: null,
                             timestamp_close: null,
                             duration_minutes: Math.floor((Date.now() - openedTime) / (1000 * 60)),
-                            indicators_snapshot: null,
+                            indicators_snapshot: position.indicators_snapshot,
                             open_reason: position.open_reason,
                             close_reason: null, // Still open
                           };

@@ -104,6 +104,167 @@ interface TriggerLevels {
   peakLockTrigger: number | null;
 }
 
+interface LiveExitStopState {
+  side: "LONG" | "SHORT";
+  entryPrice: number | null;
+  currentPrice: number | null;
+  highestPrice: number | null;
+  lowestPrice: number | null;
+  tsTrigger: number | null;
+  trailingDistance: number | null;
+  trailingActive: boolean;
+  rawTrailingStop: number | null;
+  computedTrailingStop: number | null;
+  hardStop: number | null;
+  beStop: number | null;
+  effectiveExitStop: number | null;
+  sourceUsed: string;
+  exitStopHistoryCount?: number;
+}
+
+const toPositiveNumber = (value: any): number | null => {
+  const n = Number(value);
+  return value != null && isFinite(n) && n > 0 ? n : null;
+};
+
+const firstPositive = (...values: any[]): number | null => {
+  for (const value of values) {
+    const n = toPositiveNumber(value);
+    if (n != null) return n;
+  }
+  return null;
+};
+
+const getSnapshot = (trade: any): Record<string, any> =>
+  trade?.indicators_snapshot && typeof trade.indicators_snapshot === "object"
+    ? trade.indicators_snapshot
+    : {};
+
+const resolveLiveExitStopState = (
+  trade: any,
+  rows: ChartRow[] = [],
+  openTime?: number,
+  closeTime?: number,
+): LiveExitStopState => {
+  const side = trade.side as "LONG" | "SHORT";
+  const snapshot = getSnapshot(trade);
+  const exitAudit = snapshot.trailing_stop_exit_audit || {};
+  const entryPrice = toPositiveNumber(trade.entry_price);
+  const currentPrice =
+    firstPositive(trade.current_price, rows[rows.length - 1]?.price, trade.exit_price) ?? null;
+  const hardStop = firstPositive(trade.stop_loss, snapshot.stop_loss);
+  const rawTrailingStop = firstPositive(trade.trailing_stop, snapshot.trailing_stop);
+
+  const inTradeRows = rows.filter((row) => {
+    if (openTime != null && row.timestamp < openTime) return false;
+    if (closeTime != null && isFinite(closeTime) && row.timestamp > closeTime) return false;
+    return !row.isPostExit;
+  });
+  const highs = inTradeRows.map((row) => row.high).filter((v) => isFinite(v) && v > 0);
+  const lows = inTradeRows.map((row) => row.low).filter((v) => isFinite(v) && v > 0);
+  const peakPrice = firstPositive(trade.peak_price, snapshot.peak_price);
+  const lowPrice = firstPositive(trade.low_price, snapshot.low_price);
+
+  const highestPrice = firstPositive(
+    side === "LONG" ? Math.max(...[peakPrice, currentPrice, ...highs].filter((v): v is number => v != null)) : null,
+    side === "SHORT" ? Math.max(...[lowPrice, currentPrice, ...highs].filter((v): v is number => v != null)) : null,
+  );
+  const lowestPrice = firstPositive(
+    side === "SHORT" ? Math.min(...[peakPrice, currentPrice, ...lows].filter((v): v is number => v != null)) : null,
+    side === "LONG" ? Math.min(...[lowPrice, currentPrice, ...lows].filter((v): v is number => v != null)) : null,
+  );
+
+  const atrValue = firstPositive(
+    snapshot.atr,
+    snapshot.atr_audit?.atr_value,
+    snapshot.atr_filter_audit?.atr_value_raw,
+    exitAudit.atr_value_used_for_trailing,
+    exitAudit.atr_value_at_exit,
+  );
+  const trailingMultiplier = firstPositive(
+    snapshot.atr_trailing_stop_multiplier,
+    snapshot.trailing_stop_atr_multiplier,
+    exitAudit.multiplier_used,
+  );
+  const initialTrailingStop = firstPositive(
+    trade.trailing_stop_initial_price,
+    snapshot.trailing_stop_initial_price,
+  );
+  const trailingDistance = firstPositive(
+    trade.trailing_distance,
+    snapshot.trailing_distance,
+    exitAudit.trailing_distance,
+    atrValue != null && trailingMultiplier != null ? atrValue * trailingMultiplier : null,
+    entryPrice != null && initialTrailingStop != null ? Math.abs(initialTrailingStop - entryPrice) : null,
+    entryPrice != null && trade.trailing_stop_percent != null
+      ? entryPrice * (Number(trade.trailing_stop_percent) / 100)
+      : null,
+  );
+  const tsTrigger = firstPositive(
+    trade.trailing_activation_price,
+    snapshot.trailing_activation_price,
+    entryPrice != null && atrValue != null && snapshot.trailing_stop_activation_atr != null
+      ? side === "LONG"
+        ? entryPrice + atrValue * Number(snapshot.trailing_stop_activation_atr)
+        : entryPrice - atrValue * Number(snapshot.trailing_stop_activation_atr)
+      : null,
+  );
+
+  const referencePrice = side === "LONG" ? highestPrice : lowestPrice;
+  const computedFromPeak =
+    referencePrice != null && trailingDistance != null
+      ? side === "LONG"
+        ? referencePrice - trailingDistance
+        : referencePrice + trailingDistance
+      : null;
+  const stopInProfitZone = (value: number | null) =>
+    value != null && entryPrice != null && (side === "LONG" ? value > entryPrice : value < entryPrice);
+  const rawTrailingActive = stopInProfitZone(rawTrailingStop);
+  const computedTrailingStop = rawTrailingActive
+    ? rawTrailingStop
+    : stopInProfitZone(computedFromPeak)
+      ? computedFromPeak
+      : null;
+  const currentHitTrigger =
+    currentPrice != null && tsTrigger != null
+      ? side === "LONG"
+        ? currentPrice >= tsTrigger
+        : currentPrice <= tsTrigger
+      : false;
+  const trailingActive =
+    rawTrailingActive ||
+    (computedTrailingStop != null && (currentHitTrigger || tsTrigger == null));
+  const beActivated = trade.break_even_activated === true || trade.break_even_triggered === true;
+  const beStop = beActivated
+    ? firstPositive(trade.break_even_at_price, snapshot.break_even_at_price, trade.stop_loss)
+    : null;
+
+  if (trailingActive && computedTrailingStop != null) {
+    return {
+      side,
+      entryPrice,
+      currentPrice,
+      highestPrice,
+      lowestPrice,
+      tsTrigger,
+      trailingDistance,
+      trailingActive,
+      rawTrailingStop,
+      computedTrailingStop,
+      hardStop,
+      beStop,
+      effectiveExitStop: computedTrailingStop,
+      sourceUsed: rawTrailingActive ? "TRAILING_DB" : "TRAILING_LIVE_FALLBACK",
+    };
+  }
+
+  if (beStop != null) {
+    return { side, entryPrice, currentPrice, highestPrice, lowestPrice, tsTrigger, trailingDistance, trailingActive, rawTrailingStop, computedTrailingStop, hardStop, beStop, effectiveExitStop: beStop, sourceUsed: "BREAK_EVEN" };
+  }
+
+  return { side, entryPrice, currentPrice, highestPrice, lowestPrice, tsTrigger, trailingDistance, trailingActive, rawTrailingStop, computedTrailingStop, hardStop, beStop, effectiveExitStop: hardStop, sourceUsed: hardStop != null ? "STOP_LOSS" : "NONE" };
+};
+
 interface ActivationMarkers {
   breakEvenAt: number | null;
   trailingAt: number | null;
@@ -206,11 +367,6 @@ const buildSeries = (
 } => {
   const side = trade.side as "LONG" | "SHORT";
 
-  const toPositiveNumber = (value: any): number | null => {
-    const n = Number(value);
-    return value != null && isFinite(n) && n > 0 ? n : null;
-  };
-
   // ---- Sortér historik efter tid (UTC) -----------------------------------
   const sortedHistory = [...(history || [])]
     .filter((h) => h && h.recorded_at)
@@ -286,6 +442,15 @@ const buildSeries = (
     };
   });
 
+  const liveExitState = resolveLiveExitStopState(
+    trade,
+    data,
+    openTime,
+    isFinite(closeTime) ? closeTime : undefined,
+  );
+  fallbackEffectiveStop = liveExitState.effectiveExitStop;
+  fallbackSource = liveExitState.sourceUsed;
+
   const ruleDistribution: Record<string, number> = {};
   const exitStopSeries: ExitStopPoint[] = [];
 
@@ -313,6 +478,30 @@ const buildSeries = (
         activeExitRule: lastPt.activeExitRule,
       });
     }
+
+    const hasTrailingHistory = sortedHistory.some((s) => {
+      const rule = String(s.active_exit_rule || "").toUpperCase();
+      const source = String(s.source || "").toLowerCase();
+      return rule === "TS" || rule === "TRAILING" || source === "trailing" || toPositiveNumber(s.trailing_stop) != null;
+    });
+    const lastHistoryRule = String(sortedHistory[sortedHistory.length - 1]?.active_exit_rule || "").toUpperCase();
+    const lastHistorySource = String(sortedHistory[sortedHistory.length - 1]?.source || "").toLowerCase();
+    const latestHistoryUsesTrailing = lastHistoryRule === "TS" || lastHistoryRule === "TRAILING" || lastHistorySource === "trailing";
+    const needsShortLiveTrailingFallback =
+      side === "SHORT" &&
+      liveExitState.trailingActive &&
+      liveExitState.computedTrailingStop != null &&
+      (!hasTrailingHistory || !latestHistoryUsesTrailing);
+    if (needsShortLiveTrailingFallback) {
+      exitStopSeries.length = 0;
+      const startTs = openTime;
+      const endTs = isFinite(closeTime) ? closeTime : data[data.length - 1]?.timestamp ?? openTime;
+      if (endTs > startTs) {
+        exitStopSeries.push({ timestamp: startTs, exitStop: liveExitState.computedTrailingStop, activeExitRule: "TRAILING_LIVE_FALLBACK" });
+        exitStopSeries.push({ timestamp: endTs, exitStop: liveExitState.computedTrailingStop, activeExitRule: "TRAILING_LIVE_FALLBACK" });
+      }
+      ruleDistribution.TRAILING_LIVE_FALLBACK = (ruleDistribution.TRAILING_LIVE_FALLBACK || 0) + exitStopSeries.length;
+    }
   } else if (fallbackEffectiveStop != null) {
     // Ingen historik → flad linje fra entry til nu (eller close)
     const startTs = openTime;
@@ -337,8 +526,14 @@ const buildSeries = (
 
   if (latestInTradeIndex >= 0 && !hasHistorical) {
     const row = data[latestInTradeIndex];
-    row.trailingStop = validForSide(trailingStopDb, row);
+    row.trailingStop = validForSide(liveExitState.computedTrailingStop ?? trailingStopDb, row);
     row.effectiveStop = validForSide(fallbackEffectiveStop, row);
+    row.breakEven = validForSide(breakEvenAtPrice, row);
+    row.peakLockStop = validForSide(peakLockStopPrice, row);
+  } else if (latestInTradeIndex >= 0 && side === "SHORT" && liveExitState.trailingActive) {
+    const row = data[latestInTradeIndex];
+    row.trailingStop = validForSide(liveExitState.computedTrailingStop, row);
+    row.effectiveStop = validForSide(liveExitState.effectiveExitStop, row);
     row.breakEven = validForSide(breakEvenAtPrice, row);
     row.peakLockStop = validForSide(peakLockStopPrice, row);
   }
@@ -376,13 +571,15 @@ const buildSeries = (
     mappedExitStopPoints: exitStopSeries.length,
     renderExitStop,
     renderMode,
-    renderReason,
+    renderReason: side === "SHORT" && liveExitState.trailingActive && exitStopSeries.some((p) => p.activeExitRule === "TRAILING_LIVE_FALLBACK")
+      ? `${renderReason}; SHORT live trailing fallback active=${liveExitState.computedTrailingStop}`
+      : renderReason,
   };
 
   return {
     data,
     exitStopSeries,
-    triggers: { breakEvenTrigger: null, trailingTrigger: null, peakLockTrigger: null },
+    triggers: { breakEvenTrigger: null, trailingTrigger: liveExitState.tsTrigger, peakLockTrigger: null },
     markers: { breakEvenAt: null, trailingAt: null, peakLockAt: null },
     tsDiagnostic,
   };
@@ -1467,34 +1664,33 @@ const ChartDebugPanel = ({
       </summary>
       <div className="min-w-0 max-w-full space-y-4 overflow-hidden p-3">
         {(() => {
-          const entry = derived.entryPrice;
-          const currentPrice = chartData[chartData.length - 1]?.price ?? null;
-          const hardStop = derived.initialSlPrice > 0 ? derived.initialSlPrice : null;
-          const beStop = trade.break_even_triggered === true && trade.break_even_at_price != null
-            ? Number(trade.break_even_at_price) : null;
-          const trailingStopVal = trade.trailing_stop != null && Number(trade.trailing_stop) > 0
-            ? Number(trade.trailing_stop) : null;
-          const lastExit = exitStopSeries[exitStopSeries.length - 1];
-          const effectiveExitStop = lastExit?.exitStop ?? null;
-          const sourceUsed = lastExit?.activeExitRule ?? "NONE";
-          const inProfit = (v: number | null) =>
-            v != null && entry > 0 && (side === "LONG" ? v > entry : v < entry);
-          const trailingActive = inProfit(trailingStopVal);
+          const liveExit = resolveLiveExitStopState(
+            trade,
+            chartData,
+            derived.openTime ?? undefined,
+            derived.closeTime ?? undefined,
+          );
+          const chartExit = exitStopSeries[exitStopSeries.length - 1] ?? null;
           return (
             <section className="min-w-0 rounded border border-orange-500/40 bg-orange-500/5 p-2">
               <div className="font-semibold mb-1 text-orange-600 dark:text-orange-400">
                 0. Effective Exit Stop (side-aware)
               </div>
               <div className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-0.5 sm:grid-cols-2 [&>div]:min-w-0 [&>div]:break-all">
-                <div>side: {fmt(side)}</div>
-                <div>entryPrice: {fmt(entry)}</div>
-                <div>currentPrice: {fmt(currentPrice)}</div>
-                <div>hardStop: {fmt(hardStop)}</div>
-                <div>beStop: {fmt(beStop)}</div>
-                <div>trailingStop: {fmt(trailingStopVal)}</div>
-                <div>effectiveExitStop: {fmt(effectiveExitStop)}</div>
-                <div>trailingActive: {fmt(trailingActive)}</div>
-                <div>sourceUsed: {fmt(sourceUsed)}</div>
+                <div>side: {fmt(liveExit.side)}</div>
+                <div>entryPrice: {fmt(liveExit.entryPrice)}</div>
+                <div>currentPrice: {fmt(liveExit.currentPrice)}</div>
+                <div>highestPrice: {fmt(liveExit.highestPrice)}</div>
+                <div>lowestPrice: {fmt(liveExit.lowestPrice)}</div>
+                <div>tsTrigger: {fmt(liveExit.tsTrigger)}</div>
+                <div>trailingDistance: {fmt(liveExit.trailingDistance)}</div>
+                <div>trailingActive: {fmt(liveExit.trailingActive)}</div>
+                <div>rawTrailingStop: {fmt(liveExit.rawTrailingStop)}</div>
+                <div>computedTrailingStop: {fmt(liveExit.computedTrailingStop)}</div>
+                <div>hardStop: {fmt(liveExit.hardStop)}</div>
+                <div>effectiveExitStop: {fmt(chartExit?.exitStop ?? liveExit.effectiveExitStop)}</div>
+                <div>sourceUsed: {fmt(chartExit?.activeExitRule ?? liveExit.sourceUsed)}</div>
+                <div>exitStopHistoryCount: {fmt(tsDiagnostic?.pointCount ?? exitStopSeries.length)}</div>
               </div>
             </section>
           );
