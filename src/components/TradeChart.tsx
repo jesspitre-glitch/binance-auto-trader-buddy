@@ -120,6 +120,10 @@ interface LiveExitStopState {
   effectiveExitStop: number | null;
   sourceUsed: string;
   exitStopHistoryCount?: number;
+  trailingTriggerValid: boolean;
+  trailingTriggerHit: boolean;
+  trailingAllowedByTrigger: boolean;
+  reasonIfTrailingInactive: string | null;
 }
 
 const toPositiveNumber = (value: any): number | null => {
