@@ -2484,7 +2484,8 @@ serve(async (req) => {
             const trailingReallyActive =
               breakEvenActivatedState === true ||
               (trailingStopActive === true && trailingValidThisCycle === true && trailingStop !== null) ||
-              (peakLockActive === true && trailingStop !== null);
+              liveFallbackTrailingStop !== null ||
+              (peakLockActive === true && effectiveTrailingStopForAudit !== null);
             const trailingInactiveOk = !trailingReallyActive;
 
             // Krav 4: Prisbevægelse < Z × ATR i samme periode.
@@ -2650,7 +2651,7 @@ serve(async (req) => {
         }
 
         // Opdater peak og trailing HVER gang trailing er valid (uanset om den allerede var aktiveret)
-        if (trailingStopActive && trailingValidThisCycle && newTrailingStop !== null && newTrailingStop !== undefined && isFinite(newTrailingStop)) {
+          if (trailingStopActive && trailingValidThisCycle && newTrailingStop !== null && newTrailingStop !== undefined && isFinite(newTrailingStop)) {
           updateData.peak_price = newPeakPrice;
           updateData.trailing_stop = newTrailingStop;
           // 🟢 STALE EXIT TRACKING: marker tidspunkt for trailing-opdatering kun ved reel ændring
@@ -2662,6 +2663,14 @@ serve(async (req) => {
           }
 
           console.log(`📈 TRAILING OPDATERET | ${position.symbol} | peak=${newPeakPrice} ts=${newTrailingStop}`);
+        } else if (liveFallbackTrailingStop !== null) {
+          updateData.peak_price = newPeakPrice;
+          updateData.trailing_stop = liveFallbackTrailingStop;
+          updateData.indicators_snapshot = {
+            ...(updateData.indicators_snapshot ?? position.indicators_snapshot ?? {}),
+            stale_exit_trailing_updated_at: new Date().toISOString(),
+          };
+          console.log(`📈 TRAILING LIVE FALLBACK GEMT | ${position.symbol} | peak=${newPeakPrice} ts=${liveFallbackTrailingStop}`);
         } else if (trailingStopActive && !trailingValidThisCycle) {
           console.log(`⚠️ TRAILING VALID=FALSE | ${position.symbol} | reason=${trailingActivationReason}`);
         } else if (!trailingStopActive && breakEvenActivatedState && isInProfit && trailingProfitThresholdPassed) {
