@@ -633,17 +633,72 @@ serve(async (req) => {
           .eq('id', position.id);
 
         // 🟡 ORPHAN SAFE EXIT: Orphan recovery rows have no slot/strategy config.
-        // We skip trailing/BE/timeout logic, but DO auto-close via reduceOnly market
-        // when the hard SL fallback is breached. Sync owns ORPHAN_RECONCILED on qty match.
+        // We skip strategy BE/trailing/timeout logic, but enforce a side-aware
+        // effectiveExitStop (trailing-fallback > BE > hard SL) via reduceOnly market close
+        // — mirroring the UI/chart's resolveLiveExitStopState so backend and chart agree.
         if (position.is_orphan_recovery === true) {
           const hardSl = Number(position.stop_loss);
+          const entry = Number(position.entry_price);
+          const side = position.side as 'LONG' | 'SHORT';
+          const snap: any = position.indicators_snapshot || {};
+
+          // 🔁 Track peak/low so live-trailing fallback can ratchet (orphan path used to skip this)
+          let orphanPeak = Number(position.peak_price) || entry;
+          let orphanLow = Number(position.low_price) || entry;
+          let orphanPeakChanged = false;
+          if (side === 'LONG' && currentPrice > orphanPeak) { orphanPeak = currentPrice; orphanPeakChanged = true; }
+          if (side === 'SHORT' && currentPrice < orphanPeak) { orphanPeak = currentPrice; orphanPeakChanged = true; }
+          if (side === 'LONG' && currentPrice < orphanLow) { orphanLow = currentPrice; orphanPeakChanged = true; }
+          if (side === 'SHORT' && currentPrice > orphanLow) { orphanLow = currentPrice; orphanPeakChanged = true; }
+          if (orphanPeakChanged) {
+            try {
+              await supabaseClient.from('positions').update({
+                peak_price: orphanPeak, low_price: orphanLow,
+              }).eq('id', position.id);
+            } catch {}
+          }
+
+          // 🔧 Compute live-trailing fallback distance (mirrors TradeChart.resolveLiveExitStopState)
+          const atrValue = Number(snap.atr) || Number(snap.atr_audit?.atr_value) || 0;
+          const trailingMultiplier = Number(snap.atr_trailing_stop_multiplier) || Number(snap.trailing_stop_atr_multiplier) || 0;
+          const trailingPctFallback = Number(position.trailing_stop_percent) || 0;
+          let trailingDistance = 0;
+          if (atrValue > 0 && trailingMultiplier > 0) trailingDistance = atrValue * trailingMultiplier;
+          else if (entry > 0 && trailingPctFallback > 0) trailingDistance = entry * (trailingPctFallback / 100);
+
+          const referencePrice = side === 'LONG' ? orphanPeak : orphanLow;
+          const computedTrailingStop = trailingDistance > 0 && referencePrice > 0
+            ? (side === 'LONG' ? referencePrice - trailingDistance : referencePrice + trailingDistance)
+            : null;
+          const trailingInProfitZone = computedTrailingStop != null && entry > 0 &&
+            (side === 'LONG' ? computedTrailingStop > entry : computedTrailingStop < entry);
+          const dbTrailingStop = Number(position.trailing_stop) || 0;
+          const dbTrailingActive = dbTrailingStop > 0 &&
+            (side === 'LONG' ? dbTrailingStop > entry : dbTrailingStop < entry);
+          const trailingActive = dbTrailingActive || trailingInProfitZone;
+          const effectiveTrailingStop = dbTrailingActive
+            ? dbTrailingStop
+            : (trailingInProfitZone ? computedTrailingStop : null);
+
+          // Priority: trailing > hard SL (orphan rows have no BE)
+          const effectiveExitStop = effectiveTrailingStop != null
+            ? effectiveTrailingStop
+            : (Number.isFinite(hardSl) && hardSl > 0 ? hardSl : null);
+          const sourceUsed = effectiveTrailingStop != null
+            ? (dbTrailingActive ? 'TRAILING_DB' : 'TRAILING_LIVE_FALLBACK')
+            : (effectiveExitStop != null ? 'STOP_LOSS' : 'NONE');
+
           let orphanAction = 'ORPHAN_SAFE_EXIT_MONITORED';
-          if (Number.isFinite(hardSl) && hardSl > 0) {
-            const slHit = position.side === 'LONG'
-              ? currentPrice <= hardSl
-              : currentPrice >= hardSl;
-            if (slHit) {
-              console.warn(`🟡 ORPHAN_HARD_SL_HIT ${position.symbol} ${position.side} price=${currentPrice} sl=${hardSl} qty=${position.quantity} — closing orphan via reduceOnly market`);
+          if (effectiveExitStop != null) {
+            const stopHit = side === 'LONG'
+              ? currentPrice <= effectiveExitStop
+              : currentPrice >= effectiveExitStop;
+
+            console.log(`🟡 ORPHAN_STOP_EVAL ${position.symbol} ${side} | price=${currentPrice} | effectiveExitStop=${effectiveExitStop} | sourceUsed=${sourceUsed} | trailingActive=${trailingActive} | hardStop=${hardSl} | computedTrailing=${computedTrailingStop} | stopHit=${stopHit}`);
+
+            if (stopHit) {
+              const closeReasonOrphan = sourceUsed.startsWith('TRAILING') ? 'ORPHAN_TRAILING_STOP_HIT' : 'ORPHAN_HARD_SL_HIT';
+              console.warn(`🟡 ${closeReasonOrphan} ${position.symbol} ${side} price=${currentPrice} stop=${effectiveExitStop} (${sourceUsed}) qty=${position.quantity} — closing orphan via reduceOnly market`);
               try {
                 const closeResult = await closePositionOnBinance(position.symbol, position.side, Number(position.quantity));
                 const exitPrice = closeResult?.avgPrice && Number.isFinite(closeResult.avgPrice) && closeResult.avgPrice > 0
@@ -661,7 +716,7 @@ serve(async (req) => {
                   .update({
                     status: 'CLOSED',
                     closed_at: new Date().toISOString(),
-                    close_reason: 'ORPHAN_HARD_SL_HIT',
+                    close_reason: closeReasonOrphan,
                     source: 'binance_reconciliation',
                     is_orphan_recovery: true,
                     current_price: exitPrice,
@@ -671,7 +726,7 @@ serve(async (req) => {
 
                 await supabaseClient.from('reconciliation_log').insert({
                   user_id: position.user_id,
-                  event_type: 'ORPHAN_HARD_SL_CLOSED',
+                  event_type: `${closeReasonOrphan}_CLOSED`,
                   symbol: position.symbol,
                   side: position.side,
                   binance_qty: executedQty,
@@ -679,17 +734,19 @@ serve(async (req) => {
                   details: {
                     exit_price: exitPrice,
                     stop_loss: hardSl,
+                    effective_exit_stop: effectiveExitStop,
+                    source_used: sourceUsed,
                     pnl: orphanPnl,
                     order_id: closeResult?.orderId ?? null,
                     source: 'binance_reconciliation',
                   },
                 });
 
-                orphanAction = 'ORPHAN_HARD_SL_CLOSED';
-                console.log(`✅ ORPHAN_HARD_SL_CLOSED ${position.symbol} ${position.side} exit=${exitPrice} pnl=${orphanPnl.toFixed(4)}`);
+                orphanAction = `${closeReasonOrphan}_CLOSED`;
+                console.log(`✅ ${orphanAction} ${position.symbol} ${position.side} exit=${exitPrice} pnl=${orphanPnl.toFixed(4)} (${sourceUsed})`);
               } catch (err: any) {
                 const errMsg = String(err?.message ?? err);
-                console.error(`❌ ORPHAN_HARD_SL_CLOSE_FAILED ${position.symbol}: ${errMsg}`);
+                console.error(`❌ ${closeReasonOrphan}_CLOSE_FAILED ${position.symbol}: ${errMsg}`);
                 const mergedSnapshot = {
                   ...((position.indicators_snapshot as any) || {}),
                   reconciliation: {
@@ -702,24 +759,27 @@ serve(async (req) => {
                   .from('positions')
                   .update({
                     close_failed: true,
-                    close_failed_reason: `ORPHAN_HARD_SL_CLOSE_FAILED: ${errMsg}`,
+                    close_failed_reason: `${closeReasonOrphan}_CLOSE_FAILED: ${errMsg}`,
                     close_failed_price: currentPrice,
-                    close_failed_stop_level: hardSl,
+                    close_failed_stop_level: effectiveExitStop,
                     close_failed_at: new Date().toISOString(),
                     indicators_snapshot: mergedSnapshot,
                   })
                   .eq('id', position.id);
                 await supabaseClient.from('reconciliation_log').insert({
                   user_id: position.user_id,
-                  event_type: 'ORPHAN_HARD_SL_CLOSE_FAILED',
+                  event_type: `${closeReasonOrphan}_CLOSE_FAILED`,
                   symbol: position.symbol,
                   side: position.side,
                   binance_qty: Number(position.quantity),
                   position_id: position.id,
-                  details: { error: errMsg, stop_loss: hardSl, current_price: currentPrice },
+                  details: { error: errMsg, stop_loss: hardSl, effective_exit_stop: effectiveExitStop, source_used: sourceUsed, current_price: currentPrice },
                 });
-                orphanAction = 'ORPHAN_HARD_SL_CLOSE_FAILED';
+                orphanAction = `${closeReasonOrphan}_CLOSE_FAILED`;
               }
+            } else {
+              // 🔍 Audit: stop NOT hit — log eval state for visibility
+              console.log(`🔍 ORPHAN_STOP_NOT_HIT ${position.symbol} ${side} | price=${currentPrice} | effectiveExitStop=${effectiveExitStop} | sourceUsed=${sourceUsed} | trailingActive=${trailingActive} | hardStop=${hardSl} | trailingStop=${effectiveTrailingStop}`);
             }
           }
           results.push({ position_id: position.id, symbol: position.symbol, action: orphanAction });
