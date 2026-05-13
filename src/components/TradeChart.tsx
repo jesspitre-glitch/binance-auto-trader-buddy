@@ -78,6 +78,11 @@ interface TsHistoryDiagnostic {
   renderExitStop: boolean;
   renderMode: string;
   renderReason: string;
+  liveEffectiveExitStop: number | null;
+  lastHistoryExitStop: number | null;
+  finalRenderedExitStop: number | null;
+  historyOverridesLive: boolean;
+  sourceUsed: string;
 }
 
 // Egen tidsserie til Exit Stop (uafhængig af candle-rækker)
@@ -472,6 +477,9 @@ const buildSeries = (
 
   const ruleDistribution: Record<string, number> = {};
   const exitStopSeries: ExitStopPoint[] = [];
+  const liveEffectiveExitStop = liveExitState.effectiveExitStop;
+  let lastHistoryExitStop: number | null = null;
+  let historyOverridesLive = false;
 
   if (hasHistorical) {
     // Byg uafhængig tidsserie direkte fra historik (egne timestamps)
@@ -486,6 +494,7 @@ const buildSeries = (
       });
       ruleDistribution[rule] = (ruleDistribution[rule] || 0) + 1;
     });
+    lastHistoryExitStop = exitStopSeries[exitStopSeries.length - 1]?.exitStop ?? null;
 
     // Forlæng med en sidste "nu"-punkt så step-linjen rækker frem til seneste candle
     const lastCandleTs = data[data.length - 1]?.timestamp;
@@ -497,30 +506,6 @@ const buildSeries = (
         activeExitRule: lastPt.activeExitRule,
       });
     }
-
-    const hasTrailingHistory = sortedHistory.some((s) => {
-      const rule = String(s.active_exit_rule || "").toUpperCase();
-      const source = String(s.source || "").toLowerCase();
-      return rule === "TS" || rule === "TRAILING" || source === "trailing" || toPositiveNumber(s.trailing_stop) != null;
-    });
-    const lastHistoryRule = String(sortedHistory[sortedHistory.length - 1]?.active_exit_rule || "").toUpperCase();
-    const lastHistorySource = String(sortedHistory[sortedHistory.length - 1]?.source || "").toLowerCase();
-    const latestHistoryUsesTrailing = lastHistoryRule === "TS" || lastHistoryRule === "TRAILING" || lastHistorySource === "trailing";
-    const needsShortLiveTrailingFallback =
-      side === "SHORT" &&
-      liveExitState.trailingActive &&
-      liveExitState.computedTrailingStop != null &&
-      (!hasTrailingHistory || !latestHistoryUsesTrailing);
-    if (needsShortLiveTrailingFallback) {
-      exitStopSeries.length = 0;
-      const startTs = openTime;
-      const endTs = isFinite(closeTime) ? closeTime : data[data.length - 1]?.timestamp ?? openTime;
-      if (endTs > startTs) {
-        exitStopSeries.push({ timestamp: startTs, exitStop: liveExitState.computedTrailingStop, activeExitRule: "TRAILING_LIVE_FALLBACK" });
-        exitStopSeries.push({ timestamp: endTs, exitStop: liveExitState.computedTrailingStop, activeExitRule: "TRAILING_LIVE_FALLBACK" });
-      }
-      ruleDistribution.TRAILING_LIVE_FALLBACK = (ruleDistribution.TRAILING_LIVE_FALLBACK || 0) + exitStopSeries.length;
-    }
   } else if (fallbackEffectiveStop != null) {
     // Ingen historik → flad linje fra entry til nu (eller close)
     const startTs = openTime;
@@ -530,6 +515,38 @@ const buildSeries = (
       exitStopSeries.push({ timestamp: endTs, exitStop: fallbackEffectiveStop, activeExitRule: `FALLBACK_${fallbackSource}` });
     }
   }
+
+  // Live/current stop må altid vinde over gammel history/cache i den seneste chart-værdi.
+  if (liveEffectiveExitStop != null && isFinite(liveEffectiveExitStop) && liveEffectiveExitStop > 0) {
+    const endTs = isFinite(closeTime) ? closeTime : data[data.length - 1]?.timestamp ?? openTime;
+    const liveRule = `LIVE_${liveExitState.sourceUsed}`;
+    const lastRendered = exitStopSeries[exitStopSeries.length - 1];
+    historyOverridesLive =
+      hasHistorical &&
+      lastHistoryExitStop != null &&
+      Math.abs(lastHistoryExitStop - liveEffectiveExitStop) > 1e-9;
+
+    if (lastRendered) {
+      if (endTs >= lastRendered.timestamp) {
+        lastRendered.timestamp = endTs;
+        lastRendered.exitStop = liveEffectiveExitStop;
+        lastRendered.activeExitRule = liveRule;
+        const previousRendered = exitStopSeries[exitStopSeries.length - 2];
+        if (previousRendered && hasHistorical) {
+          previousRendered.exitStop = liveEffectiveExitStop;
+          previousRendered.activeExitRule = liveRule;
+        }
+      } else {
+        exitStopSeries.push({ timestamp: endTs, exitStop: liveEffectiveExitStop, activeExitRule: liveRule });
+        exitStopSeries.sort((a, b) => a.timestamp - b.timestamp);
+      }
+    } else if (endTs > openTime) {
+      exitStopSeries.push({ timestamp: openTime, exitStop: liveEffectiveExitStop, activeExitRule: liveRule });
+      exitStopSeries.push({ timestamp: endTs, exitStop: liveEffectiveExitStop, activeExitRule: liveRule });
+    }
+  }
+
+  const finalRenderedExitStop = exitStopSeries[exitStopSeries.length - 1]?.exitStop ?? null;
 
   const validForSide = (v: number | null, row: ChartRow): number | null => {
     if (v == null || !isFinite(v) || v <= 0) return null;
@@ -590,9 +607,14 @@ const buildSeries = (
     mappedExitStopPoints: exitStopSeries.length,
     renderExitStop,
     renderMode,
-    renderReason: side === "SHORT" && liveExitState.trailingActive && exitStopSeries.some((p) => p.activeExitRule === "TRAILING_LIVE_FALLBACK")
-      ? `${renderReason}; SHORT live trailing fallback active=${liveExitState.computedTrailingStop}`
+    renderReason: historyOverridesLive
+      ? `${renderReason}; live current stop overrides stale history (${lastHistoryExitStop} → ${liveEffectiveExitStop})`
       : renderReason,
+    liveEffectiveExitStop,
+    lastHistoryExitStop,
+    finalRenderedExitStop,
+    historyOverridesLive,
+    sourceUsed: exitStopSeries[exitStopSeries.length - 1]?.activeExitRule ?? liveExitState.sourceUsed,
   };
 
   return {
@@ -1690,6 +1712,14 @@ const ChartDebugPanel = ({
             derived.closeTime ?? undefined,
           );
           const chartExit = exitStopSeries[exitStopSeries.length - 1] ?? null;
+          const liveEffectiveExitStop = liveExit.effectiveExitStop;
+          const lastHistoryExitStop = tsDiagnostic?.lastHistoryExitStop ?? tsDiagnostic?.lastValue ?? null;
+          const finalRenderedExitStop = chartExit?.exitStop ?? tsDiagnostic?.finalRenderedExitStop ?? null;
+          const historyOverridesLive = tsDiagnostic?.historyOverridesLive ?? (
+            liveEffectiveExitStop != null &&
+            lastHistoryExitStop != null &&
+            Math.abs(lastHistoryExitStop - liveEffectiveExitStop) > 1e-9
+          );
           return (
             <section className="min-w-0 rounded border border-orange-500/40 bg-orange-500/5 p-2">
               <div className="font-semibold mb-1 text-orange-600 dark:text-orange-400">
@@ -1713,6 +1743,10 @@ const ChartDebugPanel = ({
                 <div>hardStop: {fmt(liveExit.hardStop)}</div>
                 <div>effectiveExitStop: {fmt(chartExit?.exitStop ?? liveExit.effectiveExitStop)}</div>
                 <div>sourceUsed: {fmt(chartExit?.activeExitRule ?? liveExit.sourceUsed)}</div>
+                <div>liveEffectiveExitStop: {fmt(liveEffectiveExitStop)}</div>
+                <div>lastHistoryExitStop: {fmt(lastHistoryExitStop)}</div>
+                <div>finalRenderedExitStop: {fmt(finalRenderedExitStop)}</div>
+                <div>historyOverridesLive: {fmt(historyOverridesLive)}</div>
                 <div>exitStopHistoryCount: {fmt(tsDiagnostic?.pointCount ?? exitStopSeries.length)}</div>
               </div>
             </section>
@@ -1758,6 +1792,11 @@ const ChartDebugPanel = ({
             <div>Første active_stop: {fmt(tsDiagnostic?.firstValue ?? null)}</div>
             <div>Sidste timestamp: <span className="font-mono">{tsDiagnostic?.lastTs ? new Date(tsDiagnostic.lastTs).toISOString() : "-"}</span></div>
             <div>Sidste active_stop: {fmt(tsDiagnostic?.lastValue ?? null)}</div>
+            <div>liveEffectiveExitStop: {fmt(tsDiagnostic?.liveEffectiveExitStop ?? null)}</div>
+            <div>lastHistoryExitStop: {fmt(tsDiagnostic?.lastHistoryExitStop ?? null)}</div>
+            <div>finalRenderedExitStop: {fmt(tsDiagnostic?.finalRenderedExitStop ?? null)}</div>
+            <div>historyOverridesLive: {fmt(tsDiagnostic?.historyOverridesLive ?? false)}</div>
+            <div>sourceUsed: <span className="font-mono">{tsDiagnostic?.sourceUsed ?? "-"}</span></div>
             <div className="sm:col-span-2">
               active_exit_rule fordeling:{" "}
               <span className="font-mono">
