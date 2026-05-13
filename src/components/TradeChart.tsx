@@ -1704,6 +1704,10 @@ const ChartDebugPanel = ({
                 <div>tsTrigger: {fmt(liveExit.tsTrigger)}</div>
                 <div>trailingDistance: {fmt(liveExit.trailingDistance)}</div>
                 <div>trailingActive: {fmt(liveExit.trailingActive)}</div>
+                <div>trailingTriggerValid: {fmt(liveExit.trailingTriggerValid)}</div>
+                <div>trailingTriggerHit: {fmt(liveExit.trailingTriggerHit)}</div>
+                <div>trailingAllowedByTrigger: {fmt(liveExit.trailingAllowedByTrigger)}</div>
+                <div>reasonIfTrailingInactive: {fmt(liveExit.reasonIfTrailingInactive)}</div>
                 <div>rawTrailingStop: {fmt(liveExit.rawTrailingStop)}</div>
                 <div>computedTrailingStop: {fmt(liveExit.computedTrailingStop)}</div>
                 <div>hardStop: {fmt(liveExit.hardStop)}</div>
