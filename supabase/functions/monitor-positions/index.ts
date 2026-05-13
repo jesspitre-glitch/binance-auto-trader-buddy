@@ -716,7 +716,7 @@ serve(async (req) => {
                   .update({
                     status: 'CLOSED',
                     closed_at: new Date().toISOString(),
-                    close_reason: 'ORPHAN_HARD_SL_HIT',
+                    close_reason: closeReasonOrphan,
                     source: 'binance_reconciliation',
                     is_orphan_recovery: true,
                     current_price: exitPrice,
@@ -726,7 +726,7 @@ serve(async (req) => {
 
                 await supabaseClient.from('reconciliation_log').insert({
                   user_id: position.user_id,
-                  event_type: 'ORPHAN_HARD_SL_CLOSED',
+                  event_type: `${closeReasonOrphan}_CLOSED`,
                   symbol: position.symbol,
                   side: position.side,
                   binance_qty: executedQty,
@@ -734,17 +734,19 @@ serve(async (req) => {
                   details: {
                     exit_price: exitPrice,
                     stop_loss: hardSl,
+                    effective_exit_stop: effectiveExitStop,
+                    source_used: sourceUsed,
                     pnl: orphanPnl,
                     order_id: closeResult?.orderId ?? null,
                     source: 'binance_reconciliation',
                   },
                 });
 
-                orphanAction = 'ORPHAN_HARD_SL_CLOSED';
-                console.log(`✅ ORPHAN_HARD_SL_CLOSED ${position.symbol} ${position.side} exit=${exitPrice} pnl=${orphanPnl.toFixed(4)}`);
+                orphanAction = `${closeReasonOrphan}_CLOSED`;
+                console.log(`✅ ${orphanAction} ${position.symbol} ${position.side} exit=${exitPrice} pnl=${orphanPnl.toFixed(4)} (${sourceUsed})`);
               } catch (err: any) {
                 const errMsg = String(err?.message ?? err);
-                console.error(`❌ ORPHAN_HARD_SL_CLOSE_FAILED ${position.symbol}: ${errMsg}`);
+                console.error(`❌ ${closeReasonOrphan}_CLOSE_FAILED ${position.symbol}: ${errMsg}`);
                 const mergedSnapshot = {
                   ...((position.indicators_snapshot as any) || {}),
                   reconciliation: {
@@ -757,24 +759,27 @@ serve(async (req) => {
                   .from('positions')
                   .update({
                     close_failed: true,
-                    close_failed_reason: `ORPHAN_HARD_SL_CLOSE_FAILED: ${errMsg}`,
+                    close_failed_reason: `${closeReasonOrphan}_CLOSE_FAILED: ${errMsg}`,
                     close_failed_price: currentPrice,
-                    close_failed_stop_level: hardSl,
+                    close_failed_stop_level: effectiveExitStop,
                     close_failed_at: new Date().toISOString(),
                     indicators_snapshot: mergedSnapshot,
                   })
                   .eq('id', position.id);
                 await supabaseClient.from('reconciliation_log').insert({
                   user_id: position.user_id,
-                  event_type: 'ORPHAN_HARD_SL_CLOSE_FAILED',
+                  event_type: `${closeReasonOrphan}_CLOSE_FAILED`,
                   symbol: position.symbol,
                   side: position.side,
                   binance_qty: Number(position.quantity),
                   position_id: position.id,
-                  details: { error: errMsg, stop_loss: hardSl, current_price: currentPrice },
+                  details: { error: errMsg, stop_loss: hardSl, effective_exit_stop: effectiveExitStop, source_used: sourceUsed, current_price: currentPrice },
                 });
-                orphanAction = 'ORPHAN_HARD_SL_CLOSE_FAILED';
+                orphanAction = `${closeReasonOrphan}_CLOSE_FAILED`;
               }
+            } else {
+              // 🔍 Audit: stop NOT hit — log eval state for visibility
+              console.log(`🔍 ORPHAN_STOP_NOT_HIT ${position.symbol} ${side} | price=${currentPrice} | effectiveExitStop=${effectiveExitStop} | sourceUsed=${sourceUsed} | trailingActive=${trailingActive} | hardStop=${hardSl} | trailingStop=${effectiveTrailingStop}`);
             }
           }
           results.push({ position_id: position.id, symbol: position.symbol, action: orphanAction });
