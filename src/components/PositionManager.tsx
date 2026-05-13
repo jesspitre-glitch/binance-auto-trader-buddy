@@ -53,6 +53,7 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
   const [positionToClose, setPositionToClose] = useState<any>(null);
   const [config, setConfig] = useState<any>(null);
   const { toast } = useToast();
+  const trailingStatusRef = useRef<Map<string, string>>(new Map());
 
   const fetchConfig = async () => {
     try {
