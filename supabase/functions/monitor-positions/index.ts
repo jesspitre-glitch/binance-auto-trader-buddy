@@ -1840,6 +1840,87 @@ serve(async (req) => {
           ? Number(newTrailingStop)
           : null;
 
+        const firstPositiveNumber = (...values: any[]): number | null => {
+          for (const value of values) {
+            const n = Number(value);
+            if (Number.isFinite(n) && n > 0) return n;
+          }
+          return null;
+        };
+
+        const snapshotForLiveFallback = position.indicators_snapshot || {};
+        const exitAuditForLiveFallback = snapshotForLiveFallback.trailing_stop_exit_audit || {};
+        const entryForLiveFallback = firstPositiveNumber(position.entry_price);
+        const rawTrailingStopForLiveFallback = firstPositiveNumber(position.trailing_stop, snapshotForLiveFallback.trailing_stop);
+        const peakForLiveFallback = firstPositiveNumber(position.peak_price, snapshotForLiveFallback.peak_price);
+        const lowForLiveFallback = firstPositiveNumber(position.low_price, snapshotForLiveFallback.low_price);
+        const referenceForLiveFallback = position.side === 'LONG'
+          ? firstPositiveNumber(Math.max(...[peakForLiveFallback, currentPrice].filter((v): v is number => v != null)))
+          : firstPositiveNumber(Math.min(...[peakForLiveFallback, currentPrice].filter((v): v is number => v != null)));
+        const atrForLiveFallback = firstPositiveNumber(
+          snapshotForLiveFallback.atr,
+          snapshotForLiveFallback.atr_audit?.atr_value,
+          snapshotForLiveFallback.atr_filter_audit?.atr_value_raw,
+          exitAuditForLiveFallback.atr_value_used_for_trailing,
+          exitAuditForLiveFallback.atr_value_at_exit,
+        );
+        const multiplierForLiveFallback = firstPositiveNumber(
+          snapshotForLiveFallback.atr_trailing_stop_multiplier,
+          snapshotForLiveFallback.trailing_stop_atr_multiplier,
+          exitAuditForLiveFallback.multiplier_used,
+        );
+        const initialTrailingStopForLiveFallback = firstPositiveNumber(
+          position.trailing_stop_initial_price,
+          snapshotForLiveFallback.trailing_stop_initial_price,
+        );
+        const trailingDistanceForLiveFallback = firstPositiveNumber(
+          position.trailing_distance,
+          snapshotForLiveFallback.trailing_distance,
+          exitAuditForLiveFallback.trailing_distance,
+          atrForLiveFallback != null && multiplierForLiveFallback != null ? atrForLiveFallback * multiplierForLiveFallback : null,
+          entryForLiveFallback != null && initialTrailingStopForLiveFallback != null ? Math.abs(initialTrailingStopForLiveFallback - entryForLiveFallback) : null,
+          entryForLiveFallback != null && position.trailing_stop_percent != null
+            ? entryForLiveFallback * (Number(position.trailing_stop_percent) / 100)
+            : null,
+        );
+        const tsTriggerForLiveFallback = firstPositiveNumber(
+          position.trailing_activation_price,
+          snapshotForLiveFallback.trailing_activation_price,
+          entryForLiveFallback != null && atrForLiveFallback != null && snapshotForLiveFallback.trailing_stop_activation_atr != null
+            ? position.side === 'LONG'
+              ? entryForLiveFallback + atrForLiveFallback * Number(snapshotForLiveFallback.trailing_stop_activation_atr)
+              : entryForLiveFallback - atrForLiveFallback * Number(snapshotForLiveFallback.trailing_stop_activation_atr)
+            : null,
+        );
+        const liveStopInProfitZone = (value: number | null) =>
+          value != null && entryForLiveFallback != null && (position.side === 'LONG' ? value > entryForLiveFallback : value < entryForLiveFallback);
+        const rawTrailingActiveForLiveFallback = liveStopInProfitZone(rawTrailingStopForLiveFallback);
+        const computedFromPeakForLiveFallback = referenceForLiveFallback != null && trailingDistanceForLiveFallback != null
+          ? position.side === 'LONG'
+            ? referenceForLiveFallback - trailingDistanceForLiveFallback
+            : referenceForLiveFallback + trailingDistanceForLiveFallback
+          : null;
+        const computedTrailingStopForLiveFallback = rawTrailingActiveForLiveFallback
+          ? rawTrailingStopForLiveFallback
+          : liveStopInProfitZone(computedFromPeakForLiveFallback)
+            ? computedFromPeakForLiveFallback
+            : null;
+        const liveFallbackTriggerHit = currentPrice != null && tsTriggerForLiveFallback != null
+          ? position.side === 'LONG'
+            ? currentPrice >= tsTriggerForLiveFallback
+            : currentPrice <= tsTriggerForLiveFallback
+          : false;
+        const liveFallbackTrailingActive = rawTrailingActiveForLiveFallback ||
+          (computedTrailingStopForLiveFallback != null && (liveFallbackTriggerHit || tsTriggerForLiveFallback == null));
+        const liveFallbackTrailingStop = trailingStop === null && liveFallbackTrailingActive
+          ? computedTrailingStopForLiveFallback
+          : null;
+        const effectiveTrailingStopForAudit = trailingStop ?? liveFallbackTrailingStop;
+
+        if (liveFallbackTrailingStop !== null) {
+          console.log(`🟠 TRAILING_LIVE_FALLBACK_ACTIVE ${position.symbol} ${position.side} | currentPrice=${currentPrice} | entryPrice=${position.entry_price} | peakPrice=${peakForLiveFallback} | lowPrice=${lowForLiveFallback} | referencePrice=${referenceForLiveFallback} | trailingDistance=${trailingDistanceForLiveFallback} | tsTrigger=${tsTriggerForLiveFallback} | trailingStop=${liveFallbackTrailingStop}`);
+        }
+
         // 🔍 DEBUG LOG: Kompakt oversigt over stop-kandidater og winner (kun når debug=true)
         if (debug) {
           // Beregn hvilken stop-kandidat der vinder (mest beskyttende)
