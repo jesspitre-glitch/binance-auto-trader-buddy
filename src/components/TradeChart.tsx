@@ -367,11 +367,6 @@ const buildSeries = (
 } => {
   const side = trade.side as "LONG" | "SHORT";
 
-  const toPositiveNumber = (value: any): number | null => {
-    const n = Number(value);
-    return value != null && isFinite(n) && n > 0 ? n : null;
-  };
-
   // ---- Sortér historik efter tid (UTC) -----------------------------------
   const sortedHistory = [...(history || [])]
     .filter((h) => h && h.recorded_at)
@@ -447,6 +442,15 @@ const buildSeries = (
     };
   });
 
+  const liveExitState = resolveLiveExitStopState(
+    trade,
+    data,
+    openTime,
+    isFinite(closeTime) ? closeTime : undefined,
+  );
+  fallbackEffectiveStop = liveExitState.effectiveExitStop;
+  fallbackSource = liveExitState.sourceUsed;
+
   const ruleDistribution: Record<string, number> = {};
   const exitStopSeries: ExitStopPoint[] = [];
 
@@ -474,6 +478,27 @@ const buildSeries = (
         activeExitRule: lastPt.activeExitRule,
       });
     }
+
+    const hasTrailingHistory = sortedHistory.some((s) => {
+      const rule = String(s.active_exit_rule || "").toUpperCase();
+      const source = String(s.source || "").toLowerCase();
+      return rule === "TS" || rule === "TRAILING" || source === "trailing" || toPositiveNumber(s.trailing_stop) != null;
+    });
+    const needsShortLiveTrailingFallback =
+      side === "SHORT" &&
+      liveExitState.trailingActive &&
+      liveExitState.computedTrailingStop != null &&
+      !hasTrailingHistory;
+    if (needsShortLiveTrailingFallback) {
+      exitStopSeries.length = 0;
+      const startTs = openTime;
+      const endTs = isFinite(closeTime) ? closeTime : data[data.length - 1]?.timestamp ?? openTime;
+      if (endTs > startTs) {
+        exitStopSeries.push({ timestamp: startTs, exitStop: liveExitState.computedTrailingStop, activeExitRule: "TRAILING_LIVE_FALLBACK" });
+        exitStopSeries.push({ timestamp: endTs, exitStop: liveExitState.computedTrailingStop, activeExitRule: "TRAILING_LIVE_FALLBACK" });
+      }
+      ruleDistribution.TRAILING_LIVE_FALLBACK = (ruleDistribution.TRAILING_LIVE_FALLBACK || 0) + exitStopSeries.length;
+    }
   } else if (fallbackEffectiveStop != null) {
     // Ingen historik → flad linje fra entry til nu (eller close)
     const startTs = openTime;
@@ -498,8 +523,14 @@ const buildSeries = (
 
   if (latestInTradeIndex >= 0 && !hasHistorical) {
     const row = data[latestInTradeIndex];
-    row.trailingStop = validForSide(trailingStopDb, row);
+    row.trailingStop = validForSide(liveExitState.computedTrailingStop ?? trailingStopDb, row);
     row.effectiveStop = validForSide(fallbackEffectiveStop, row);
+    row.breakEven = validForSide(breakEvenAtPrice, row);
+    row.peakLockStop = validForSide(peakLockStopPrice, row);
+  } else if (latestInTradeIndex >= 0 && side === "SHORT" && liveExitState.trailingActive) {
+    const row = data[latestInTradeIndex];
+    row.trailingStop = validForSide(liveExitState.computedTrailingStop, row);
+    row.effectiveStop = validForSide(liveExitState.effectiveExitStop, row);
     row.breakEven = validForSide(breakEvenAtPrice, row);
     row.peakLockStop = validForSide(peakLockStopPrice, row);
   }
@@ -537,13 +568,15 @@ const buildSeries = (
     mappedExitStopPoints: exitStopSeries.length,
     renderExitStop,
     renderMode,
-    renderReason,
+    renderReason: side === "SHORT" && liveExitState.trailingActive && liveExitState.sourceUsed === "TRAILING_LIVE_FALLBACK"
+      ? `${renderReason}; SHORT live trailing fallback active=${liveExitState.computedTrailingStop}`
+      : renderReason,
   };
 
   return {
     data,
     exitStopSeries,
-    triggers: { breakEvenTrigger: null, trailingTrigger: null, peakLockTrigger: null },
+    triggers: { breakEvenTrigger: null, trailingTrigger: liveExitState.tsTrigger, peakLockTrigger: null },
     markers: { breakEvenAt: null, trailingAt: null, peakLockAt: null },
     tsDiagnostic,
   };
