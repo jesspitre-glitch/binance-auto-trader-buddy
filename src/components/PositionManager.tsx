@@ -465,29 +465,27 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                           <div className="border-t pt-2 mt-2 space-y-1">
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-semibold">Trailing:</span>
-                               {/* Trailing er AKTIV når backend har sat en trailing_stop i DB og den er i profit-zonen */}
-                               {trailingStopDb != null && trailingInProfitZone ? (
+                               {/* AKTIV når DB stop er i profit-zonen ELLER prisen har krydset tsTrigger */}
+                               {trailingIsActive ? (
                                  <>
                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-profit/10 text-profit border-profit/20">
                                      AKTIV
                                    </Badge>
-                                   <span className="text-xs text-muted-foreground">({profitInAtr.toFixed(1)} ATR)</span>
+                                   {atr > 0 && (
+                                     <span className="text-xs text-muted-foreground">({profitInAtr.toFixed(1)} ATR)</span>
+                                   )}
                                  </>
-                               ) : !isBreakEvenActivated ? (
-                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground">
-                                   STANDBY (afventer BE)
-                                 </Badge>
                                ) : profitDistance <= 0 ? (
                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground">
                                    BLOKERET (ikke i profit)
                                  </Badge>
-                               ) : trailingStopDb == null ? (
+                               ) : trailingTriggerPrice != null ? (
                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
                                    VENTER ({profitInAtr.toFixed(1)}/{trailingActivationAtr} ATR)
                                  </Badge>
                                ) : (
-                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-profit/10 text-profit border-profit/20">
-                                   AKTIV
+                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground">
+                                   STANDBY
                                  </Badge>
                                )}
                              </div>
