@@ -1664,34 +1664,33 @@ const ChartDebugPanel = ({
       </summary>
       <div className="min-w-0 max-w-full space-y-4 overflow-hidden p-3">
         {(() => {
-          const entry = derived.entryPrice;
-          const currentPrice = chartData[chartData.length - 1]?.price ?? null;
-          const hardStop = derived.initialSlPrice > 0 ? derived.initialSlPrice : null;
-          const beStop = trade.break_even_triggered === true && trade.break_even_at_price != null
-            ? Number(trade.break_even_at_price) : null;
-          const trailingStopVal = trade.trailing_stop != null && Number(trade.trailing_stop) > 0
-            ? Number(trade.trailing_stop) : null;
-          const lastExit = exitStopSeries[exitStopSeries.length - 1];
-          const effectiveExitStop = lastExit?.exitStop ?? null;
-          const sourceUsed = lastExit?.activeExitRule ?? "NONE";
-          const inProfit = (v: number | null) =>
-            v != null && entry > 0 && (side === "LONG" ? v > entry : v < entry);
-          const trailingActive = inProfit(trailingStopVal);
+          const liveExit = resolveLiveExitStopState(
+            trade,
+            chartData,
+            derived.openTime ?? undefined,
+            derived.closeTime ?? undefined,
+          );
+          const chartExit = exitStopSeries[exitStopSeries.length - 1] ?? null;
           return (
             <section className="min-w-0 rounded border border-orange-500/40 bg-orange-500/5 p-2">
               <div className="font-semibold mb-1 text-orange-600 dark:text-orange-400">
                 0. Effective Exit Stop (side-aware)
               </div>
               <div className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-0.5 sm:grid-cols-2 [&>div]:min-w-0 [&>div]:break-all">
-                <div>side: {fmt(side)}</div>
-                <div>entryPrice: {fmt(entry)}</div>
-                <div>currentPrice: {fmt(currentPrice)}</div>
-                <div>hardStop: {fmt(hardStop)}</div>
-                <div>beStop: {fmt(beStop)}</div>
-                <div>trailingStop: {fmt(trailingStopVal)}</div>
-                <div>effectiveExitStop: {fmt(effectiveExitStop)}</div>
-                <div>trailingActive: {fmt(trailingActive)}</div>
-                <div>sourceUsed: {fmt(sourceUsed)}</div>
+                <div>side: {fmt(liveExit.side)}</div>
+                <div>entryPrice: {fmt(liveExit.entryPrice)}</div>
+                <div>currentPrice: {fmt(liveExit.currentPrice)}</div>
+                <div>highestPrice: {fmt(liveExit.highestPrice)}</div>
+                <div>lowestPrice: {fmt(liveExit.lowestPrice)}</div>
+                <div>tsTrigger: {fmt(liveExit.tsTrigger)}</div>
+                <div>trailingDistance: {fmt(liveExit.trailingDistance)}</div>
+                <div>trailingActive: {fmt(liveExit.trailingActive)}</div>
+                <div>rawTrailingStop: {fmt(liveExit.rawTrailingStop)}</div>
+                <div>computedTrailingStop: {fmt(liveExit.computedTrailingStop)}</div>
+                <div>hardStop: {fmt(liveExit.hardStop)}</div>
+                <div>effectiveExitStop: {fmt(chartExit?.exitStop ?? liveExit.effectiveExitStop)}</div>
+                <div>sourceUsed: {fmt(chartExit?.activeExitRule ?? liveExit.sourceUsed)}</div>
+                <div>exitStopHistoryCount: {fmt(tsDiagnostic?.pointCount ?? exitStopSeries.length)}</div>
               </div>
             </section>
           );
