@@ -149,7 +149,12 @@ export const resolveLiveExitStopState = (
       ? computedFromPeak
       : null;
 
-  // STRICT trigger gate — the only way trailing can be considered active.
+  // PRIMARY RULE: an existing valid trade.trailing_stop in DB means trailing has
+  // already been activated by the backend. Treat it as the source of truth and
+  // skip the trigger gate entirely.
+  const dbTrailingValid = rawTrailingStop != null && Number.isFinite(rawTrailingStop);
+
+  // Fallback STRICT trigger gate — only used when DB has no trailing_stop yet.
   const trailingTriggerValid = tsTrigger != null && Number.isFinite(tsTrigger);
   const trailingTriggerHit =
     trailingTriggerValid && currentPrice != null
@@ -158,14 +163,17 @@ export const resolveLiveExitStopState = (
         : currentPrice <= (tsTrigger as number)
       : false;
   const trailingAllowedByTrigger = trailingTriggerValid && trailingTriggerHit;
-  const trailingActive = trailingAllowedByTrigger && computedTrailingStop != null;
-  const reasonIfTrailingInactive = !trailingTriggerValid
-    ? "NO_TS_TRIGGER"
-    : !trailingTriggerHit
-      ? "TRIGGER_NOT_HIT"
-      : computedTrailingStop == null
-        ? "NO_COMPUTED_STOP"
-        : null;
+  const trailingActive =
+    dbTrailingValid || (trailingAllowedByTrigger && computedTrailingStop != null);
+  const reasonIfTrailingInactive = dbTrailingValid
+    ? null
+    : !trailingTriggerValid
+      ? "NO_TS_TRIGGER"
+      : !trailingTriggerHit
+        ? "TRIGGER_NOT_HIT"
+        : computedTrailingStop == null
+          ? "NO_COMPUTED_STOP"
+          : null;
   const beActivated = trade.break_even_activated === true || trade.break_even_triggered === true;
   const beStop = beActivated
     ? firstPositive(trade.break_even_at_price, snapshot.break_even_at_price, trade.stop_loss)
@@ -178,7 +186,13 @@ export const resolveLiveExitStopState = (
     reasonIfTrailingInactive,
   };
 
-  if (trailingActive && computedTrailingStop != null) {
+  if (trailingActive) {
+    const effective = dbTrailingValid ? (rawTrailingStop as number) : (computedTrailingStop as number);
+    const sourceUsed = dbTrailingValid
+      ? "TRADE_TRAILING_STOP"
+      : rawTrailingActive
+        ? "TRAILING_DB"
+        : "TRAILING_LIVE_FALLBACK";
     return {
       side,
       entryPrice,
@@ -192,8 +206,8 @@ export const resolveLiveExitStopState = (
       computedTrailingStop,
       hardStop,
       beStop,
-      effectiveExitStop: computedTrailingStop,
-      sourceUsed: rawTrailingActive ? "TRAILING_DB" : "TRAILING_LIVE_FALLBACK",
+      effectiveExitStop: effective,
+      sourceUsed,
       ...debugFields,
     };
   }
