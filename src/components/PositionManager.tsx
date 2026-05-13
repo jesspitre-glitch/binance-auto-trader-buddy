@@ -294,13 +294,40 @@ export const PositionManager = ({ slotId, includeLegacyData = false, slots = [] 
                   ? (position.side === 'LONG' ? trailingStopDb >= position.entry_price : trailingStopDb <= position.entry_price)
                   : false;
 
-                // Trailing er AKTIV når backend har sat en trailing_stop og den er i profit-zonen
-                // Dette er den korrekte source-of-truth fra backend
-                const trailingIsActive = trailingStopDb != null && trailingInProfitZone;
+                // tsTrigger hit: LONG når pris ≥ trigger, SHORT når pris ≤ trigger
+                const tsTriggerHit = trailingTriggerPrice != null && Number.isFinite(trailingTriggerPrice)
+                  ? (position.side === 'LONG'
+                      ? livePrice >= trailingTriggerPrice
+                      : livePrice <= trailingTriggerPrice)
+                  : false;
+
+                // Trailing er AKTIV når backend har sat en trailing_stop i profit-zonen
+                // ELLER prisen har krydset tsTrigger (UI viser aktivt selvom DB endnu ikke er opdateret)
+                const trailingIsActive = (trailingStopDb != null && trailingInProfitZone) || tsTriggerHit;
+
+                // Audit-log når trailing skifter status (standby/venter -> aktiv osv.)
+                if (!(position as any).is_orphan_recovery) {
+                  const newStatus = trailingIsActive
+                    ? 'ACTIVE'
+                    : (trailingTriggerPrice != null ? 'WAITING_FOR_TRIGGER' : 'STANDBY');
+                  const prevStatus = trailingStatusRef.current.get(position.id);
+                  if (prevStatus && prevStatus !== newStatus) {
+                    console.log('[Trailing] status change', {
+                      symbol: position.symbol,
+                      side: position.side,
+                      entryPrice: Number(position.entry_price),
+                      currentPrice: livePrice,
+                      tsTrigger: trailingTriggerPrice,
+                      previousStatus: prevStatus,
+                      newStatus,
+                    });
+                  }
+                  trailingStatusRef.current.set(position.id, newStatus);
+                }
 
                 // Aktivt stop (til visning): TS (når aktiv) → BE → SL(max tab)
-                const activeStopLevel = trailingIsActive
-                  ? trailingStopDb!
+                const activeStopLevel = trailingIsActive && trailingStopDb != null
+                  ? trailingStopDb
                   : isBreakEvenActivated
                     ? breakEvenLevel
                     : originalStopLoss;
