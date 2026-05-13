@@ -337,34 +337,71 @@ export const TradeDetailsDialog = ({ trade, isOpen, onClose, onDeleted }: TradeD
               );
             })()}
 
-            {/* Trailing Stop - use position data for live, snapshot for closed */}
-            {(trade.trailing_stop || trade.indicators_snapshot?.trailing_stop) && (() => {
-              const trailingStopValue = Number(trade.trailing_stop || trade.indicators_snapshot?.trailing_stop);
-              const entryPriceVal = Number(trade.entry_price);
-              // Trailing is active when stop is in profit zone (above entry for LONG, below for SHORT)
-              const trailingIsActive = trade.side === 'LONG' 
-                ? trailingStopValue >= entryPriceVal 
-                : trailingStopValue <= entryPriceVal;
-              
-              // Calculate distance from peak
+            {/* Trailing Stop — STRICT trigger-gated state via shared resolver
+                (same source of truth as PositionManager and TradeChart). */}
+            {(() => {
+              const liveExit = resolveLiveExitStopState(trade);
+              const trailingIsActive = liveExit.trailingActive;
+              const trailingStopValue = liveExit.computedTrailingStop;
               const peakPrice = Number(trade.peak_price || trade.indicators_snapshot?.peak_price);
-              const distanceFromPeak = peakPrice > 0 
-                ? Math.abs(peakPrice - trailingStopValue) / peakPrice * 100 
-                : null;
-              
+              const distanceFromPeak =
+                trailingIsActive && trailingStopValue != null && peakPrice > 0
+                  ? Math.abs(peakPrice - trailingStopValue) / peakPrice * 100
+                  : null;
+
+              // Debug — exposes the shared state used by this card.
+              if (typeof window !== "undefined" && isPositionOpen) {
+                // eslint-disable-next-line no-console
+                console.log("[LiveCard] trailing state", {
+                  symbol: trade.symbol,
+                  side: trade.side,
+                  cardTrailingActive: trailingIsActive,
+                  cardTsTrigger: liveExit.tsTrigger,
+                  cardEffectiveExitStop: liveExit.effectiveExitStop,
+                  cardSourceUsed: liveExit.sourceUsed,
+                  trailingTriggerValid: liveExit.trailingTriggerValid,
+                  trailingTriggerHit: liveExit.trailingTriggerHit,
+                  reasonIfTrailingInactive: liveExit.reasonIfTrailingInactive,
+                });
+              }
+
+              // Don't render the trailing card at all when there is no
+              // trailing data to show AND no DB trailing_stop history.
+              const hasAnyTrailingData =
+                trailingStopValue != null ||
+                trade.trailing_stop != null ||
+                trade.indicators_snapshot?.trailing_stop != null;
+              if (!hasAnyTrailingData) return null;
+
+              const displayValue = trailingIsActive
+                ? trailingStopValue
+                : Number(trade.trailing_stop || trade.indicators_snapshot?.trailing_stop) || null;
+
               return (
                 <div className={`border rounded-lg p-3 ${trailingIsActive ? 'border-profit/50 bg-profit/5' : 'border-warning/50 bg-warning/5'}`}>
                   <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                     🎯 Trailing Stop
-                    {trailingIsActive && (
+                    {trailingIsActive ? (
                       <Badge variant="outline" className="ml-1 text-xs bg-profit/20 text-profit border-profit/40">
                         AKTIV
                       </Badge>
+                    ) : (
+                      <Badge variant="outline" className="ml-1 text-xs bg-warning/20 text-warning border-warning/40">
+                        STANDBY
+                      </Badge>
                     )}
                   </div>
-                  <div className={`font-mono font-semibold ${trailingIsActive ? 'text-profit' : 'text-warning'}`}>
-                    ${formatPrice(trailingStopValue)}
-                  </div>
+                  {displayValue != null && (
+                    <div className={`font-mono font-semibold ${trailingIsActive ? 'text-profit' : 'text-warning'}`}>
+                      ${formatPrice(displayValue)}
+                    </div>
+                  )}
+                  {!trailingIsActive && liveExit.reasonIfTrailingInactive && (
+                    <div className="text-[10px] text-muted-foreground mt-1">
+                      Inaktiv: {liveExit.reasonIfTrailingInactive}
+                      {liveExit.tsTrigger != null && ` · trigger $${formatPrice(liveExit.tsTrigger)}`}
+                    </div>
+                  )}
                   {distanceFromPeak !== null && (
                     <div className="text-xs text-muted-foreground">
                       {distanceFromPeak.toFixed(2)}% fra peak
