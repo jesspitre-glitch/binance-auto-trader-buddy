@@ -149,12 +149,36 @@ export const resolveLiveExitStopState = (
       ? computedFromPeak
       : null;
 
-  // PRIMARY RULE: an existing valid trade.trailing_stop in DB means trailing has
-  // already been activated by the backend. Treat it as the source of truth and
-  // skip the trigger gate entirely.
-  const dbTrailingValid = rawTrailingStop != null && Number.isFinite(rawTrailingStop);
+  // PRIMARY RULE: an existing trade.trailing_stop in DB only counts as active if
+  // it is side-valid AND protective relative to currentPrice + hardStop.
+  const rawTrailingStopFinite =
+    rawTrailingStop != null && Number.isFinite(rawTrailingStop);
+  let dbTrailingRejectedReason: string | null = null;
+  let dbTrailingSideValid = false;
+  if (rawTrailingStopFinite && currentPrice != null && hardStop != null) {
+    if (side === "LONG") {
+      if (!(rawTrailingStop! < currentPrice)) {
+        dbTrailingRejectedReason = "LONG_TRAILING_ABOVE_CURRENT";
+      } else if (!(rawTrailingStop! > hardStop)) {
+        dbTrailingRejectedReason = "LONG_TRAILING_BELOW_HARD_STOP";
+      } else {
+        dbTrailingSideValid = true;
+      }
+    } else {
+      if (!(rawTrailingStop! > currentPrice)) {
+        dbTrailingRejectedReason = "SHORT_TRAILING_BELOW_CURRENT";
+      } else if (!(rawTrailingStop! < hardStop)) {
+        dbTrailingRejectedReason = "SHORT_TRAILING_ABOVE_HARD_STOP";
+      } else {
+        dbTrailingSideValid = true;
+      }
+    }
+  } else if (rawTrailingStopFinite) {
+    dbTrailingRejectedReason = "MISSING_PRICE_OR_HARD_STOP";
+  }
+  const dbTrailingValid = dbTrailingSideValid;
 
-  // Fallback STRICT trigger gate — only used when DB has no trailing_stop yet.
+  // Fallback STRICT trigger gate — only used when DB trailing is not side-valid.
   const trailingTriggerValid = tsTrigger != null && Number.isFinite(tsTrigger);
   const trailingTriggerHit =
     trailingTriggerValid && currentPrice != null
@@ -167,13 +191,15 @@ export const resolveLiveExitStopState = (
     dbTrailingValid || (trailingAllowedByTrigger && computedTrailingStop != null);
   const reasonIfTrailingInactive = dbTrailingValid
     ? null
-    : !trailingTriggerValid
-      ? "NO_TS_TRIGGER"
-      : !trailingTriggerHit
-        ? "TRIGGER_NOT_HIT"
-        : computedTrailingStop == null
-          ? "NO_COMPUTED_STOP"
-          : null;
+    : dbTrailingRejectedReason
+      ? `DB_TRAILING_REJECTED:${dbTrailingRejectedReason}`
+      : !trailingTriggerValid
+        ? "NO_TS_TRIGGER"
+        : !trailingTriggerHit
+          ? "TRIGGER_NOT_HIT"
+          : computedTrailingStop == null
+            ? "NO_COMPUTED_STOP"
+            : null;
   const beActivated = trade.break_even_activated === true || trade.break_even_triggered === true;
   const beStop = beActivated
     ? firstPositive(trade.break_even_at_price, snapshot.break_even_at_price, trade.stop_loss)
