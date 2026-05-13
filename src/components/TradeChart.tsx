@@ -229,19 +229,32 @@ const buildSeries = (
   const peakLockStopPrice =
     peakLockActivated ? toPositiveNumber(trade.peak_lock_stop_price) : null;
 
-  const fallbackStopCandidates = [
-    stopLossDb,
-    breakEvenAtPrice,
-    trailingStopDb,
-    peakLockStopPrice,
-  ].filter((v): v is number => v != null);
+  // Side-aware effective stop selection — mirror the rules used in PositionManager
+  // Priority: active trailing > active break-even > hard stop loss
+  // Validity per side:
+  //   LONG  → protective stop must be BELOW entry (trailing/BE only counted when in profit zone)
+  //   SHORT → protective stop must be ABOVE entry
+  const entryPriceNum = toPositiveNumber(trade.entry_price);
+  const isProfitZone = (v: number | null): boolean => {
+    if (v == null || entryPriceNum == null) return false;
+    return side === "LONG" ? v > entryPriceNum : v < entryPriceNum;
+  };
 
-  const fallbackEffectiveStop: number | null =
-    fallbackStopCandidates.length > 0
-      ? side === "LONG"
-        ? Math.max(...fallbackStopCandidates)
-        : Math.min(...fallbackStopCandidates)
-      : null;
+  let fallbackSource: string = "NONE";
+  let fallbackEffectiveStop: number | null = null;
+  if (trailingStopDb != null && isProfitZone(trailingStopDb)) {
+    fallbackEffectiveStop = trailingStopDb;
+    fallbackSource = "TRAILING";
+  } else if (breakEvenAtPrice != null && isProfitZone(breakEvenAtPrice)) {
+    fallbackEffectiveStop = breakEvenAtPrice;
+    fallbackSource = "BREAK_EVEN";
+  } else if (peakLockStopPrice != null && isProfitZone(peakLockStopPrice)) {
+    fallbackEffectiveStop = peakLockStopPrice;
+    fallbackSource = "PEAK_LOCK";
+  } else if (stopLossDb != null) {
+    fallbackEffectiveStop = stopLossDb;
+    fallbackSource = "STOP_LOSS";
+  }
 
   const closeTime = trade.closed_at
     ? new Date(trade.closed_at).getTime()
