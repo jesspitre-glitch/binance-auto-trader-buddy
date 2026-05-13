@@ -10,6 +10,7 @@ import { getBinanceTimeAgo } from "@/lib/timeUtils";
 import { TradeDetailsDialog } from "./TradeDetailsDialog";
 import { RegimeIndicator } from "./RegimeIndicator";
 import { ExportTradesDialog } from "./ExportTradesDialog";
+import { resolveLiveExitStopState } from "@/lib/trailingState";
 import {
   AlertDialog,
   AlertDialogAction,
