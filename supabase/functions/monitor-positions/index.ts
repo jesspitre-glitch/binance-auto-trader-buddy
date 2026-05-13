@@ -633,17 +633,72 @@ serve(async (req) => {
           .eq('id', position.id);
 
         // 🟡 ORPHAN SAFE EXIT: Orphan recovery rows have no slot/strategy config.
-        // We skip trailing/BE/timeout logic, but DO auto-close via reduceOnly market
-        // when the hard SL fallback is breached. Sync owns ORPHAN_RECONCILED on qty match.
+        // We skip strategy BE/trailing/timeout logic, but enforce a side-aware
+        // effectiveExitStop (trailing-fallback > BE > hard SL) via reduceOnly market close
+        // — mirroring the UI/chart's resolveLiveExitStopState so backend and chart agree.
         if (position.is_orphan_recovery === true) {
           const hardSl = Number(position.stop_loss);
+          const entry = Number(position.entry_price);
+          const side = position.side as 'LONG' | 'SHORT';
+          const snap: any = position.indicators_snapshot || {};
+
+          // 🔁 Track peak/low so live-trailing fallback can ratchet (orphan path used to skip this)
+          let orphanPeak = Number(position.peak_price) || entry;
+          let orphanLow = Number(position.low_price) || entry;
+          let orphanPeakChanged = false;
+          if (side === 'LONG' && currentPrice > orphanPeak) { orphanPeak = currentPrice; orphanPeakChanged = true; }
+          if (side === 'SHORT' && currentPrice < orphanPeak) { orphanPeak = currentPrice; orphanPeakChanged = true; }
+          if (side === 'LONG' && currentPrice < orphanLow) { orphanLow = currentPrice; orphanPeakChanged = true; }
+          if (side === 'SHORT' && currentPrice > orphanLow) { orphanLow = currentPrice; orphanPeakChanged = true; }
+          if (orphanPeakChanged) {
+            try {
+              await supabaseClient.from('positions').update({
+                peak_price: orphanPeak, low_price: orphanLow,
+              }).eq('id', position.id);
+            } catch {}
+          }
+
+          // 🔧 Compute live-trailing fallback distance (mirrors TradeChart.resolveLiveExitStopState)
+          const atrValue = Number(snap.atr) || Number(snap.atr_audit?.atr_value) || 0;
+          const trailingMultiplier = Number(snap.atr_trailing_stop_multiplier) || Number(snap.trailing_stop_atr_multiplier) || 0;
+          const trailingPctFallback = Number(position.trailing_stop_percent) || 0;
+          let trailingDistance = 0;
+          if (atrValue > 0 && trailingMultiplier > 0) trailingDistance = atrValue * trailingMultiplier;
+          else if (entry > 0 && trailingPctFallback > 0) trailingDistance = entry * (trailingPctFallback / 100);
+
+          const referencePrice = side === 'LONG' ? orphanPeak : orphanLow;
+          const computedTrailingStop = trailingDistance > 0 && referencePrice > 0
+            ? (side === 'LONG' ? referencePrice - trailingDistance : referencePrice + trailingDistance)
+            : null;
+          const trailingInProfitZone = computedTrailingStop != null && entry > 0 &&
+            (side === 'LONG' ? computedTrailingStop > entry : computedTrailingStop < entry);
+          const dbTrailingStop = Number(position.trailing_stop) || 0;
+          const dbTrailingActive = dbTrailingStop > 0 &&
+            (side === 'LONG' ? dbTrailingStop > entry : dbTrailingStop < entry);
+          const trailingActive = dbTrailingActive || trailingInProfitZone;
+          const effectiveTrailingStop = dbTrailingActive
+            ? dbTrailingStop
+            : (trailingInProfitZone ? computedTrailingStop : null);
+
+          // Priority: trailing > hard SL (orphan rows have no BE)
+          const effectiveExitStop = effectiveTrailingStop != null
+            ? effectiveTrailingStop
+            : (Number.isFinite(hardSl) && hardSl > 0 ? hardSl : null);
+          const sourceUsed = effectiveTrailingStop != null
+            ? (dbTrailingActive ? 'TRAILING_DB' : 'TRAILING_LIVE_FALLBACK')
+            : (effectiveExitStop != null ? 'STOP_LOSS' : 'NONE');
+
           let orphanAction = 'ORPHAN_SAFE_EXIT_MONITORED';
-          if (Number.isFinite(hardSl) && hardSl > 0) {
-            const slHit = position.side === 'LONG'
-              ? currentPrice <= hardSl
-              : currentPrice >= hardSl;
-            if (slHit) {
-              console.warn(`🟡 ORPHAN_HARD_SL_HIT ${position.symbol} ${position.side} price=${currentPrice} sl=${hardSl} qty=${position.quantity} — closing orphan via reduceOnly market`);
+          if (effectiveExitStop != null) {
+            const stopHit = side === 'LONG'
+              ? currentPrice <= effectiveExitStop
+              : currentPrice >= effectiveExitStop;
+
+            console.log(`🟡 ORPHAN_STOP_EVAL ${position.symbol} ${side} | price=${currentPrice} | effectiveExitStop=${effectiveExitStop} | sourceUsed=${sourceUsed} | trailingActive=${trailingActive} | hardStop=${hardSl} | computedTrailing=${computedTrailingStop} | stopHit=${stopHit}`);
+
+            if (stopHit) {
+              const closeReasonOrphan = sourceUsed.startsWith('TRAILING') ? 'ORPHAN_TRAILING_STOP_HIT' : 'ORPHAN_HARD_SL_HIT';
+              console.warn(`🟡 ${closeReasonOrphan} ${position.symbol} ${side} price=${currentPrice} stop=${effectiveExitStop} (${sourceUsed}) qty=${position.quantity} — closing orphan via reduceOnly market`);
               try {
                 const closeResult = await closePositionOnBinance(position.symbol, position.side, Number(position.quantity));
                 const exitPrice = closeResult?.avgPrice && Number.isFinite(closeResult.avgPrice) && closeResult.avgPrice > 0
