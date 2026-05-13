@@ -477,6 +477,9 @@ const buildSeries = (
 
   const ruleDistribution: Record<string, number> = {};
   const exitStopSeries: ExitStopPoint[] = [];
+  const liveEffectiveExitStop = liveExitState.effectiveExitStop;
+  let lastHistoryExitStop: number | null = null;
+  let historyOverridesLive = false;
 
   if (hasHistorical) {
     // Byg uafhængig tidsserie direkte fra historik (egne timestamps)
@@ -491,6 +494,7 @@ const buildSeries = (
       });
       ruleDistribution[rule] = (ruleDistribution[rule] || 0) + 1;
     });
+    lastHistoryExitStop = exitStopSeries[exitStopSeries.length - 1]?.exitStop ?? null;
 
     // Forlæng med en sidste "nu"-punkt så step-linjen rækker frem til seneste candle
     const lastCandleTs = data[data.length - 1]?.timestamp;
@@ -502,30 +506,6 @@ const buildSeries = (
         activeExitRule: lastPt.activeExitRule,
       });
     }
-
-    const hasTrailingHistory = sortedHistory.some((s) => {
-      const rule = String(s.active_exit_rule || "").toUpperCase();
-      const source = String(s.source || "").toLowerCase();
-      return rule === "TS" || rule === "TRAILING" || source === "trailing" || toPositiveNumber(s.trailing_stop) != null;
-    });
-    const lastHistoryRule = String(sortedHistory[sortedHistory.length - 1]?.active_exit_rule || "").toUpperCase();
-    const lastHistorySource = String(sortedHistory[sortedHistory.length - 1]?.source || "").toLowerCase();
-    const latestHistoryUsesTrailing = lastHistoryRule === "TS" || lastHistoryRule === "TRAILING" || lastHistorySource === "trailing";
-    const needsShortLiveTrailingFallback =
-      side === "SHORT" &&
-      liveExitState.trailingActive &&
-      liveExitState.computedTrailingStop != null &&
-      (!hasTrailingHistory || !latestHistoryUsesTrailing);
-    if (needsShortLiveTrailingFallback) {
-      exitStopSeries.length = 0;
-      const startTs = openTime;
-      const endTs = isFinite(closeTime) ? closeTime : data[data.length - 1]?.timestamp ?? openTime;
-      if (endTs > startTs) {
-        exitStopSeries.push({ timestamp: startTs, exitStop: liveExitState.computedTrailingStop, activeExitRule: "TRAILING_LIVE_FALLBACK" });
-        exitStopSeries.push({ timestamp: endTs, exitStop: liveExitState.computedTrailingStop, activeExitRule: "TRAILING_LIVE_FALLBACK" });
-      }
-      ruleDistribution.TRAILING_LIVE_FALLBACK = (ruleDistribution.TRAILING_LIVE_FALLBACK || 0) + exitStopSeries.length;
-    }
   } else if (fallbackEffectiveStop != null) {
     // Ingen historik → flad linje fra entry til nu (eller close)
     const startTs = openTime;
@@ -535,6 +515,33 @@ const buildSeries = (
       exitStopSeries.push({ timestamp: endTs, exitStop: fallbackEffectiveStop, activeExitRule: `FALLBACK_${fallbackSource}` });
     }
   }
+
+  // Live/current stop må altid vinde over gammel history/cache i den seneste chart-værdi.
+  if (liveEffectiveExitStop != null && isFinite(liveEffectiveExitStop) && liveEffectiveExitStop > 0) {
+    const endTs = isFinite(closeTime) ? closeTime : data[data.length - 1]?.timestamp ?? openTime;
+    const liveRule = `LIVE_${liveExitState.sourceUsed}`;
+    const lastRendered = exitStopSeries[exitStopSeries.length - 1];
+    historyOverridesLive =
+      hasHistorical &&
+      lastHistoryExitStop != null &&
+      Math.abs(lastHistoryExitStop - liveEffectiveExitStop) > 1e-9;
+
+    if (lastRendered) {
+      if (endTs >= lastRendered.timestamp) {
+        lastRendered.timestamp = endTs;
+        lastRendered.exitStop = liveEffectiveExitStop;
+        lastRendered.activeExitRule = liveRule;
+      } else {
+        exitStopSeries.push({ timestamp: endTs, exitStop: liveEffectiveExitStop, activeExitRule: liveRule });
+        exitStopSeries.sort((a, b) => a.timestamp - b.timestamp);
+      }
+    } else if (endTs > openTime) {
+      exitStopSeries.push({ timestamp: openTime, exitStop: liveEffectiveExitStop, activeExitRule: liveRule });
+      exitStopSeries.push({ timestamp: endTs, exitStop: liveEffectiveExitStop, activeExitRule: liveRule });
+    }
+  }
+
+  const finalRenderedExitStop = exitStopSeries[exitStopSeries.length - 1]?.exitStop ?? null;
 
   const validForSide = (v: number | null, row: ChartRow): number | null => {
     if (v == null || !isFinite(v) || v <= 0) return null;
