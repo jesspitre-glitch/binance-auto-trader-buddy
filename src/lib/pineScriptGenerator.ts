@@ -263,8 +263,8 @@ if isShort and trailActiveShort
     trailStop := na(trailStop) ? candidate : math.min(trailStop, candidate)
 
 // Compose effective stop (most protective)
-effectiveLong  = na
-effectiveShort = na
+float effectiveLong  = na
+float effectiveShort = na
 if isLong
     effectiveLong := atrSlLong
     if not na(hardSlLong)
