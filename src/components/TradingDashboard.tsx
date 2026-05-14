@@ -393,6 +393,11 @@ export const TradingDashboard = () => {
             <span className="hidden md:inline">Historik</span>
             <span className="md:hidden">Historik</span>
           </TabsTrigger>
+          <TabsTrigger value="pine" className="flex-col md:flex-row gap-1 md:gap-2 h-16 md:h-auto text-xs md:text-sm">
+            <FileCode2 className="h-5 w-5 md:h-4 md:w-4" />
+            <span className="hidden md:inline">TradingView Backtest</span>
+            <span className="md:hidden">Pine</span>
+          </TabsTrigger>
           {selectedSlotId && (
             <TabsTrigger value="config" className="flex-col md:flex-row gap-1 md:gap-2 h-16 md:h-auto text-xs md:text-sm">
               <Settings2 className="h-5 w-5 md:h-4 md:w-4" />
