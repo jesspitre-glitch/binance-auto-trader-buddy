@@ -431,6 +431,12 @@ export const TradingDashboard = () => {
             <TradeHistoryTable slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} slots={slots.map(s => ({ id: s.id, name: s.name }))} />
           </SectionErrorBoundary>
         </TabsContent>
+
+        <TabsContent value="pine" className="space-y-4">
+          <SectionErrorBoundary title="TradingView Backtest">
+            <PineScriptBacktest />
+          </SectionErrorBoundary>
+        </TabsContent>
         
         {selectedSlotId && (
           <TabsContent value="config">
