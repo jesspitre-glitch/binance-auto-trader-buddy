@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Play, Square, Settings2, History, TrendingUp, Search, BarChart3, Radio, Clock } from "lucide-react";
+import { Play, Square, Settings2, History, TrendingUp, Search, BarChart3, Radio, Clock, FileCode2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { ThemeToggle } from "./ThemeToggle";
@@ -18,6 +18,7 @@ import { StrategyAnalysis } from "./StrategyAnalysis";
 import { TradeHistoryTable } from "./TradeHistoryTable";
 import { ContinuousSyncControl } from "./ContinuousSyncControl";
 import { BnbFeeWarning } from "./BnbFeeWarning";
+import { PineScriptBacktest } from "./PineScriptBacktest";
 import { SlotSelector, Slot } from "./SlotSelector";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -372,7 +373,7 @@ export const TradingDashboard = () => {
       <PositionManager slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} slots={slots} />
 
       <Tabs defaultValue="pnl">
-        <TabsList className={cn("grid w-full h-auto md:h-10 gap-1 p-1 bg-muted", selectedSlotId ? "grid-cols-5" : "grid-cols-4")}>
+        <TabsList className={cn("grid w-full h-auto md:h-10 gap-1 p-1 bg-muted", selectedSlotId ? "grid-cols-6" : "grid-cols-5")}>
           <TabsTrigger value="pnl" className="flex-col md:flex-row gap-1 md:gap-2 h-16 md:h-auto text-xs md:text-sm">
             <TrendingUp className="h-5 w-5 md:h-4 md:w-4" />
             <span className="hidden md:inline">P&L</span>
@@ -392,6 +393,11 @@ export const TradingDashboard = () => {
             <History className="h-5 w-5 md:h-4 md:w-4" />
             <span className="hidden md:inline">Historik</span>
             <span className="md:hidden">Historik</span>
+          </TabsTrigger>
+          <TabsTrigger value="pine" className="flex-col md:flex-row gap-1 md:gap-2 h-16 md:h-auto text-xs md:text-sm">
+            <FileCode2 className="h-5 w-5 md:h-4 md:w-4" />
+            <span className="hidden md:inline">TradingView Backtest</span>
+            <span className="md:hidden">Pine</span>
           </TabsTrigger>
           {selectedSlotId && (
             <TabsTrigger value="config" className="flex-col md:flex-row gap-1 md:gap-2 h-16 md:h-auto text-xs md:text-sm">
@@ -423,6 +429,12 @@ export const TradingDashboard = () => {
         <TabsContent value="history" className="space-y-4">
           <SectionErrorBoundary title="Trade Historik">
             <TradeHistoryTable slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} slots={slots.map(s => ({ id: s.id, name: s.name }))} />
+          </SectionErrorBoundary>
+        </TabsContent>
+
+        <TabsContent value="pine" className="space-y-4">
+          <SectionErrorBoundary title="TradingView Backtest">
+            <PineScriptBacktest />
           </SectionErrorBoundary>
         </TabsContent>
         
