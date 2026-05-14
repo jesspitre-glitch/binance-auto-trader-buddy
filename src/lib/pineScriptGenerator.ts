@@ -1,10 +1,8 @@
 // Pine Script v5 generator from slot indicator_config.
-// MVP scope: StochRSI, MACD histogram, ATR SL, trailing stop, break-even,
-// higher timeframe trend, LONG/SHORT. Other features are emitted as
-// optional gated blocks so the script stays compilable.
+// Mirrors bot logic: hard vs soft filters, signal_conditions_required count,
+// per-side StochRSI zones, ATR% min, HTF trend.
 
 export interface SlotConfigLike {
-  // identity
   name?: string | null;
   scan_interval?: string | null;
   higher_trend_timeframe?: string | null;
@@ -17,6 +15,12 @@ export interface SlotConfigLike {
   break_even_enabled?: boolean | null;
   trailing_stop_activation_enabled?: boolean | null;
   hard_sl_pct_enabled?: boolean | null;
+
+  // hard-filter flags (when false → soft condition)
+  stochrsi_hard_filter?: boolean | null;
+  macd_hard_filter?: boolean | null;
+  atr_hard_filter?: boolean | null;
+  higher_trend_hard_filter?: boolean | null;
 
   // StochRSI
   stochrsi_period?: number | null;
@@ -40,6 +44,7 @@ export interface SlotConfigLike {
   trailing_stop_activation_atr?: number | null;
   break_even_atr?: number | null;
   break_even_atr_stop_offset?: number | null;
+  min_atr_percent?: number | null;
 
   // Hard SL %
   hard_sl_pct?: number | null;
@@ -47,7 +52,7 @@ export interface SlotConfigLike {
   // Max duration
   max_position_duration_minutes?: number | null;
 
-  // Required soft conditions
+  // Soft conditions count
   signal_conditions_required?: number | null;
 }
 
@@ -61,11 +66,9 @@ function tf(s?: string | null, fallback = "60"): string {
   if (!s) return fallback;
   return TF_MAP[s] ?? fallback;
 }
-
 function n(v: number | null | undefined, fallback: number): number {
   return v == null || !Number.isFinite(Number(v)) ? fallback : Number(v);
 }
-
 function b(v: boolean | null | undefined, fallback = false): boolean {
   return v == null ? fallback : !!v;
 }
@@ -93,6 +96,7 @@ export function generatePineScript(cfg: SlotConfigLike, slotLabel = "Slot"): str
   const trailActAtr = n(cfg.trailing_stop_activation_atr, 1);
   const beAtr = n(cfg.break_even_atr, 1);
   const beOffset = n(cfg.break_even_atr_stop_offset, 0);
+  const minAtrPct = n(cfg.min_atr_percent, 0);
 
   const hardSlPct = n(cfg.hard_sl_pct, 3);
   const maxDurMin = n(cfg.max_position_duration_minutes, 0);
@@ -105,6 +109,14 @@ export function generatePineScript(cfg: SlotConfigLike, slotLabel = "Slot"): str
   const useTrail = b(cfg.trailing_stop_activation_enabled, true);
   const useHardSl = b(cfg.hard_sl_pct_enabled, true);
 
+  // Hard vs soft filter flags. Default: soft (false) — only block if explicitly hard.
+  const stochHard = b(cfg.stochrsi_hard_filter, true); // StochRSI is the primary signal — hard by default
+  const macdHard = b(cfg.macd_hard_filter, false);
+  const atrHard = b(cfg.atr_hard_filter, false);
+  const htfHard = b(cfg.higher_trend_hard_filter, false);
+
+  const softRequired = n(cfg.signal_conditions_required, 1);
+
   const title = `${slotLabel} – ${cfg.name ?? "Strategy"}`.replace(/"/g, "'");
 
   return `//@version=5
@@ -112,7 +124,7 @@ export function generatePineScript(cfg: SlotConfigLike, slotLabel = "Slot"): str
 // Auto-generated from Lovable slot config
 // Slot: ${slotLabel}
 // Source config: ${cfg.name ?? "(unnamed)"}
-// MVP features: StochRSI, MACD hist, ATR SL, Trailing, Break-even, HTF trend
+// Mirrors bot: hard/soft filters, signal_conditions_required = ${softRequired}
 // ====================================================================
 strategy("${title}", overlay=true,
      pyramiding=0,
@@ -126,22 +138,28 @@ strategy("${title}", overlay=true,
      slippage=2)
 
 // ---------- Inputs ----------
-i_startDate     = input.time(timestamp("2024-01-01 00:00 +0000"), "Start date", group="Backtest range")
+i_startDate     = input.time(timestamp("2000-01-01 00:00 +0000"), "Start date", group="Backtest range")
 i_endDate       = input.time(timestamp("2099-01-01 00:00 +0000"), "End date",   group="Backtest range")
 i_allowLong     = input.bool(true,  "Allow LONG",  group="Direction")
 i_allowShort    = input.bool(true,  "Allow SHORT", group="Direction")
 
-i_useStoch      = input.bool(${useStoch}, "Use StochRSI", group="Indicators")
-i_useMacd       = input.bool(${useMacd},  "Use MACD histogram", group="Indicators")
-i_useHtf        = input.bool(${useHtf},   "Use higher timeframe trend", group="Indicators")
+i_useStoch      = input.bool(${useStoch}, "Use StochRSI",                  group="Indicators")
+i_stochHard     = input.bool(${stochHard},"StochRSI is HARD filter",       group="Indicators")
+i_useMacd       = input.bool(${useMacd},  "Use MACD histogram",            group="Indicators")
+i_macdHard      = input.bool(${macdHard}, "MACD is HARD filter",           group="Indicators")
+i_useHtf        = input.bool(${useHtf},   "Use higher timeframe trend",    group="Indicators")
+i_htfHard       = input.bool(${htfHard},  "HTF trend is HARD filter",      group="Indicators")
+i_useAtrMin     = input.bool(${useAtr},   "Use ATR% minimum filter",       group="Indicators")
+i_atrHard       = input.bool(${atrHard},  "ATR min is HARD filter",        group="Indicators")
+i_softRequired  = input.int(${softRequired}, "Soft conditions required (count)", minval=0, group="Indicators")
 
 i_stochLen      = input.int(${stochP}, "StochRSI length", minval=1, group="StochRSI")
 i_stochK        = input.int(${stochK}, "Stoch %K", minval=1, group="StochRSI")
 i_stochD        = input.int(${stochD}, "Stoch %D", minval=1, group="StochRSI")
-i_stochOSK      = input.float(${stochOSK}, "Oversold K",   group="StochRSI")
-i_stochOSD      = input.float(${stochOSD}, "Oversold D",   group="StochRSI")
-i_stochOBK      = input.float(${stochOBK}, "Overbought K", group="StochRSI")
-i_stochOBD      = input.float(${stochOBD}, "Overbought D", group="StochRSI")
+i_stochOSK      = input.float(${stochOSK}, "Oversold K (LONG)",     group="StochRSI")
+i_stochOSD      = input.float(${stochOSD}, "Oversold D (LONG)",     group="StochRSI")
+i_stochOBK      = input.float(${stochOBK}, "Overbought K (SHORT)",  group="StochRSI")
+i_stochOBD      = input.float(${stochOBD}, "Overbought D (SHORT)",  group="StochRSI")
 
 i_macdFast      = input.int(${macdF},   "MACD fast",   minval=1, group="MACD")
 i_macdSlow      = input.int(${macdS},   "MACD slow",   minval=1, group="MACD")
@@ -149,6 +167,7 @@ i_macdSignal    = input.int(${macdSig}, "MACD signal", minval=1, group="MACD")
 i_macdHistThr   = input.float(${macdHistThr}, "MACD hist threshold", step=0.0001, group="MACD")
 
 i_atrLen        = input.int(${atrP}, "ATR length", minval=1, group="ATR / Stops")
+i_minAtrPct     = input.float(${minAtrPct}, "Min ATR %", step=0.05, group="ATR / Stops")
 i_atrSlMult     = input.float(${atrSlMult},   "ATR SL multiplier",      step=0.1, group="ATR / Stops")
 i_atrTrailMult  = input.float(${atrTrailMult},"ATR Trailing multiplier",step=0.1, group="ATR / Stops")
 i_trailActAtr   = input.float(${trailActAtr},"Trailing activation (xATR profit)", step=0.1, group="ATR / Stops")
@@ -166,11 +185,13 @@ i_maxDurMin     = input.int(${maxDurMin}, "Max duration minutes (0 = off)", minv
 i_htfTf         = input.timeframe("${htfTf}", "Higher timeframe", group="HTF trend")
 i_htfEmaLen     = input.int(50, "HTF EMA length", minval=1, group="HTF trend")
 
+i_debugPlots    = input.bool(true, "Show debug bool plots", group="Debug")
+
 // ---------- Date filter ----------
 inDateRange = (time >= i_startDate) and (time <= i_endDate)
 
 // ---------- Indicators ----------
-// StochRSI = Stoch applied to RSI series, then K/D smoothing
+// StochRSI = stochastic applied to RSI series
 rsiSrc = ta.rsi(close, i_stochLen)
 _kRaw  = ta.stoch(rsiSrc, rsiSrc, rsiSrc, i_stochLen)
 kLine  = ta.sma(_kRaw, i_stochK)
@@ -179,24 +200,60 @@ dLine  = ta.sma(kLine, i_stochD)
 [macdLine, signalLine, histLine] = ta.macd(close, i_macdFast, i_macdSlow, i_macdSignal)
 
 atrVal = ta.atr(i_atrLen)
+atrPct = close > 0 ? (atrVal / close) * 100.0 : 0.0
 
 // HTF trend via EMA on higher timeframe
 htfEma = request.security(syminfo.tickerid, i_htfTf, ta.ema(close, i_htfEmaLen), barmerge.gaps_off, barmerge.lookahead_off)
 htfBullish = close > htfEma
 htfBearish = close < htfEma
 
-// ---------- Entry conditions ----------
-stochLongOK  = not i_useStoch or (kLine < i_stochOSK and dLine < i_stochOSD)
-stochShortOK = not i_useStoch or (kLine > i_stochOBK and dLine > i_stochOBD)
+// ---------- Per-condition pass flags ----------
+// StochRSI: per-side zones
+longStochPassed  = not i_useStoch or (kLine < i_stochOSK and dLine < i_stochOSD)
+shortStochPassed = not i_useStoch or (kLine > i_stochOBK and dLine > i_stochOBD)
 
-macdLongOK   = not i_useMacd or (histLine >  i_macdHistThr)
-macdShortOK  = not i_useMacd or (histLine < -i_macdHistThr)
+// MACD histogram per side
+longMacdPassed   = not i_useMacd or (histLine >  i_macdHistThr)
+shortMacdPassed  = not i_useMacd or (histLine < -i_macdHistThr)
 
-htfLongOK    = not i_useHtf or htfBullish
-htfShortOK   = not i_useHtf or htfBearish
+// HTF trend per side
+longHtfPassed    = not i_useHtf or htfBullish
+shortHtfPassed   = not i_useHtf or htfBearish
 
-longCond  = i_allowLong  and inDateRange and stochLongOK  and macdLongOK  and htfLongOK
-shortCond = i_allowShort and inDateRange and stochShortOK and macdShortOK and htfShortOK
+// ATR min filter (side-agnostic)
+atrPassed        = not i_useAtrMin or (atrPct >= i_minAtrPct)
+
+// ---------- Hard vs soft gates ----------
+// Hard gate: must pass if filter is enabled AND marked hard. If soft, hard gate is true.
+longHardGate  = (not i_useStoch or not i_stochHard or longStochPassed) and (not i_useMacd or not i_macdHard or longMacdPassed) and (not i_useHtf or not i_htfHard or longHtfPassed) and (not i_useAtrMin or not i_atrHard or atrPassed)
+shortHardGate = (not i_useStoch or not i_stochHard or shortStochPassed) and (not i_useMacd or not i_macdHard or shortMacdPassed) and (not i_useHtf or not i_htfHard or shortHtfPassed) and (not i_useAtrMin or not i_atrHard or atrPassed)
+
+// Soft conditions: count only conditions that are enabled AND NOT hard
+longSoftCount =
+     (i_useStoch  and not i_stochHard and longStochPassed  ? 1 : 0) +
+     (i_useMacd   and not i_macdHard  and longMacdPassed   ? 1 : 0) +
+     (i_useHtf    and not i_htfHard   and longHtfPassed    ? 1 : 0) +
+     (i_useAtrMin and not i_atrHard   and atrPassed        ? 1 : 0)
+
+shortSoftCount =
+     (i_useStoch  and not i_stochHard and shortStochPassed ? 1 : 0) +
+     (i_useMacd   and not i_macdHard  and shortMacdPassed  ? 1 : 0) +
+     (i_useHtf    and not i_htfHard   and shortHtfPassed   ? 1 : 0) +
+     (i_useAtrMin and not i_atrHard   and atrPassed        ? 1 : 0)
+
+// Number of available soft slots (enabled and not hard)
+softSlotCount =
+     (i_useStoch  and not i_stochHard ? 1 : 0) +
+     (i_useMacd   and not i_macdHard  ? 1 : 0) +
+     (i_useHtf    and not i_htfHard   ? 1 : 0) +
+     (i_useAtrMin and not i_atrHard   ? 1 : 0)
+
+requiredSoft = math.min(i_softRequired, softSlotCount)
+longSoftPassed  = longSoftCount  >= requiredSoft
+shortSoftPassed = shortSoftCount >= requiredSoft
+
+finalLongSignal  = i_allowLong  and inDateRange and longHardGate  and longSoftPassed
+finalShortSignal = i_allowShort and inDateRange and shortHardGate and shortSoftPassed
 
 // ---------- State for stops ----------
 var float entryPrice    = na
@@ -215,13 +272,12 @@ if strategy.position_size == 0
     beActive     := false
 
 // ---------- Entries ----------
-if longCond and strategy.position_size <= 0
+if finalLongSignal and strategy.position_size <= 0
     strategy.entry("LONG", strategy.long)
 
-if shortCond and strategy.position_size >= 0
+if finalShortSignal and strategy.position_size >= 0
     strategy.entry("SHORT", strategy.short)
 
-// ---------- Capture entry context on the first bar of a position ----------
 justEntered = strategy.position_size != 0 and na(entryPrice)
 if justEntered
     entryPrice   := strategy.position_avg_price
@@ -232,15 +288,12 @@ if justEntered
 isLong  = strategy.position_size > 0
 isShort = strategy.position_size < 0
 
-// Hard SL %
 hardSlLong  = i_useHardSl and not na(entryPrice) ? entryPrice * (1 - i_hardSlPct / 100.0) : na
 hardSlShort = i_useHardSl and not na(entryPrice) ? entryPrice * (1 + i_hardSlPct / 100.0) : na
 
-// ATR SL (initial)
 atrSlLong   = not na(entryPrice) and not na(entryAtr) ? entryPrice - i_atrSlMult * entryAtr : na
 atrSlShort  = not na(entryPrice) and not na(entryAtr) ? entryPrice + i_atrSlMult * entryAtr : na
 
-// Break-even
 beTriggerLong  = not na(entryPrice) and not na(entryAtr) and (high - entryPrice) >= i_beAtr * entryAtr
 beTriggerShort = not na(entryPrice) and not na(entryAtr) and (entryPrice - low)  >= i_beAtr * entryAtr
 
@@ -251,7 +304,6 @@ if i_useBE and isShort and beTriggerShort and not beActive
     beActive := true
     beStop   := entryPrice - i_beOffset * entryAtr
 
-// Trailing stop activation: profit >= trailActAtr * entryAtr
 trailActiveLong  = i_useTrail and not na(entryPrice) and not na(entryAtr) and (high - entryPrice) >= i_trailActAtr * entryAtr
 trailActiveShort = i_useTrail and not na(entryPrice) and not na(entryAtr) and (entryPrice - low)  >= i_trailActAtr * entryAtr
 
@@ -262,7 +314,6 @@ if isShort and trailActiveShort
     candidate = low + i_atrTrailMult * atrVal
     trailStop := na(trailStop) ? candidate : math.min(trailStop, candidate)
 
-// Compose effective stop (most protective)
 float effectiveLong  = na
 float effectiveShort = na
 if isLong
@@ -287,7 +338,6 @@ if isLong and not na(effectiveLong)
 if isShort and not na(effectiveShort)
     strategy.exit("XS", from_entry="SHORT", stop=effectiveShort)
 
-// Max duration time-exit
 if i_maxDurMin > 0 and strategy.position_size != 0 and not na(entryBarTime)
     if (time - entryBarTime) >= i_maxDurMin * 60 * 1000
         strategy.close_all(comment="TIME_EXIT")
@@ -299,7 +349,23 @@ plot(beActive ? beStop : na,        "Break-even",          color=color.yellow, s
 plot(trailStop,                     "Trailing stop",       color=color.aqua,   style=plot.style_linebr, linewidth=1)
 plot(htfEma,                        "HTF EMA",             color=color.orange)
 
-plotshape(longCond  and strategy.position_size <= 0, title="Long signal",  style=shape.triangleup,   location=location.belowbar, color=color.green, size=size.tiny)
-plotshape(shortCond and strategy.position_size >= 0, title="Short signal", style=shape.triangledown, location=location.abovebar, color=color.red,   size=size.tiny)
+plotshape(finalLongSignal  and strategy.position_size <= 0, title="Long signal",  style=shape.triangleup,   location=location.belowbar, color=color.green, size=size.tiny)
+plotshape(finalShortSignal and strategy.position_size >= 0, title="Short signal", style=shape.triangledown, location=location.abovebar, color=color.red,   size=size.tiny)
+
+// Debug bool plots (toggle via i_debugPlots) — visible in Data Window
+plot(i_debugPlots and longStochPassed   ? 1 : 0, "dbg longStochPassed",   display=display.data_window)
+plot(i_debugPlots and shortStochPassed  ? 1 : 0, "dbg shortStochPassed",  display=display.data_window)
+plot(i_debugPlots and longMacdPassed    ? 1 : 0, "dbg longMacdPassed",    display=display.data_window)
+plot(i_debugPlots and shortMacdPassed   ? 1 : 0, "dbg shortMacdPassed",   display=display.data_window)
+plot(i_debugPlots and atrPassed         ? 1 : 0, "dbg atrPassed",         display=display.data_window)
+plot(i_debugPlots and longHtfPassed     ? 1 : 0, "dbg longHtfPassed",     display=display.data_window)
+plot(i_debugPlots and shortHtfPassed    ? 1 : 0, "dbg shortHtfPassed",    display=display.data_window)
+plot(i_debugPlots and longSoftPassed    ? 1 : 0, "dbg longSoftPassed",    display=display.data_window)
+plot(i_debugPlots and shortSoftPassed   ? 1 : 0, "dbg shortSoftPassed",   display=display.data_window)
+plot(i_debugPlots ? longSoftCount  : na,         "dbg longSoftCount",     display=display.data_window)
+plot(i_debugPlots ? shortSoftCount : na,         "dbg shortSoftCount",    display=display.data_window)
+plot(i_debugPlots ? requiredSoft   : na,         "dbg requiredSoft",      display=display.data_window)
+plot(i_debugPlots and finalLongSignal   ? 1 : 0, "dbg finalLongSignal",   display=display.data_window)
+plot(i_debugPlots and finalShortSignal  ? 1 : 0, "dbg finalShortSignal",  display=display.data_window)
 `;
 }
