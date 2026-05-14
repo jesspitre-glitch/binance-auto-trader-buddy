@@ -65,8 +65,10 @@ export const PineScriptBacktest = () => {
       toast({ title: "Ingen config", description: "Vælg et slot med tilknyttet config", variant: "destructive" });
       return;
     }
-    const label = `S${selectedSlot.slot_number} – ${selectedSlot.name}`;
-    setCode(generatePineScript(config, label));
+    // Strip any "Sx – " or "Sx - " prefix from the stored slot name to avoid "S4 – S1 – ..."
+    const cleanName = (selectedSlot.name ?? "").replace(/^\s*S\d+\s*[–-]\s*/i, "").trim();
+    const label = `Slot ${selectedSlot.slot_number} – ${cleanName || "Strategy"}`;
+    setCode(generatePineScript(config, label, selectedSlot.slot_number));
   };
 
   const handleCopy = async () => {
