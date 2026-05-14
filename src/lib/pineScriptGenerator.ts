@@ -170,9 +170,8 @@ i_htfEmaLen     = input.int(50, "HTF EMA length", minval=1, group="HTF trend")
 inDateRange = (time >= i_startDate) and (time <= i_endDate)
 
 // ---------- Indicators ----------
-rsiSrc       = ta.rsi(close, i_stochLen)
-[stochK, stochD] = ta.stoch(rsiSrc, rsiSrc, rsiSrc, i_stochLen), ta.sma(ta.stoch(rsiSrc, rsiSrc, rsiSrc, i_stochLen), i_stochD)
-// proper StochRSI K/D
+// StochRSI = Stoch applied to RSI series, then K/D smoothing
+rsiSrc = ta.rsi(close, i_stochLen)
 _kRaw  = ta.stoch(rsiSrc, rsiSrc, rsiSrc, i_stochLen)
 kLine  = ta.sma(_kRaw, i_stochK)
 dLine  = ta.sma(kLine, i_stochD)
