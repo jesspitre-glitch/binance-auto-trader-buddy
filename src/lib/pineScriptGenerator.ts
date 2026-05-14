@@ -1,6 +1,13 @@
 // Pine Script v5 generator from slot indicator_config.
-// Mirrors bot logic: hard vs soft filters, signal_conditions_required count,
-// per-side StochRSI zones, ATR% min, HTF trend.
+// Mirrors bot logic:
+//  - StochRSI: per-side zone (oversold LONG / overbought SHORT) — primary, HARD by default
+//  - MACD Histogram: SOFT, directional (hist > thr LONG, hist < -thr SHORT) — when macd_enabled
+//  - MACD Histogram Momentum: SOFT, separate condition — when histogram_momentum_enabled
+//  - MACD Direction: HARD — when macd_direction_enabled (same directional check)
+//  - Higher Timeframe trend (EMA): toggleable hard/soft
+//  - ATR% min filter: toggleable hard/soft
+//  - signal_conditions_required = minimum SOFT conditions that must pass
+//  - Exits: ATR SL, Hard SL%, Break-even (xATR), Trailing (xATR), Max-SL-after-MFE, Max duration
 
 export interface SlotConfigLike {
   name?: string | null;
@@ -10,13 +17,16 @@ export interface SlotConfigLike {
   // toggles
   stochrsi_enabled?: boolean | null;
   macd_enabled?: boolean | null;
+  macd_direction_enabled?: boolean | null;
+  histogram_momentum_enabled?: boolean | null;
+  histogram_momentum_periods?: number | null;
   atr_enabled?: boolean | null;
   higher_trend_enabled?: boolean | null;
   break_even_enabled?: boolean | null;
   trailing_stop_activation_enabled?: boolean | null;
   hard_sl_pct_enabled?: boolean | null;
 
-  // hard-filter flags (when false → soft condition)
+  // hard/soft flags
   stochrsi_hard_filter?: boolean | null;
   macd_hard_filter?: boolean | null;
   atr_hard_filter?: boolean | null;
@@ -49,6 +59,11 @@ export interface SlotConfigLike {
   // Hard SL %
   hard_sl_pct?: number | null;
 
+  // Max SL after MFE
+  max_sl_after_mfe_enabled?: boolean | null;
+  max_sl_after_mfe_activate_pct?: number | null;
+  max_sl_after_mfe_max_dist_pct?: number | null;
+
   // Max duration
   max_position_duration_minutes?: number | null;
 
@@ -62,18 +77,16 @@ const TF_MAP: Record<string, string> = {
   "1d": "D", "1w": "W",
 };
 
-function tf(s?: string | null, fallback = "60"): string {
-  if (!s) return fallback;
-  return TF_MAP[s] ?? fallback;
-}
-function n(v: number | null | undefined, fallback: number): number {
-  return v == null || !Number.isFinite(Number(v)) ? fallback : Number(v);
-}
-function b(v: boolean | null | undefined, fallback = false): boolean {
-  return v == null ? fallback : !!v;
-}
+const tf = (s?: string | null, fallback = "60") => (s && TF_MAP[s]) || fallback;
+const n = (v: number | null | undefined, fallback: number) =>
+  v == null || !Number.isFinite(Number(v)) ? fallback : Number(v);
+const b = (v: boolean | null | undefined, fallback = false) => (v == null ? fallback : !!v);
 
-export function generatePineScript(cfg: SlotConfigLike, slotLabel = "Slot"): string {
+export function generatePineScript(
+  cfg: SlotConfigLike,
+  slotLabel = "Slot",
+  slotNumber?: number,
+): string {
   const mainTf = tf(cfg.scan_interval, "60");
   const htfTf = tf(cfg.higher_trend_timeframe, mainTf);
 
@@ -89,6 +102,7 @@ export function generatePineScript(cfg: SlotConfigLike, slotLabel = "Slot"): str
   const macdS = n(cfg.macd_slow, 26);
   const macdSig = n(cfg.macd_signal, 9);
   const macdHistThr = n(cfg.macd_histogram_threshold, 0);
+  const histMomPeriods = n(cfg.histogram_momentum_periods, 3);
 
   const atrP = n(cfg.atr_period, 14);
   const atrSlMult = n(cfg.atr_stop_loss_multiplier, 2);
@@ -103,14 +117,20 @@ export function generatePineScript(cfg: SlotConfigLike, slotLabel = "Slot"): str
 
   const useStoch = b(cfg.stochrsi_enabled, true);
   const useMacd = b(cfg.macd_enabled, true);
+  const useMacdDir = b(cfg.macd_direction_enabled, false);
+  const useHistMom = b(cfg.histogram_momentum_enabled, false);
   const useAtr = b(cfg.atr_enabled, true);
-  const useHtf = b(cfg.higher_trend_enabled, true);
+  const useHtf = b(cfg.higher_trend_enabled, false);
   const useBE = b(cfg.break_even_enabled, true);
   const useTrail = b(cfg.trailing_stop_activation_enabled, true);
   const useHardSl = b(cfg.hard_sl_pct_enabled, true);
 
-  // Hard vs soft filter flags. Default: soft (false) — only block if explicitly hard.
-  const stochHard = b(cfg.stochrsi_hard_filter, true); // StochRSI is the primary signal — hard by default
+  const useMfeCap = b(cfg.max_sl_after_mfe_enabled, false);
+  const mfeActivatePct = n(cfg.max_sl_after_mfe_activate_pct, 1.3);
+  const mfeMaxDistPct = n(cfg.max_sl_after_mfe_max_dist_pct, 0.8);
+
+  // StochRSI hard by default (primary signal). Other filters: hard only if explicitly hard.
+  const stochHard = b(cfg.stochrsi_hard_filter, true);
   const macdHard = b(cfg.macd_hard_filter, false);
   const atrHard = b(cfg.atr_hard_filter, false);
   const htfHard = b(cfg.higher_trend_hard_filter, false);
@@ -119,12 +139,35 @@ export function generatePineScript(cfg: SlotConfigLike, slotLabel = "Slot"): str
 
   const title = `${slotLabel} – ${cfg.name ?? "Strategy"}`.replace(/"/g, "'");
 
+  // Header summary lines listing active gates
+  const hardList: string[] = [];
+  if (useStoch && stochHard) hardList.push("StochRSI");
+  if (useMacdDir) hardList.push("MACD Direction");
+  if (useMacd && macdHard) hardList.push("MACD Histogram");
+  if (useHtf && htfHard) hardList.push("HTF Trend");
+  if (useAtr && atrHard) hardList.push("ATR% min");
+  if (useHardSl) hardList.push("Hard SL%");
+
+  const softList: string[] = [];
+  if (useStoch && !stochHard) softList.push("StochRSI");
+  if (useMacd && !macdHard) softList.push("MACD Histogram");
+  if (useHistMom) softList.push("MACD Histogram Momentum");
+  if (useHtf && !htfHard) softList.push("HTF Trend");
+  if (useAtr && !atrHard) softList.push("ATR% min");
+
+  const slotNumStr = slotNumber != null ? String(slotNumber) : "?";
+
   return `//@version=5
 // ====================================================================
 // Auto-generated from Lovable slot config
-// Slot: ${slotLabel}
-// Source config: ${cfg.name ?? "(unnamed)"}
-// Mirrors bot: hard/soft filters, signal_conditions_required = ${softRequired}
+//   Slot number     : ${slotNumStr}
+//   Slot name       : ${slotLabel}
+//   Source config   : ${cfg.name ?? "(unnamed)"}
+//   Main TF         : ${mainTf}    HTF: ${htfTf}
+//   Hard filters    : ${hardList.join(", ") || "(none)"}
+//   Soft conditions : ${softList.join(", ") || "(none)"}
+//   Required soft   : ${softRequired} / ${softList.length}
+//   MFE cap         : ${useMfeCap ? `activate=${mfeActivatePct}% maxDist=${mfeMaxDistPct}%` : "off"}
 // ====================================================================
 strategy("${title}", overlay=true,
      pyramiding=0,
@@ -145,8 +188,10 @@ i_allowShort    = input.bool(true,  "Allow SHORT", group="Direction")
 
 i_useStoch      = input.bool(${useStoch}, "Use StochRSI",                  group="Indicators")
 i_stochHard     = input.bool(${stochHard},"StochRSI is HARD filter",       group="Indicators")
-i_useMacd       = input.bool(${useMacd},  "Use MACD histogram",            group="Indicators")
-i_macdHard      = input.bool(${macdHard}, "MACD is HARD filter",           group="Indicators")
+i_useMacd       = input.bool(${useMacd},  "Use MACD histogram (soft)",     group="Indicators")
+i_macdHard      = input.bool(${macdHard}, "MACD histogram is HARD filter", group="Indicators")
+i_useMacdDir    = input.bool(${useMacdDir},"Use MACD direction (HARD)",    group="Indicators")
+i_useHistMom    = input.bool(${useHistMom},"Use MACD Histogram Momentum (soft)", group="Indicators")
 i_useHtf        = input.bool(${useHtf},   "Use higher timeframe trend",    group="Indicators")
 i_htfHard       = input.bool(${htfHard},  "HTF trend is HARD filter",      group="Indicators")
 i_useAtrMin     = input.bool(${useAtr},   "Use ATR% minimum filter",       group="Indicators")
@@ -165,6 +210,7 @@ i_macdFast      = input.int(${macdF},   "MACD fast",   minval=1, group="MACD")
 i_macdSlow      = input.int(${macdS},   "MACD slow",   minval=1, group="MACD")
 i_macdSignal    = input.int(${macdSig}, "MACD signal", minval=1, group="MACD")
 i_macdHistThr   = input.float(${macdHistThr}, "MACD hist threshold", step=0.0001, group="MACD")
+i_histMomLen    = input.int(${histMomPeriods}, "Histogram momentum periods", minval=2, group="MACD")
 
 i_atrLen        = input.int(${atrP}, "ATR length", minval=1, group="ATR / Stops")
 i_minAtrPct     = input.float(${minAtrPct}, "Min ATR %", step=0.05, group="ATR / Stops")
@@ -180,6 +226,10 @@ i_beOffset      = input.float(${beOffset},"BE stop offset (xATR over entry)", st
 i_useHardSl     = input.bool(${useHardSl}, "Use hard SL %", group="Hard SL")
 i_hardSlPct     = input.float(${hardSlPct}, "Hard SL %", step=0.1, group="Hard SL")
 
+i_useMfeCap     = input.bool(${useMfeCap}, "Use Max SL after MFE", group="Max SL after MFE")
+i_mfeActPct     = input.float(${mfeActivatePct}, "Activate at MFE %", step=0.05, group="Max SL after MFE")
+i_mfeMaxDistPct = input.float(${mfeMaxDistPct}, "Max SL distance from entry %", step=0.05, group="Max SL after MFE")
+
 i_maxDurMin     = input.int(${maxDurMin}, "Max duration minutes (0 = off)", minval=0, group="Time exit")
 
 i_htfTf         = input.timeframe("${htfTf}", "Higher timeframe", group="HTF trend")
@@ -191,7 +241,7 @@ i_debugPlots    = input.bool(true, "Show debug bool plots", group="Debug")
 inDateRange = (time >= i_startDate) and (time <= i_endDate)
 
 // ---------- Indicators ----------
-// StochRSI = stochastic applied to RSI series
+// StochRSI = stochastic on RSI series
 rsiSrc = ta.rsi(close, i_stochLen)
 _kRaw  = ta.stoch(rsiSrc, rsiSrc, rsiSrc, i_stochLen)
 kLine  = ta.sma(_kRaw, i_stochK)
@@ -199,52 +249,61 @@ dLine  = ta.sma(kLine, i_stochD)
 
 [macdLine, signalLine, histLine] = ta.macd(close, i_macdFast, i_macdSlow, i_macdSignal)
 
+// Histogram momentum: cur = hist[0]-hist[1], prev = hist[1]-hist[2]
+curMom  = histLine - histLine[1]
+prevMom = histLine[1] - histLine[2]
+
 atrVal = ta.atr(i_atrLen)
 atrPct = close > 0 ? (atrVal / close) * 100.0 : 0.0
 
-// HTF trend via EMA on higher timeframe
 htfEma = request.security(syminfo.tickerid, i_htfTf, ta.ema(close, i_htfEmaLen), barmerge.gaps_off, barmerge.lookahead_off)
 htfBullish = close > htfEma
 htfBearish = close < htfEma
 
 // ---------- Per-condition pass flags ----------
-// StochRSI: per-side zones
 longStochPassed  = not i_useStoch or (kLine < i_stochOSK and dLine < i_stochOSD)
 shortStochPassed = not i_useStoch or (kLine > i_stochOBK and dLine > i_stochOBD)
 
-// MACD histogram per side
-longMacdPassed   = not i_useMacd or (histLine >  i_macdHistThr)
-shortMacdPassed  = not i_useMacd or (histLine < -i_macdHistThr)
+// MACD Histogram (directional, like bot)
+longMacdHistPassed  = not i_useMacd or (histLine >  i_macdHistThr)
+shortMacdHistPassed = not i_useMacd or (histLine < -i_macdHistThr)
 
-// HTF trend per side
-longHtfPassed    = not i_useHtf or htfBullish
-shortHtfPassed   = not i_useHtf or htfBearish
+// MACD Histogram Momentum (separate soft condition)
+longMacdMomPassed  = not i_useHistMom or (curMom > prevMom and curMom > 0)
+shortMacdMomPassed = not i_useHistMom or (curMom < prevMom and curMom < 0)
 
-// ATR min filter (side-agnostic)
+// MACD Direction (HARD when enabled): same directional histogram check
+longMacdDirPassed  = not i_useMacdDir or (histLine >  i_macdHistThr)
+shortMacdDirPassed = not i_useMacdDir or (histLine < -i_macdHistThr)
+
+longHtfPassed    = not i_useHtf    or htfBullish
+shortHtfPassed   = not i_useHtf    or htfBearish
+
 atrPassed        = not i_useAtrMin or (atrPct >= i_minAtrPct)
 
-// ---------- Hard vs soft gates ----------
-// Hard gate: must pass if filter is enabled AND marked hard. If soft, hard gate is true.
-longHardGate  = (not i_useStoch or not i_stochHard or longStochPassed) and (not i_useMacd or not i_macdHard or longMacdPassed) and (not i_useHtf or not i_htfHard or longHtfPassed) and (not i_useAtrMin or not i_atrHard or atrPassed)
-shortHardGate = (not i_useStoch or not i_stochHard or shortStochPassed) and (not i_useMacd or not i_macdHard or shortMacdPassed) and (not i_useHtf or not i_htfHard or shortHtfPassed) and (not i_useAtrMin or not i_atrHard or atrPassed)
+// ---------- Hard gates ----------
+longHardGate  = (not i_useStoch or not i_stochHard or longStochPassed)  and (not i_useMacd or not i_macdHard or longMacdHistPassed)  and longMacdDirPassed  and (not i_useHtf or not i_htfHard or longHtfPassed)  and (not i_useAtrMin or not i_atrHard or atrPassed)
+shortHardGate = (not i_useStoch or not i_stochHard or shortStochPassed) and (not i_useMacd or not i_macdHard or shortMacdHistPassed) and shortMacdDirPassed and (not i_useHtf or not i_htfHard or shortHtfPassed) and (not i_useAtrMin or not i_atrHard or atrPassed)
 
-// Soft conditions: count only conditions that are enabled AND NOT hard
+// ---------- Soft conditions (count only enabled+non-hard) ----------
 longSoftCount =
-     (i_useStoch  and not i_stochHard and longStochPassed  ? 1 : 0) +
-     (i_useMacd   and not i_macdHard  and longMacdPassed   ? 1 : 0) +
-     (i_useHtf    and not i_htfHard   and longHtfPassed    ? 1 : 0) +
-     (i_useAtrMin and not i_atrHard   and atrPassed        ? 1 : 0)
+     (i_useStoch  and not i_stochHard and longStochPassed     ? 1 : 0) +
+     (i_useMacd   and not i_macdHard  and longMacdHistPassed  ? 1 : 0) +
+     (i_useHistMom                    and longMacdMomPassed   ? 1 : 0) +
+     (i_useHtf    and not i_htfHard   and longHtfPassed       ? 1 : 0) +
+     (i_useAtrMin and not i_atrHard   and atrPassed           ? 1 : 0)
 
 shortSoftCount =
-     (i_useStoch  and not i_stochHard and shortStochPassed ? 1 : 0) +
-     (i_useMacd   and not i_macdHard  and shortMacdPassed  ? 1 : 0) +
-     (i_useHtf    and not i_htfHard   and shortHtfPassed   ? 1 : 0) +
-     (i_useAtrMin and not i_atrHard   and atrPassed        ? 1 : 0)
+     (i_useStoch  and not i_stochHard and shortStochPassed    ? 1 : 0) +
+     (i_useMacd   and not i_macdHard  and shortMacdHistPassed ? 1 : 0) +
+     (i_useHistMom                    and shortMacdMomPassed  ? 1 : 0) +
+     (i_useHtf    and not i_htfHard   and shortHtfPassed      ? 1 : 0) +
+     (i_useAtrMin and not i_atrHard   and atrPassed           ? 1 : 0)
 
-// Number of available soft slots (enabled and not hard)
 softSlotCount =
      (i_useStoch  and not i_stochHard ? 1 : 0) +
      (i_useMacd   and not i_macdHard  ? 1 : 0) +
+     (i_useHistMom                    ? 1 : 0) +
      (i_useHtf    and not i_htfHard   ? 1 : 0) +
      (i_useAtrMin and not i_atrHard   ? 1 : 0)
 
@@ -255,13 +314,15 @@ shortSoftPassed = shortSoftCount >= requiredSoft
 finalLongSignal  = i_allowLong  and inDateRange and longHardGate  and longSoftPassed
 finalShortSignal = i_allowShort and inDateRange and shortHardGate and shortSoftPassed
 
-// ---------- State for stops ----------
+// ---------- State ----------
 var float entryPrice    = na
 var float entryAtr      = na
 var int   entryBarTime  = na
 var float trailStop     = na
 var float beStop        = na
 var bool  beActive      = false
+var float mfeStop       = na
+var bool  mfeActive     = false
 
 if strategy.position_size == 0
     entryPrice   := na
@@ -270,21 +331,21 @@ if strategy.position_size == 0
     trailStop    := na
     beStop       := na
     beActive     := false
+    mfeStop      := na
+    mfeActive    := false
 
 // ---------- Entries ----------
 if finalLongSignal and strategy.position_size <= 0
     strategy.entry("LONG", strategy.long)
-
 if finalShortSignal and strategy.position_size >= 0
     strategy.entry("SHORT", strategy.short)
 
-justEntered = strategy.position_size != 0 and na(entryPrice)
-if justEntered
+if strategy.position_size != 0 and na(entryPrice)
     entryPrice   := strategy.position_avg_price
     entryAtr     := atrVal
     entryBarTime := time
 
-// ---------- Exit logic ----------
+// ---------- Exits ----------
 isLong  = strategy.position_size > 0
 isShort = strategy.position_size < 0
 
@@ -314,6 +375,17 @@ if isShort and trailActiveShort
     candidate = low + i_atrTrailMult * atrVal
     trailStop := na(trailStop) ? candidate : math.min(trailStop, candidate)
 
+// Max SL after MFE: once MFE >= activate%, cap SL distance from entry to maxDist%
+mfeLongPct  = isLong  and not na(entryPrice) ? (high - entryPrice) / entryPrice * 100.0 : na
+mfeShortPct = isShort and not na(entryPrice) ? (entryPrice - low)  / entryPrice * 100.0 : na
+
+if i_useMfeCap and isLong and not na(mfeLongPct) and mfeLongPct >= i_mfeActPct and not mfeActive
+    mfeActive := true
+    mfeStop   := entryPrice * (1 - i_mfeMaxDistPct / 100.0)
+if i_useMfeCap and isShort and not na(mfeShortPct) and mfeShortPct >= i_mfeActPct and not mfeActive
+    mfeActive := true
+    mfeStop   := entryPrice * (1 + i_mfeMaxDistPct / 100.0)
+
 float effectiveLong  = na
 float effectiveShort = na
 if isLong
@@ -324,6 +396,8 @@ if isLong
         effectiveLong := na(effectiveLong) ? beStop : math.max(effectiveLong, beStop)
     if not na(trailStop)
         effectiveLong := na(effectiveLong) ? trailStop : math.max(effectiveLong, trailStop)
+    if mfeActive and not na(mfeStop)
+        effectiveLong := na(effectiveLong) ? mfeStop : math.max(effectiveLong, mfeStop)
 if isShort
     effectiveShort := atrSlShort
     if not na(hardSlShort)
@@ -332,6 +406,8 @@ if isShort
         effectiveShort := na(effectiveShort) ? beStop : math.min(effectiveShort, beStop)
     if not na(trailStop)
         effectiveShort := na(effectiveShort) ? trailStop : math.min(effectiveShort, trailStop)
+    if mfeActive and not na(mfeStop)
+        effectiveShort := na(effectiveShort) ? mfeStop : math.min(effectiveShort, mfeStop)
 
 if isLong and not na(effectiveLong)
     strategy.exit("XL", from_entry="LONG", stop=effectiveLong)
@@ -347,25 +423,30 @@ plot(isLong  ? effectiveLong  : na, "Active Stop (LONG)",  color=color.red,    s
 plot(isShort ? effectiveShort : na, "Active Stop (SHORT)", color=color.red,    style=plot.style_linebr, linewidth=2)
 plot(beActive ? beStop : na,        "Break-even",          color=color.yellow, style=plot.style_linebr, linewidth=1)
 plot(trailStop,                     "Trailing stop",       color=color.aqua,   style=plot.style_linebr, linewidth=1)
+plot(mfeActive ? mfeStop : na,      "MFE-cap stop",        color=color.fuchsia,style=plot.style_linebr, linewidth=1)
 plot(htfEma,                        "HTF EMA",             color=color.orange)
 
 plotshape(finalLongSignal  and strategy.position_size <= 0, title="Long signal",  style=shape.triangleup,   location=location.belowbar, color=color.green, size=size.tiny)
 plotshape(finalShortSignal and strategy.position_size >= 0, title="Short signal", style=shape.triangledown, location=location.abovebar, color=color.red,   size=size.tiny)
 
-// Debug bool plots (toggle via i_debugPlots) — visible in Data Window
-plot(i_debugPlots and longStochPassed   ? 1 : 0, "dbg longStochPassed",   display=display.data_window)
-plot(i_debugPlots and shortStochPassed  ? 1 : 0, "dbg shortStochPassed",  display=display.data_window)
-plot(i_debugPlots and longMacdPassed    ? 1 : 0, "dbg longMacdPassed",    display=display.data_window)
-plot(i_debugPlots and shortMacdPassed   ? 1 : 0, "dbg shortMacdPassed",   display=display.data_window)
-plot(i_debugPlots and atrPassed         ? 1 : 0, "dbg atrPassed",         display=display.data_window)
-plot(i_debugPlots and longHtfPassed     ? 1 : 0, "dbg longHtfPassed",     display=display.data_window)
-plot(i_debugPlots and shortHtfPassed    ? 1 : 0, "dbg shortHtfPassed",    display=display.data_window)
-plot(i_debugPlots and longSoftPassed    ? 1 : 0, "dbg longSoftPassed",    display=display.data_window)
-plot(i_debugPlots and shortSoftPassed   ? 1 : 0, "dbg shortSoftPassed",   display=display.data_window)
-plot(i_debugPlots ? longSoftCount  : na,         "dbg longSoftCount",     display=display.data_window)
-plot(i_debugPlots ? shortSoftCount : na,         "dbg shortSoftCount",    display=display.data_window)
-plot(i_debugPlots ? requiredSoft   : na,         "dbg requiredSoft",      display=display.data_window)
-plot(i_debugPlots and finalLongSignal   ? 1 : 0, "dbg finalLongSignal",   display=display.data_window)
-plot(i_debugPlots and finalShortSignal  ? 1 : 0, "dbg finalShortSignal",  display=display.data_window)
+// Debug bool plots — Data Window
+plot(i_debugPlots and longStochPassed       ? 1 : 0, "dbg longStochPassed",         display=display.data_window)
+plot(i_debugPlots and shortStochPassed      ? 1 : 0, "dbg shortStochPassed",        display=display.data_window)
+plot(i_debugPlots and longMacdHistPassed    ? 1 : 0, "dbg macdHistogramPassed L",   display=display.data_window)
+plot(i_debugPlots and shortMacdHistPassed   ? 1 : 0, "dbg macdHistogramPassed S",   display=display.data_window)
+plot(i_debugPlots and longMacdMomPassed     ? 1 : 0, "dbg macdHistogramMomentum L", display=display.data_window)
+plot(i_debugPlots and shortMacdMomPassed    ? 1 : 0, "dbg macdHistogramMomentum S", display=display.data_window)
+plot(i_debugPlots and longMacdDirPassed     ? 1 : 0, "dbg macdDirectionPassed L",   display=display.data_window)
+plot(i_debugPlots and shortMacdDirPassed    ? 1 : 0, "dbg macdDirectionPassed S",   display=display.data_window)
+plot(i_debugPlots and atrPassed             ? 1 : 0, "dbg atrPassed",               display=display.data_window)
+plot(i_debugPlots and longHtfPassed         ? 1 : 0, "dbg longHtfPassed",           display=display.data_window)
+plot(i_debugPlots and shortHtfPassed        ? 1 : 0, "dbg shortHtfPassed",          display=display.data_window)
+plot(i_debugPlots and longSoftPassed        ? 1 : 0, "dbg softConditionsMet L",     display=display.data_window)
+plot(i_debugPlots and shortSoftPassed       ? 1 : 0, "dbg softConditionsMet S",     display=display.data_window)
+plot(i_debugPlots ? longSoftCount  : na,             "dbg longSoftCount",           display=display.data_window)
+plot(i_debugPlots ? shortSoftCount : na,             "dbg shortSoftCount",          display=display.data_window)
+plot(i_debugPlots ? requiredSoft   : na,             "dbg requiredSoft",            display=display.data_window)
+plot(i_debugPlots and finalLongSignal       ? 1 : 0, "dbg finalLongSignal",         display=display.data_window)
+plot(i_debugPlots and finalShortSignal      ? 1 : 0, "dbg finalShortSignal",        display=display.data_window)
 `;
 }
