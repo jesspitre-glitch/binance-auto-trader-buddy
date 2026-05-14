@@ -339,7 +339,7 @@ export function generatePineScript(
   const mfeMaxDistPct = n(cfg.max_sl_after_mfe_max_dist_pct, 1);
   const maxDurMin = n(cfg.max_position_duration_minutes, 0);
 
-  return `//@version=5
+  return `//@version=6
 // ====================================================================
 // Auto-generated from Lovable slot config — STRICT UI → Pine validation
 //   Slot number                  : ${slotNumStr}
