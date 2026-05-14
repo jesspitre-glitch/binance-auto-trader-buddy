@@ -264,15 +264,17 @@ htfBearish = close < htfEma
 longStochPassed  = not i_useStoch or (kLine < i_stochOSK and dLine < i_stochOSD)
 shortStochPassed = not i_useStoch or (kLine > i_stochOBK and dLine > i_stochOBD)
 
-// MACD Histogram (directional, like bot)
-longMacdHistPassed  = not i_useMacd or (histLine >  i_macdHistThr)
-shortMacdHistPassed = not i_useMacd or (histLine < -i_macdHistThr)
+// MACD Histogram (NON-directional soft): magnitude only — same for L/S
+macdHistPassed     = not i_useMacd or (math.abs(histLine) > i_macdHistThr)
+longMacdHistPassed  = macdHistPassed
+shortMacdHistPassed = macdHistPassed
 
-// MACD Histogram Momentum (separate soft condition)
-longMacdMomPassed  = not i_useHistMom or (curMom > prevMom and curMom > 0)
-shortMacdMomPassed = not i_useHistMom or (curMom < prevMom and curMom < 0)
+// MACD Histogram Momentum (NON-directional soft): strength of momentum change
+macdMomPassed      = not i_useHistMom or (math.abs(curMom) > math.abs(prevMom))
+longMacdMomPassed  = macdMomPassed
+shortMacdMomPassed = macdMomPassed
 
-// MACD Direction (HARD when enabled): same directional histogram check
+// MACD Direction (HARD only when enabled): directional histogram check
 longMacdDirPassed  = not i_useMacdDir or (histLine >  i_macdHistThr)
 shortMacdDirPassed = not i_useMacdDir or (histLine < -i_macdHistThr)
 
