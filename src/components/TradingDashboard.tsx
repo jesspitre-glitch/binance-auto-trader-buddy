@@ -18,6 +18,7 @@ import { StrategyAnalysis } from "./StrategyAnalysis";
 import { TradeHistoryTable } from "./TradeHistoryTable";
 import { ContinuousSyncControl } from "./ContinuousSyncControl";
 import { BnbFeeWarning } from "./BnbFeeWarning";
+import { PineScriptBacktest } from "./PineScriptBacktest";
 import { SlotSelector, Slot } from "./SlotSelector";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
