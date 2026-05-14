@@ -372,7 +372,7 @@ export const TradingDashboard = () => {
       <PositionManager slotId={selectedSlotId} includeLegacyData={includeLegacyDataInSelectedSlot} slots={slots} />
 
       <Tabs defaultValue="pnl">
-        <TabsList className={cn("grid w-full h-auto md:h-10 gap-1 p-1 bg-muted", selectedSlotId ? "grid-cols-5" : "grid-cols-4")}>
+        <TabsList className={cn("grid w-full h-auto md:h-10 gap-1 p-1 bg-muted", selectedSlotId ? "grid-cols-6" : "grid-cols-5")}>
           <TabsTrigger value="pnl" className="flex-col md:flex-row gap-1 md:gap-2 h-16 md:h-auto text-xs md:text-sm">
             <TrendingUp className="h-5 w-5 md:h-4 md:w-4" />
             <span className="hidden md:inline">P&L</span>
