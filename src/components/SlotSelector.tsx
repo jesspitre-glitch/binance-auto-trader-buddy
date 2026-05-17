@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,7 @@ export interface Slot {
   config_id: string | null;
   capital_percent: number;
   is_active: boolean;
+  allowed_symbols?: string[] | null;
 }
 
 interface SlotSelectorProps {
