@@ -517,12 +517,15 @@ f_supertrend(_period, _mult) =>
 inDateRange = (time >= i_startDate) and (time <= i_endDate)
 
 // ---------- Indicators ----------
-emaFastLine = ta.ema(close, i_emaFast)
-emaMediumLine = ta.ema(close, i_emaMedium)
-emaSlowLine = ta.ema(close, i_emaSlow)
-emaTrendLong = emaFastLine > emaMediumLine and emaMediumLine > emaSlowLine and close > close[1]
-emaTrendShort = emaFastLine < emaMediumLine and emaMediumLine < emaSlowLine and close < close[1]
-emaSpreadPct = close > 0 ? math.abs(emaFastLine - emaSlowLine) / close * 100.0 : 0.0
+// EMA trend computed on Trend TF (i_trendTf) — matches bot's medium-trend logic
+emaFastLine   = request.security(syminfo.tickerid, i_trendTf, ta.ema(close, i_emaFast),   barmerge.gaps_off, barmerge.lookahead_off)
+emaMediumLine = request.security(syminfo.tickerid, i_trendTf, ta.ema(close, i_emaMedium), barmerge.gaps_off, barmerge.lookahead_off)
+emaSlowLine   = request.security(syminfo.tickerid, i_trendTf, ta.ema(close, i_emaSlow),   barmerge.gaps_off, barmerge.lookahead_off)
+trendClose    = request.security(syminfo.tickerid, i_trendTf, close,        barmerge.gaps_off, barmerge.lookahead_off)
+trendClosePrev= request.security(syminfo.tickerid, i_trendTf, close[1],     barmerge.gaps_off, barmerge.lookahead_off)
+emaTrendLong  = emaFastLine > emaMediumLine and emaMediumLine > emaSlowLine and trendClose > trendClosePrev
+emaTrendShort = emaFastLine < emaMediumLine and emaMediumLine < emaSlowLine and trendClose < trendClosePrev
+emaSpreadPct  = trendClose > 0 ? math.abs(emaFastLine - emaSlowLine) / trendClose * 100.0 : 0.0
 emaSpreadPassed = not i_useEma or ((emaSpreadPct >= i_minEmaSpread) and (i_maxEmaSpread <= 0 or emaSpreadPct <= i_maxEmaSpread))
 
 rsiLine = ta.rsi(close, i_rsiLen)
