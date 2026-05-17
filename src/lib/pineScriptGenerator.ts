@@ -604,8 +604,10 @@ volRatio = volAvg > 0 ? volume / volAvg : 0.0
 atrAdaptiveThreshold = i_useAdaptiveAtr ? math.min(math.max(i_atrBase * volRatio, i_atrFloor), i_atrCeiling) : i_minAtrPct
 atrPassed = not i_useAtr or (atrPct >= atrAdaptiveThreshold and (not i_useAdaptiveAtr or atrPct <= i_atrCeiling))
 
-[diPlus, diMinus, adxRaw] = ta.dmi(i_adxLen, i_adxLen)
-adxVal = request.security(syminfo.tickerid, i_trendTf, adxRaw, barmerge.gaps_off, barmerge.lookahead_off)
+// ADX computed directly on Trend TF: ta.dmi is invoked inside request.security
+// so DMI/ADX state is built from the higher-TF series, not the chart TF.
+[diPlusChart, diMinusChart, adxRawChart] = ta.dmi(i_adxLen, i_adxLen)
+[diPlusTf, diMinusTf, adxVal] = request.security(syminfo.tickerid, i_trendTf, ta.dmi(i_adxLen, i_adxLen), barmerge.gaps_off, barmerge.lookahead_off)
 adxPassed = not i_useAdx or (adxVal >= i_adxFloor and adxVal <= i_adxCeiling)
 
 volumeLongPassed = not i_useVolume or volRatio >= i_volMultLong
