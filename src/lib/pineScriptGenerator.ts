@@ -602,7 +602,7 @@ volRatio = volAvg > 0 ? volume / volAvg : 0.0
 atrAdaptiveThreshold = i_useAdaptiveAtr ? math.min(math.max(i_atrBase * volRatio, i_atrFloor), i_atrCeiling) : i_minAtrPct
 atrPassed = not i_useAtr or (atrPct >= atrAdaptiveThreshold and (not i_useAdaptiveAtr or atrPct <= i_atrCeiling))
 
-adxVal = ta.adx(i_adxLen)
+adxVal = request.security(syminfo.tickerid, i_trendTf, ta.adx(i_adxLen), barmerge.gaps_off, barmerge.lookahead_off)
 adxPassed = not i_useAdx or (adxVal >= i_adxFloor and adxVal <= i_adxCeiling)
 
 volumeLongPassed = not i_useVolume or volRatio >= i_volMultLong
