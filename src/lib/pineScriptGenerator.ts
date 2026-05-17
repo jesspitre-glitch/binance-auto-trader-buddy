@@ -894,11 +894,16 @@ plot(i_usePsar ? psarLine : na, "PSAR", color=color.gray)
 plotshape(finalLongSignal and strategy.position_size <= 0, title="Long signal", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.tiny)
 plotshape(finalShortSignal and strategy.position_size >= 0, title="Short signal", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.tiny)
 
-// Debug bool plots — Data Window
+// Debug bool plots — Data Window (open Data Window in TV to inspect per-bar values)
+// NOTE: ADX is computed as ta.dmi() at chart TF, then pulled via request.security on trend TF.
+//       Inspect dbg_adxVal in Data Window — if it differs from TradingView's built-in ADX
+//       on the trend TF, the call should be refactored to compute ta.dmi inside request.security.
+//       Per instruction, no change is made until debug confirms a discrepancy.
 plot(i_debugPlots ? longSoftCount : na, "dbg longSoftCount", display=display.data_window)
 plot(i_debugPlots ? shortSoftCount : na, "dbg shortSoftCount", display=display.data_window)
 plot(i_debugPlots ? softSlotCount : na, "dbg activeSoftConditions", display=display.data_window)
-plot(i_debugPlots ? requiredSoft : na, "dbg effectiveRequiredSoft", display=display.data_window)
+plot(i_debugPlots ? requiredSoft : na, "dbg requiredSoft", display=display.data_window)
+plot(i_debugPlots ? i_requestedSoft : na, "dbg requestedSoftInput", display=display.data_window)
 plot(i_debugPlots and softClampWarning ? 1 : 0, "dbg softClampWarning", display=display.data_window)
 plot(i_debugPlots and longHardGate ? 1 : 0, "dbg longHardGate", display=display.data_window)
 plot(i_debugPlots and shortHardGate ? 1 : 0, "dbg shortHardGate", display=display.data_window)
@@ -906,11 +911,24 @@ plot(i_debugPlots and longSoftPassed ? 1 : 0, "dbg longSoftPassed", display=disp
 plot(i_debugPlots and shortSoftPassed ? 1 : 0, "dbg shortSoftPassed", display=display.data_window)
 plot(i_debugPlots and finalLongSignal ? 1 : 0, "dbg finalLongSignal", display=display.data_window)
 plot(i_debugPlots and finalShortSignal ? 1 : 0, "dbg finalShortSignal", display=display.data_window)
-plot(i_debugPlots and macdHistPassed ? 1 : 0, "dbg macdHistogramPassed", display=display.data_window)
-plot(i_debugPlots and macdMomPassed ? 1 : 0, "dbg macdHistogramMomentumPassed", display=display.data_window)
+plot(i_debugPlots and longStochPassed ? 1 : 0, "dbg longStochPassed", display=display.data_window)
+plot(i_debugPlots and shortStochPassed ? 1 : 0, "dbg shortStochPassed", display=display.data_window)
+plot(i_debugPlots and volumeLongPassed ? 1 : 0, "dbg volumeLongPassed", display=display.data_window)
+plot(i_debugPlots and volumeShortPassed ? 1 : 0, "dbg volumeShortPassed", display=display.data_window)
+plot(i_debugPlots and vwapLongPassed ? 1 : 0, "dbg vwapLongPassed", display=display.data_window)
+plot(i_debugPlots and vwapShortPassed ? 1 : 0, "dbg vwapShortPassed", display=display.data_window)
+plot(i_debugPlots and candlePassed ? 1 : 0, "dbg candlePassed", display=display.data_window)
 plot(i_debugPlots and atrPassed ? 1 : 0, "dbg atrPassed", display=display.data_window)
+plot(i_debugPlots and emaSpreadPassed ? 1 : 0, "dbg emaSpreadPassed", display=display.data_window)
 plot(i_debugPlots and longHtfPassed ? 1 : 0, "dbg longHtfPassed", display=display.data_window)
 plot(i_debugPlots and shortHtfPassed ? 1 : 0, "dbg shortHtfPassed", display=display.data_window)
+plot(i_debugPlots and adxPassed ? 1 : 0, "dbg adxPassed", display=display.data_window)
+plot(i_debugPlots ? adxVal : na, "dbg adxVal", display=display.data_window)
+plot(i_debugPlots ? adxRaw : na, "dbg adxRawChartTf", display=display.data_window)
+plot(i_debugPlots ? atrPct : na, "dbg atrPct", display=display.data_window)
+plot(i_debugPlots ? emaSpreadPct : na, "dbg emaSpreadPct", display=display.data_window)
+plot(i_debugPlots and macdHistPassed ? 1 : 0, "dbg macdHistogramPassed", display=display.data_window)
+plot(i_debugPlots and macdMomPassed ? 1 : 0, "dbg macdHistogramMomentumPassed", display=display.data_window)
 
 // ---------- Runtime validation table ----------
 activeFilters =
