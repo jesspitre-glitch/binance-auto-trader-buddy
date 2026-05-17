@@ -228,7 +228,7 @@ export const SlotSelector = ({
   const saveSlot = async () => {
     if (!editSlot) return;
     try {
-      const normalizedAllowed = normalizeAllowedSymbols(editAllowedSymbols);
+      const normalizedAllowed = [...new Set(editAllowedSymbols.map(s => s.trim().toUpperCase()).filter(Boolean))];
       const { error } = await supabase
         .from("strategy_slots")
         .update({
