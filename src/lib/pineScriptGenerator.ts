@@ -1010,16 +1010,15 @@ plotshape(finalLongSignal and strategy.position_size <= 0, title="Long signal", 
 plotshape(finalShortSignal and strategy.position_size >= 0, title="Short signal", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.tiny)
 
 // Debug bool plots — Data Window (open Data Window in TV to inspect per-bar values)
-// NOTE: ADX is computed as ta.dmi() at chart TF, then pulled via request.security on trend TF.
-//       Inspect dbg_adxVal in Data Window — if it differs from TradingView's built-in ADX
-//       on the trend TF, the call should be refactored to compute ta.dmi inside request.security.
-//       Per instruction, no change is made until debug confirms a discrepancy.
+// Regression diff from pre-fix Pine: ta.sum→math.sum, ta.adx→request.security(... ta.dmi ...), RSI cross calls hoisted.
 plot(i_debugPlots ? longSoftCount : na, "dbg longSoftCount", display=display.data_window)
 plot(i_debugPlots ? shortSoftCount : na, "dbg shortSoftCount", display=display.data_window)
 plot(i_debugPlots ? softSlotCount : na, "dbg activeSoftConditions", display=display.data_window)
 plot(i_debugPlots ? requiredSoft : na, "dbg requiredSoft", display=display.data_window)
 plot(i_debugPlots ? i_requestedSoft : na, "dbg requestedSoftInput", display=display.data_window)
 plot(i_debugPlots and softClampWarning ? 1 : 0, "dbg softClampWarning", display=display.data_window)
+plot(i_debugPlots and rawLongSignal ? 1 : 0, "dbg rawLongSignal", display=display.data_window)
+plot(i_debugPlots and rawShortSignal ? 1 : 0, "dbg rawShortSignal", display=display.data_window)
 plot(i_debugPlots and longHardGate ? 1 : 0, "dbg longHardGate", display=display.data_window)
 plot(i_debugPlots and shortHardGate ? 1 : 0, "dbg shortHardGate", display=display.data_window)
 plot(i_debugPlots and longSoftPassed ? 1 : 0, "dbg longSoftPassed", display=display.data_window)
