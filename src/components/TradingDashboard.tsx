@@ -108,6 +108,7 @@ export const TradingDashboard = () => {
           setActiveConfigId(data.active_config_id);
         }
         setMasterScanSlotId((data as any).master_scan_slot_id ?? null);
+        setUseGlobalCandidateGate(((data as any).use_global_candidate_gate ?? false) === true);
         
         if (data.is_active) {
           try {
