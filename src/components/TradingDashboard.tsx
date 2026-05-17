@@ -194,6 +194,7 @@ export const TradingDashboard = () => {
         is_active: newState,
         active_config_id: activeConfigId,
         master_scan_slot_id: masterScanSlotId,
+        use_global_candidate_gate: useGlobalCandidateGate,
       };
       
       if (newState) {
