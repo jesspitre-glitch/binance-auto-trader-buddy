@@ -158,11 +158,22 @@ export const SlotSelector = ({
     }
   };
 
+  // Normalize allowed_symbols input. Accepts newline, comma, semicolon, whitespace.
+  const normalizeAllowedSymbols = (input: string): string[] => {
+    return [...new Set(
+      input
+        .split(/[\n,; \t]+/)
+        .map(s => s.trim().toUpperCase())
+        .filter(Boolean)
+    )];
+  };
+
   const openEditDialog = (slot: Slot) => {
     setEditSlot(slot);
     setEditName(slot.name);
     setEditConfigId(slot.config_id);
     setEditCapital(slot.capital_percent);
+    setEditAllowedSymbols((slot.allowed_symbols ?? []).join("\n"));
     setCopyFromSlotId("");
     setDialogOpen(true);
   };
