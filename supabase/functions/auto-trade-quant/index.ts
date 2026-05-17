@@ -3415,11 +3415,11 @@ serve(async (req) => {
         : symbols;
 
       if (allowedUpper.size > 0) {
-        console.log(`🎯 SLOT_ALLOWED_SYMBOLS_ACTIVE | slot=${slotName} | whitelist=${allowedSymbols.length} | matched=${scanSymbols.length}/${symbols.length} | symbols=${[...allowedUpper].join(',')}`);
+        console.log(`🎯 SLOT_ALLOWED_SYMBOL_SCAN | ${JSON.stringify({ slot_id: slotId ?? null, slot_name: slotName, allowed_symbols_count: scanSymbols.length, allowed_symbols: scanSymbols })}`);
       } else {
-        console.log(`🌐 SLOT_ALLOWED_SYMBOLS_EMPTY_SCAN_ALL | slot=${slotName} | scanning all ${symbols.length} USDC pairs`);
+        console.log(`🌐 SLOT_SCAN_ALL_SYMBOLS | ${JSON.stringify({ slot_id: slotId ?? null, slot_name: slotName, total_symbols: symbols.length })}`);
       }
-      console.log(`🔍 Slot "${slotName}" scanning ${scanSymbols.length} USDC pairs independently`);
+      console.log(`🔍 Slot "${slotName}" scanning ${scanSymbols.length}${allowedUpper.size > 0 ? ' whitelisted' : ''} symbols (pool=${symbols.length})`);
 
       
       // 📊 STEP 1: Collect all valid signals with their strength
