@@ -565,7 +565,7 @@ bbLower = bbBasis - bbDev
 bbLongPassed = not i_useBb or close <= bbLower * 1.01
 bbShortPassed = not i_useBb or close >= bbUpper * 0.99
 
-rollingVwap = ta.sum(hlc3 * volume, i_vwapLen) / ta.sum(volume, i_vwapLen)
+rollingVwap = math.sum(hlc3 * volume, i_vwapLen) / math.sum(volume, i_vwapLen)
 vwapLongPassed = not i_useVwap or close > rollingVwap
 vwapShortPassed = not i_useVwap or close < rollingVwap
 
