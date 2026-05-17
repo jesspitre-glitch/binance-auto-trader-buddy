@@ -3406,7 +3406,21 @@ serve(async (req) => {
       const symbolFilters = await fetchSymbolFilters();
       const symbols = await fetchAllUSDCSymbols();
       const isMasterSlot = false; // master gating disabled — every slot scans full pool
-      console.log(`🔍 Slot "${slotName}" scanning ${symbols.length} USDC pairs independently`);
+
+      // 🎯 PER-SLOT SYMBOL WHITELIST: filter the scan pool to allowed_symbols if set.
+      // Empty list = scan all USDC perpetuals (legacy behavior).
+      const allowedUpper = new Set(allowedSymbols.map(s => s.toUpperCase()));
+      const scanSymbols = allowedUpper.size > 0
+        ? symbols.filter(s => allowedUpper.has(s.toUpperCase()))
+        : symbols;
+
+      if (allowedUpper.size > 0) {
+        console.log(`🎯 SLOT_ALLOWED_SYMBOLS_ACTIVE | slot=${slotName} | whitelist=${allowedSymbols.length} | matched=${scanSymbols.length}/${symbols.length} | symbols=${[...allowedUpper].join(',')}`);
+      } else {
+        console.log(`🌐 SLOT_ALLOWED_SYMBOLS_EMPTY_SCAN_ALL | slot=${slotName} | scanning all ${symbols.length} USDC pairs`);
+      }
+      console.log(`🔍 Slot "${slotName}" scanning ${scanSymbols.length} USDC pairs independently`);
+
       
       // 📊 STEP 1: Collect all valid signals with their strength
       interface SignalCandidate {
