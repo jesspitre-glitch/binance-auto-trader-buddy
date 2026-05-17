@@ -531,8 +531,10 @@ emaSpreadPassed = not i_useEma or ((emaSpreadPct >= i_minEmaSpread) and (i_maxEm
 rsiLine = ta.rsi(close, i_rsiLen)
 rsiRising = ta.rising(rsiLine, i_rsiMomLen)
 rsiFalling = ta.falling(rsiLine, i_rsiMomLen)
-rsiLongPassed = not i_useRsi or ((rsiLine >= i_rsiMinLong and rsiLine <= i_rsiMinLong + i_rsiZoneWidth) or (ta.crossover(rsiLine, i_rsiMinLong) and rsiRising))
-rsiShortPassed = not i_useRsi or ((rsiLine <= i_rsiMaxShort and rsiLine >= i_rsiMaxShort - i_rsiZoneWidth) or (ta.crossunder(rsiLine, i_rsiMaxShort) and rsiFalling))
+rsiCrossUpMin = ta.crossover(rsiLine, i_rsiMinLong)
+rsiCrossDownMax = ta.crossunder(rsiLine, i_rsiMaxShort)
+rsiLongPassed = not i_useRsi or ((rsiLine >= i_rsiMinLong and rsiLine <= i_rsiMinLong + i_rsiZoneWidth) or (rsiCrossUpMin and rsiRising))
+rsiShortPassed = not i_useRsi or ((rsiLine <= i_rsiMaxShort and rsiLine >= i_rsiMaxShort - i_rsiZoneWidth) or (rsiCrossDownMax and rsiFalling))
 
 // StochRSI = stochastic on RSI series, not price stochastic
 rsiSrc = ta.rsi(close, i_stochLen)
@@ -602,7 +604,8 @@ volRatio = volAvg > 0 ? volume / volAvg : 0.0
 atrAdaptiveThreshold = i_useAdaptiveAtr ? math.min(math.max(i_atrBase * volRatio, i_atrFloor), i_atrCeiling) : i_minAtrPct
 atrPassed = not i_useAtr or (atrPct >= atrAdaptiveThreshold and (not i_useAdaptiveAtr or atrPct <= i_atrCeiling))
 
-adxVal = request.security(syminfo.tickerid, i_trendTf, ta.adx(i_adxLen), barmerge.gaps_off, barmerge.lookahead_off)
+[diPlus, diMinus, adxRaw] = ta.dmi(i_adxLen, i_adxLen)
+adxVal = request.security(syminfo.tickerid, i_trendTf, adxRaw, barmerge.gaps_off, barmerge.lookahead_off)
 adxPassed = not i_useAdx or (adxVal >= i_adxFloor and adxVal <= i_adxCeiling)
 
 volumeLongPassed = not i_useVolume or volRatio >= i_volMultLong
