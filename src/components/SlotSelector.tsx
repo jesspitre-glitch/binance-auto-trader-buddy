@@ -173,7 +173,7 @@ export const SlotSelector = ({
     setEditName(slot.name);
     setEditConfigId(slot.config_id);
     setEditCapital(slot.capital_percent);
-    setEditAllowedSymbols((slot.allowed_symbols ?? []).join("\n"));
+    setEditAllowedSymbols((slot.allowed_symbols ?? []).map(s => s.toUpperCase()));
     setCopyFromSlotId("");
     setDialogOpen(true);
   };
