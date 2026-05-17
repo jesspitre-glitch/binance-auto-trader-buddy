@@ -56,6 +56,7 @@ export const SlotSelector = ({
   const [editName, setEditName] = useState("");
   const [editConfigId, setEditConfigId] = useState<string | null>(null);
   const [editCapital, setEditCapital] = useState(16);
+  const [editAllowedSymbols, setEditAllowedSymbols] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [copyFromSlotId, setCopyFromSlotId] = useState<string>("");
   const [isCopying, setIsCopying] = useState(false);
