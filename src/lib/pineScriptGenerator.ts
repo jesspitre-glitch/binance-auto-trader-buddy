@@ -734,6 +734,119 @@ rawShortSignal = i_strategyOn and i_allowShort and inDateRange and shortHardGate
 finalLongSignal = rawLongSignal and not rawShortSignal ? true : rawLongSignal and rawShortSignal and longSoftCount > shortSoftCount
 finalShortSignal = rawShortSignal and not rawLongSignal ? true : rawLongSignal and rawShortSignal and shortSoftCount > longSoftCount
 
+// ---------- Regression debug: hard blockers and backtest-period counters ----------
+longStochHardBlock = i_useStoch and i_stochHard and not longStochPassed
+shortStochHardBlock = i_useStoch and i_stochHard and not shortStochPassed
+volumeLongHardBlock = i_useVolume and i_volumeHard and not volumeLongPassed
+volumeShortHardBlock = i_volumeModeShort == "HARD" and not volumeShortPassed
+longVwapHardBlock = i_useVwap and i_vwapHard and not vwapLongPassed
+shortVwapHardBlock = i_useVwap and i_vwapHard and not vwapShortPassed
+candleHardBlock = i_useCandle and i_candleHard and not candlePassed
+atrHardBlock = i_useAtr and i_atrHard and not atrPassed
+emaSpreadHardBlock = i_useEma and not emaSpreadPassed
+longHtfHardBlock = i_useHtf and i_htfHard and not longHtfPassed
+shortHtfHardBlock = i_useHtf and i_htfHard and not shortHtfPassed
+
+var int longHardGateBars = 0
+var int shortHardGateBars = 0
+var int longSoftPassedBars = 0
+var int shortSoftPassedBars = 0
+var int rawLongSignalBars = 0
+var int rawShortSignalBars = 0
+var int finalLongSignalBars = 0
+var int finalShortSignalBars = 0
+var int longStochBlockBars = 0
+var int shortStochBlockBars = 0
+var int volumeLongBlockBars = 0
+var int volumeShortBlockBars = 0
+var int longVwapBlockBars = 0
+var int shortVwapBlockBars = 0
+var int candleBlockBars = 0
+var int atrBlockBars = 0
+var int emaSpreadBlockBars = 0
+var int longHtfBlockBars = 0
+var int shortHtfBlockBars = 0
+
+if inDateRange and barstate.isconfirmed
+    longHardGateBars := longHardGateBars + (longHardGate ? 1 : 0)
+    shortHardGateBars := shortHardGateBars + (shortHardGate ? 1 : 0)
+    longSoftPassedBars := longSoftPassedBars + (longSoftPassed ? 1 : 0)
+    shortSoftPassedBars := shortSoftPassedBars + (shortSoftPassed ? 1 : 0)
+    rawLongSignalBars := rawLongSignalBars + (rawLongSignal ? 1 : 0)
+    rawShortSignalBars := rawShortSignalBars + (rawShortSignal ? 1 : 0)
+    finalLongSignalBars := finalLongSignalBars + (finalLongSignal ? 1 : 0)
+    finalShortSignalBars := finalShortSignalBars + (finalShortSignal ? 1 : 0)
+    longStochBlockBars := longStochBlockBars + (longStochHardBlock ? 1 : 0)
+    shortStochBlockBars := shortStochBlockBars + (shortStochHardBlock ? 1 : 0)
+    volumeLongBlockBars := volumeLongBlockBars + (volumeLongHardBlock ? 1 : 0)
+    volumeShortBlockBars := volumeShortBlockBars + (volumeShortHardBlock ? 1 : 0)
+    longVwapBlockBars := longVwapBlockBars + (longVwapHardBlock ? 1 : 0)
+    shortVwapBlockBars := shortVwapBlockBars + (shortVwapHardBlock ? 1 : 0)
+    candleBlockBars := candleBlockBars + (candleHardBlock ? 1 : 0)
+    atrBlockBars := atrBlockBars + (atrHardBlock ? 1 : 0)
+    emaSpreadBlockBars := emaSpreadBlockBars + (emaSpreadHardBlock ? 1 : 0)
+    longHtfBlockBars := longHtfBlockBars + (longHtfHardBlock ? 1 : 0)
+    shortHtfBlockBars := shortHtfBlockBars + (shortHtfHardBlock ? 1 : 0)
+
+longTopHardBlocker = "none"
+longTopHardBlockerCount = 0
+if longStochBlockBars > longTopHardBlockerCount
+    longTopHardBlocker := "StochRSI"
+    longTopHardBlockerCount := longStochBlockBars
+if volumeLongBlockBars > longTopHardBlockerCount
+    longTopHardBlocker := "Volume LONG"
+    longTopHardBlockerCount := volumeLongBlockBars
+if volumeShortBlockBars > longTopHardBlockerCount
+    longTopHardBlocker := "Volume SHORT"
+    longTopHardBlockerCount := volumeShortBlockBars
+if longVwapBlockBars > longTopHardBlockerCount
+    longTopHardBlocker := "VWAP"
+    longTopHardBlockerCount := longVwapBlockBars
+if candleBlockBars > longTopHardBlockerCount
+    longTopHardBlocker := "Candle"
+    longTopHardBlockerCount := candleBlockBars
+if atrBlockBars > longTopHardBlockerCount
+    longTopHardBlocker := "ATR"
+    longTopHardBlockerCount := atrBlockBars
+if emaSpreadBlockBars > longTopHardBlockerCount
+    longTopHardBlocker := "EMA Spread"
+    longTopHardBlockerCount := emaSpreadBlockBars
+if longHtfBlockBars > longTopHardBlockerCount
+    longTopHardBlocker := "HTF"
+    longTopHardBlockerCount := longHtfBlockBars
+
+shortTopHardBlocker = "none"
+shortTopHardBlockerCount = 0
+if shortStochBlockBars > shortTopHardBlockerCount
+    shortTopHardBlocker := "StochRSI"
+    shortTopHardBlockerCount := shortStochBlockBars
+if volumeLongBlockBars > shortTopHardBlockerCount
+    shortTopHardBlocker := "Volume LONG"
+    shortTopHardBlockerCount := volumeLongBlockBars
+if volumeShortBlockBars > shortTopHardBlockerCount
+    shortTopHardBlocker := "Volume SHORT"
+    shortTopHardBlockerCount := volumeShortBlockBars
+if shortVwapBlockBars > shortTopHardBlockerCount
+    shortTopHardBlocker := "VWAP"
+    shortTopHardBlockerCount := shortVwapBlockBars
+if candleBlockBars > shortTopHardBlockerCount
+    shortTopHardBlocker := "Candle"
+    shortTopHardBlockerCount := candleBlockBars
+if atrBlockBars > shortTopHardBlockerCount
+    shortTopHardBlocker := "ATR"
+    shortTopHardBlockerCount := atrBlockBars
+if emaSpreadBlockBars > shortTopHardBlockerCount
+    shortTopHardBlocker := "EMA Spread"
+    shortTopHardBlockerCount := emaSpreadBlockBars
+if shortHtfBlockBars > shortTopHardBlockerCount
+    shortTopHardBlocker := "HTF"
+    shortTopHardBlockerCount := shortHtfBlockBars
+
+longFinalWhy = finalLongSignal ? "PASS" : not i_strategyOn ? "strategy off" : not i_allowLong ? "long disabled" : not inDateRange ? "date range" : not longHardGate ? "hard gate" : not longSoftPassed ? "soft deficit" : rawLongSignal and rawShortSignal and longSoftCount <= shortSoftCount ? "tie lost" : "no raw"
+shortFinalWhy = finalShortSignal ? "PASS" : not i_strategyOn ? "strategy off" : not i_allowShort ? "short disabled" : not inDateRange ? "date range" : not shortHardGate ? "hard gate" : not shortSoftPassed ? "soft deficit" : rawLongSignal and rawShortSignal and shortSoftCount <= longSoftCount ? "tie lost" : "no raw"
+longAggregateWhy = finalLongSignalBars > 0 ? "final ok" : longHardGateBars == 0 ? "hard never true: " + longTopHardBlocker + " (" + str.tostring(longTopHardBlockerCount) + ")" : longSoftPassedBars == 0 ? "soft never true" : rawLongSignalBars == 0 ? "strategy/allow/date" : "tie-break lost"
+shortAggregateWhy = finalShortSignalBars > 0 ? "final ok" : shortHardGateBars == 0 ? "hard never true: " + shortTopHardBlocker + " (" + str.tostring(shortTopHardBlockerCount) + ")" : shortSoftPassedBars == 0 ? "soft never true" : rawShortSignalBars == 0 ? "strategy/allow/date" : "tie-break lost"
+
 // ---------- State ----------
 var float entryPrice = na
 var float entryAtr = na
