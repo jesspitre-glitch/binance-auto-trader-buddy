@@ -3227,6 +3227,7 @@ serve(async (req) => {
         slotId: string | null;
         capitalPercent: number;
         slotName: string;
+        allowedSymbols: string[];
       }
 
       const slotIterations: SlotIteration[] = [];
@@ -3253,6 +3254,7 @@ serve(async (req) => {
               slotId: slot.id,
               capitalPercent: Number(slot.capital_percent),
               slotName: slot.name,
+              allowedSymbols: normalizeAllowedSymbols((slot as any).allowed_symbols),
             });
           } else {
             console.log(`⏭️ Slot "${slot.name}" (${slot.id}): config missing or disabled, skipping`);
@@ -3267,6 +3269,7 @@ serve(async (req) => {
             slotId: null,
             capitalPercent: 100,
             slotName: 'Legacy',
+            allowedSymbols: [],
           });
         }
       }
