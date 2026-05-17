@@ -3856,31 +3856,33 @@ serve(async (req) => {
         }
       }
 
-      // 🌐 HYBRID GLOBAL CANDIDATE GATING
-      // Hvis et tidligere slot allerede har valgt et globalt kandidat-symbol+side i denne cycle,
-      // må dette slot KUN handle på samme symbol+side (men skal stadig have det i egen eligible-pool).
-      // Hvis intet globalt kandidat endnu, vælger DETTE slots top-eligible signal det globale kandidat.
+      // 🌐 HYBRID GLOBAL CANDIDATE GATING (only when useGlobalCandidateGate=true)
+      // When ON: first slot picks a global symbol+side; later slots must accept or reject.
+      // When OFF: each slot trades its own top eligible signal independently.
       let signalsToTrade = eligibleSignals;
-      if (globalCandidate) {
-        const before = signalsToTrade.length;
-        signalsToTrade = eligibleSignals.filter(
-          s => s.symbol === globalCandidate!.symbol && s.signal === globalCandidate!.side
-        );
-        if (signalsToTrade.length > 0) {
-          console.log(`✅ SLOT_ACCEPTED_GLOBAL_SIGNAL | slot=${slotName} | symbol=${globalCandidate.symbol} | side=${globalCandidate.side}`);
+      if (useGlobalCandidateGate) {
+        if (globalCandidate) {
+          signalsToTrade = eligibleSignals.filter(
+            s => s.symbol === globalCandidate!.symbol && s.signal === globalCandidate!.side
+          );
+          if (signalsToTrade.length > 0) {
+            console.log(`✅ SLOT_ACCEPTED_GLOBAL_SIGNAL | slot=${slotName} | symbol=${globalCandidate.symbol} | side=${globalCandidate.side}`);
+          } else {
+            const ownTopSymbols = eligibleSignals.slice(0, 3).map(s => `${s.symbol}(${s.signal})`).join(',') || 'none';
+            console.log(`🚫 SLOT_REJECTED_GLOBAL_SIGNAL | slot=${slotName} | global=${globalCandidate.symbol}/${globalCandidate.side} | reason=symbol+side not in slot's own eligibleSignals (own top: ${ownTopSymbols})`);
+          }
+        } else if (eligibleSignals.length > 0) {
+          const top = eligibleSignals[0];
+          globalCandidate = { symbol: top.symbol, side: top.signal, chosenBySlot: slotName };
+          console.log(`🌐 GLOBAL_CANDIDATE_SELECTED | symbol=${top.symbol} | side=${top.signal} | chosen_by=${slotName} | strength=${top.strength.toFixed(1)} | total_active_slots=${slotIterations.length}`);
+          console.log(`✅ SLOT_ACCEPTED_GLOBAL_SIGNAL | slot=${slotName} | symbol=${top.symbol} | side=${top.signal}`);
+          signalsToTrade = eligibleSignals.filter(s => s.symbol === top.symbol && s.signal === top.signal);
         } else {
-          const ownTopSymbols = eligibleSignals.slice(0, 3).map(s => `${s.symbol}(${s.signal})`).join(',') || 'none';
-          console.log(`🚫 SLOT_REJECTED_GLOBAL_SIGNAL | slot=${slotName} | global=${globalCandidate.symbol}/${globalCandidate.side} | reason=symbol+side not in slot's own eligibleSignals (own top: ${ownTopSymbols})`);
+          console.log(`🚫 SLOT_REJECTED_GLOBAL_SIGNAL | slot=${slotName} | reason=no eligible signals (no global candidate set)`);
         }
-      } else if (eligibleSignals.length > 0) {
-        const top = eligibleSignals[0];
-        globalCandidate = { symbol: top.symbol, side: top.signal, chosenBySlot: slotName };
-        console.log(`🌐 GLOBAL_CANDIDATE_SELECTED | symbol=${top.symbol} | side=${top.signal} | chosen_by=${slotName} | strength=${top.strength.toFixed(1)} | total_active_slots=${slotIterations.length}`);
-        console.log(`✅ SLOT_ACCEPTED_GLOBAL_SIGNAL | slot=${slotName} | symbol=${top.symbol} | side=${top.signal}`);
-        // Restrict signalsToTrade to ONLY the chosen global candidate so this slot can't fall back to a different symbol
-        signalsToTrade = eligibleSignals.filter(s => s.symbol === top.symbol && s.signal === top.signal);
       } else {
-        console.log(`🚫 SLOT_REJECTED_GLOBAL_SIGNAL | slot=${slotName} | reason=no eligible signals (no global candidate set)`);
+        // Gate disabled — each slot trades its own eligible signals independently
+        console.log(`🟢 GLOBAL_GATE_BYPASSED | slot=${slotName} | independent eligible signals=${eligibleSignals.length}`);
       }
 
       
