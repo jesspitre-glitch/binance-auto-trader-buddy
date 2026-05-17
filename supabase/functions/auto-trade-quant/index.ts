@@ -3927,7 +3927,14 @@ serve(async (req) => {
           console.log(`⚠️ SIKKERHED: Blokerer NONE signal for ${symbol}`);
           continue;
         }
-        
+
+        // 🎯 FINAL WHITELIST SAFETY CHECK: never let a slot open a non-allowed symbol
+        if (allowedUpper.size > 0 && !allowedUpper.has(symbol.toUpperCase())) {
+          console.log(`🚫 SYMBOL_NOT_ALLOWED_FOR_SLOT | slot=${slotName} | slot_id=${slotId ?? 'legacy'} | symbol=${symbol} | whitelist_size=${allowedUpper.size}`);
+          await updateSlotEvalForSymbol(symbol, 'BLOCKED', 'SYMBOL_NOT_ALLOWED_FOR_SLOT');
+          continue;
+        }
+
         try {
           console.log(`\n🎯 Behandler signal ${selectedSignal.symbol} (${signalIndex + 1}/${signalsToTrade.length}, styrke: ${selectedSignal.strength.toFixed(1)})`);
           
