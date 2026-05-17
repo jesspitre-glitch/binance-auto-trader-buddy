@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { AllowedSymbolsPicker } from "@/components/AllowedSymbolsPicker";
 import {
   Dialog,
   DialogContent,
@@ -56,7 +56,7 @@ export const SlotSelector = ({
   const [editName, setEditName] = useState("");
   const [editConfigId, setEditConfigId] = useState<string | null>(null);
   const [editCapital, setEditCapital] = useState(16);
-  const [editAllowedSymbols, setEditAllowedSymbols] = useState("");
+  const [editAllowedSymbols, setEditAllowedSymbols] = useState<string[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [copyFromSlotId, setCopyFromSlotId] = useState<string>("");
   const [isCopying, setIsCopying] = useState(false);
@@ -173,7 +173,7 @@ export const SlotSelector = ({
     setEditName(slot.name);
     setEditConfigId(slot.config_id);
     setEditCapital(slot.capital_percent);
-    setEditAllowedSymbols((slot.allowed_symbols ?? []).join("\n"));
+    setEditAllowedSymbols((slot.allowed_symbols ?? []).map(s => s.toUpperCase()));
     setCopyFromSlotId("");
     setDialogOpen(true);
   };
@@ -228,7 +228,7 @@ export const SlotSelector = ({
   const saveSlot = async () => {
     if (!editSlot) return;
     try {
-      const normalizedAllowed = normalizeAllowedSymbols(editAllowedSymbols);
+      const normalizedAllowed = [...new Set(editAllowedSymbols.map(s => s.trim().toUpperCase()).filter(Boolean))];
       const { error } = await supabase
         .from("strategy_slots")
         .update({
@@ -439,36 +439,13 @@ export const SlotSelector = ({
             <div className="space-y-2 border-t pt-3">
               <Label className="text-sm font-medium">Allowed Symbols</Label>
               <p className="text-xs text-muted-foreground">
-                Kun disse symbols må scannes og handles af dette slot. Tom liste = slot scanner alle USDC perpetuals. Adskil med komma, semikolon, mellemrum eller linjeskift.
+                Kun disse symbols må scannes og handles af dette slot. Tom liste = slot scanner alle USDC perpetuals.
               </p>
-              <Textarea
+              <AllowedSymbolsPicker
                 value={editAllowedSymbols}
-                onChange={(e) => setEditAllowedSymbols(e.target.value)}
-                placeholder="fx BTCUSDC, ETHUSDC, SOLUSDC"
-                rows={3}
-                className="font-mono text-xs"
+                onChange={setEditAllowedSymbols}
               />
-              {(() => {
-                const parsed = normalizeAllowedSymbols(editAllowedSymbols);
-                if (parsed.length === 0) {
-                  return (
-                    <p className="text-xs text-amber-600 dark:text-amber-400">
-                      No symbol filter — slot scans all USDC perpetuals
-                    </p>
-                  );
-                }
-                return (
-                  <div className="flex flex-wrap gap-1">
-                    <Badge variant="secondary" className="text-[10px]">{parsed.length} symbols</Badge>
-                    {parsed.slice(0, 30).map(sym => (
-                      <Badge key={sym} variant="outline" className="text-[10px]">{sym}</Badge>
-                    ))}
-                    {parsed.length > 30 && (
-                      <Badge variant="outline" className="text-[10px]">+{parsed.length - 30} flere</Badge>
-                    )}
-                  </div>
-                );
-              })()}
+
             </div>
             {/* Copy config from another slot */}
             {slots.filter(s => s.id !== editSlot?.id && s.config_id).length > 0 && (
