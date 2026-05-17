@@ -570,8 +570,10 @@ stochLongInZone = kLine <= i_stochOSK or dLine <= i_stochOSD
 stochShortInZone = kLine >= i_stochOBK or dLine >= i_stochOBD
 stochCrossUp = kLine[1] < dLine[1] and kLine >= dLine
 stochCrossDown = kLine[1] > dLine[1] and kLine <= dLine
-longStochRaw = i_stochLongMode == "ZONE_ONLY" ? stochLongInZone : (stochCrossUp and stochLongInZone)
-shortStochRaw = i_stochShortMode == "ZONE_ONLY" ? stochShortInZone : (stochCrossDown and stochShortInZone)
+longStochCrossOrZone  = i_legacyStochMode ? stochLongInZone  : (stochCrossUp   and stochLongInZone)
+shortStochCrossOrZone = i_legacyStochMode ? stochShortInZone : (stochCrossDown and stochShortInZone)
+longStochRaw  = i_stochLongMode  == "ZONE_ONLY" ? stochLongInZone  : longStochCrossOrZone
+shortStochRaw = i_stochShortMode == "ZONE_ONLY" ? stochShortInZone : shortStochCrossOrZone
 longStochPassed = not i_useStoch or longStochRaw
 shortStochPassed = not i_useStoch or shortStochRaw
 
