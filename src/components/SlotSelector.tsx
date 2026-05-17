@@ -401,43 +401,6 @@ export const SlotSelector = ({
             Allokeret: {totalAllocated}% / 100%
           </span>
         )}
-            </div>
-            {/* Allowed Symbols whitelist */}
-            <div className="space-y-2 border-t pt-3">
-              <Label className="text-sm font-medium">Allowed Symbols</Label>
-              <p className="text-xs text-muted-foreground">
-                Kun disse symbols må scannes og handles af dette slot. Tom liste = slot scanner alle USDC perpetuals. Adskil med komma, semikolon, mellemrum eller linjeskift.
-              </p>
-              <Textarea
-                value={editAllowedSymbols}
-                onChange={(e) => setEditAllowedSymbols(e.target.value)}
-                placeholder="fx BTCUSDC, ETHUSDC, SOLUSDC"
-                rows={3}
-                className="font-mono text-xs"
-              />
-              {(() => {
-                const parsed = normalizeAllowedSymbols(editAllowedSymbols);
-                if (parsed.length === 0) {
-                  return (
-                    <p className="text-xs text-amber-600 dark:text-amber-400">
-                      No symbol filter — slot scans all USDC perpetuals
-                    </p>
-                  );
-                }
-                return (
-                  <div className="flex flex-wrap gap-1">
-                    <Badge variant="secondary" className="text-[10px]">{parsed.length} symbols</Badge>
-                    {parsed.slice(0, 30).map(sym => (
-                      <Badge key={sym} variant="outline" className="text-[10px]">{sym}</Badge>
-                    ))}
-                    {parsed.length > 30 && (
-                      <Badge variant="outline" className="text-[10px]">+{parsed.length - 30} flere</Badge>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-
       {/* Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
