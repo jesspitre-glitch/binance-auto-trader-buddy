@@ -401,6 +401,8 @@ export const SlotSelector = ({
             Allokeret: {totalAllocated}% / 100%
           </span>
         )}
+      </div>
+
       {/* Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
