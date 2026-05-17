@@ -438,6 +438,12 @@ i_useCandle     = input.bool(${useCandle}, "Candle Momentum enabled", group="UI 
 i_candleHard    = input.bool(${candleHard}, "Candle Momentum HARD", group="UI mapping")
 i_requestedSoft = input.int(${requestedSoft}, "Requested soft conditions", minval=0, group="UI mapping")
 
+// ---------- Legacy compatibility toggles (regression isolation) ----------
+// All default OFF. Enable individually to A/B test pre-v6-fix behavior.
+i_legacyAdxMode      = input.bool(false, "Legacy ADX mode (ta.dmi on chart TF wrapped in request.security)", group="Legacy compatibility")
+i_legacyTiebreakMode = input.bool(false, "Legacy tie-break mode (no tie-break: rawLong/rawShort pass independently)", group="Legacy compatibility")
+i_legacyStochMode    = input.bool(false, "Legacy StochRSI mode (zone-only, no cross requirement in REVERSAL modes)", group="Legacy compatibility")
+
 i_emaFast       = input.int(${emaFast}, "EMA fast", minval=1, group="EMA / RSI")
 i_emaMedium     = input.int(${emaMedium}, "EMA medium", minval=1, group="EMA / RSI")
 i_emaSlow       = input.int(${emaSlow}, "EMA slow", minval=1, group="EMA / RSI")
