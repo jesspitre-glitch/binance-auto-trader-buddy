@@ -178,10 +178,22 @@ export function generatePineScript(
   cfg: SlotConfigLike,
   slotLabel = "Slot",
   slotNumber?: number,
+  meta?: { slotId?: string | null; configId?: string | null },
 ): string {
   const mainTf = tf(cfg.scan_interval, "60");
   const trendTf = tf(cfg.trend_timeframe, mainTf);
   const htfTf = tf(cfg.higher_trend_timeframe, mainTf);
+
+  const slotIdStr = meta?.slotId ?? "(unknown)";
+  const configIdStr = meta?.configId ?? (cfg as any)?.id ?? "(unknown)";
+  // FNV-1a 32-bit hash over the full config JSON — lets you verify export matches UI.
+  const cfgJson = JSON.stringify(cfg, Object.keys(cfg as object).sort());
+  let cfgHash = 0x811c9dc5;
+  for (let i = 0; i < cfgJson.length; i++) {
+    cfgHash ^= cfgJson.charCodeAt(i);
+    cfgHash = (cfgHash + ((cfgHash << 1) + (cfgHash << 4) + (cfgHash << 7) + (cfgHash << 8) + (cfgHash << 24))) >>> 0;
+  }
+  const cfgHashStr = cfgHash.toString(16).padStart(8, "0");
 
   // Strict UI boolean mapping: only a saved true exports as true. null/undefined/false export as false.
   const useStrategy = strictBool(cfg.enabled);
