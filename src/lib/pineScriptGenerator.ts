@@ -438,6 +438,12 @@ i_useCandle     = input.bool(${useCandle}, "Candle Momentum enabled", group="UI 
 i_candleHard    = input.bool(${candleHard}, "Candle Momentum HARD", group="UI mapping")
 i_requestedSoft = input.int(${requestedSoft}, "Requested soft conditions", minval=0, group="UI mapping")
 
+// ---------- Legacy compatibility toggles (regression isolation) ----------
+// All default OFF. Enable individually to A/B test pre-v6-fix behavior.
+i_legacyAdxMode      = input.bool(false, "Legacy ADX mode (ta.dmi on chart TF wrapped in request.security)", group="Legacy compatibility")
+i_legacyTiebreakMode = input.bool(false, "Legacy tie-break mode (no tie-break: rawLong/rawShort pass independently)", group="Legacy compatibility")
+i_legacyStochMode    = input.bool(false, "Legacy StochRSI mode (zone-only, no cross requirement in REVERSAL modes)", group="Legacy compatibility")
+
 i_emaFast       = input.int(${emaFast}, "EMA fast", minval=1, group="EMA / RSI")
 i_emaMedium     = input.int(${emaMedium}, "EMA medium", minval=1, group="EMA / RSI")
 i_emaSlow       = input.int(${emaSlow}, "EMA slow", minval=1, group="EMA / RSI")
@@ -564,8 +570,10 @@ stochLongInZone = kLine <= i_stochOSK or dLine <= i_stochOSD
 stochShortInZone = kLine >= i_stochOBK or dLine >= i_stochOBD
 stochCrossUp = kLine[1] < dLine[1] and kLine >= dLine
 stochCrossDown = kLine[1] > dLine[1] and kLine <= dLine
-longStochRaw = i_stochLongMode == "ZONE_ONLY" ? stochLongInZone : (stochCrossUp and stochLongInZone)
-shortStochRaw = i_stochShortMode == "ZONE_ONLY" ? stochShortInZone : (stochCrossDown and stochShortInZone)
+longStochCrossOrZone  = i_legacyStochMode ? stochLongInZone  : (stochCrossUp   and stochLongInZone)
+shortStochCrossOrZone = i_legacyStochMode ? stochShortInZone : (stochCrossDown and stochShortInZone)
+longStochRaw  = i_stochLongMode  == "ZONE_ONLY" ? stochLongInZone  : longStochCrossOrZone
+shortStochRaw = i_stochShortMode == "ZONE_ONLY" ? stochShortInZone : shortStochCrossOrZone
 longStochPassed = not i_useStoch or longStochRaw
 shortStochPassed = not i_useStoch or shortStochRaw
 
@@ -623,10 +631,12 @@ volRatio = volAvg > 0 ? volume / volAvg : 0.0
 atrAdaptiveThreshold = i_useAdaptiveAtr ? math.min(math.max(i_atrBase * volRatio, i_atrFloor), i_atrCeiling) : i_minAtrPct
 atrPassed = not i_useAtr or (atrPct >= atrAdaptiveThreshold and (not i_useAdaptiveAtr or atrPct <= i_atrCeiling))
 
-// ADX computed directly on Trend TF: ta.dmi is invoked inside request.security
-// so DMI/ADX state is built from the higher-TF series, not the chart TF.
+// ADX: new mode computes ta.dmi directly inside request.security (DMI state on higher TF).
+// Legacy mode reproduces pre-v6-fix behavior: ta.dmi on chart TF, then wrap raw adx in request.security.
 [diPlusChart, diMinusChart, adxRawChart] = ta.dmi(i_adxLen, i_adxLen)
-[diPlusTf, diMinusTf, adxVal] = request.security(syminfo.tickerid, i_trendTf, ta.dmi(i_adxLen, i_adxLen), barmerge.gaps_off, barmerge.lookahead_off)
+[diPlusTf, diMinusTf, adxTfNew] = request.security(syminfo.tickerid, i_trendTf, ta.dmi(i_adxLen, i_adxLen), barmerge.gaps_off, barmerge.lookahead_off)
+adxTfLegacy = request.security(syminfo.tickerid, i_trendTf, adxRawChart, barmerge.gaps_off, barmerge.lookahead_off)
+adxVal = i_legacyAdxMode ? adxTfLegacy : adxTfNew
 adxPassed = not i_useAdx or (adxVal >= i_adxFloor and adxVal <= i_adxCeiling)
 
 volumeLongPassed = not i_useVolume or volRatio >= i_volMultLong
@@ -750,8 +760,10 @@ shortHardGate =
 
 rawLongSignal = i_strategyOn and i_allowLong and inDateRange and longHardGate and longSoftPassed
 rawShortSignal = i_strategyOn and i_allowShort and inDateRange and shortHardGate and shortSoftPassed
-finalLongSignal = rawLongSignal and not rawShortSignal ? true : rawLongSignal and rawShortSignal and longSoftCount > shortSoftCount
-finalShortSignal = rawShortSignal and not rawLongSignal ? true : rawLongSignal and rawShortSignal and shortSoftCount > longSoftCount
+// Tie-break: new mode requires longSoftCount > shortSoftCount (and vice versa) when both raw signals fire.
+// Legacy mode lets both rawLong/rawShort pass independently (no tie-break suppression).
+finalLongSignal  = i_legacyTiebreakMode ? rawLongSignal  : (rawLongSignal and not rawShortSignal ? true : rawLongSignal and rawShortSignal and longSoftCount > shortSoftCount)
+finalShortSignal = i_legacyTiebreakMode ? rawShortSignal : (rawShortSignal and not rawLongSignal ? true : rawLongSignal and rawShortSignal and shortSoftCount > longSoftCount)
 
 // ---------- Regression debug: hard blockers and backtest-period counters ----------
 longStochHardBlock = i_useStoch and i_stochHard and not longStochPassed
