@@ -339,8 +339,12 @@ export function generatePineScript(
   const mfeMaxDistPct = n(cfg.max_sl_after_mfe_max_dist_pct, 1);
   const maxDurMin = n(cfg.max_position_duration_minutes, 0);
 
+  const GENERATOR_VERSION = "v6.2-regression-debug";
+  const GENERATED_AT = new Date().toISOString();
   return `//@version=6
 // ====================================================================
+// Generator version              : ${GENERATOR_VERSION}
+// Generated at (UTC)             : ${GENERATED_AT}
 // Auto-generated from Lovable slot config — STRICT UI → Pine validation
 //   Slot number                  : ${slotNumStr}
 //   Slot name                    : ${slotLabel}
