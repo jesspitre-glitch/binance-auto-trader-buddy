@@ -3301,13 +3301,18 @@ serve(async (req) => {
         topBlockers: Record<string, number>;
       }> = [];
 
-      // 🌐 HYBRID GLOBAL CANDIDATE: Første slot med eligible signaler vælger ÉT globalt
-      // kandidat-symbol+side. Alle øvrige slots må kun handle på samme symbol+side, men
-      // skal stadig have signalet i deres EGEN eligibleSignals (egne filtre respekteres).
+      // 🌐 HYBRID GLOBAL CANDIDATE GATE (toggleable via trading_session.use_global_candidate_gate)
+      // When ON: første slot med eligible signaler vælger ÉT globalt kandidat-symbol+side.
+      //          Alle øvrige slots må kun handle på samme symbol+side (men skal stadig have det
+      //          i deres egen eligibleSignals — egne filtre respekteres).
+      // When OFF (default): hver slot handler sit eget bedste eligible signal uafhængigt.
+      const useGlobalCandidateGate = (session as any).use_global_candidate_gate === true;
+      console.log(`🌐 GLOBAL_CANDIDATE_GATE: ${useGlobalCandidateGate ? 'ON — slots forced to share symbol+side' : 'OFF — slots scan and trade independently'}`);
       let globalCandidate: { symbol: string; side: string; chosenBySlot: string } | null = null;
 
-      for (const { config, slotId, capitalPercent, slotName } of slotIterations) {
+      for (const { config, slotId, capitalPercent, slotName, allowedSymbols } of slotIterations) {
         console.log(`\n🎰 === SLOT: "${slotName}" | ID: ${slotId ?? 'legacy'} | Capital: ${capitalPercent}% ===`);
+
         
         // Initialize per-slot summary tracker
         const slotSummary = {
