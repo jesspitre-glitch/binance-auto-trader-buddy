@@ -368,6 +368,11 @@ export const SlotSelector = ({
                 <Badge variant="secondary" className="text-xs px-1.5 py-0">
                   {slot.capital_percent}%
                 </Badge>
+                {(slot.allowed_symbols?.length ?? 0) > 0 && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0" title={(slot.allowed_symbols ?? []).join(', ')}>
+                    {slot.allowed_symbols!.length} symbols
+                  </Badge>
+                )}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
