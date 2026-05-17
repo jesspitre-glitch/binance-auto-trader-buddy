@@ -760,8 +760,10 @@ shortHardGate =
 
 rawLongSignal = i_strategyOn and i_allowLong and inDateRange and longHardGate and longSoftPassed
 rawShortSignal = i_strategyOn and i_allowShort and inDateRange and shortHardGate and shortSoftPassed
-finalLongSignal = rawLongSignal and not rawShortSignal ? true : rawLongSignal and rawShortSignal and longSoftCount > shortSoftCount
-finalShortSignal = rawShortSignal and not rawLongSignal ? true : rawLongSignal and rawShortSignal and shortSoftCount > longSoftCount
+// Tie-break: new mode requires longSoftCount > shortSoftCount (and vice versa) when both raw signals fire.
+// Legacy mode lets both rawLong/rawShort pass independently (no tie-break suppression).
+finalLongSignal  = i_legacyTiebreakMode ? rawLongSignal  : (rawLongSignal and not rawShortSignal ? true : rawLongSignal and rawShortSignal and longSoftCount > shortSoftCount)
+finalShortSignal = i_legacyTiebreakMode ? rawShortSignal : (rawShortSignal and not rawLongSignal ? true : rawLongSignal and rawShortSignal and shortSoftCount > longSoftCount)
 
 // ---------- Regression debug: hard blockers and backtest-period counters ----------
 longStochHardBlock = i_useStoch and i_stochHard and not longStochPassed
