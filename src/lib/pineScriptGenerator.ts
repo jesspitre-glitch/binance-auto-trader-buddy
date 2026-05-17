@@ -178,10 +178,22 @@ export function generatePineScript(
   cfg: SlotConfigLike,
   slotLabel = "Slot",
   slotNumber?: number,
+  meta?: { slotId?: string | null; configId?: string | null },
 ): string {
   const mainTf = tf(cfg.scan_interval, "60");
   const trendTf = tf(cfg.trend_timeframe, mainTf);
   const htfTf = tf(cfg.higher_trend_timeframe, mainTf);
+
+  const slotIdStr = meta?.slotId ?? "(unknown)";
+  const configIdStr = meta?.configId ?? (cfg as any)?.id ?? "(unknown)";
+  // FNV-1a 32-bit hash over the full config JSON — lets you verify export matches UI.
+  const cfgJson = JSON.stringify(cfg, Object.keys(cfg as object).sort());
+  let cfgHash = 0x811c9dc5;
+  for (let i = 0; i < cfgJson.length; i++) {
+    cfgHash ^= cfgJson.charCodeAt(i);
+    cfgHash = (cfgHash + ((cfgHash << 1) + (cfgHash << 4) + (cfgHash << 7) + (cfgHash << 8) + (cfgHash << 24))) >>> 0;
+  }
+  const cfgHashStr = cfgHash.toString(16).padStart(8, "0");
 
   // Strict UI boolean mapping: only a saved true exports as true. null/undefined/false export as false.
   const useStrategy = strictBool(cfg.enabled);
@@ -339,25 +351,28 @@ export function generatePineScript(
   const mfeMaxDistPct = n(cfg.max_sl_after_mfe_max_dist_pct, 1);
   const maxDurMin = n(cfg.max_position_duration_minutes, 0);
 
-  const GENERATOR_VERSION = "v6.2-regression-debug";
+  const GENERATOR_VERSION = "v6.3-verify-header";
   const GENERATED_AT = new Date().toISOString();
   return `//@version=6
 // ====================================================================
+// LOVABLE PINE EXPORT — verify this matches your UI before backtesting
+// --------------------------------------------------------------------
 // Generator version              : ${GENERATOR_VERSION}
 // Generated at (UTC)             : ${GENERATED_AT}
-// Auto-generated from Lovable slot config — STRICT UI → Pine validation
-//   Slot number                  : ${slotNumStr}
-//   Slot name                    : ${slotLabel}
-//   Source config                : ${cfg.name ?? "(unnamed)"}
-//   Main TF                      : ${mainTf}    Trend TF: ${trendTf}    HTF: ${htfTf}
-//   Strategy enabled             : ${onOff(useStrategy)}
-//   Hard filters                 : ${listLabels(rules, (r) => r.enabled && r.hard)}${useMacdDir ? ", MACD Direction" : ""}${useMacdColor ? ", MACD Color Change" : ""}
-//   Soft conditions counted      : ${listLabels(rules, (r) => r.soft)}
-//   Requested Soft               : ${requestedSoft}
-//   Active Soft Conditions       : ${activeSoftCount}
-//   Effective Required Soft      : ${effectiveSoft}
-//   Soft clamp warning           : ${softWarning}
-//   Exits active                 : auto=${onOff(autoExit)}, hardSL=${onOff(useHardSl)}, atrSL=${onOff(autoExit && useAtr)}, BE=${onOff(useBE)}, trailing=${onOff(useTrail)}, peakLock=${onOff(usePeak)}, mfeCap=${onOff(useMfeCap)}, timeExit=${onOff(autoExit && maxDurMin > 0)}, conditionalTime=${onOff(useConditionalTimeExit)}
+// Slot number                    : ${slotNumStr}
+// Slot id                        : ${slotIdStr}
+// Slot name                      : ${slotLabel}
+// Config id                      : ${configIdStr}
+// Config name                    : ${cfg.name ?? "(unnamed)"}
+// Config hash (FNV-1a)           : ${cfgHashStr}
+// Scan TF / Trend TF / HTF       : ${mainTf} / ${trendTf} / ${htfTf}
+// Trend TF enabled               : ${onOff(useTrendTf)}    HTF enabled: ${onOff(useHtf)}
+// Strategy enabled               : ${onOff(useStrategy)}
+// Hard filters                   : ${listLabels(rules, (r) => r.enabled && r.hard)}${useMacdDir ? ", MACD Direction" : ""}${useMacdColor ? ", MACD Color Change" : ""}
+// Soft conditions counted        : ${listLabels(rules, (r) => r.soft)}
+// Requested / Active / Effective Soft : ${requestedSoft} / ${activeSoftCount} / ${effectiveSoft}
+// Soft clamp warning             : ${softWarning}
+// Exits active                   : auto=${onOff(autoExit)}, hardSL=${onOff(useHardSl)}, atrSL=${onOff(autoExit && useAtr)}, BE=${onOff(useBE)}, trailing=${onOff(useTrail)}, peakLock=${onOff(usePeak)}, mfeCap=${onOff(useMfeCap)}, timeExit=${onOff(autoExit && maxDurMin > 0)}, conditionalTime=${onOff(useConditionalTimeExit)}
 // --------------------------------------------------------------------
 // UI TOGGLE MAP (true means saved UI state was true; no boolean fallback)
 //   ema=${onOff(useEma)}, rsi=${onOff(useRsi)}, stochrsi=${onOff(useStoch)}, macd=${onOff(useMacd)}, macdDirection=${onOff(useMacdDir)}, macdColorChange=${onOff(useMacdColor)}, macdHistogramMomentum=${onOff(useHistMom)}

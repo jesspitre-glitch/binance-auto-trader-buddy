@@ -68,7 +68,12 @@ export const PineScriptBacktest = () => {
     // Strip any "Sx – " or "Sx - " prefix from the stored slot name to avoid "S4 – S1 – ..."
     const cleanName = (selectedSlot.name ?? "").replace(/^\s*S\d+\s*[–-]\s*/i, "").trim();
     const label = `Slot ${selectedSlot.slot_number} – ${cleanName || "Strategy"}`;
-    setCode(generatePineScript(config, label, selectedSlot.slot_number));
+    setCode(
+      generatePineScript(config, label, selectedSlot.slot_number, {
+        slotId: selectedSlot.id,
+        configId: selectedSlot.config_id,
+      }),
+    );
   };
 
   const handleCopy = async () => {
