@@ -1075,6 +1075,7 @@ export type Database = {
       }
       strategy_slots: {
         Row: {
+          allowed_symbols: string[]
           capital_percent: number
           config_id: string | null
           created_at: string | null
@@ -1086,6 +1087,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          allowed_symbols?: string[]
           capital_percent?: number
           config_id?: string | null
           created_at?: string | null
@@ -1097,6 +1099,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          allowed_symbols?: string[]
           capital_percent?: number
           config_id?: string | null
           created_at?: string | null
@@ -1244,6 +1247,7 @@ export type Database = {
           master_scan_slot_id: string | null
           started_at: string | null
           updated_at: string | null
+          use_global_candidate_gate: boolean
           user_id: string
         }
         Insert: {
@@ -1253,6 +1257,7 @@ export type Database = {
           master_scan_slot_id?: string | null
           started_at?: string | null
           updated_at?: string | null
+          use_global_candidate_gate?: boolean
           user_id: string
         }
         Update: {
@@ -1262,6 +1267,7 @@ export type Database = {
           master_scan_slot_id?: string | null
           started_at?: string | null
           updated_at?: string | null
+          use_global_candidate_gate?: boolean
           user_id?: string
         }
         Relationships: [

@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { SectionErrorBoundary } from "./SectionErrorBoundary";
 
 export const TradingDashboard = () => {
@@ -37,6 +38,7 @@ export const TradingDashboard = () => {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [masterScanSlotId, setMasterScanSlotId] = useState<string | null>(null);
+  const [useGlobalCandidateGate, setUseGlobalCandidateGate] = useState<boolean>(false);
   const { toast } = useToast();
 
   // Get the selected slot's config for the Config tab
@@ -107,6 +109,7 @@ export const TradingDashboard = () => {
           setActiveConfigId(data.active_config_id);
         }
         setMasterScanSlotId((data as any).master_scan_slot_id ?? null);
+        setUseGlobalCandidateGate(((data as any).use_global_candidate_gate ?? false) === true);
         
         if (data.is_active) {
           try {
@@ -192,6 +195,7 @@ export const TradingDashboard = () => {
         is_active: newState,
         active_config_id: activeConfigId,
         master_scan_slot_id: masterScanSlotId,
+        use_global_candidate_gate: useGlobalCandidateGate,
       };
       
       if (newState) {
@@ -329,6 +333,53 @@ export const TradingDashboard = () => {
               </Select>
             </div>
           )}
+
+          {/* Global Candidate Gate toggle */}
+          <div className="border-t pt-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1">
+                <Label className="text-sm font-medium">Use Global Candidate Gate</Label>
+                <p className="text-xs text-muted-foreground">
+                  Når tændt: første eligible slot vælger ét globalt symbol+side, som alle efterfølgende slots skal acceptere eller afvise.
+                  Når slukket: hvert slot kan handle sit eget bedste signal uafhængigt.
+                </p>
+              </div>
+              <Switch
+                checked={useGlobalCandidateGate}
+                onCheckedChange={async (checked) => {
+                  setUseGlobalCandidateGate(checked);
+                  try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (!user) return;
+                    await supabase
+                      .from("trading_session")
+                      .upsert(
+                        { user_id: user.id, use_global_candidate_gate: checked, active_config_id: activeConfigId },
+                        { onConflict: 'user_id' }
+                      );
+                    toast({
+                      title: "Global candidate gate opdateret",
+                      description: checked
+                        ? "Global candidate gate active — slots forced to share symbol+side"
+                        : "Slots scan and trade independently",
+                    });
+                  } catch (err: any) {
+                    toast({ title: "Fejl", description: err.message, variant: "destructive" });
+                  }
+                }}
+              />
+            </div>
+            <p className={cn(
+              "text-xs mt-2 px-2 py-1 rounded inline-block",
+              useGlobalCandidateGate
+                ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                : "bg-success/10 text-success"
+            )}>
+              {useGlobalCandidateGate
+                ? "ON — Global candidate gate active"
+                : "OFF — Slots scan and trade independently"}
+            </p>
+          </div>
         </CardContent>
       </Card>
 

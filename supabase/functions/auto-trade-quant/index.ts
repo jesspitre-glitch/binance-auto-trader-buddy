@@ -718,6 +718,19 @@ const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
 let symbolFiltersCache: { data: Record<string, SymbolFilters>, timestamp: number } | null = null;
 let usdcSymbolsCache: { data: string[], timestamp: number } | null = null;
 
+// Normalize an allowed-symbols list from a raw textarea/array input.
+// Accepts newline, comma, semicolon or whitespace as separators. Returns unique uppercase entries.
+function normalizeAllowedSymbols(input: string | string[] | null | undefined): string[] {
+  if (!input) return [];
+  const raw = Array.isArray(input) ? input.join('\n') : input;
+  return [...new Set(
+    raw
+      .split(/[\n,; \t]+/)
+      .map(s => s.trim().toUpperCase())
+      .filter(Boolean)
+  )];
+}
+
 async function fetchAllUSDCSymbols(): Promise<string[]> {
   // Return cached data if still fresh
   if (usdcSymbolsCache && Date.now() - usdcSymbolsCache.timestamp < CACHE_DURATION_MS) {
@@ -3214,6 +3227,7 @@ serve(async (req) => {
         slotId: string | null;
         capitalPercent: number;
         slotName: string;
+        allowedSymbols: string[];
       }
 
       const slotIterations: SlotIteration[] = [];
@@ -3240,6 +3254,7 @@ serve(async (req) => {
               slotId: slot.id,
               capitalPercent: Number(slot.capital_percent),
               slotName: slot.name,
+              allowedSymbols: normalizeAllowedSymbols((slot as any).allowed_symbols),
             });
           } else {
             console.log(`⏭️ Slot "${slot.name}" (${slot.id}): config missing or disabled, skipping`);
@@ -3254,6 +3269,7 @@ serve(async (req) => {
             slotId: null,
             capitalPercent: 100,
             slotName: 'Legacy',
+            allowedSymbols: [],
           });
         }
       }
@@ -3285,13 +3301,18 @@ serve(async (req) => {
         topBlockers: Record<string, number>;
       }> = [];
 
-      // 🌐 HYBRID GLOBAL CANDIDATE: Første slot med eligible signaler vælger ÉT globalt
-      // kandidat-symbol+side. Alle øvrige slots må kun handle på samme symbol+side, men
-      // skal stadig have signalet i deres EGEN eligibleSignals (egne filtre respekteres).
+      // 🌐 HYBRID GLOBAL CANDIDATE GATE (toggleable via trading_session.use_global_candidate_gate)
+      // When ON: første slot med eligible signaler vælger ÉT globalt kandidat-symbol+side.
+      //          Alle øvrige slots må kun handle på samme symbol+side (men skal stadig have det
+      //          i deres egen eligibleSignals — egne filtre respekteres).
+      // When OFF (default): hver slot handler sit eget bedste eligible signal uafhængigt.
+      const useGlobalCandidateGate = (session as any).use_global_candidate_gate === true;
+      console.log(`🌐 GLOBAL_CANDIDATE_GATE: ${useGlobalCandidateGate ? 'ON — slots forced to share symbol+side' : 'OFF — slots scan and trade independently'}`);
       let globalCandidate: { symbol: string; side: string; chosenBySlot: string } | null = null;
 
-      for (const { config, slotId, capitalPercent, slotName } of slotIterations) {
+      for (const { config, slotId, capitalPercent, slotName, allowedSymbols } of slotIterations) {
         console.log(`\n🎰 === SLOT: "${slotName}" | ID: ${slotId ?? 'legacy'} | Capital: ${capitalPercent}% ===`);
+
         
         // Initialize per-slot summary tracker
         const slotSummary = {
@@ -3385,7 +3406,21 @@ serve(async (req) => {
       const symbolFilters = await fetchSymbolFilters();
       const symbols = await fetchAllUSDCSymbols();
       const isMasterSlot = false; // master gating disabled — every slot scans full pool
-      console.log(`🔍 Slot "${slotName}" scanning ${symbols.length} USDC pairs independently`);
+
+      // 🎯 PER-SLOT SYMBOL WHITELIST: filter the scan pool to allowed_symbols if set.
+      // Empty list = scan all USDC perpetuals (legacy behavior).
+      const allowedUpper = new Set(allowedSymbols.map(s => s.toUpperCase()));
+      const scanSymbols = allowedUpper.size > 0
+        ? symbols.filter(s => allowedUpper.has(s.toUpperCase()))
+        : symbols;
+
+      if (allowedUpper.size > 0) {
+        console.log(`🎯 SLOT_ALLOWED_SYMBOLS_ACTIVE | slot=${slotName} | whitelist=${allowedSymbols.length} | matched=${scanSymbols.length}/${symbols.length} | symbols=${[...allowedUpper].join(',')}`);
+      } else {
+        console.log(`🌐 SLOT_ALLOWED_SYMBOLS_EMPTY_SCAN_ALL | slot=${slotName} | scanning all ${symbols.length} USDC pairs`);
+      }
+      console.log(`🔍 Slot "${slotName}" scanning ${scanSymbols.length} USDC pairs independently`);
+
       
       // 📊 STEP 1: Collect all valid signals with their strength
       interface SignalCandidate {
@@ -3412,7 +3447,7 @@ serve(async (req) => {
           .eq('id', id);
       };
 
-      for (const symbol of symbols) {
+      for (const symbol of scanSymbols) {
         try {
           // Add 100ms delay between symbols to avoid Binance rate limits (418 errors)
           await new Promise(resolve => setTimeout(resolve, 100));
@@ -3821,31 +3856,33 @@ serve(async (req) => {
         }
       }
 
-      // 🌐 HYBRID GLOBAL CANDIDATE GATING
-      // Hvis et tidligere slot allerede har valgt et globalt kandidat-symbol+side i denne cycle,
-      // må dette slot KUN handle på samme symbol+side (men skal stadig have det i egen eligible-pool).
-      // Hvis intet globalt kandidat endnu, vælger DETTE slots top-eligible signal det globale kandidat.
+      // 🌐 HYBRID GLOBAL CANDIDATE GATING (only when useGlobalCandidateGate=true)
+      // When ON: first slot picks a global symbol+side; later slots must accept or reject.
+      // When OFF: each slot trades its own top eligible signal independently.
       let signalsToTrade = eligibleSignals;
-      if (globalCandidate) {
-        const before = signalsToTrade.length;
-        signalsToTrade = eligibleSignals.filter(
-          s => s.symbol === globalCandidate!.symbol && s.signal === globalCandidate!.side
-        );
-        if (signalsToTrade.length > 0) {
-          console.log(`✅ SLOT_ACCEPTED_GLOBAL_SIGNAL | slot=${slotName} | symbol=${globalCandidate.symbol} | side=${globalCandidate.side}`);
+      if (useGlobalCandidateGate) {
+        if (globalCandidate) {
+          signalsToTrade = eligibleSignals.filter(
+            s => s.symbol === globalCandidate!.symbol && s.signal === globalCandidate!.side
+          );
+          if (signalsToTrade.length > 0) {
+            console.log(`✅ SLOT_ACCEPTED_GLOBAL_SIGNAL | slot=${slotName} | symbol=${globalCandidate.symbol} | side=${globalCandidate.side}`);
+          } else {
+            const ownTopSymbols = eligibleSignals.slice(0, 3).map(s => `${s.symbol}(${s.signal})`).join(',') || 'none';
+            console.log(`🚫 SLOT_REJECTED_GLOBAL_SIGNAL | slot=${slotName} | global=${globalCandidate.symbol}/${globalCandidate.side} | reason=symbol+side not in slot's own eligibleSignals (own top: ${ownTopSymbols})`);
+          }
+        } else if (eligibleSignals.length > 0) {
+          const top = eligibleSignals[0];
+          globalCandidate = { symbol: top.symbol, side: top.signal, chosenBySlot: slotName };
+          console.log(`🌐 GLOBAL_CANDIDATE_SELECTED | symbol=${top.symbol} | side=${top.signal} | chosen_by=${slotName} | strength=${top.strength.toFixed(1)} | total_active_slots=${slotIterations.length}`);
+          console.log(`✅ SLOT_ACCEPTED_GLOBAL_SIGNAL | slot=${slotName} | symbol=${top.symbol} | side=${top.signal}`);
+          signalsToTrade = eligibleSignals.filter(s => s.symbol === top.symbol && s.signal === top.signal);
         } else {
-          const ownTopSymbols = eligibleSignals.slice(0, 3).map(s => `${s.symbol}(${s.signal})`).join(',') || 'none';
-          console.log(`🚫 SLOT_REJECTED_GLOBAL_SIGNAL | slot=${slotName} | global=${globalCandidate.symbol}/${globalCandidate.side} | reason=symbol+side not in slot's own eligibleSignals (own top: ${ownTopSymbols})`);
+          console.log(`🚫 SLOT_REJECTED_GLOBAL_SIGNAL | slot=${slotName} | reason=no eligible signals (no global candidate set)`);
         }
-      } else if (eligibleSignals.length > 0) {
-        const top = eligibleSignals[0];
-        globalCandidate = { symbol: top.symbol, side: top.signal, chosenBySlot: slotName };
-        console.log(`🌐 GLOBAL_CANDIDATE_SELECTED | symbol=${top.symbol} | side=${top.signal} | chosen_by=${slotName} | strength=${top.strength.toFixed(1)} | total_active_slots=${slotIterations.length}`);
-        console.log(`✅ SLOT_ACCEPTED_GLOBAL_SIGNAL | slot=${slotName} | symbol=${top.symbol} | side=${top.signal}`);
-        // Restrict signalsToTrade to ONLY the chosen global candidate so this slot can't fall back to a different symbol
-        signalsToTrade = eligibleSignals.filter(s => s.symbol === top.symbol && s.signal === top.signal);
       } else {
-        console.log(`🚫 SLOT_REJECTED_GLOBAL_SIGNAL | slot=${slotName} | reason=no eligible signals (no global candidate set)`);
+        // Gate disabled — each slot trades its own eligible signals independently
+        console.log(`🟢 GLOBAL_GATE_BYPASSED | slot=${slotName} | independent eligible signals=${eligibleSignals.length}`);
       }
 
       
@@ -3890,7 +3927,14 @@ serve(async (req) => {
           console.log(`⚠️ SIKKERHED: Blokerer NONE signal for ${symbol}`);
           continue;
         }
-        
+
+        // 🎯 FINAL WHITELIST SAFETY CHECK: never let a slot open a non-allowed symbol
+        if (allowedUpper.size > 0 && !allowedUpper.has(symbol.toUpperCase())) {
+          console.log(`🚫 SYMBOL_NOT_ALLOWED_FOR_SLOT | slot=${slotName} | slot_id=${slotId ?? 'legacy'} | symbol=${symbol} | whitelist_size=${allowedUpper.size}`);
+          await updateSlotEvalForSymbol(symbol, 'BLOCKED', 'SYMBOL_NOT_ALLOWED_FOR_SLOT');
+          continue;
+        }
+
         try {
           console.log(`\n🎯 Behandler signal ${selectedSignal.symbol} (${signalIndex + 1}/${signalsToTrade.length}, styrke: ${selectedSignal.strength.toFixed(1)})`);
           

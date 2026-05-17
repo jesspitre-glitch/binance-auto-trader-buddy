@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,7 @@ export interface Slot {
   config_id: string | null;
   capital_percent: number;
   is_active: boolean;
+  allowed_symbols?: string[] | null;
 }
 
 interface SlotSelectorProps {
@@ -54,6 +56,7 @@ export const SlotSelector = ({
   const [editName, setEditName] = useState("");
   const [editConfigId, setEditConfigId] = useState<string | null>(null);
   const [editCapital, setEditCapital] = useState(16);
+  const [editAllowedSymbols, setEditAllowedSymbols] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [copyFromSlotId, setCopyFromSlotId] = useState<string>("");
   const [isCopying, setIsCopying] = useState(false);
@@ -155,11 +158,22 @@ export const SlotSelector = ({
     }
   };
 
+  // Normalize allowed_symbols input. Accepts newline, comma, semicolon, whitespace.
+  const normalizeAllowedSymbols = (input: string): string[] => {
+    return [...new Set(
+      input
+        .split(/[\n,; \t]+/)
+        .map(s => s.trim().toUpperCase())
+        .filter(Boolean)
+    )];
+  };
+
   const openEditDialog = (slot: Slot) => {
     setEditSlot(slot);
     setEditName(slot.name);
     setEditConfigId(slot.config_id);
     setEditCapital(slot.capital_percent);
+    setEditAllowedSymbols((slot.allowed_symbols ?? []).join("\n"));
     setCopyFromSlotId("");
     setDialogOpen(true);
   };
@@ -214,12 +228,14 @@ export const SlotSelector = ({
   const saveSlot = async () => {
     if (!editSlot) return;
     try {
+      const normalizedAllowed = normalizeAllowedSymbols(editAllowedSymbols);
       const { error } = await supabase
         .from("strategy_slots")
         .update({
           name: editName,
           config_id: editConfigId,
           capital_percent: editCapital,
+          allowed_symbols: normalizedAllowed,
         })
         .eq("id", editSlot.id);
 
@@ -352,6 +368,11 @@ export const SlotSelector = ({
                 <Badge variant="secondary" className="text-xs px-1.5 py-0">
                   {slot.capital_percent}%
                 </Badge>
+                {(slot.allowed_symbols?.length ?? 0) > 0 && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0" title={(slot.allowed_symbols ?? []).join(', ')}>
+                    {slot.allowed_symbols!.length} symbols
+                  </Badge>
+                )}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -413,6 +434,41 @@ export const SlotSelector = ({
                 fallback={editSlot?.capital_percent ?? defaultCapitalPercent}
                 className="w-24"
               />
+            </div>
+            {/* Allowed Symbols whitelist */}
+            <div className="space-y-2 border-t pt-3">
+              <Label className="text-sm font-medium">Allowed Symbols</Label>
+              <p className="text-xs text-muted-foreground">
+                Kun disse symbols må scannes og handles af dette slot. Tom liste = slot scanner alle USDC perpetuals. Adskil med komma, semikolon, mellemrum eller linjeskift.
+              </p>
+              <Textarea
+                value={editAllowedSymbols}
+                onChange={(e) => setEditAllowedSymbols(e.target.value)}
+                placeholder="fx BTCUSDC, ETHUSDC, SOLUSDC"
+                rows={3}
+                className="font-mono text-xs"
+              />
+              {(() => {
+                const parsed = normalizeAllowedSymbols(editAllowedSymbols);
+                if (parsed.length === 0) {
+                  return (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      No symbol filter — slot scans all USDC perpetuals
+                    </p>
+                  );
+                }
+                return (
+                  <div className="flex flex-wrap gap-1">
+                    <Badge variant="secondary" className="text-[10px]">{parsed.length} symbols</Badge>
+                    {parsed.slice(0, 30).map(sym => (
+                      <Badge key={sym} variant="outline" className="text-[10px]">{sym}</Badge>
+                    ))}
+                    {parsed.length > 30 && (
+                      <Badge variant="outline" className="text-[10px]">+{parsed.length - 30} flere</Badge>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             {/* Copy config from another slot */}
             {slots.filter(s => s.id !== editSlot?.id && s.config_id).length > 0 && (
