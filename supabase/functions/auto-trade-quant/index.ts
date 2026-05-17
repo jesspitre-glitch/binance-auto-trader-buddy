@@ -3447,7 +3447,7 @@ serve(async (req) => {
           .eq('id', id);
       };
 
-      for (const symbol of symbols) {
+      for (const symbol of scanSymbols) {
         try {
           // Add 100ms delay between symbols to avoid Binance rate limits (418 errors)
           await new Promise(resolve => setTimeout(resolve, 100));
