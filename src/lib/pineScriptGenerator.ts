@@ -1059,7 +1059,7 @@ longBlockers =
      f_add(i_usePivot and i_pivotHard and not pivotLongPassed, "Pivot ") + f_add(i_useVwap and i_vwapHard and not vwapLongPassed, "VWAP ") +
      f_add(i_useSupertrend and i_superHard and not superLongPassed, "Supertrend ") + f_add(i_useObv and i_obvHard and not obvLongPassed, "OBV ") + f_add(i_useCci and i_cciHard and not cciLongPassed, "CCI ") +
      f_add(i_usePsar and i_psarHard and not psarLongPassed, "PSAR ") + f_add(i_useCandle and i_candleHard and not candlePassed, "Candle ") + f_add(i_useHtf and i_htfHard and not longHtfPassed, "HTF ") +
-     f_add(i_useAtr and i_atrHard and not atrPassed, "ATR ") + f_add(i_useAdx and i_adxHard and not adxPassed, "ADX ") + f_add(not longSoftPassed, "Soft deficit ")
+     f_add(i_useAtr and i_atrHard and not atrPassed, "ATR ") + f_add(i_useAdx and i_adxHard and not adxPassed, "ADX ")
 
 shortBlockers =
      f_add(i_useEma and not emaSpreadPassed, "EMA spread ") + f_add(i_useEma and i_emaTrendHard and not emaTrendShort, "EMA trend ") +
@@ -1069,7 +1069,7 @@ shortBlockers =
      f_add(i_usePivot and i_pivotHard and not pivotShortPassed, "Pivot ") + f_add(i_useVwap and i_vwapHard and not vwapShortPassed, "VWAP ") +
      f_add(i_useSupertrend and i_superHard and not superShortPassed, "Supertrend ") + f_add(i_useObv and i_obvHard and not obvShortPassed, "OBV ") + f_add(i_useCci and i_cciHard and not cciShortPassed, "CCI ") +
      f_add(i_usePsar and i_psarHard and not psarShortPassed, "PSAR ") + f_add(i_useCandle and i_candleHard and not candlePassed, "Candle ") + f_add(i_useHtf and i_htfHard and not shortHtfPassed, "HTF ") +
-     f_add(i_useAtr and i_atrHard and not atrPassed, "ATR ") + f_add(i_useAdx and i_adxHard and not adxPassed, "ADX ") + f_add(not shortSoftPassed, "Soft deficit ")
+      f_add(i_useAtr and i_atrHard and not atrPassed, "ATR ") + f_add(i_useAdx and i_adxHard and not adxPassed, "ADX ")
 
 var table dbg = table.new(position.top_right, 4, 18, border_width=1)
 if i_debugTable and barstate.islast
