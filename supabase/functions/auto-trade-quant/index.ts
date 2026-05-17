@@ -718,6 +718,19 @@ const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
 let symbolFiltersCache: { data: Record<string, SymbolFilters>, timestamp: number } | null = null;
 let usdcSymbolsCache: { data: string[], timestamp: number } | null = null;
 
+// Normalize an allowed-symbols list from a raw textarea/array input.
+// Accepts newline, comma, semicolon or whitespace as separators. Returns unique uppercase entries.
+function normalizeAllowedSymbols(input: string | string[] | null | undefined): string[] {
+  if (!input) return [];
+  const raw = Array.isArray(input) ? input.join('\n') : input;
+  return [...new Set(
+    raw
+      .split(/[\n,; \t]+/)
+      .map(s => s.trim().toUpperCase())
+      .filter(Boolean)
+  )];
+}
+
 async function fetchAllUSDCSymbols(): Promise<string[]> {
   // Return cached data if still fresh
   if (usdcSymbolsCache && Date.now() - usdcSymbolsCache.timestamp < CACHE_DURATION_MS) {
